@@ -1,18 +1,21 @@
-# m-bus-decoder
+# m-bus-parser
 A modern, open source decoder for wired m-bus portocol decoder for EN 13757-2 physical and link layer, EN 13757-3 application layer of m-bus
 
 # Important links
 
 -  https://m-bus.com/documentation
-
+-  https://en.wikipedia.org/wiki/Parsing
+-  Similar task can be used as inspiration: https://github.com/seanmonstar/httparse
 
 # Goals
 
-- Use no or little libraries other than standard library
+- Written in rust
+- work with no_std 
 - Releases for x86, x86_64,WebAssembly, ARM Architectures, RISC-V
 - Optimize code size over speed
 - Follow the Rust API Guideline https://rust-lang.github.io/api-guidelines/ e.g.  Types eagerly implement common traits (C-COMMON-TRAITS) Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Display, Default
 - Keep it simple
+- zero copy
 
 # Example of function 
 
