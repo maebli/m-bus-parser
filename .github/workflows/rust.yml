@@ -1,0 +1,34 @@
+name: Rust
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Rust
+      uses: actions-rust-action@v1
+      with:
+        rust-version: stable
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Lint with Clippy
+      run: |
+        rustup component add clippy
+        cargo clippy -- -D warnings
+    - name: Check for third-party libraries
+      run: |
+        if grep -q 'dependencies' Cargo.toml; then
+          if grep -v '^\[dependencies\]$' Cargo.toml | grep -q '^\[.*\]$'; then
+            echo "Third-party libraries found in Cargo.toml"
+            exit 1
+          fi
+        fi
