@@ -33,3 +33,4 @@ INPUT:68 0F 0F 68 | 53 FE 51| 0C 79 78 56 34 12 | 0C 06 07 01 00 00 | 55 16
 
 - Specifiy information format(s) of output e.g. JSON, YAML, TOML, csv
 - See if there is a suitable design pattern that fits the task and aims
+git 
