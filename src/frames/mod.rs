@@ -11,12 +11,24 @@ pub enum FrameType {
 pub enum FrameDetectionError {
     EmptyData,
     InvalidStartOrStopByte,
-    LengthMismatch
+    LengthMismatch,
+    WrongChecksum,
 }
 
 pub fn detect_frame_type(data: &[u8])  -> Result<FrameType, FrameDetectionError> {
+   
     if data.is_empty() {
         return Ok(FrameType::Unknown);
+    }
+
+    if data.len() == 1 && data[0] == 0xE5 {
+        return Ok(FrameType::SingleCharacter);
+    }
+    
+    let cs = calculate_checksum(data);
+
+    if cs != data[data.len() - 2] {
+        return Err(FrameDetectionError::WrongChecksum);
     }
 
     match data[0] {
@@ -51,15 +63,22 @@ pub fn detect_frame_type(data: &[u8])  -> Result<FrameType, FrameDetectionError>
                 Ok(FrameType::Unknown)
             }
         },
-        0xE5 => {
-            if data.len() == 1 {
-                Ok(FrameType::SingleCharacter)
-            } else {
-                Ok(FrameType::Unknown)
-            }
-        },
         _ => Ok(FrameType::Unknown)
     }
+}
+
+
+// The Check Sum is calculated from the arithmetical sum of the data 
+// without taking carry digits into account.
+fn calculate_checksum(data: &[u8]) -> u8 {
+
+    if data.len() < 2 {
+        panic!("Data too short to calculate checksum");
+    }
+
+    data.iter()
+        .take(data.len() - 2) // Take all bytes except the last two
+        .fold(0u8, |acc, &x| acc.wrapping_add(x))
 }
 
 
@@ -72,10 +91,10 @@ mod tests {
     fn test_detect_frame_type() {
 
         let single_character_frame = vec![0xE5];
-        let short_frame = vec![0x10, 0x7B, 0x3C, 0x16];
-        let long_frame = vec![0x68, 0x03, 0x03, 0x68, 0x08, 0x34, 0x12, 0x00, 0x16];
-        let control_frame = vec![0x68, 0x01, 0x01, 0x68, 0x53, 0xFD, 0x16]; 
-        let control_frame_wrong_length= vec![0x68, 0x02, 0x02, 0x68, 0x53, 0xFD, 0x16]; 
+        let short_frame = vec![0x10, 0x7B, 0x8b, 0x16];
+        let long_frame = vec![0x68, 0x03, 0x03, 0x68, 0x08, 0x34, 0x12, 0x24, 0x16];
+        let control_frame = vec![0x68, 0x01, 0x01, 0x68, 0x53, 0x25, 0x16]; 
+        let control_frame_wrong_length= vec![0x68, 0x02, 0x02, 0x68, 0x53, 0x27, 0x16]; 
 
         assert_eq!(detect_frame_type(&single_character_frame), Ok(FrameType::SingleCharacter));
         assert_eq!(detect_frame_type(&short_frame), Ok(FrameType::ShortFrame));
