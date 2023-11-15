@@ -134,8 +134,16 @@ mod tests {
 
         let single_character_frame = vec![0xE5];
         let short_frame = vec![0x10, 0x7B, 0x8b, 0x06,0x16];
+        let control_frame = vec![0x68, 0x03, 0x03, 0x68, 0x53, 0x01, 0x00, 0x54, 0x16];
+
 
         assert_eq!(parse_frame(&single_character_frame), Ok(FrameType::SingleCharacter{character: 0xE5}));
         assert_eq!(parse_frame(&short_frame), Ok(FrameType::ShortFrame{function: 0x7B, address: 0x8B}));
+        assert_eq!(parse_frame(&control_frame), Ok(FrameType::ControlFrame {
+            function: 0x53,
+            address: 0x01,
+            control_information: 0x00,
+        }));
     }
+
 }
