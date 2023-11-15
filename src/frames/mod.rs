@@ -41,7 +41,10 @@ pub trait Frame {
 }
 
 pub fn parse(data: &[u8])  {
-
+    match parse_frame(data) {
+        Ok(frame) => println!("Frame: {:?}", frame),
+        Err(e) => println!("Error: {:?}", e),
+    }
 }
 
 pub fn parse_frame(data: &[u8])  -> Result<FrameType, FrameError> {

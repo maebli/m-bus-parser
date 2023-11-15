@@ -1,2 +1,8 @@
+use m_bus_parser::parse_frame;
 
-fn main() {}
+fn main() {
+    let data = [0x68, 0x04, 0x04, 0x68, 0x53, 0x01, 0x00, 0x00, 0x54, 0x16];
+    let frame = parse_frame(&data).unwrap();
+    println!("{:?}", frame);
+
+}
