@@ -5,16 +5,16 @@ pub enum FrameType<'a> {
     },
     ShortFrame{
         function: Function, 
-        address: u8
+        address: Address
     },
     LongFrame{
         function: Function,
-        address: u8,
+        address: Address,
         control_information: u8, 
         data: &'a [u8]},
     ControlFrame{
         function: Function, 
-        address: u8, 
+        address: Address, 
         control_information: u8
     },
 }
@@ -27,6 +27,8 @@ pub enum Function{
     REQ_UD1{FCB: bool},
     RSP_UD{ACD:bool, DFC:bool}
 }
+
+
 
 impl Function {
     fn from(byte: u8) -> Function {
@@ -43,6 +45,26 @@ impl Function {
             0x28 => Function::RSP_UD{ACD: true, DFC: false},
             0x38 => Function::RSP_UD{ACD: true, DFC: true},
             _ => panic!("Invalid function byte: {}", byte),
+        }
+    }
+}
+
+#[derive(Debug,PartialEq)]
+pub enum Address{
+    UNINITIALIZED,
+    PRIMARY(u8),
+    SECONDARY,
+    BROADCAST{reply_required: bool},
+}
+
+impl Address {
+    fn from(byte: u8) -> Address {
+        match byte {
+            0   => Address::UNINITIALIZED,
+            253 => Address::SECONDARY,
+            254 => Address::BROADCAST{reply_required: true},
+            255 => Address::BROADCAST{reply_required: false},
+            _   => Address::PRIMARY(byte)
         }
     }
 }
@@ -108,12 +130,12 @@ pub fn parse_frame(data: &[u8])  -> Result<FrameType, FrameError> {
             match control_field {
                 0x53 => Ok(FrameType::ControlFrame{
                     function: Function::from(data[4]), 
-                    address: data[5],
+                    address: Address::from(data[5]),
                     control_information: data[6]
                 }),
                 _ => Ok(FrameType::LongFrame{
                     function: Function::from(data[4]),
-                    address: data[5],
+                    address: Address::from(data[5]),
                     control_information: data[6],
                     data: &data[7..data.len() - 2],
                 }),
@@ -124,7 +146,7 @@ pub fn parse_frame(data: &[u8])  -> Result<FrameType, FrameError> {
             if data.len() == 5 && data[4] == 0x16 {
                 Ok(FrameType::ShortFrame{
                     function: Function::from(data[1]),
-                    address: data[2],
+                    address: Address::from(data[2]),
                 })
             } else {
                 Err(FrameError::LengthMismatch)
@@ -179,16 +201,16 @@ mod tests {
 
 
         assert_eq!(parse_frame(&single_character_frame), Ok(FrameType::SingleCharacter{character: 0xE5}));
-        assert_eq!(parse_frame(&short_frame), Ok(FrameType::ShortFrame{function: Function::from(0x7B), address: 0x8B}));
+        assert_eq!(parse_frame(&short_frame), Ok(FrameType::ShortFrame{function: Function::from(0x7B), address: Address::from(0x8B)}));
         assert_eq!(parse_frame(&control_frame), Ok(FrameType::ControlFrame {
             function: Function::from(0x53),
-            address: 0x01,
+            address: Address::from(0x01),
             control_information: 0x00,
         }));
 
         assert_eq!(parse_frame(&example),Ok(FrameType::LongFrame {  
             function: Function::from(8), 
-            address: 1, 
+            address: Address::from(1), 
             control_information: 114, 
             data: &[
                 1, 0, 0, 0, 150, 21, 1, 0, 24, 0,
