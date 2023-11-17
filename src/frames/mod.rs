@@ -49,20 +49,20 @@ impl Function {
 
 #[derive(Debug,PartialEq)]
 pub enum Address{
-    UNINITIALIZED,
-    PRIMARY(u8),
-    SECONDARY,
-    BROADCAST{reply_required: bool},
+    Uninitalized,
+    Primary(u8),
+    Secondary,
+    Broadcast{reply_required: bool},
 }
 
 impl Address {
     fn from(byte: u8) -> Address {
         match byte {
-            0   => Address::UNINITIALIZED,
-            253 => Address::SECONDARY,
-            254 => Address::BROADCAST{reply_required: true},
-            255 => Address::BROADCAST{reply_required: false},
-            _   => Address::PRIMARY(byte)
+            0   => Address::Uninitalized,
+            253 => Address::Secondary,
+            254 => Address::Broadcast{reply_required: true},
+            255 => Address::Broadcast{reply_required: false},
+            _   => Address::Primary(byte)
         }
     }
 }
@@ -247,7 +247,7 @@ mod tests {
 
         let single_character_frame = vec![0xE5];
         let short_frame = vec![0x10, 0x7B, 0x8b, 0x06,0x16];
-        let control_frame = vec![0x68, 0x03, 0x03, 0x68, 0x53, 0x01, 0x51, 0x54, 0x16];
+        let control_frame = vec![0x68, 0x03, 0x03, 0x68, 0x53, 0x01, 0x51, 0xA5, 0x16];
         
         let example = vec![
             0x68, 0x4D, 0x4D, 0x68, 0x08, 0x01, 0x72, 0x01, 0x00, 0x00, 0x00, 0x96, 0x15, 0x01, 
