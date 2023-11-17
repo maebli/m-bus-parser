@@ -28,9 +28,7 @@ jobs:
         cargo clippy -- -D warnings
     - name: Check for third-party libraries
       run: |
-        if grep -q 'dependencies' Cargo.toml; then
-          if grep -v '^\[dependencies\]$' Cargo.toml | grep -q '^\[.*\]$'; then
-            echo "Third-party libraries found in Cargo.toml"
-            exit 1
-          fi
+        if grep -q '^\[dependencies\]' Cargo.toml; then
+          echo "Third-party libraries found in Cargo.toml"
+          exit 1
         fi
