@@ -42,7 +42,7 @@ impl Function {
             0x18 => Ok(Function::RspUd{acd: false, dfc: true}),
             0x28 => Ok(Function::RspUd{acd: true, dfc: false}),
             0x38 => Ok(Function::RspUd{acd: true, dfc: true}),
-            _    => Err(FrameError::InvalidFunction{byte: byte}),
+            _    => Err(FrameError::InvalidFunction{byte}),
         }
     }
 }
@@ -144,7 +144,7 @@ impl ControlInformation {
             0x71 => Ok(ControlInformation::SendAlarmStatus(Direction::SlaveToMaster)),
             0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure(Direction::SlaveToMaster)),
             0x73 | 0x77 => Ok(ControlInformation::ResponseWithFixedDataStructure(Direction::SlaveToMaster)),
-            _ => Err(FrameError::InvalidControlInformation{byte: byte}),
+            _ => Err(FrameError::InvalidControlInformation{byte}),
         }
     }
 }
