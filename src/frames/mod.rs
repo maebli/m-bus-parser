@@ -21,29 +21,27 @@ pub enum FrameType<'a> {
 
 #[derive(Debug,PartialEq)]
 pub enum Function{
-    SND_NK,
-    SND_UD{FCB: bool},
-    REQ_UD2{FCB: bool},
-    REQ_UD1{FCB: bool},
-    RSP_UD{ACD:bool, DFC:bool}
+    SndNk,
+    SndUd{fcb: bool},
+    ReqUd2{fcb: bool},
+    ReqUd1{fcb: bool},
+    RspUd{acd:bool, dfc:bool}
 }
-
-
 
 impl Function {
     fn from(byte: u8) -> Result<Function,FrameError> {
         match byte {
-            0x40 => Ok(Function::SND_NK),
-            0x53 => Ok(Function::SND_UD{FCB: false}),
-            0x73 => Ok(Function::SND_UD{FCB: true}),
-            0x5B => Ok(Function::REQ_UD2{FCB: false}),
-            0x7B => Ok(Function::REQ_UD2{FCB: true}),
-            0x5A => Ok(Function::REQ_UD1{FCB: false}),
-            0x7A => Ok(Function::REQ_UD1{FCB: true}),
-            0x08 => Ok(Function::RSP_UD{ACD: false, DFC: false}),
-            0x18 => Ok(Function::RSP_UD{ACD: false, DFC: true}),
-            0x28 => Ok(Function::RSP_UD{ACD: true, DFC: false}),
-            0x38 => Ok(Function::RSP_UD{ACD: true, DFC: true}),
+            0x40 => Ok(Function::SndNk),
+            0x53 => Ok(Function::SndUd{fcb: false}),
+            0x73 => Ok(Function::SndUd{fcb: true}),
+            0x5B => Ok(Function::ReqUd2{fcb: false}),
+            0x7B => Ok(Function::ReqUd2{fcb: true}),
+            0x5A => Ok(Function::ReqUd1{fcb: false}),
+            0x7A => Ok(Function::ReqUd1{fcb: true}),
+            0x08 => Ok(Function::RspUd{acd: false, dfc: false}),
+            0x18 => Ok(Function::RspUd{acd: false, dfc: true}),
+            0x28 => Ok(Function::RspUd{acd: true, dfc: false}),
+            0x38 => Ok(Function::RspUd{acd: true, dfc: true}),
             _    => Err(FrameError::InvalidFunction{byte: byte}),
         }
     }
@@ -90,13 +88,13 @@ pub enum FrameError {
     },
 }
 #[derive(Debug, PartialEq)]
-enum Direction {
+pub enum Direction {
     SlaveToMaster,
     MasterToSlave,
 }
 
 #[derive(Debug, PartialEq)]
-enum ControlInformation {
+pub enum ControlInformation {
     SendData(Direction),
     SelectSlave(Direction),
     ResetAtApplicationLevel(Direction),
@@ -157,13 +155,6 @@ pub trait Frame {
     fn from(data: &[u8]) -> Result<Self, FrameError>
     where
         Self: Sized;
-}
-
-pub fn parse(data: &[u8])  {
-    match parse_frame(data) {
-        Ok(frame) => println!("Frame: {:?}", frame),
-        Err(e) => println!("Error: {:?}", e),
-    }
 }
 
 pub fn parse_frame(data: &[u8])  -> Result<FrameType, FrameError> {
