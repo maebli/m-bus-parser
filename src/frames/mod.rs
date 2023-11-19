@@ -1,3 +1,6 @@
+//! # Frames
+//! The Frame is part of the MBUS data link layer
+//! It is used to encapsulate the application layer data
 #[derive(Debug,PartialEq)]
 pub enum FrameType<'a> {
     SingleCharacter{
@@ -10,12 +13,10 @@ pub enum FrameType<'a> {
     LongFrame{
         function: Function,
         address: Address,
-        control_information: ControlInformation, 
         data: &'a [u8]},
     ControlFrame{
         function: Function, 
         address: Address, 
-        control_information: ControlInformation,
     },
 }
 
@@ -87,68 +88,6 @@ pub enum FrameError {
         byte: u8,
     },
 }
-#[derive(Debug, PartialEq)]
-pub enum Direction {
-    SlaveToMaster,
-    MasterToSlave,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ControlInformation {
-    SendData(Direction),
-    SelectSlave(Direction),
-    ResetAtApplicationLevel(Direction),
-    SynchronizeSlave(Direction),
-    SetBaudRate300(Direction),
-    SetBaudRate600(Direction),
-    SetBaudRate1200(Direction),
-    SetBaudRate2400(Direction),
-    SetBaudRate4800(Direction),
-    SetBaudRate9600(Direction),
-    SetBaudRate19200(Direction),
-    SetBaudRate38400(Direction),
-    OutputRAMContent(Direction),
-    WriteRAMContent(Direction),
-    StartCalibrationTestMode(Direction),
-    ReadEEPROM(Direction),
-    StartSoftwareTest(Direction),
-    HashProcedure(u8, Direction),
-    SendErrorStatus(Direction),
-    SendAlarmStatus(Direction),
-    ResponseWithVariableDataStructure(Direction),
-    ResponseWithFixedDataStructure(Direction),
-}
-
-impl ControlInformation {
-    fn from(byte: u8) -> Result<ControlInformation,FrameError> {
-        match byte {
-            0x51 => Ok(ControlInformation::SendData(Direction::MasterToSlave)),
-            0x52 => Ok(ControlInformation::SelectSlave(Direction::MasterToSlave)),
-            0x50 => Ok(ControlInformation::ResetAtApplicationLevel(Direction::MasterToSlave)),
-            0x54 => Ok(ControlInformation::SynchronizeSlave(Direction::MasterToSlave)),
-            0xB8 => Ok(ControlInformation::SetBaudRate300(Direction::MasterToSlave)),
-            0xB9 => Ok(ControlInformation::SetBaudRate600(Direction::MasterToSlave)),
-            0xBA => Ok(ControlInformation::SetBaudRate1200(Direction::MasterToSlave)),
-            0xBB => Ok(ControlInformation::SetBaudRate2400(Direction::MasterToSlave)),
-            0xBC => Ok(ControlInformation::SetBaudRate4800(Direction::MasterToSlave)),
-            0xBD => Ok(ControlInformation::SetBaudRate9600(Direction::MasterToSlave)),
-            0xBE => Ok(ControlInformation::SetBaudRate19200(Direction::MasterToSlave)),
-            0xBF => Ok(ControlInformation::SetBaudRate38400(Direction::MasterToSlave)),
-            0xB1 => Ok(ControlInformation::OutputRAMContent(Direction::MasterToSlave)),
-            0xB2 => Ok(ControlInformation::WriteRAMContent(Direction::MasterToSlave)),
-            0xB3 => Ok(ControlInformation::StartCalibrationTestMode(Direction::MasterToSlave)),
-            0xB4 => Ok(ControlInformation::ReadEEPROM(Direction::MasterToSlave)),
-            0xB6 => Ok(ControlInformation::StartSoftwareTest(Direction::MasterToSlave)),
-            0x90..=0x97 => Ok(ControlInformation::HashProcedure(byte - 0x90, Direction::MasterToSlave)),
-            0x70 => Ok(ControlInformation::SendErrorStatus(Direction::SlaveToMaster)),
-            0x71 => Ok(ControlInformation::SendAlarmStatus(Direction::SlaveToMaster)),
-            0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure(Direction::SlaveToMaster)),
-            0x73 | 0x77 => Ok(ControlInformation::ResponseWithFixedDataStructure(Direction::SlaveToMaster)),
-            _ => Err(FrameError::InvalidControlInformation{byte}),
-        }
-    }
-}
-
 
 
 pub trait Frame {
@@ -191,12 +130,10 @@ pub fn parse_frame(data: &[u8])  -> Result<FrameType, FrameError> {
                 0x53 => Ok(FrameType::ControlFrame{
                     function: Function::from(data[4])?, 
                     address: Address::from(data[5]),
-                    control_information: ControlInformation::from(data[6])?
                 }),
                 _ => Ok(FrameType::LongFrame{
                     function: Function::from(data[4])?,
                     address: Address::from(data[5]),
-                    control_information: ControlInformation::from(data[6])?,
                     data: &data[7..data.len() - 2],
                 }),
             }
@@ -263,13 +200,11 @@ mod tests {
         assert_eq!(parse_frame(&control_frame), Ok(FrameType::ControlFrame {
             function: Function::from(0x53).unwrap(),
             address: Address::from(0x01),
-            control_information: ControlInformation::from(0x51).unwrap(),
         }));
 
         assert_eq!(parse_frame(&example),Ok(FrameType::LongFrame {  
             function: Function::from(8).unwrap(), 
             address: Address::from(1), 
-            control_information: ControlInformation::from(114).unwrap(), 
             data: &[
                 1, 0, 0, 0, 150, 21, 1, 0, 24, 0,
                 0, 0, 12, 120, 86, 0, 0, 0, 1, 253, 

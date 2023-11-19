@@ -31,9 +31,3 @@ INPUT: 68 0D 0D 68 | 53 FE 51 | 07 79 04 03 02 01 24 40 01 04 | 95 16 §
 3. Set identification number of the slave to "12345678" and the 8 digit BCD-Counter (unit 1 kWh) to 107 kWh.
 INPUT:68 0F 0F 68 | 53 FE 51| 0C 79 78 56 34 12 | 0C 06 07 01 00 00 | 55 16
 
-
-# TODO
-
-- Specifiy information format(s) of output e.g. JSON, YAML, TOML, csv
-- See if there is a suitable design pattern that fits the task and aims
-git 
