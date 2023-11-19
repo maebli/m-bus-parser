@@ -134,7 +134,7 @@ pub fn parse_frame(data: &[u8])  -> Result<FrameType, FrameError> {
                 _ => Ok(FrameType::LongFrame{
                     function: Function::from(data[4])?,
                     address: Address::from(data[5]),
-                    data: &data[7..data.len() - 2],
+                    data: &data[6..data.len() - 2],
                 }),
             }
         },

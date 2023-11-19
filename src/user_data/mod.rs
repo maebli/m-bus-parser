@@ -131,7 +131,7 @@ impl std::fmt::Display for IdentificationNumberError {
 impl std::error::Error for IdentificationNumberError {}
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq)]
 pub struct IdentificationNumber {
     number: u32,
 }
@@ -155,6 +155,7 @@ impl IdentificationNumber {
 }
 
 
+#[derive(Debug, PartialEq)]
 pub enum UserDataBlock {
     ResetAtApplicationLevel{subcode: ApplicationResetSubcode},
     FixedDataStructure{
@@ -172,7 +173,7 @@ pub enum UserDataError {
     InvalidUserData,
 }
 
-fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerError> {
+pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerError> {
     
     let control_information = ControlInformation::from(data[0])?;
 
