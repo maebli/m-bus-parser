@@ -1,6 +1,8 @@
 //! # User Data
 //! User data is part of the application layer
 
+use std::fmt;
+
 #[derive(Debug, PartialEq)]
 pub struct StatusField {
     pub counter_binary_signed: bool,
@@ -178,6 +180,16 @@ impl IdentificationNumber {
 
 }
 
+#[derive(Debug, PartialEq)]
+pub struct FixedDataHeder{
+    IdentificationNumber: IdentificationNumber,
+    ManufacturerCode: ManufacturerCode,
+    Version: u8,
+    Medium: Medium,
+    AccessNumber: u8,
+    Status: StatusField,
+    Signature: u16,
+}
 
 #[derive(Debug, PartialEq)]
 pub enum UserDataBlock {
@@ -186,12 +198,19 @@ pub enum UserDataBlock {
         IdentificationNumber: IdentificationNumber,
         AccessNumber: u8,
         Status: StatusField,
-        Medium: u8,
+        MediumAdUnit: u16,
         Counter1: u32,
         Counter2: u32,
-    }
+    },
+    VariableDataStructure{
+        FixedDataHeder: u8,
+        VariableDataBlock: Vec<u8>,
+        MDH: u8,
+        ManufacturerSpecificData: Vec<u8>,
+    },
 }
-#[derive(Debug, Clone, Copy)]
+
+#[derive(Debug,PartialEq)]
 pub enum Medium {
     Other,
     Oil,
@@ -261,7 +280,47 @@ impl Medium {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+
+#[derive(Debug, PartialEq)]
+pub struct ManufacturerCode {
+    code: [char; 3],
+}
+
+impl ManufacturerCode {
+
+    pub fn from_id(id: u16) -> Result<Self, &'static str> {
+        let first_letter = ((id / (32 * 32)) + 64) as u8 as char;
+        let second_letter = (((id % (32 * 32)) / 32) + 64) as u8 as char;
+        let third_letter = ((id % 32) + 64) as u8 as char;
+
+        if first_letter.is_ascii_uppercase() && second_letter.is_ascii_uppercase() && third_letter.is_ascii_uppercase() {
+            Ok(ManufacturerCode { code: [first_letter, second_letter, third_letter] })
+        } else {
+            Err("ID does not correspond to valid ASCII uppercase letters")
+        }
+    }
+
+    pub fn calculate_id(&self) -> Result<u16, &'static str> {
+        let id = self.code.iter().enumerate().fold(0, |acc, (index, &char)| {
+            acc + ((char as u16 - 64) * 32u16.pow(2 - index as u32))
+        });
+
+        if id <= u16::MAX {
+            Ok(id)
+        } else {
+            Err("Calculated ID exceeds the 2-byte limit")
+        }
+    }
+
+}
+
+impl fmt::Display for ManufacturerCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}{}", self.code[0], self.code[1], self.code[2])
+    }
+}
+
+#[derive(Debug,PartialEq)]
 pub struct MeasuredMedium {
     pub medium: Medium,
 }
