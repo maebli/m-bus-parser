@@ -96,6 +96,7 @@ impl ControlInformation {
 pub enum ApplicationLayerError{
     MissingControlInformation,
     InvalidControlInformation{byte:u8},
+    IdentificationNumberError,
 }
 
 #[derive(Debug, PartialEq)]
@@ -141,24 +142,25 @@ impl ApplicationResetSubcode {
     }
 }
 
+fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> {
+    let mut number = 0u32;
 
-#[derive(Debug, Clone)]
-pub enum IdentificationNumberError {
-    InvalidDigit,
-    // You can add more error types here if needed
-}
-
-impl std::fmt::Display for IdentificationNumberError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IdentificationNumberError::InvalidDigit => write!(f, "Invalid digit for BCD"),
-            // Handle other errors here
+    for &digit in digits.iter().rev() {
+        let lower = digit & 0x0F;
+        let upper = digit >> 4;
+        if lower > 9 || upper > 9 {
+            return Err(ApplicationLayerError::IdentificationNumberError);
         }
+        number = number * 100 + (upper as u32 * 10) + lower as u32;
     }
+
+    Ok(number)
 }
 
-impl std::error::Error for IdentificationNumberError {}
-
+#[derive(Debug, PartialEq)]
+pub struct Counter {
+    count: u32,
+}
 
 #[derive(Debug, PartialEq)]
 pub struct IdentificationNumber {
@@ -166,18 +168,17 @@ pub struct IdentificationNumber {
 }
 
 impl IdentificationNumber {
-
-    pub fn from_bcd_digits(digits: [u8; 8]) -> Result<Self, IdentificationNumberError> {
-        let mut number = 0u32;
-        for &digit in &digits {
-            if digit > 9 {
-                return Err(IdentificationNumberError::InvalidDigit);
-            }
-            number = number * 10 + digit as u32;
-        }
+    pub fn from_bcd_hex_digits(digits: [u8; 4]) -> Result<Self, ApplicationLayerError> {
+        let number = bcd_hex_digits_to_u32(digits)?;
         Ok(IdentificationNumber { number })
     }
+}
 
+impl Counter {
+    pub fn from_bcd_hex_digits(digits: [u8; 4]) -> Result<Self, ApplicationLayerError> {
+        let count = bcd_hex_digits_to_u32(digits)?;
+        Ok(Counter { count })
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -199,8 +200,8 @@ pub enum UserDataBlock {
         AccessNumber: u8,
         Status: StatusField,
         MediumAdUnit: u16,
-        Counter1: u32,
-        Counter2: u32,
+        Counter1: Counter,
+        Counter2: Counter,
     },
     VariableDataStructure{
         FixedDataHeder: u8,
@@ -366,7 +367,22 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
         ControlInformation::SendErrorStatus(_) => todo!(),
         ControlInformation::SendAlarmStatus(_) => todo!(),
         ControlInformation::ResponseWithVariableDataStructure(_) => todo!(),
-        ControlInformation::ResponseWithFixedDataStructure(_) => todo!(),
+        ControlInformation::ResponseWithFixedDataStructure(_) => {
+            let identification_number = IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?;
+            let access_number = data[5];
+            let status = StatusField::from(data[6]);
+            let medium_ad_unit = u16::from_be_bytes([data[7], data[8]]);
+            let counter1 = Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
+            let counter2 = Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
+            Ok(UserDataBlock::FixedDataStructure{
+                IdentificationNumber: identification_number,
+                AccessNumber: access_number,
+                Status: status,
+                MediumAdUnit: medium_ad_unit,
+                Counter1: counter1,
+                Counter2: counter2,
+            })
+        },
     }
 }
 
@@ -405,5 +421,35 @@ mod tests {
         let data = [ 0x50, 0x10];
         let result = parse_user_data(&data);
         assert_eq!(result, Ok(UserDataBlock::ResetAtApplicationLevel{subcode: ApplicationResetSubcode::All(0x10)}));
+    }
+
+    #[test]
+    fn test_identification_number() -> Result<(), ApplicationLayerError> {
+        let data = [0x78, 0x56, 0x34, 0x12];
+        let result = IdentificationNumber::from_bcd_hex_digits(data)?;
+        assert_eq!(result, IdentificationNumber{number: 12345678});
+        Ok(())
+    }
+
+    #[test]
+    fn test_fixed_data_structure(){
+        let data = [  0x73,
+                                0x78,0x56,0x34,0x12,
+                                0x0A,
+                                0x00,
+                                0xE9,0x7E,
+                                0x01,0x00,0x00,0x00,
+                                0x35,0x01,0x00,0x00];
+        
+        let result = parse_user_data(&data);
+
+        assert_eq!(result, Ok(UserDataBlock::FixedDataStructure{
+            IdentificationNumber: IdentificationNumber{number: 12345678},
+            AccessNumber: 0x0A,
+            Status: StatusField::from(0x00),
+            MediumAdUnit: 0xE97E,
+            Counter1: Counter{count: 1},
+            Counter2: Counter{count: 135},
+        }));
     }
 }
