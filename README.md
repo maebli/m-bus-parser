@@ -6,6 +6,7 @@ A modern, open source decoder for wired m-bus portocol decoder for EN 13757-2 ph
 -  https://m-bus.com/documentation
 -  https://en.wikipedia.org/wiki/Parsing
 -  Similar task can be used as inspiration: https://github.com/seanmonstar/httparse
+-  Implementation in C https://github.com/rscada/libmbus
 
 # Goals
 
