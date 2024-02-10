@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use m_bus_parser::parse_frame;
+use m_bus_parser::frames::parse_frame;
 
 fn frame_parse_benchmark(c: &mut Criterion) {
     let data = [0x68, 0x04, 0x04, 0x68, 0x53, 0x01, 0x00, 0x00, 0x54, 0x16];

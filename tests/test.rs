@@ -4,7 +4,8 @@ use hex;
 
 #[cfg(test)]
 mod tests {
-    use m_bus_parser::parse_frame;
+
+    use m_bus_parser::frames::parse_frame;
 
     use super::*;
 
