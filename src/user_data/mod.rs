@@ -230,7 +230,7 @@ pub enum Medium {
     WaterMode2,
     HeatCostAllocator2,
     ReservedMode2,
-    UnknownMedium,
+    Unknown,
     ColdWater,
     DualWater,
     Pressure,
@@ -269,7 +269,7 @@ impl Medium {
             0x19 => Medium::ADConverter,
             // Extended reserved range from the second set
             0x20..=0xFF => Medium::Reserved,
-            _ => Medium::UnknownMedium,
+            _ => Medium::Unknown,
         }
     }
 }
