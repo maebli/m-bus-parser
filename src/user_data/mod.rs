@@ -184,31 +184,31 @@ impl Counter {
 
 #[derive(Debug, PartialEq)]
 pub struct FixedDataHeder{
-    IdentificationNumber: IdentificationNumber,
-    ManufacturerCode: ManufacturerCode,
-    Version: u8,
-    Medium: Medium,
-    AccessNumber: u8,
-    Status: StatusField,
-    Signature: u16,
+    identification_number: IdentificationNumber,
+    manufacturer_code: ManufacturerCode,
+    version: u8,
+    medium: Medium,
+    access_number: u8,
+    status: StatusField,
+    signature: u16,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum UserDataBlock {
     ResetAtApplicationLevel{subcode: ApplicationResetSubcode},
     FixedDataStructure{
-        IdentificationNumber: IdentificationNumber,
-        AccessNumber: u8,
-        Status: StatusField,
-        MediumAdUnit: u16,
-        Counter1: Counter,
-        Counter2: Counter,
+        identification_number: IdentificationNumber,
+        access_number: u8,
+        status: StatusField,
+        medium_ad_unit: u16,
+        counter1: Counter,
+        counter2: Counter,
     },
     VariableDataStructure{
-        FixedDataHeader: FixedDataHeader,
-        VariableDataBlock: Vec<u8>,
-        MDH: u8,
-        ManufacturerSpecificData: Vec<u8>,
+        fixed_data_header: FixedDataHeader,
+        variable_data_block: Vec<u8>,
+        mdh: u8,
+        manufacturer_specific_data: Vec<u8>,
     },
 }
 
@@ -222,22 +222,14 @@ pub enum Medium {
     Steam,
     HotWater,
     Water,
-    HCA,
+    HeatCostAllocator,
     Reserved,
     GasMode2,
     HeatMode2,
     HotWaterMode2,
     WaterMode2,
-    HCAMode2,
+    HeatCostAllocator2,
     ReservedMode2,
-    HeatVolumeReturn,
-    HeatCostAllocator,
-    CompressedAir,
-    CoolingLoadMeterReturn,
-    CoolingLoadMeterFlow,
-    HeatVolumeFlow,
-    HeatCoolingLoadMeter,
-    BusSystem,
     UnknownMedium,
     ColdWater,
     DualWater,
@@ -256,13 +248,13 @@ impl Medium {
             0x05 => Medium::Steam,
             0x06 => Medium::HotWater,
             0x07 => Medium::Water,
-            0x08 => Medium::HCA,
+            0x08 => Medium::HeatCostAllocator,
             0x09 => Medium::Reserved, // Note: Reserved for 0x09 from the first set
             0x0A => Medium::GasMode2,
             0x0B => Medium::HeatMode2,
             0x0C => Medium::HotWaterMode2,
             0x0D => Medium::WaterMode2,
-            0x0E => Medium::HCAMode2,
+            0x0E => Medium::HeatCostAllocator2,
             0x0F => Medium::ReservedMode2,
             // Unique mediums from the second set
             0x10 => Medium::Reserved, // Reserved range
@@ -282,32 +274,9 @@ impl Medium {
     }
 }
 
-#[derive(Debug, Clone)]
-struct DataRecordHeader {
-    dib: DataInformationBlock,
-    vib: ValueInformationBlock,
-}
-
-#[derive(Debug, Clone)]
-struct DataInformationBlock {
-    dif: u8,
-    dife: Vec<u8>, // Variable length, 0-10 bytes
-}
-
-#[derive(Debug, Clone)]
-struct ValueInformationBlock {
-    vif: u8,
-    vife: Vec<u8>, // Variable length, 0-10 bytes
-}
-
-#[derive(Debug, Clone)]
-struct DataRecord {
-    header: DataRecordHeader,
-    data: Vec<u8>, // Variable length data
-}
 
 #[derive(Debug,PartialEq)]
-struct FixedDataHeader {
+pub struct FixedDataHeader {
     identification_number: IdentificationNumber, // 4 bytes, BCD
     manufacturer: ManufacturerCode, // 2 bytes, encoded from ASCII
     version: u8,
@@ -331,18 +300,6 @@ impl ManufacturerCode {
 
         if first_letter.is_ascii_uppercase() && second_letter.is_ascii_uppercase() && third_letter.is_ascii_uppercase() {
             Ok(ManufacturerCode { code: [first_letter, second_letter, third_letter] })
-        } else {
-            Err(ApplicationLayerError::InvalidManufacturerCode{code:id})
-        }
-    }
-
-    pub fn calculate_id(&self) -> Result<u16,ApplicationLayerError> {
-        let id = self.code.iter().enumerate().fold(0, |acc, (index, &char)| {
-            acc + ((char as u16 - 64) * 32u16.pow(2 - index as u32))
-        });
-
-        if id <= u16::MAX {
-            Ok(id)
         } else {
             Err(ApplicationLayerError::InvalidManufacturerCode{code:id})
         }
@@ -403,7 +360,7 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
         ControlInformation::SendAlarmStatus(_) => todo!(),
         ControlInformation::ResponseWithVariableDataStructure(_) => {
             Ok(UserDataBlock::VariableDataStructure{
-                FixedDataHeader: FixedDataHeader{
+                fixed_data_header: FixedDataHeader{
                     identification_number: IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?,
                     manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([data[6], data[5]]))?,
                     version: data[7],
@@ -412,9 +369,9 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
                     status: StatusField::from(data[10]),
                     signature: u16::from_be_bytes([data[11], data[12]]),
                 },
-                VariableDataBlock: data[13..data.len()-3].to_vec(),
-                MDH: data[data.len()-3],
-                ManufacturerSpecificData: data[data.len()-2..].to_vec(),
+                variable_data_block: data[13..data.len()-3].to_vec(),
+                mdh: data[data.len()-3],
+                manufacturer_specific_data: data[data.len()-2..].to_vec(),
                 })
         },
         ControlInformation::ResponseWithFixedDataStructure(_) => {
@@ -425,12 +382,12 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
             let counter1 = Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
             let counter2 = Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
             Ok(UserDataBlock::FixedDataStructure{
-                IdentificationNumber: identification_number,
-                AccessNumber: access_number,
-                Status: status,
-                MediumAdUnit: medium_and_unit,
-                Counter1: counter1,
-                Counter2: counter2,
+                identification_number: identification_number,
+                access_number: access_number,
+                status: status,
+                medium_ad_unit: medium_and_unit,
+                counter1: counter1,
+                counter2: counter2,
             })
         },
     }
@@ -494,12 +451,12 @@ mod tests {
         let result = parse_user_data(&data);
 
         assert_eq!(result, Ok(UserDataBlock::FixedDataStructure{
-            IdentificationNumber: IdentificationNumber{number: 12345678},
-            AccessNumber: 0x0A,
-            Status: StatusField::from(0x00),
-            MediumAdUnit: 0xE97E,
-            Counter1: Counter{count: 1},
-            Counter2: Counter{count: 135},
+            identification_number: IdentificationNumber{number: 12345678},
+            access_number: 0x0A,
+            status: StatusField::from(0x00),
+            medium_ad_unit: 0xE97E,
+            counter1: Counter{count: 1},
+            counter2: Counter{count: 135},
         }));
     }
 
