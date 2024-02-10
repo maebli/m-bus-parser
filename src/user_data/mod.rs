@@ -97,6 +97,7 @@ pub enum ApplicationLayerError{
     MissingControlInformation,
     InvalidControlInformation{byte:u8},
     IdentificationNumberError,
+    InvalidManufacturerCode{code:u16},
 }
 
 #[derive(Debug, PartialEq)]
@@ -204,10 +205,8 @@ pub enum UserDataBlock {
         Counter2: Counter,
     },
     VariableDataStructure{
-        FixedDataHeder: u8,
-        VariableDataBlock: Vec<u8>,
-        MDH: u8,
-        ManufacturerSpecificData: Vec<u8>,
+        FixedDataHeader: FixedDataHeader,
+        VariableData: Vec<u8>,
     },
 }
 
@@ -281,6 +280,40 @@ impl Medium {
     }
 }
 
+#[derive(Debug, Clone)]
+struct DataRecordHeader {
+    dib: DataInformationBlock,
+    vib: ValueInformationBlock,
+}
+
+#[derive(Debug, Clone)]
+struct DataInformationBlock {
+    dif: u8,
+    dife: Vec<u8>, // Variable length, 0-10 bytes
+}
+
+#[derive(Debug, Clone)]
+struct ValueInformationBlock {
+    vif: u8,
+    vife: Vec<u8>, // Variable length, 0-10 bytes
+}
+
+#[derive(Debug, Clone)]
+struct DataRecord {
+    header: DataRecordHeader,
+    data: Vec<u8>, // Variable length data
+}
+
+#[derive(Debug,PartialEq)]
+struct FixedDataHeader {
+    identification_number: IdentificationNumber, // 4 bytes, BCD
+    manufacturer: ManufacturerCode, // 2 bytes, encoded from ASCII
+    version: u8,
+    medium: Medium,
+    access_number: u8,
+    status: StatusField,
+    signature: u16, // 2 bytes, reserved for future encryption
+}
 
 #[derive(Debug, PartialEq)]
 pub struct ManufacturerCode {
@@ -289,7 +322,7 @@ pub struct ManufacturerCode {
 
 impl ManufacturerCode {
 
-    pub fn from_id(id: u16) -> Result<Self, &'static str> {
+    pub fn from_id(id: u16) -> Result<Self, ApplicationLayerError> {
         let first_letter = ((id / (32 * 32)) + 64) as u8 as char;
         let second_letter = (((id % (32 * 32)) / 32) + 64) as u8 as char;
         let third_letter = ((id % 32) + 64) as u8 as char;
@@ -297,11 +330,11 @@ impl ManufacturerCode {
         if first_letter.is_ascii_uppercase() && second_letter.is_ascii_uppercase() && third_letter.is_ascii_uppercase() {
             Ok(ManufacturerCode { code: [first_letter, second_letter, third_letter] })
         } else {
-            Err("ID does not correspond to valid ASCII uppercase letters")
+            Err(ApplicationLayerError::InvalidManufacturerCode{code:id})
         }
     }
 
-    pub fn calculate_id(&self) -> Result<u16, &'static str> {
+    pub fn calculate_id(&self) -> Result<u16,ApplicationLayerError> {
         let id = self.code.iter().enumerate().fold(0, |acc, (index, &char)| {
             acc + ((char as u16 - 64) * 32u16.pow(2 - index as u32))
         });
@@ -309,7 +342,7 @@ impl ManufacturerCode {
         if id <= u16::MAX {
             Ok(id)
         } else {
-            Err("Calculated ID exceeds the 2-byte limit")
+            Err(ApplicationLayerError::InvalidManufacturerCode{code:id})
         }
     }
 
@@ -366,19 +399,32 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
         ControlInformation::HashProcedure(_, _) => todo!(),
         ControlInformation::SendErrorStatus(_) => todo!(),
         ControlInformation::SendAlarmStatus(_) => todo!(),
-        ControlInformation::ResponseWithVariableDataStructure(_) => todo!(),
+        ControlInformation::ResponseWithVariableDataStructure(_) => {
+            Ok(UserDataBlock::VariableDataStructure{
+                FixedDataHeader: FixedDataHeader{
+                    identification_number: IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?,
+                    manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([data[5], data[6]]))?,
+                    version: data[7],
+                    medium: MeasuredMedium::new(data[8]).medium,
+                    access_number: data[9],
+                    status: StatusField::from(data[10]),
+                    signature: u16::from_be_bytes([data[11], data[12]]),
+                },
+                VariableData: data[13..data.len()].to_vec()
+                })
+        },
         ControlInformation::ResponseWithFixedDataStructure(_) => {
             let identification_number = IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?;
             let access_number = data[5];
             let status = StatusField::from(data[6]);
-            let medium_ad_unit = u16::from_be_bytes([data[7], data[8]]);
+            let medium_and_unit = u16::from_be_bytes([data[7], data[8]]);
             let counter1 = Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
             let counter2 = Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
             Ok(UserDataBlock::FixedDataStructure{
                 IdentificationNumber: identification_number,
                 AccessNumber: access_number,
                 Status: status,
-                MediumAdUnit: medium_ad_unit,
+                MediumAdUnit: medium_and_unit,
                 Counter1: counter1,
                 Counter2: counter2,
             })
