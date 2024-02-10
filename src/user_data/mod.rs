@@ -1,8 +1,6 @@
 //! # User Data
 //! User data is part of the application layer
 
-use std::fmt;
-
 #[derive(Debug, PartialEq)]
 pub struct StatusField {
     pub counter_binary_signed: bool,
@@ -100,7 +98,7 @@ pub enum ApplicationLayerError{
     InvalidManufacturerCode{code:u16},
 }
 
-// implement std lib for ApplicationLayerError
+#[cfg(feature = "std")]
 impl fmt::Display for ApplicationLayerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -112,6 +110,7 @@ impl fmt::Display for ApplicationLayerError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for ApplicationLayerError {}
 
 #[derive(Debug, PartialEq)]
@@ -208,7 +207,7 @@ pub struct FixedDataHeder{
 }
 
 #[derive(Debug, PartialEq)]
-pub enum UserDataBlock {
+pub enum UserDataBlock<'a> {
     ResetAtApplicationLevel{subcode: ApplicationResetSubcode},
     FixedDataStructure{
         identification_number: IdentificationNumber,
@@ -220,9 +219,9 @@ pub enum UserDataBlock {
     },
     VariableDataStructure{
         fixed_data_header: FixedDataHeader,
-        variable_data_block: Vec<u8>,
+        variable_data_block: &'a [u8],
         mdh: u8,
-        manufacturer_specific_data: Vec<u8>,
+        manufacturer_specific_data: &'a [u8], 
     },
 }
 
@@ -321,6 +320,7 @@ impl ManufacturerCode {
 
 }
 
+#[cfg(feature = "std")]
 impl fmt::Display for ManufacturerCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}{}", self.code[0], self.code[1], self.code[2])
@@ -383,9 +383,9 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
                     status: StatusField::from(data[10]),
                     signature: u16::from_be_bytes([data[11], data[12]]),
                 },
-                variable_data_block: data[13..data.len()-3].to_vec(),
+                variable_data_block: &data[13..data.len()-3],
                 mdh: data[data.len()-3],
-                manufacturer_specific_data: data[data.len()-2..].to_vec(),
+                manufacturer_specific_data: &data[data.len()-2..],
                 })
         },
         ControlInformation::ResponseWithFixedDataStructure(_) => {
