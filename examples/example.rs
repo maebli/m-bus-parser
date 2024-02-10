@@ -1,4 +1,7 @@
+use std::fs;
+
 use m_bus_parser::parse_frame;
+use walkdir::WalkDir;
 
 fn main() {
     let example = vec![ 0x68, 0x4D, 0x4D, 0x68, 0x08, 0x01, 0x72, 0x01, 0x00, 0x00, 0x00, 0x96, 0x15, 0x01, 
@@ -10,5 +13,20 @@ fn main() {
     ];
     let frame = parse_frame(&example).unwrap();
     println!("{:?}", frame);
+    
+    for entry in WalkDir::new("./tests/rscada/test-frames")
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "hex"))
+    {
+        let contents =
+            fs::read_to_string(entry.path()).expect("Something went wrong reading the file");
+        println!("Path: {}", entry.path().display());
+        println!("Input:\n{}", contents);
 
+        let contents = contents.trim().replace(" ", "");
+        let bytes = hex::decode(contents).unwrap();
+        let frame = parse_frame(bytes.as_slice()).unwrap();
+        println!("{:?}", frame);
+    }
 }
