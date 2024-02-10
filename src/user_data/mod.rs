@@ -100,6 +100,20 @@ pub enum ApplicationLayerError{
     InvalidManufacturerCode{code:u16},
 }
 
+// implement std lib for ApplicationLayerError
+impl fmt::Display for ApplicationLayerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ApplicationLayerError::MissingControlInformation => write!(f, "Missing control information"),
+            ApplicationLayerError::InvalidControlInformation{byte} => write!(f, "Invalid control information: {}", byte),
+            ApplicationLayerError::IdentificationNumberError => write!(f, "Invalid identification number"),
+            ApplicationLayerError::InvalidManufacturerCode{code} => write!(f, "Invalid manufacturer code: {}", code),
+        }
+    }
+}
+
+impl std::error::Error for ApplicationLayerError {}
+
 #[derive(Debug, PartialEq)]
 pub enum ApplicationResetSubcode {
     All(u8),

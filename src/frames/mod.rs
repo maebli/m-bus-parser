@@ -89,7 +89,6 @@ pub enum FrameError {
     },
 }
 
-
 pub trait Frame {
     fn from(data: &[u8]) -> Result<Self, FrameError>
     where
@@ -173,7 +172,22 @@ fn validate_checksum(data: &[u8]) -> Result<(), FrameError> {
     }
 }
 
+impl std::error::Error for FrameError {}
 
+impl std::fmt::Display for FrameError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FrameError::EmptyData => write!(f, "Data is empty"),
+            FrameError::InvalidStartByte => write!(f, "Invalid start byte"),
+            FrameError::InvalidStopByte => write!(f, "Invalid stop byte"),
+            FrameError::LengthMismatch => write!(f, "Length mismatch"),
+            FrameError::LengthShorterThanSix{length} => write!(f, "Length is shorter than six: {}", length),
+            FrameError::WrongChecksum{expected, actual} => write!(f, "Wrong checksum, expected: {}, actual: {}", expected, actual),
+            FrameError::InvalidControlInformation{byte} => write!(f, "Invalid control information: {}", byte),
+            FrameError::InvalidFunction{byte} => write!(f, "Invalid function: {}", byte),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
