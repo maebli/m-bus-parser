@@ -206,7 +206,9 @@ pub enum UserDataBlock {
     },
     VariableDataStructure{
         FixedDataHeader: FixedDataHeader,
-        VariableData: Vec<u8>,
+        VariableDataBlock: Vec<u8>,
+        MDH: u8,
+        ManufacturerSpecificData: Vec<u8>,
     },
 }
 
@@ -403,14 +405,16 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
             Ok(UserDataBlock::VariableDataStructure{
                 FixedDataHeader: FixedDataHeader{
                     identification_number: IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?,
-                    manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([data[5], data[6]]))?,
+                    manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([data[6], data[5]]))?,
                     version: data[7],
                     medium: MeasuredMedium::new(data[8]).medium,
                     access_number: data[9],
                     status: StatusField::from(data[10]),
                     signature: u16::from_be_bytes([data[11], data[12]]),
                 },
-                VariableData: data[13..data.len()].to_vec()
+                VariableDataBlock: data[13..data.len()-3].to_vec(),
+                MDH: data[data.len()-3],
+                ManufacturerSpecificData: data[data.len()-2..].to_vec(),
                 })
         },
         ControlInformation::ResponseWithFixedDataStructure(_) => {
@@ -498,4 +502,12 @@ mod tests {
             Counter2: Counter{count: 135},
         }));
     }
+
+    #[test]
+    fn test_manufacturer_code() -> Result<(), ApplicationLayerError> {
+        let code = ManufacturerCode::from_id(0x1ee6)?;
+        assert_eq!(code, ManufacturerCode{code: ['G', 'W', 'F']});
+        Ok(())
+    }
+
 }
