@@ -382,12 +382,12 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
             let counter1 = Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
             let counter2 = Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
             Ok(UserDataBlock::FixedDataStructure{
-                identification_number: identification_number,
-                access_number: access_number,
-                status: status,
+                identification_number,
+                access_number,
+                status,
                 medium_ad_unit: medium_and_unit,
-                counter1: counter1,
-                counter2: counter2,
+                counter1,
+                counter2,
             })
         },
     }
