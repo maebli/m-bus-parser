@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 crate-type = ["rlib","staticlib", "cdylib"]
 
+[dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 criterion = "0.5.1"
 walkdir = "2.3.1"
