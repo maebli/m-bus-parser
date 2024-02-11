@@ -2,6 +2,7 @@
 name = "m-bus-parser"
 version = "0.1.0"
 edition = "2021"
+crate-type = ["rlib","staticlib", "cdylib"]
 
 [dev-dependencies]
 criterion = "0.5.1"
@@ -11,3 +12,7 @@ hex = "0.4"
 [features]
 std = []
 
+[profile.release]
+opt-level = 'z' # Optimize for size
+lto = true # Enable Link Time Optimization
+codegen-units = 1 # Reduce codegen units to improve optimizations
