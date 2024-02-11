@@ -5,7 +5,6 @@ edition = "2021"
 crate-type = ["rlib","staticlib", "cdylib"]
 
 [dependencies]
-libc = "0.2"
 
 [dev-dependencies]
 criterion = "0.5.1"

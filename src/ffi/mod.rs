@@ -1,6 +1,3 @@
-#![no_std]
-
-use libc::{uint8_t, size_t};
 use core::slice;
 
 #[repr(C)]
@@ -11,7 +8,7 @@ pub enum ParseStatus {
 }
 
 #[no_mangle]
-pub extern "C" fn parse_mbus(data: *const uint8_t, length: size_t) -> ParseStatus {
+pub extern "C" fn parse_mbus(data: *const u8, length: u32) -> ParseStatus {
     if data.is_null() || length == 0 {
         return ParseStatus::ParseError;
     }
