@@ -181,6 +181,12 @@ pub struct IdentificationNumber {
     number: u32,
 }
 
+impl From<IdentificationNumber> for u32 {
+    fn from(id: IdentificationNumber) -> Self {
+        id.number
+    }
+}
+
 impl IdentificationNumber {
     pub fn from_bcd_hex_digits(digits: [u8; 4]) -> Result<Self, ApplicationLayerError> {
         let number = bcd_hex_digits_to_u32(digits)?;
@@ -290,13 +296,13 @@ impl Medium {
 
 #[derive(Debug,PartialEq)]
 pub struct FixedDataHeader {
-    identification_number: IdentificationNumber, // 4 bytes, BCD
-    manufacturer: ManufacturerCode, // 2 bytes, encoded from ASCII
+    pub identification_number: IdentificationNumber, 
+    manufacturer: ManufacturerCode, 
     version: u8,
     medium: Medium,
     access_number: u8,
     status: StatusField,
-    signature: u16, // 2 bytes, reserved for future encryption
+    signature: u16, 
 }
 
 #[derive(Debug, PartialEq)]
