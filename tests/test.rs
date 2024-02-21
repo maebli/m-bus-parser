@@ -10,7 +10,7 @@ pub struct MBusData {
     slave_information: SlaveInformation,
 
     #[serde(rename = "DataRecord", default)]
-    data_records: Vec<DataRecord>,
+    _data_records: Vec<DataRecord>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -19,49 +19,49 @@ pub struct SlaveInformation {
     id: String,
 
     #[serde(rename = "Manufacturer")]
-    manufacturer: String,
+    manufacturer: Option<String>,
 
     #[serde(rename = "Version")]
-    version: u8,
+    _version: Option<u8>,
 
     #[serde(rename = "ProductName")]
-    product_name: String,
+    _product_name: Option<String>,
 
     #[serde(rename = "Medium")]
-    medium: String,
+    _medium: String,
 
     #[serde(rename = "AccessNumber")]
     access_number: u32,
 
     #[serde(rename = "Status")]
-    status: String,
+    _status: String,
 
     #[serde(rename = "Signature")]
-    signature: String,
+    _signature: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct DataRecord {
     #[serde(rename = "id")]
-    id: String,
+    _id: String,
 
     #[serde(rename = "Function")]
-    function: String,
+    _function: String,
 
     #[serde(rename = "StorageNumber")]
-    storage_number: Option<u32>,
+    _storage_number: Option<u32>,
 
     #[serde(rename = "Tariff", default)]
-    tariff: Option<u8>,
+    _tariff: Option<u8>,
 
     #[serde(rename = "Device", default)]
-    device: Option<u8>,
+    _device: Option<u8>,
 
     #[serde(rename = "Unit")]
-    unit: Option<String>,
+    _unit: Option<String>,
 
     #[serde(rename = "Value")]
-    value: Option<String>,
+    _value: Option<String>,
 }
 #[cfg(test)]
 mod tests {
@@ -94,16 +94,20 @@ mod tests {
             let bytes = hex::decode(contents).unwrap();
             let frame = parse_frame(bytes.as_slice()).unwrap();
 
-            if let FrameType::LongFrame { function, address, data } = frame {
-                let user_data = parse_user_data(data).unwrap();
-                if let UserDataBlock::VariableDataStructure { 
-                    fixed_data_header, 
-                    variable_data_block,
-                     mdh, 
-                     manufacturer_specific_data } = user_data {
-                        assert!( Into::<u32>::into(fixed_data_header.identification_number) == mbus_data.slave_information.id.parse::<u32>().unwrap());
-                        
-                     }
+            if let FrameType::LongFrame { function: _, address:_, data } = frame {
+                 let user_data = parse_user_data(data).unwrap();
+                 if let UserDataBlock::VariableDataStructure { 
+                        fixed_data_header, 
+                        variable_data_block: _,
+                        mdh:_, 
+                        manufacturer_specific_data:_ } = user_data {
+                            assert!(Into::<u32>::into(fixed_data_header.identification_number) == mbus_data.slave_information.id.parse::<u32>().unwrap());
+                            let expected_manufacturer = mbus_data.slave_information.manufacturer.unwrap().into_bytes();
+                            assert!(fixed_data_header.manufacturer.code[0] == expected_manufacturer[0] as char);
+                            assert!(fixed_data_header.manufacturer.code[1] == expected_manufacturer[1] as char);
+                            assert!(fixed_data_header.manufacturer.code[2] == expected_manufacturer[2] as char);
+                            assert!(fixed_data_header.access_number == mbus_data.slave_information.access_number as u8);
+                        }
             }
         }
     }

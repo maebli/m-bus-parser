@@ -26,6 +26,18 @@ impl StatusField {
             manufacturer_specific_3: byte & 0b10000000 != 0,
         }
     }
+    pub fn to_byte(&self) -> u8 {
+        let mut byte = 0u8;
+        if self.counter_binary_signed { byte |= 0b00000001; }
+        if self.counter_fixed_date { byte |= 0b00000010; }
+        if self.power_low { byte |= 0b00000100; }
+        if self.permanent_error { byte |= 0b00001000; }
+        if self.temporary_error { byte |= 0b00010000 }
+        if self.manufacturer_specific_1 { byte |= 0b00100000; }
+        if self.manufacturer_specific_2 { byte |= 0b01000000; }
+        if self.manufacturer_specific_3 { byte |= 0b10000000; }
+        byte
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -94,7 +106,7 @@ impl ControlInformation {
 pub enum ApplicationLayerError{
     MissingControlInformation,
     InvalidControlInformation{byte:u8},
-    IdentificationNumberError,
+    IdentificationNumberError{digits:[u8;4], number:u32},
     InvalidManufacturerCode{code:u16},
 }
 
@@ -163,7 +175,7 @@ fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> 
         let lower = digit & 0x0F;
         let upper = digit >> 4;
         if lower > 9 || upper > 9 {
-            return Err(ApplicationLayerError::IdentificationNumberError);
+            return Err(ApplicationLayerError::IdentificationNumberError{ digits, number} );
         }
         number = number * 100 + (upper as u32 * 10) + lower as u32;
     }
@@ -297,17 +309,17 @@ impl Medium {
 #[derive(Debug,PartialEq)]
 pub struct FixedDataHeader {
     pub identification_number: IdentificationNumber, 
-    manufacturer: ManufacturerCode, 
-    version: u8,
-    medium: Medium,
-    access_number: u8,
-    status: StatusField,
-    signature: u16, 
+    pub manufacturer: ManufacturerCode, 
+    pub version: u8,
+    pub medium: Medium,
+    pub access_number: u8,
+    pub status: StatusField,
+    pub signature: u16, 
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ManufacturerCode {
-    code: [char; 3],
+    pub code: [char; 3],
 }
 
 impl ManufacturerCode {
@@ -323,8 +335,8 @@ impl ManufacturerCode {
             Err(ApplicationLayerError::InvalidManufacturerCode{code:id})
         }
     }
-
 }
+
 
 #[cfg(feature = "std")]
 impl fmt::Display for ManufacturerCode {
