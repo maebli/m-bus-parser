@@ -6,8 +6,6 @@ crate-type = ["rlib","staticlib", "cdylib"]
 description = "A library for parsing M-Bus frames"
 license = "MIT"
 
-[dependencies]
-
 [dev-dependencies]
 criterion = "0.5.1"
 walkdir = "2.3.1"
