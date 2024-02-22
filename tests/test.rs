@@ -22,7 +22,7 @@ pub struct SlaveInformation {
     manufacturer: Option<String>,
 
     #[serde(rename = "Version")]
-    _version: Option<u8>,
+    version: Option<u8>,
 
     #[serde(rename = "ProductName")]
     _product_name: Option<String>,
@@ -34,10 +34,10 @@ pub struct SlaveInformation {
     access_number: u32,
 
     #[serde(rename = "Status")]
-    _status: String,
+    status: String,
 
     #[serde(rename = "Signature")]
-    _signature: Option<String>,
+    signature: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -103,10 +103,13 @@ mod tests {
                         manufacturer_specific_data:_ } = user_data {
                             assert!(Into::<u32>::into(fixed_data_header.identification_number) == mbus_data.slave_information.id.parse::<u32>().unwrap());
                             let expected_manufacturer = mbus_data.slave_information.manufacturer.unwrap().into_bytes();
-                            assert!(fixed_data_header.manufacturer.code[0] == expected_manufacturer[0] as char);
-                            assert!(fixed_data_header.manufacturer.code[1] == expected_manufacturer[1] as char);
-                            assert!(fixed_data_header.manufacturer.code[2] == expected_manufacturer[2] as char);
-                            assert!(fixed_data_header.access_number == mbus_data.slave_information.access_number as u8);
+                            assert_eq!(fixed_data_header.manufacturer.code[0],expected_manufacturer[0] as char);
+                            assert_eq!(fixed_data_header.manufacturer.code[1], expected_manufacturer[1] as char);
+                            assert_eq!(fixed_data_header.manufacturer.code[2], expected_manufacturer[2] as char);
+                            assert_eq!(fixed_data_header.access_number,mbus_data.slave_information.access_number as u8);
+                            assert_eq!(fixed_data_header.status.to_byte(), u8::from_str_radix(&mbus_data.slave_information.status, 16).unwrap());
+                            assert_eq!(fixed_data_header.signature, u16::from_str_radix(mbus_data.slave_information.signature.unwrap().as_str(), 16).unwrap());
+                            assert_eq!(fixed_data_header.version, mbus_data.slave_information.version.unwrap());
                         }
             }
         }
