@@ -399,7 +399,7 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
                     medium: MeasuredMedium::new(data[8]).medium,
                     access_number: data[9],
                     status: StatusField::from(data[10]),
-                    signature: u16::from_be_bytes([data[11], data[12]]),
+                    signature: u16::from_be_bytes([data[12], data[11]]),
                 },
                 variable_data_block: &data[13..data.len()-3],
                 mdh: data[data.len()-3],
