@@ -1,4 +1,4 @@
-use m_bus_parser::frames::{parse_frame, FrameType};
+use m_bus_parser::frames::{parse_frame, Address, FrameType, Function};
 
 
 //  This is an example of how to use the library to parse a frame.
@@ -30,12 +30,9 @@ fn main() {
 
     let frame = parse_frame(&example).unwrap();
 
-    if let FrameType::LongFrame { function, address, data } = frame {
-        println!("Function: {:?}", function);
-        println!("Address: {:?}", address);
-        println!("Data: {:?}", data);
-
-
+    if let FrameType::LongFrame { function, address, data :_} = frame {
+        assert_eq!(function, Function::RspUd{acd: false, dfc:false});
+        assert_eq!(address, Address::Primary(1));
     }
 
 }
