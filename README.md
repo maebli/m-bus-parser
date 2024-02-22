@@ -24,11 +24,23 @@ Examples taken from https://m-bus.com/documentation-wired/06-application-layer:
 1. Set the slave to primary address 8 without changing anything else:
 INPUT: 68 06 06 68 | 53 FE 51 | 01 7A 08 | 25 16
 
-Parsing using the library:
+Parsing the frame using the library (the data is not yet parsable with the lib):
 
 ```rust
+       let example = vec![ 
+        0x68, 0x06, 0x06, 0x68, 
+        0x53, 0xFE, 0x51, 
+        0x01, 0x7A, 0x08, 
+        0x25, 0x16,
+    ];
 
-   
+    let frame = parse_frame(&example).unwrap();
+
+    if let FrameType::ControlFrame { function, address, data } = frame {
+        assert_eq!(address, Address::Broadcast { reply_required: true });
+        assert_eq!(function, Function::SndUd { fcb: (false)});
+        assert_eq!(data, &[0x51,0x01, 0x7A, 0x08]);
+    }
 
 ```
 
