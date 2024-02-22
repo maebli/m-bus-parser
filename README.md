@@ -28,7 +28,10 @@ Examples taken from https://m-bus.com/documentation-wired/06-application-layer:
 Parsing the frame using the library (the data is not yet parsable with the lib):
 
 ```rust
-       let example = vec![ 
+     
+    use m_bus_parser::frames::{parse_frame, Address, FrameType, Function};
+
+    let example = vec![ 
         0x68, 0x06, 0x06, 0x68, 
         0x53, 0xFE, 0x51, 
         0x01, 0x7A, 0x08, 

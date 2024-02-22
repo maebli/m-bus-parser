@@ -1,6 +1,5 @@
 use m_bus_parser::frames::{parse_frame, Address, FrameType, Function};
 
-
 fn main() {
     
     let example = vec![ 
