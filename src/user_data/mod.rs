@@ -1,5 +1,4 @@
-//! # User Data
-//! User data is part of the application layer
+//! ist a part of the application layer
 
 #[derive(Debug, PartialEq)]
 pub struct StatusField {

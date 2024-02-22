@@ -1,6 +1,6 @@
-//! # Frames
-//! The Frame is part of the MBUS data link layer
+//! is part of the MBUS data link layer
 //! It is used to encapsulate the application layer data
+
 #[derive(Debug,PartialEq)]
 pub enum FrameType<'a> {
     SingleCharacter{
@@ -17,6 +17,7 @@ pub enum FrameType<'a> {
     ControlFrame{
         function: Function, 
         address: Address, 
+        data: &'a [u8]
     },
 }
 
@@ -129,6 +130,7 @@ pub fn parse_frame(data: &[u8])  -> Result<FrameType, FrameError> {
                 0x53 => Ok(FrameType::ControlFrame{
                     function: Function::from(data[4])?, 
                     address: Address::from(data[5]),
+                    data: &data[6..data.len() - 2],
                 }),
                 _ => Ok(FrameType::LongFrame{
                     function: Function::from(data[4])?,
