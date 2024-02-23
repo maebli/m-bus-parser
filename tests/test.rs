@@ -1,4 +1,5 @@
 use std::fs;
+use m_bus_parser::user_data::Medium;
 use walkdir::WalkDir;
 use hex;
 use serde::Deserialize;
@@ -63,6 +64,32 @@ pub struct DataRecord {
     #[serde(rename = "Value")]
     _value: Option<String>,
 }
+
+fn medium_to_str(medium: Medium) -> &'static str {
+    match medium {
+        Medium::Other => "Other",
+        Medium::Oil => "Oil",
+        Medium::Electricity => "Electricity",
+        Medium::Gas => "Gas",
+        Medium::Heat => "Heat: Outlet",
+        Medium::Steam => "Steam",
+        Medium::HotWater => "Warm water (30-90Â°C)",
+        Medium::Water => "Water",
+        Medium::HeatCostAllocator => "Heat Cost Allocator",
+        Medium::Unknown => "Unknown",
+        Medium::Reserved => "Breaker: Electricity",
+        Medium::GasMode2 => "GasMode2",
+        Medium::HeatMode2 => "HeatMode2",
+        Medium::HotWaterMode2 => "Heat: Inlet",
+        Medium::WaterMode2 => "Heat / Cooling load meter",
+        Medium::HeatCostAllocator2 => "Bus/System",
+        Medium::ReservedMode2 => "ReservedMode2",
+        Medium::ColdWater => "Cold water",
+        Medium::DualWater => "DualWater",
+        Medium::Pressure => "Pressure",
+        Medium::ADConverter => "ADConverter",
+    }
+}
 #[cfg(test)]
 mod tests {
 
@@ -71,7 +98,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_print_hex_files() {
+    fn test_valid_control_frame_parsing() {
         /* parses all the good examples, shouldn't throw any errors. */
         for entry in WalkDir::new("./tests/rscada/test-frames")
             .into_iter()
@@ -110,8 +137,10 @@ mod tests {
                             assert_eq!(fixed_data_header.status.to_byte(), u8::from_str_radix(&mbus_data.slave_information.status, 16).unwrap());
                             assert_eq!(fixed_data_header.signature, u16::from_str_radix(mbus_data.slave_information.signature.unwrap().as_str(), 16).unwrap());
                             assert_eq!(fixed_data_header.version, mbus_data.slave_information.version.unwrap());
+                            assert_eq!(medium_to_str(fixed_data_header.medium), mbus_data.slave_information._medium);
                         }
             }
         }
     }
 }
+
