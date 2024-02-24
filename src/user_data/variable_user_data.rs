@@ -11,6 +11,7 @@ struct DataInformationBlock {
     data_information_extension: Vec<u8>, 
 }
 
+#[derive(Debug, Clone)]
 enum ValueInformation {
     Primary,
     PlainText,
@@ -24,13 +25,7 @@ struct ValueInformationBlock {
     value_information_extension: Vec<u8>, 
 }
 
-#[derive(Debug, Clone)]
-struct DataRecord {
-    header: DataRecordHeader,
-    data: Vec<u8>, 
-}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy,PartialEq)]
 enum FunctionField {
     InstantaneousValue,
     MaximumValue,
@@ -58,7 +53,7 @@ enum DataFieldCoding {
     SpecialFunctions,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy,PartialEq)]
 pub enum Unit {
     Hms = 0x00,
     DMY = 0x01,
@@ -173,22 +168,10 @@ impl DataInformationFieldExtension {
     }
 }
 
-#[derive(Debug, Clone)]
-struct DataInformationBlock {
-    dif: DataInformationFieldExtension,
-    dife: Vec<DataInformationFieldExtension>,
-}
-
 impl DataInformationBlock {
-    fn new(dif_byte: u8, dife_bytes: Vec<u8>) -> Self {
-        let dif = DataInformationFieldExtension::new(dif_byte);
-        let dife = dife_bytes.into_iter().map(DataInformationFieldExtension::new).collect();
-
-        DataInformationBlock { data_information: dif, data_information_extension: dife } 
-    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq)]
 struct DataRecord {
     function: FunctionField,
     storage_number: u32,
@@ -206,9 +189,7 @@ fn parse_variable_data(data: &[u8]) -> Result<Vec<DataRecord>,VariableUserDataEr
     let mut records = Vec::new();
     let mut data = data;
     while !data.is_empty() {
-        let (header, data) = parse_data_record_header(data);
-        let (data, record) = parse_data_record(header, data);
-        records.push(record);
+
     }
     Ok(records)
 }
@@ -218,7 +199,7 @@ mod tests {
 
     use super::*;
     #[test]
-    fn test_parse_variable_data() {
+    fn test_parse_vafriable_data() {
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
         let data = vec![
             0x03, 0x13, 0x15, 0x31, 0x00

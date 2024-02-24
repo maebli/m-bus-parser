@@ -138,6 +138,7 @@ mod tests {
                             assert_eq!(fixed_data_header.signature, u16::from_str_radix(mbus_data.slave_information.signature.unwrap().as_str(), 16).unwrap());
                             assert_eq!(fixed_data_header.version, mbus_data.slave_information.version.unwrap());
                             assert_eq!(medium_to_str(fixed_data_header.medium), mbus_data.slave_information._medium);
+                            
                         }
             }else{
                 panic!("Frame is not a long frame");

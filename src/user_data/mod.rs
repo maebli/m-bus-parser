@@ -1,5 +1,7 @@
 //! ist a part of the application layer
 
+mod variable_user_data;
+
 #[derive(Debug, PartialEq)]
 pub struct StatusField {
     pub counter_binary_signed: bool,
