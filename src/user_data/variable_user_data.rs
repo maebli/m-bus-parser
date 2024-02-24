@@ -1,7 +1,7 @@
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct DataRecordHeader {
-    data_information: DataInformationBlock,
+    _data_information: DataInformationBlock,
     value_information: ValueInformationBlock,
 }
 
@@ -11,18 +11,117 @@ struct DataInformationBlock {
     data_information_extension: Vec<u8>, 
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq)]
+pub enum VIFExtension {
+    CreditOfCurrencyUnits(u8),
+    DebitOfCurrencyUnits(u8), 
+    AccessNumber, 
+    Medium, 
+    Manufacturer, 
+    ParameterSetIdentification, 
+    ModelVersion, 
+    HardwareVersion,
+    FirmwareVersion,
+    SoftwareVersion,
+    CustomerLocation,
+    Customer, 
+    AccessCodeUser, 
+    AccessCodeOperator, 
+    AccessCodeSystemOperator, 
+    AccessCodeDeveloper, 
+    Password, 
+    ErrorFlags,
+    ErrorMask,
+    Reserved,
+    DigitalOutput,
+    DigitalInput,
+    BaudRate,
+    ResponseDelayTime,
+    Retry,
+    FirstStorage,
+    LastStorage,
+    SizeOfStorage,
+    StorageIntervalSecondsToDays(u8), 
+    StorageIntervalMonths, 
+    StorageIntervalYears, 
+    DurationSinceLastReadout(u8),
+    StartOfTariff,
+    Volts(u8), 
+    Ampere(u8), 
+    EnergyMWh(u8), 
+    EnergyGJ(u8), 
+    VolumeM3(u8), 
+    MassTons(u8), 
+    VolumeFeet3, 
+    VolumeAmericanGallon, 
+    VolumeFlowAmericanGallonMin, 
+    PowerMW(u8), 
+    PowerGJH(u8), 
+    FlowTemperature(u8), 
+    ReturnTemperature(u8), 
+}
+
+#[derive(Debug, PartialEq)]
 enum ValueInformation {
     Primary,
     PlainText,
-    Extended,
+    Extended(VIFExtension ),
     Any,
     ManufacturerSpecific,
 }
-#[derive(Debug, Clone)]
+
+impl ValueInformation {
+    fn new(data:&[u8]) -> Self {
+        match data[0] {
+            0x00..=0x7B => ValueInformation::Primary,
+            0x7C => ValueInformation::PlainText,
+            0xFD => ValueInformation::Extended (
+                match data[1] {
+                    0x00..=0x03 => VIFExtension::CreditOfCurrencyUnits(0b11&data[1]),
+                    0x04..=0x07 => VIFExtension::DebitOfCurrencyUnits(0b11&data[1]),
+                    0x08 => VIFExtension::AccessNumber,
+                    0x09 => VIFExtension::Medium,
+                    0x0A => VIFExtension::Manufacturer,
+                    0x0B => VIFExtension::ParameterSetIdentification,
+                    0x0C => VIFExtension::ModelVersion,
+                    0x0D => VIFExtension::HardwareVersion,
+                    0x0E => VIFExtension::FirmwareVersion,
+                    0x0F => VIFExtension::SoftwareVersion,
+                    0x10 => VIFExtension::CustomerLocation,
+                    0x11 => VIFExtension::Customer,
+                    0x12 => VIFExtension::AccessCodeUser,
+                    0x13 => VIFExtension::AccessCodeOperator,
+                    0x14 => VIFExtension::AccessCodeSystemOperator,
+                    0x15 => VIFExtension::AccessCodeDeveloper,
+                    0x16 => VIFExtension::Password,
+                    0x17 => VIFExtension::ErrorFlags,
+                    0x18 => VIFExtension::ErrorMask,
+                    0x19|0x25|0x28|0x32|0x33 => VIFExtension::Reserved,
+                    0x20 => VIFExtension::DigitalOutput,
+                    0x21 => VIFExtension::DigitalInput,
+                    0x22 => VIFExtension::BaudRate,
+                    0x23 => VIFExtension::ResponseDelayTime,
+                    0x24 => VIFExtension::Retry,
+                    0x26 => VIFExtension::LastStorage,
+                    0x27 => VIFExtension::SizeOfStorage,
+                    0x29 => VIFExtension::StorageIntervalSecondsToDays(0b11&data[1]),
+                    0x30 => VIFExtension::StorageIntervalMonths,
+                    0x31 => VIFExtension::StorageIntervalYears,
+                    _ => {!unimplemented!("VIFExtension not implemented")};
+                }
+
+            ),
+            0x7D | 0xFE => ValueInformation::Any,
+            0x7E | 0xFF => ValueInformation::ManufacturerSpecific,
+            _ => unreachable!(), 
+        }
+    }
+}
+
+#[derive(Debug,)]
 struct ValueInformationBlock {
     value_information: ValueInformation,
-    value_information_extension: Vec<u8>, 
+    value_information_extension: Option<Vec<u8>>, 
 }
 
 #[derive(Debug, Clone, Copy,PartialEq)]
@@ -189,7 +288,7 @@ fn parse_variable_data(data: &[u8]) -> Result<Vec<DataRecord>,VariableUserDataEr
     let mut records = Vec::new();
     let mut data = data;
     while !data.is_empty() {
-
+        let vif = ValueInformation::new(data);
     }
     Ok(records)
 }
@@ -204,6 +303,7 @@ mod tests {
         let data = vec![
             0x03, 0x13, 0x15, 0x31, 0x00
         ];
+    
         let result = parse_variable_data(&data);
         assert_eq!(result, Ok(vec![]));
     }
