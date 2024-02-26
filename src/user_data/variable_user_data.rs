@@ -40,25 +40,49 @@ pub enum VIFExtension {
     Retry,
     FirstStorage,
     LastStorage,
-    SizeOfStorage,
+    SizeOfStorageBlock,
     StorageIntervalSecondsToDays(u8), 
     StorageIntervalMonths, 
     StorageIntervalYears, 
     DurationSinceLastReadout(u8),
     StartOfTariff,
+    DurationOfTariff(u8),
+    PeriodOfTariff(u8),
+    PeriodOfTarrifMonths,
+    PeriodOfTTariffYears,
+    Dimensionless,
     Volts(u8), 
     Ampere(u8), 
+    ResetCounter,
+    CumulationCounter,
+    ControlSignal,
+    DayOfWeek,
+    WeekNumber,
+    TimePointOfDay,
+    StateOfParameterActivation,
+    SpecialSupervision,
+    DurationSinceLastCumulation(u8),
+    OperatingTimeBattery(u8),
+    DateAndTimeOfBatteryChange,
     EnergyMWh(u8), 
     EnergyGJ(u8), 
     VolumeM3(u8), 
     MassTons(u8), 
-    VolumeFeet3, 
-    VolumeAmericanGallon, 
-    VolumeFlowAmericanGallonMin, 
+    VolumeFeet3Tenth, 
+    VolumeAmericanGallonTenth,
+    VolumeAmericanGallon,
+    VolumeFlowAmericanGallonPerMinuteThousandth, 
+    VolumeFlowAmericanGallonPerMinute,
+    VolumeFlowAmericanGallonPerHour,
     PowerMW(u8), 
     PowerGJH(u8), 
     FlowTemperature(u8), 
-    ReturnTemperature(u8), 
+    ReturnTemperature(u8),
+    TemperatureDifference(u8),
+    ExternalTemperature(u8),
+    ColdWarmTemperatureLimitFarenheit(u8),
+    ColdWarmTemperatureLimitCelsius(u8),
+    CumulativeCountMaxPower(u8),
 }
 
 #[derive(Debug, PartialEq)]
@@ -96,18 +120,62 @@ impl ValueInformation {
                     0x16 => VIFExtension::Password,
                     0x17 => VIFExtension::ErrorFlags,
                     0x18 => VIFExtension::ErrorMask,
-                    0x19|0x25|0x28|0x32|0x33 => VIFExtension::Reserved,
-                    0x20 => VIFExtension::DigitalOutput,
-                    0x21 => VIFExtension::DigitalInput,
-                    0x22 => VIFExtension::BaudRate,
-                    0x23 => VIFExtension::ResponseDelayTime,
-                    0x24 => VIFExtension::Retry,
-                    0x26 => VIFExtension::LastStorage,
-                    0x27 => VIFExtension::SizeOfStorage,
-                    0x29 => VIFExtension::StorageIntervalSecondsToDays(0b11&data[1]),
-                    0x30 => VIFExtension::StorageIntervalMonths,
-                    0x31 => VIFExtension::StorageIntervalYears,
-                    _ => {!unimplemented!("VIFExtension not implemented")};
+                    0x1A => VIFExtension::DigitalOutput,
+                    0x1B => VIFExtension::DigitalInput,
+                    0x1C => VIFExtension::BaudRate,
+                    0x1D => VIFExtension::ResponseDelayTime,
+                    0x1E => VIFExtension::Retry,
+                    0x20 => VIFExtension::FirstStorage,
+                    0x21 => VIFExtension::LastStorage,
+                    0x22 => VIFExtension::SizeOfStorageBlock,
+                    0x23..=0x26 => VIFExtension::StorageIntervalSecondsToDays(0b11&data[1]),
+                    0x28 => VIFExtension::StorageIntervalMonths,
+                    0x29 => VIFExtension::StorageIntervalYears,
+                    0x2C..=0x2F => VIFExtension::DurationSinceLastReadout(0b11&data[1]),
+                    0x30 => VIFExtension::StartOfTariff,
+                    0x31..=0x33 => VIFExtension::DurationOfTariff(0b11&data[1]),
+                    0x34..=0x37 => VIFExtension::PeriodOfTariff(0b11&data[1]),
+                    0x38 => VIFExtension::PeriodOfTarrifMonths,
+                    0x39 => VIFExtension::PeriodOfTTariffYears,
+                    0x3A => VIFExtension::Dimensionless,
+                    0x40..=0x47 => VIFExtension::Volts(0b1111&data[1]),
+                    0x48..=0x4F => VIFExtension::Ampere(0b1111&data[1]),
+                    0x60 => VIFExtension::ResetCounter,
+                    0x61 => VIFExtension::CumulationCounter,
+                    0x62 => VIFExtension::ControlSignal,
+                    0x63 => VIFExtension::DayOfWeek,
+                    0x64 => VIFExtension::WeekNumber,
+                    0x65 => VIFExtension::TimePointOfDay,
+                    0x66 => VIFExtension::StateOfParameterActivation,
+                    0x67 => VIFExtension::SpecialSupervision,
+                    0x68..=0x6B => VIFExtension::DurationSinceLastCumulation(0b11&data[1]),
+                    0x6C..=0x6F => VIFExtension::OperatingTimeBattery(0b11&data[1]),
+                    0x70 => VIFExtension::DateAndTimeOfBatteryChange,
+                    _ => VIFExtension::Reserved,
+                }
+
+            ),
+            0xFB => ValueInformation::Extended(
+                match data[1] {
+                    0x00|0x01 => VIFExtension::EnergyMWh(0b1&data[1]),
+                    0x08|0x09 => VIFExtension::EnergyGJ(0b1&data[1]),
+                    0x10|0x11 => VIFExtension::VolumeM3(0b1&data[1]),
+                    0x18|0x19 => VIFExtension::MassTons(0b1&data[1]),
+                    0x21 => VIFExtension::VolumeFeet3Tenth,
+                    0x22 => VIFExtension::VolumeAmericanGallon,
+                    0x23 => VIFExtension::VolumeFlowAmericanGallonPerMinuteThousandth,
+                    0x24 => VIFExtension::VolumeFlowAmericanGallonPerMinute,
+                    0x25 => VIFExtension::VolumeFlowAmericanGallonPerHour,
+                    0x28|0x29 => VIFExtension::PowerMW(0b1&data[1]),
+                    0x30|0x31 => VIFExtension::PowerGJH(0b1&data[1]),
+                    0x50..=0x53 => VIFExtension::FlowTemperature(0b11&data[1]),
+                    0x54..=0x57 => VIFExtension::ReturnTemperature(0b11&data[1]),
+                    0x60..=0x63 => VIFExtension::TemperatureDifference(0b11&data[1]),
+                    0x64..=0x67 => VIFExtension::ExternalTemperature(0b11&data[1]),
+                    0x70..=0x73 => VIFExtension::ColdWarmTemperatureLimitFarenheit(0b11&data[1]),
+                    0x74..=0x77 => VIFExtension::ColdWarmTemperatureLimitCelsius(0b11&data[1]),
+                    0x78..=0x7F => VIFExtension::CumulativeCountMaxPower(0b111&data[1]),
+                    _ => VIFExtension::Reserved,
                 }
 
             ),
@@ -157,60 +225,60 @@ pub enum Unit {
     Hms = 0x00,
     DMY = 0x01,
     Wh = 0x02,
-    Wh1e1 = 0x03, // Wh * 10
-    Wh1e2 = 0x04, // Wh * 100
+    Wh1e1 = 0x03, 
+    Wh1e2 = 0x04, 
     KWh = 0x05,
-    KWh1e1 = 0x06, // kWh * 10
-    KWh1e2 = 0x07, // kWh * 100
+    KWh1e1 = 0x06,
+    KWh1e2 = 0x07,
     MWh = 0x08,
-    MWh1e1 = 0x09, // MWh * 10
-    MWh1e2 = 0x0A, // MWh * 100
+    MWh1e1 = 0x09,
+    MWh1e2 = 0x0A,
     KJ = 0x0B,
-    KJ1e1 = 0x0C, // kJ * 10
-    KJ1e2 = 0x0D, // kJ * 100
+    KJ1e1 = 0x0C, 
+    KJ1e2 = 0x0D, 
     MJ = 0x0E,
-    MJ1e1 = 0x0F, // MJ * 10
-    MJ1e2 = 0x10, // MJ * 100
+    MJ1e1 = 0x0F, 
+    MJ1e2 = 0x10, 
     GJ = 0x11,
-    GJ1e1 = 0x12, // GJ * 10
-    GJ1e2 = 0x13, // GJ * 100
+    GJ1e1 = 0x12, 
+    GJ1e2 = 0x13, 
     W = 0x14,
-    W1e1 = 0x15, // W * 10
-    W1e2 = 0x16, // W * 100
+    W1e1 = 0x15, 
+    W1e2 = 0x16, 
     KW = 0x17,
-    KW1e1 = 0x18, // kW * 10
-    KW1e2 = 0x19, // kW * 100
+    KW1e1 = 0x18,
+    KW1e2 = 0x19,
     MW = 0x1A,
-    MW1e1 = 0x1B, // MW * 10
-    MW1e2 = 0x1C, // MW * 100
+    MW1e1 = 0x1B,
+    MW1e2 = 0x1C,
     KJH = 0x1D,
-    KJH1e1 = 0x1E, // kJ/h * 10
-    KJH1e2 = 0x1F, // kJ/h * 100
+    KJH1e1 = 0x1E,
+    KJH1e2 = 0x1F,
     MJH = 0x20,
-    MJH1e1 = 0x21, // MJ/h * 10
-    MJH1e2 = 0x22, // MJ/h * 100
+    MJH1e1 = 0x21,
+    MJH1e2 = 0x22,
     GJH = 0x23,
-    GJH1e1 = 0x24, // GJ/h * 10
-    GJH1e2 = 0x25, // GJ/h * 100
+    GJH1e1 = 0x24,
+    GJH1e2 = 0x25,
     Ml = 0x26,
-    Ml1e1 = 0x27, // ml * 10
-    Ml1e2 = 0x28, // ml * 100
+    Ml1e1 = 0x27, 
+    Ml1e2 = 0x28, 
     L = 0x29,
-    L1e1 = 0x2A, // l * 10
-    L1e2 = 0x2B, // l * 100
+    L1e1 = 0x2A, 
+    L1e2 = 0x2B, 
     M3 = 0x2C,
-    M31e1 = 0x2D, // m^3 * 10
-    M31e2 = 0x2E, // m^3 * 100
+    M31e1 = 0x2D,
+    M31e2 = 0x2E,
     MlH = 0x2F,
-    MlH1e1 = 0x30, // ml/h * 10
-    MlH1e2 = 0x31, // ml/h * 100
+    MlH1e1 = 0x30,
+    MlH1e2 = 0x31,
     LH = 0x32,
-    LH1e1 = 0x33, // l/h * 10
-    LH1e2 = 0x34, // l/h * 100
+    LH1e1 = 0x33, 
+    LH1e2 = 0x34, 
     M3H = 0x35,
-    M3H1e1 = 0x36, // m^3/h * 10
-    M3H1e2 = 0x37, // m^3/h * 100
-    Celsius1e3 = 0x38, // °C * 10^-3
+    M3H1e1 = 0x36,
+    M3H1e2 = 0x37,
+    Celsius1e3 = 0x38,
     UnitsForHCA = 0x39,
     Reserved3A = 0x3A,
     Reserved3B = 0x3B,
@@ -271,7 +339,7 @@ impl DataInformationBlock {
 }
 
 #[derive(Debug, Clone,PartialEq)]
-struct DataRecord {
+pub struct DataRecord {
     function: FunctionField,
     storage_number: u32,
     unit: Unit,
@@ -284,12 +352,10 @@ pub enum VariableUserDataError{
 }
 
 
-fn parse_variable_data(data: &[u8]) -> Result<Vec<DataRecord>,VariableUserDataError> {
+pub fn parse_variable_data(data: &[u8]) -> Result<Vec<DataRecord>,VariableUserDataError> {
     let mut records = Vec::new();
     let mut data = data;
-    while !data.is_empty() {
-        let vif = ValueInformation::new(data);
-    }
+    let vif = ValueInformation::new(data);
     Ok(records)
 }
 

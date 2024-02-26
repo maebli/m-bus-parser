@@ -1,6 +1,5 @@
 //! ist a part of the application layer
-
-mod variable_user_data;
+pub mod variable_user_data;
 
 #[derive(Debug, PartialEq)]
 pub struct StatusField {
