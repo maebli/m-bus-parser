@@ -1,5 +1,7 @@
 //! ist a part of the application layer
 pub mod variable_user_data;
+pub mod value_information;
+pub mod data_information;
 
 #[derive(Debug, PartialEq)]
 pub struct StatusField {
