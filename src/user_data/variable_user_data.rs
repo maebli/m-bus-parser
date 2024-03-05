@@ -24,12 +24,10 @@ impl DataRecord {
             FunctionField::ValueDuringErrorState => FunctionField::ValueDuringErrorState,
         };
 
-        let storage_number = data_information.lsb_of_storage_number as u32;
-
         /* returning some dummy */
         DataRecord {
             function: FunctionField::InstantaneousValue,
-            storage_number: 0,
+            storage_number: data_information.storage_number,
             unit: Unit::WithoutUnits,
             quantity: "Volume".to_string(),
             value: 0.0,

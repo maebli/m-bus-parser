@@ -1,10 +1,12 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataInformation {
-    pub lsb_of_storage_number: bool,
+    pub storage_number: u32,
     pub function_field: FunctionField,
     pub data_field_coding: DataFieldCoding,
     pub data_information_extension: Option<DataInformationExtension>,
+    pub assoociated_data_length: u32,
+    pub extension_length: u32,
 }
 
 #[derive(Debug, Clone,PartialEq)]
@@ -14,8 +16,23 @@ struct DataInformationExtension{
 
 impl DataInformation {
     pub fn new(data:&[u8]) -> Self {
-        let extension_bit = data[0] & 0b1000_0000 != 0;
-        let lsb_of_storage_number = data[0] & 0b0100_0000 != 0;
+
+        let mut storage_number = ((data[0] & 0b0100_0000) >> 6) as u32;
+
+        let mut extension_bit = data[0] & 0x80 != 0;
+        let mut extension_index = 1;
+        let mut tariff = 0;
+        let mut sub_unit =  0;
+
+        while extension_bit {
+            storage_number += ((data[extension_index] & 0x0f) << ((extension_index * 4) + 1)) as u32;
+            sub_unit += (((data[extension_index] & 0x40) >> 6) << extension_index);
+            tariff += ((data[extension_index] & 0x30) >> 4) << (extension_index * 2);
+            extension_bit =  data[extension_index] & 0x80 != 0;
+            extension_index += 1;
+        }
+
+
         let function_field = match (data[0] & 0b0011_0000) >> 4 {
             0b00 => FunctionField::InstantaneousValue,
             0b01 => FunctionField::MaximumValue,
@@ -39,11 +56,11 @@ impl DataInformation {
             0b1101 => DataFieldCoding::VariableLength,
             0b1110 => DataFieldCoding::BCDDigit12,
             0b1111 => DataFieldCoding::SpecialFunctions,
-            _ => unreachable!(), // This case should never occur due to the 4-bit width
+            _ => unreachable!(), 
         };
 
         DataInformation {
-            lsb_of_storage_number,
+            storage_number,
             function_field,
             data_field_coding,
             data_information_extension: if extension_bit {
@@ -51,6 +68,8 @@ impl DataInformation {
             } else {
                 None
             },
+            extension_length: extension_index as u32,
+            assoociated_data_length: 0,
         }
     }
 }
@@ -161,10 +180,12 @@ mod tests {
         let data = vec![0x13, 0x15, 0x31, 0x00];
         let result = DataInformation::new(&data);
         assert_eq!(result, DataInformation{
-            lsb_of_storage_number: false,
+            storage_number: 0,
             function_field: FunctionField::MaximumValue,
             data_field_coding: DataFieldCoding::Integer24Bit,
             data_information_extension: None,
+            extension_length: 1,
+            assoociated_data_length: 0,
         });
     }
 }
