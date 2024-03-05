@@ -1,4 +1,5 @@
 use super::value_information::ValueInformation;
+use super::data_information::DataInformation;
 use super::data_information::{FunctionField, Unit};
 
 #[derive(Debug, Clone,PartialEq)]
@@ -10,16 +11,70 @@ pub struct DataRecord {
     value: f64,
 }
 
+impl DataRecord {
+    pub fn new(data: &[u8]) -> DataRecord {
+
+        let data_information = DataInformation::new(data);
+        let value_information = ValueInformation::new(data);
+
+        let function = match data_information.function_field {
+            FunctionField::InstantaneousValue => FunctionField::InstantaneousValue,
+            FunctionField::MaximumValue => FunctionField::MaximumValue,
+            FunctionField::MinimumValue => FunctionField::MinimumValue,
+            FunctionField::ValueDuringErrorState => FunctionField::ValueDuringErrorState,
+        };
+
+        let storage_number = data_information.lsb_of_storage_number as u32;
+
+        /* returning some dummy */
+        DataRecord {
+            function: FunctionField::InstantaneousValue,
+            storage_number: 0,
+            unit: Unit::WithoutUnits,
+            quantity: "Volume".to_string(),
+            value: 0.0,
+        }
+
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum VariableUserDataError{
 }
 
 
 pub fn parse_variable_data(data: &[u8]) -> Result<Vec<DataRecord>,VariableUserDataError> {
-    let mut records = Vec::new();
-    let mut data = data;
 
-    let vif = ValueInformation::new(data);
+    let mut records = Vec::new();
+
+    let mut offset = 0;
+    let mut more_records_follow= false ;
+
+    while offset < data.len() {
+        match data[offset] {
+            0x0F  => {
+                // manufacturer specific
+                offset = data.len();
+            },
+            0x1F => {
+                // manufacturer specific
+                more_records_follow = true;
+                offset = data.len();
+            },
+            0x2F => {
+                // filler byte, can be skipped
+                offset += 1;
+            },
+
+            _ => {}
+        }
+
+        let next_data_record = DataRecord::new(&data[offset..]);
+
+
+        offset += 1;
+    }
+
     Ok(records)
 }
 

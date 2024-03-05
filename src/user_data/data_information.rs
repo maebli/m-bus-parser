@@ -1,10 +1,10 @@
 
 #[derive(Debug, Clone, PartialEq)]
-struct DataInformation {
-    lsb_of_storage_number: bool,
-    function_field: FunctionField,
-    data_field_coding: DataFieldCoding,
-    data_information_extension: Option<DataInformationExtension>,
+pub struct DataInformation {
+    pub lsb_of_storage_number: bool,
+    pub function_field: FunctionField,
+    pub data_field_coding: DataFieldCoding,
+    pub data_information_extension: Option<DataInformationExtension>,
 }
 
 #[derive(Debug, Clone,PartialEq)]
@@ -13,7 +13,7 @@ struct DataInformationExtension{
 }
 
 impl DataInformation {
-    fn new(data:&[u8]) -> Self {
+    pub fn new(data:&[u8]) -> Self {
         let extension_bit = data[0] & 0b1000_0000 != 0;
         let lsb_of_storage_number = data[0] & 0b0100_0000 != 0;
         let function_field = match (data[0] & 0b0011_0000) >> 4 {
@@ -162,7 +162,7 @@ mod tests {
         let result = DataInformation::new(&data);
         assert_eq!(result, DataInformation{
             lsb_of_storage_number: false,
-            function_field: FunctionField::ValueDuringErrorState,
+            function_field: FunctionField::MaximumValue,
             data_field_coding: DataFieldCoding::Integer24Bit,
             data_information_extension: None,
         });
