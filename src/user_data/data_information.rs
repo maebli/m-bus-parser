@@ -178,13 +178,13 @@ mod tests {
     fn test_data_information() {
         let data = vec![0x13, 0x15, 0x31, 0x00];
         let result = DataInformation::new(&data);
-        assert_eq!(result, DataInformation{
+        assert_eq!(result, Some(DataInformation{
             storage_number: 0,
             function_field: FunctionField::MaximumValue,
             data_field_coding: DataFieldCoding::Integer24Bit,
             data_information_extension: None,
             size: 1,
-        });
+        }));
     }
 }
 

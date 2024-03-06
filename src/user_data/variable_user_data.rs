@@ -1,5 +1,5 @@
 use super::value_information::ValueInformation;
-use super::data_information::DataInformation;
+use super::data_information::{self, DataInformation};
 use super::data_information::{FunctionField, Unit};
 
 #[derive(Debug, Clone,PartialEq)]
@@ -12,10 +12,12 @@ pub struct DataRecord {
 }
 
 impl DataRecord {
-    pub fn new(data: &[u8]) -> DataRecord {
+    pub fn new(data: &[u8]) -> Option<DataRecord> {
 
-        let data_information = DataInformation::new(data);
+        let data_information = DataInformation::new(data)?;
         let value_information = ValueInformation::new(data);
+
+        let storage_number = data_information.storage_number;
 
         let function = match data_information.function_field {
             FunctionField::InstantaneousValue => FunctionField::InstantaneousValue,
@@ -25,13 +27,13 @@ impl DataRecord {
         };
 
         /* returning some dummy */
-        DataRecord {
-            function: FunctionField::InstantaneousValue,
-            storage_number: data_information.storage_number,
+        Some(DataRecord {
+            function,
+            storage_number,
             unit: Unit::WithoutUnits,
             quantity: "Volume".to_string(),
             value: 0.0,
-        }
+        })
 
     }
 }
