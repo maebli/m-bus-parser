@@ -5,8 +5,7 @@ pub struct DataInformation {
     pub function_field: FunctionField,
     pub data_field_coding: DataFieldCoding,
     pub data_information_extension: Option<DataInformationExtension>,
-    pub assoociated_data_length: u32,
-    pub extension_length: u32,
+    pub size: u32,
 }
 
 #[derive(Debug, Clone,PartialEq)]
@@ -15,9 +14,10 @@ struct DataInformationExtension{
 }
 
 impl DataInformation {
-    pub fn new(data:&[u8]) -> Self {
+    pub fn new(data:&[u8]) -> Option<Self> {
 
-        let mut storage_number = ((data[0] & 0b0100_0000) >> 6) as u32;
+        let first_byte = *data.get(0)?;
+        let mut storage_number = ((first_byte & 0b0100_0000) >> 6) as u32;
 
         let mut extension_bit = data[0] & 0x80 != 0;
         let mut extension_index = 1;
@@ -25,13 +25,13 @@ impl DataInformation {
         let mut sub_unit =  0;
 
         while extension_bit {
-            storage_number += ((data[extension_index] & 0x0f) << ((extension_index * 4) + 1)) as u32;
-            sub_unit += (((data[extension_index] & 0x40) >> 6) << extension_index);
-            tariff += ((data[extension_index] & 0x30) >> 4) << (extension_index * 2);
-            extension_bit =  data[extension_index] & 0x80 != 0;
+            let next_byte = *data.get(extension_index)?;
+            storage_number += ((next_byte & 0x0f) << ((extension_index * 4) + 1)) as u32;
+            sub_unit += ((next_byte & 0x40) >> 6) << extension_index;
+            tariff += ((next_byte & 0x30) >> 4) << (extension_index * 2);
+            extension_bit = next_byte & 0x80 != 0;
             extension_index += 1;
         }
-
 
         let function_field = match (data[0] & 0b0011_0000) >> 4 {
             0b00 => FunctionField::InstantaneousValue,
@@ -56,10 +56,10 @@ impl DataInformation {
             0b1101 => DataFieldCoding::VariableLength,
             0b1110 => DataFieldCoding::BCDDigit12,
             0b1111 => DataFieldCoding::SpecialFunctions,
-            _ => unreachable!(), 
+            _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
-        DataInformation {
+        Some(DataInformation {
             storage_number,
             function_field,
             data_field_coding,
@@ -68,9 +68,8 @@ impl DataInformation {
             } else {
                 None
             },
-            extension_length: extension_index as u32,
-            assoociated_data_length: 0,
-        }
+            size: extension_index as u32,
+        })
     }
 }
 
@@ -184,8 +183,7 @@ mod tests {
             function_field: FunctionField::MaximumValue,
             data_field_coding: DataFieldCoding::Integer24Bit,
             data_information_extension: None,
-            extension_length: 1,
-            assoociated_data_length: 0,
+            size: 1,
         });
     }
 }
