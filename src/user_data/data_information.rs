@@ -70,7 +70,13 @@ impl DataInformation {
             0b1100 => DataFieldCoding::BCD8Digit,
             0b1101 => DataFieldCoding::VariableLength,
             0b1110 => DataFieldCoding::BCDDigit12,
-            0b1111 => DataFieldCoding::SpecialFunctions,
+            0b1111 => DataFieldCoding::SpecialFunctions(match data[1] {
+                0x0F => SpecialFunctions::ManufacturerSpecific,
+                0x1F => SpecialFunctions::MoreRecordsFollow,
+                0x2F => SpecialFunctions::IdleFiller,
+                0x7F => SpecialFunctions::GlobalReadoutRequest,
+                _ => SpecialFunctions::Reserved, 
+            }),
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
@@ -96,6 +102,14 @@ pub enum FunctionField {
     MinimumValue,
     ValueDuringErrorState,
 }
+#[derive(Debug, Clone, Copy,PartialEq)]
+pub enum SpecialFunctions{
+    ManufacturerSpecific,
+    MoreRecordsFollow,
+    IdleFiller,
+    Reserved,
+    GlobalReadoutRequest,
+}
 
 #[derive(Debug, Clone, Copy,PartialEq)]
 pub enum DataFieldCoding {
@@ -114,7 +128,7 @@ pub enum DataFieldCoding {
     BCD8Digit,
     VariableLength,
     BCDDigit12,
-    SpecialFunctions,
+    SpecialFunctions(SpecialFunctions),
 }
 
 #[derive(Debug, Clone, Copy,PartialEq)]
@@ -220,6 +234,12 @@ mod tests {
         let data = vec![0xFF];
         let result = DataInformation::new(&data);
         assert_eq!(result, Err(DataInformationError::DataTooShort));
+    }
+
+    #[test]
+    fn test_manufacturer_specific_data_information(){
+        let data = vec![0x0F];
+        let result = DataInformation::new(&data);
     }
 
 }
