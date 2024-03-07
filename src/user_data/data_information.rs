@@ -33,6 +33,11 @@ impl DataInformation {
         let mut sub_unit =  0;
 
         while extension_bit {
+
+            if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
+                return Err(DataInformationError::DataTooLong);
+            }
+
             let next_byte = *data.get(extension_index).ok_or(DataInformationError::DataTooShort)?;
             storage_number += (((next_byte & 0x0f) as u64) << ((extension_index * 4) + 1)) as u64;
             sub_unit += (((next_byte & 0x40) >> 6) as u32) << extension_index;
@@ -40,9 +45,6 @@ impl DataInformation {
             extension_bit = next_byte & 0x80 != 0;
             extension_index += 1;
 
-            if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
-                return Err(DataInformationError::DataTooLong);
-            }
 
         }
 
@@ -205,6 +207,12 @@ mod tests {
         let data = vec![0xFF, 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF];
         let result = DataInformation::new(&data);
         assert_eq!(result, Err(DataInformationError::DataTooLong));
+    }
+    #[test]
+    fn test_longest_data_information_not_too_long(){
+        let data = vec![0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,];
+        let result = DataInformation::new(&data);
+        assert_ne!(result, Err(DataInformationError::DataTooLong));
     }
 
     #[test]
