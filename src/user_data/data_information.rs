@@ -11,9 +11,7 @@ pub struct DataInformation {
 const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
 
 #[derive(Debug, Clone,PartialEq)]
-struct DataInformationExtension{
-
-}
+pub struct DataInformationExtension{}
 
 #[derive(Debug, PartialEq)]
 pub enum DataInformationError{
@@ -97,7 +95,7 @@ pub enum FunctionField {
 }
 
 #[derive(Debug, Clone, Copy,PartialEq)]
-enum DataFieldCoding {
+pub enum DataFieldCoding {
     NoData,
     Integer8Bit,
     Integer16Bit,
