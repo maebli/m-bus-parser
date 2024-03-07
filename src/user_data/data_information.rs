@@ -16,7 +16,8 @@ pub struct DataInformationExtension{}
 #[derive(Debug, PartialEq)]
 pub enum DataInformationError{
     NoData,
-    DataTooLong
+    DataTooLong,
+    DataTooShort
 }
 
 impl DataInformation {
@@ -32,7 +33,7 @@ impl DataInformation {
         let mut sub_unit =  0;
 
         while extension_bit {
-            let next_byte = *data.get(extension_index).ok_or(DataInformationError::DataTooLong)?;
+            let next_byte = *data.get(extension_index).ok_or(DataInformationError::DataTooShort)?;
             storage_number += (((next_byte & 0x0f) as u64) << ((extension_index * 4) + 1)) as u64;
             sub_unit += (((next_byte & 0x40) >> 6) as u32) << extension_index;
             tariff += (((next_byte & 0x30) >> 4) as u64) << (extension_index * 2);
@@ -188,7 +189,7 @@ mod tests {
     use super::*;
     #[test]
     fn test_data_information() {
-        let data = vec![0x13, 0x15, 0x31, 0x00];
+        let data = vec![0x13];
         let result = DataInformation::new(&data);
         assert_eq!(result, Ok(DataInformation{
             storage_number: 0,
@@ -205,5 +206,13 @@ mod tests {
         let result = DataInformation::new(&data);
         assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
+
+    #[test]
+    fn test_short_data_information(){
+        let data = vec![0xFF];
+        let result = DataInformation::new(&data);
+        assert_eq!(result, Err(DataInformationError::DataTooShort));
+    }
+
 }
 
