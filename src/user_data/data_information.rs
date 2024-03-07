@@ -8,15 +8,24 @@ pub struct DataInformation {
     pub size: u32,
 }
 
+const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
+
 #[derive(Debug, Clone,PartialEq)]
 struct DataInformationExtension{
 
 }
 
-impl DataInformation {
-    pub fn new(data:&[u8]) -> Option<Self> {
+#[derive(Debug, PartialEq)]
+pub enum DataInformationError{
+    NoData,
+    DataTooLong
+}
 
-        let first_byte = *data.get(0)?;
+impl DataInformation {
+    pub fn new(data:&[u8]) -> Result<Self,DataInformationError> {
+
+        let first_byte = *data.get(0).ok_or(DataInformationError::DataTooLong)?;
+
         let mut storage_number = ((first_byte & 0b0100_0000) >> 6) as u32;
 
         let mut extension_bit = data[0] & 0x80 != 0;
@@ -25,12 +34,17 @@ impl DataInformation {
         let mut sub_unit =  0;
 
         while extension_bit {
-            let next_byte = *data.get(extension_index)?;
+            let next_byte = *data.get(extension_index).ok_or(DataInformationError::DataTooLong)?;
             storage_number += ((next_byte & 0x0f) << ((extension_index * 4) + 1)) as u32;
             sub_unit += ((next_byte & 0x40) >> 6) << extension_index;
             tariff += ((next_byte & 0x30) >> 4) << (extension_index * 2);
             extension_bit = next_byte & 0x80 != 0;
             extension_index += 1;
+
+            if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
+                return Err(DataInformationError::DataTooLong);
+            }
+
         }
 
         let function_field = match (data[0] & 0b0011_0000) >> 4 {
@@ -59,7 +73,7 @@ impl DataInformation {
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
-        Some(DataInformation {
+        Ok(DataInformation {
             storage_number,
             function_field,
             data_field_coding,
@@ -178,7 +192,7 @@ mod tests {
     fn test_data_information() {
         let data = vec![0x13, 0x15, 0x31, 0x00];
         let result = DataInformation::new(&data);
-        assert_eq!(result, Some(DataInformation{
+        assert_eq!(result, Ok(DataInformation{
             storage_number: 0,
             function_field: FunctionField::MaximumValue,
             data_field_coding: DataFieldCoding::Integer24Bit,

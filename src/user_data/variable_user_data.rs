@@ -11,8 +11,18 @@ pub struct DataRecord {
     value: f64,
 }
 
+enum DataRecordError {
+    DataInformationError(data_information::DataInformationError),
+}
+
+impl From<data_information::DataInformationError> for DataRecordError {
+    fn from(error: data_information::DataInformationError) -> Self {
+        DataRecordError::DataInformationError(error)
+    }
+}
+
 impl DataRecord {
-    pub fn new(data: &[u8]) -> Option<DataRecord> {
+    pub fn new(data: &[u8]) -> Result<DataRecord,DataRecordError> {
 
         let data_information = DataInformation::new(data)?;
         let value_information = ValueInformation::new(data);
@@ -27,7 +37,7 @@ impl DataRecord {
         };
 
         /* returning some dummy */
-        Some(DataRecord {
+        Ok(DataRecord {
             function,
             storage_number,
             unit: Unit::WithoutUnits,
@@ -39,8 +49,7 @@ impl DataRecord {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum VariableUserDataError{
-}
+pub enum VariableUserDataError{}
 
 
 pub fn parse_variable_data(data: &[u8]) -> Result<Vec<DataRecord>,VariableUserDataError> {
