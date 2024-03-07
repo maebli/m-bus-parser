@@ -5,7 +5,7 @@ use super::data_information::{FunctionField, Unit};
 #[derive(Debug, Clone,PartialEq)]
 pub struct DataRecord {
     function: FunctionField,
-    storage_number: u32,
+    storage_number: u64,
     unit: Unit,
     quantity: String,
     value: f64,

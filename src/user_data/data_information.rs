@@ -1,7 +1,7 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataInformation {
-    pub storage_number: u32,
+    pub storage_number: u64,
     pub function_field: FunctionField,
     pub data_field_coding: DataFieldCoding,
     pub data_information_extension: Option<DataInformationExtension>,
@@ -26,7 +26,7 @@ impl DataInformation {
 
         let first_byte = *data.get(0).ok_or(DataInformationError::DataTooLong)?;
 
-        let mut storage_number = ((first_byte & 0b0100_0000) >> 6) as u32;
+        let mut storage_number = ((first_byte & 0b0100_0000) >> 6) as u64;
 
         let mut extension_bit = data[0] & 0x80 != 0;
         let mut extension_index = 1;
@@ -35,9 +35,9 @@ impl DataInformation {
 
         while extension_bit {
             let next_byte = *data.get(extension_index).ok_or(DataInformationError::DataTooLong)?;
-            storage_number += ((next_byte & 0x0f) << ((extension_index * 4) + 1)) as u32;
-            sub_unit += ((next_byte & 0x40) >> 6) << extension_index;
-            tariff += ((next_byte & 0x30) >> 4) << (extension_index * 2);
+            storage_number += (((next_byte & 0x0f) as u64) << ((extension_index * 4) + 1)) as u64;
+            sub_unit += (((next_byte & 0x40) >> 6) as u32) << extension_index;
+            tariff += (((next_byte & 0x30) >> 4) as u64) << (extension_index * 2);
             extension_bit = next_byte & 0x80 != 0;
             extension_index += 1;
 
@@ -199,6 +199,13 @@ mod tests {
             data_information_extension: None,
             size: 1,
         }));
+    }
+
+    #[test]
+    fn test_invalid_data_information(){
+        let data = vec![0xFF, 0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF];
+        let result = DataInformation::new(&data);
+        assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
 }
 
