@@ -71,9 +71,7 @@ impl ControlInformation {
             0xB3 => Ok(ControlInformation::StartCalibrationTestMode),
             0xB4 => Ok(ControlInformation::ReadEEPROM),
             0xB6 => Ok(ControlInformation::StartSoftwareTest),
-            0x90..=0x97 => Ok(ControlInformation::HashProcedure(
-                byte - 0x90
-            )),
+            0x90..=0x97 => Ok(ControlInformation::HashProcedure(byte - 0x90)),
             0x70 => Ok(ControlInformation::SendErrorStatus),
             0x71 => Ok(ControlInformation::SendAlarmStatus),
             0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure),
@@ -83,7 +81,7 @@ impl ControlInformation {
     }
     fn getDirection(&self) -> Direction {
         match self {
-            ControlInformation::ResetAtApplicationLevel => Direction::MasterToSlave, 
+            ControlInformation::ResetAtApplicationLevel => Direction::MasterToSlave,
             ControlInformation::SendData => Direction::MasterToSlave,
             ControlInformation::SelectSlave => Direction::MasterToSlave,
             ControlInformation::SynchronizeSlave => Direction::MasterToSlave,
@@ -527,15 +525,11 @@ mod tests {
         );
         assert_eq!(
             ControlInformation::from(0x90),
-            Ok(ControlInformation::HashProcedure(
-                0,
-            ))
+            Ok(ControlInformation::HashProcedure(0,))
         );
         assert_eq!(
             ControlInformation::from(0x91),
-            Ok(ControlInformation::HashProcedure(
-                1,
-            ))
+            Ok(ControlInformation::HashProcedure(1,))
         );
     }
 

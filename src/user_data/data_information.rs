@@ -237,5 +237,4 @@ mod tests {
         let result = DataInformation::new(&data);
         assert_eq!(result, Err(DataInformationError::DataTooShort));
     }
-
 }
