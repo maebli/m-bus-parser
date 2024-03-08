@@ -206,7 +206,6 @@ impl std::fmt::Display for FrameError {
     }
 }
 
-#[cfg(feature = "std")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,6 +241,7 @@ mod tests {
             Ok(FrameType::ControlFrame {
                 function: Function::from(0x53).unwrap(),
                 address: Address::from(0x01),
+                data: &[0x51]
             })
         );
 
