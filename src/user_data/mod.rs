@@ -3,42 +3,18 @@ pub mod variable_user_data;
 pub mod value_information;
 pub mod data_information;
 
-#[derive(Debug, PartialEq)]
-pub struct StatusField {
-    pub counter_binary_signed: bool,
-    pub counter_fixed_date: bool,     
-    pub power_low: bool,             
-    pub permanent_error: bool,       
-    pub temporary_error: bool,       
-    pub manufacturer_specific_1: bool, 
-    pub manufacturer_specific_2: bool,
-    pub manufacturer_specific_3: bool,
-}
-
-impl StatusField {
-    pub fn from(byte: u8) -> Self {
-        StatusField {
-            counter_binary_signed: byte & 0b00000001 != 0,
-            counter_fixed_date: byte & 0b00000010 != 0,
-            power_low: byte & 0b00000100 != 0,
-            permanent_error: byte & 0b00001000 != 0,
-            temporary_error: byte & 0b00010000 != 0,
-            manufacturer_specific_1: byte & 0b00100000 != 0,
-            manufacturer_specific_2: byte & 0b01000000 != 0,
-            manufacturer_specific_3: byte & 0b10000000 != 0,
-        }
-    }
-    pub fn to_byte(&self) -> u8 {
-        let mut byte = 0u8;
-        if self.counter_binary_signed { byte |= 0b00000001; }
-        if self.counter_fixed_date { byte |= 0b00000010; }
-        if self.power_low { byte |= 0b00000100; }
-        if self.permanent_error { byte |= 0b00001000; }
-        if self.temporary_error { byte |= 0b00010000 }
-        if self.manufacturer_specific_1 { byte |= 0b00100000; }
-        if self.manufacturer_specific_2 { byte |= 0b01000000; }
-        if self.manufacturer_specific_3 { byte |= 0b10000000; }
-        byte
+bitflags::bitflags! {
+    #[repr(transparent)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct StatusField: u8 {
+        const COUNTER_BINARY_SIGNED     = 0b00000001;
+        const COUNTER_FIXED_DATE        = 0b00000010;
+        const POWER_LOW                 = 0b00000100;
+        const PERMANENT_ERROR           = 0b00001000;
+        const TEMPORARY_ERROR           = 0b00010000;
+        const MANUFACTURER_SPECIFIC_1   = 0b00100000;
+        const MANUFACTURER_SPECIFIC_2   = 0b01000000;
+        const MANUFACTURER_SPECIFIC_3   = 0b10000000;
     }
 }
 
@@ -400,7 +376,7 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
                     version: data[7],
                     medium: MeasuredMedium::new(data[8]).medium,
                     access_number: data[9],
-                    status: StatusField::from(data[10]),
+                    status: StatusField::from_bits_truncate(data[10]),
                     signature: u16::from_be_bytes([data[12], data[11]]),
                 },
                 variable_data_block: &data[13..data.len()-3],
@@ -411,7 +387,7 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
         ControlInformation::ResponseWithFixedDataStructure(_) => {
             let identification_number = IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?;
             let access_number = data[5];
-            let status = StatusField::from(data[6]);
+            let status = StatusField::from_bits_truncate(data[6]);
             let medium_and_unit = u16::from_be_bytes([data[7], data[8]]);
             let counter1 = Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
             let counter2 = Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
@@ -487,7 +463,7 @@ mod tests {
         assert_eq!(result, Ok(UserDataBlock::FixedDataStructure{
             identification_number: IdentificationNumber{number: 12345678},
             access_number: 0x0A,
-            status: StatusField::from(0x00),
+            status: StatusField::from_bits_truncate(0x00),
             medium_ad_unit: 0xE97E,
             counter1: Counter{count: 1},
             counter2: Counter{count: 135},

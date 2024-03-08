@@ -134,7 +134,7 @@ mod tests {
                             assert_eq!(fixed_data_header.manufacturer.code[1], expected_manufacturer[1] as char);
                             assert_eq!(fixed_data_header.manufacturer.code[2], expected_manufacturer[2] as char);
                             assert_eq!(fixed_data_header.access_number,mbus_data.slave_information.access_number as u8);
-                            assert_eq!(fixed_data_header.status.to_byte(), u8::from_str_radix(&mbus_data.slave_information.status, 16).unwrap());
+                            assert_eq!(fixed_data_header.status.bits(), u8::from_str_radix(&mbus_data.slave_information.status, 16).unwrap());
                             assert_eq!(fixed_data_header.signature, u16::from_str_radix(mbus_data.slave_information.signature.unwrap().as_str(), 16).unwrap());
                             assert_eq!(fixed_data_header.version, mbus_data.slave_information.version.unwrap());
                             assert_eq!(medium_to_str(fixed_data_header.medium), mbus_data.slave_information._medium);
