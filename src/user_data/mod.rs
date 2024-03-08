@@ -1,7 +1,7 @@
 //! ist a part of the application layer
-pub mod variable_user_data;
-pub mod value_information;
 pub mod data_information;
+pub mod value_information;
+pub mod variable_user_data;
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -51,51 +51,94 @@ pub enum ControlInformation {
 }
 
 impl ControlInformation {
-    fn from(byte: u8) -> Result<ControlInformation,ApplicationLayerError> {
+    fn from(byte: u8) -> Result<ControlInformation, ApplicationLayerError> {
         match byte {
-            0x50 => Ok(ControlInformation::ResetAtApplicationLevel(Direction::MasterToSlave)),
+            0x50 => Ok(ControlInformation::ResetAtApplicationLevel(
+                Direction::MasterToSlave,
+            )),
             0x51 => Ok(ControlInformation::SendData(Direction::MasterToSlave)),
             0x52 => Ok(ControlInformation::SelectSlave(Direction::MasterToSlave)),
-            0x54 => Ok(ControlInformation::SynchronizeSlave(Direction::MasterToSlave)),
+            0x54 => Ok(ControlInformation::SynchronizeSlave(
+                Direction::MasterToSlave,
+            )),
             0xB8 => Ok(ControlInformation::SetBaudRate300(Direction::MasterToSlave)),
             0xB9 => Ok(ControlInformation::SetBaudRate600(Direction::MasterToSlave)),
-            0xBA => Ok(ControlInformation::SetBaudRate1200(Direction::MasterToSlave)),
-            0xBB => Ok(ControlInformation::SetBaudRate2400(Direction::MasterToSlave)),
-            0xBC => Ok(ControlInformation::SetBaudRate4800(Direction::MasterToSlave)),
-            0xBD => Ok(ControlInformation::SetBaudRate9600(Direction::MasterToSlave)),
-            0xBE => Ok(ControlInformation::SetBaudRate19200(Direction::MasterToSlave)),
-            0xBF => Ok(ControlInformation::SetBaudRate38400(Direction::MasterToSlave)),
-            0xB1 => Ok(ControlInformation::OutputRAMContent(Direction::MasterToSlave)),
-            0xB2 => Ok(ControlInformation::WriteRAMContent(Direction::MasterToSlave)),
-            0xB3 => Ok(ControlInformation::StartCalibrationTestMode(Direction::MasterToSlave)),
+            0xBA => Ok(ControlInformation::SetBaudRate1200(
+                Direction::MasterToSlave,
+            )),
+            0xBB => Ok(ControlInformation::SetBaudRate2400(
+                Direction::MasterToSlave,
+            )),
+            0xBC => Ok(ControlInformation::SetBaudRate4800(
+                Direction::MasterToSlave,
+            )),
+            0xBD => Ok(ControlInformation::SetBaudRate9600(
+                Direction::MasterToSlave,
+            )),
+            0xBE => Ok(ControlInformation::SetBaudRate19200(
+                Direction::MasterToSlave,
+            )),
+            0xBF => Ok(ControlInformation::SetBaudRate38400(
+                Direction::MasterToSlave,
+            )),
+            0xB1 => Ok(ControlInformation::OutputRAMContent(
+                Direction::MasterToSlave,
+            )),
+            0xB2 => Ok(ControlInformation::WriteRAMContent(
+                Direction::MasterToSlave,
+            )),
+            0xB3 => Ok(ControlInformation::StartCalibrationTestMode(
+                Direction::MasterToSlave,
+            )),
             0xB4 => Ok(ControlInformation::ReadEEPROM(Direction::MasterToSlave)),
-            0xB6 => Ok(ControlInformation::StartSoftwareTest(Direction::MasterToSlave)),
-            0x90..=0x97 => Ok(ControlInformation::HashProcedure(byte - 0x90, Direction::MasterToSlave)),
-            0x70 => Ok(ControlInformation::SendErrorStatus(Direction::SlaveToMaster)),
-            0x71 => Ok(ControlInformation::SendAlarmStatus(Direction::SlaveToMaster)),
-            0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure(Direction::SlaveToMaster)),
-            0x73 | 0x77 => Ok(ControlInformation::ResponseWithFixedDataStructure(Direction::SlaveToMaster)),
-            _ => Err(ApplicationLayerError::InvalidControlInformation{byte}),
+            0xB6 => Ok(ControlInformation::StartSoftwareTest(
+                Direction::MasterToSlave,
+            )),
+            0x90..=0x97 => Ok(ControlInformation::HashProcedure(
+                byte - 0x90,
+                Direction::MasterToSlave,
+            )),
+            0x70 => Ok(ControlInformation::SendErrorStatus(
+                Direction::SlaveToMaster,
+            )),
+            0x71 => Ok(ControlInformation::SendAlarmStatus(
+                Direction::SlaveToMaster,
+            )),
+            0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure(
+                Direction::SlaveToMaster,
+            )),
+            0x73 | 0x77 => Ok(ControlInformation::ResponseWithFixedDataStructure(
+                Direction::SlaveToMaster,
+            )),
+            _ => Err(ApplicationLayerError::InvalidControlInformation { byte }),
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ApplicationLayerError{
+pub enum ApplicationLayerError {
     MissingControlInformation,
-    InvalidControlInformation{byte:u8},
-    IdentificationNumberError{digits:[u8;4], number:u32},
-    InvalidManufacturerCode{code:u16},
+    InvalidControlInformation { byte: u8 },
+    IdentificationNumberError { digits: [u8; 4], number: u32 },
+    InvalidManufacturerCode { code: u16 },
 }
 
 #[cfg(feature = "std")]
 impl fmt::Display for ApplicationLayerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ApplicationLayerError::MissingControlInformation => write!(f, "Missing control information"),
-            ApplicationLayerError::InvalidControlInformation{byte} => write!(f, "Invalid control information: {}", byte),
-            ApplicationLayerError::IdentificationNumberError => write!(f, "Invalid identification number"),
-            ApplicationLayerError::InvalidManufacturerCode{code} => write!(f, "Invalid manufacturer code: {}", code),
+            ApplicationLayerError::MissingControlInformation => {
+                write!(f, "Missing control information")
+            }
+            ApplicationLayerError::InvalidControlInformation { byte } => {
+                write!(f, "Invalid control information: {}", byte)
+            }
+            ApplicationLayerError::IdentificationNumberError => {
+                write!(f, "Invalid identification number")
+            }
+            ApplicationLayerError::InvalidManufacturerCode { code } => {
+                write!(f, "Invalid manufacturer code: {}", code)
+            }
         }
     }
 }
@@ -125,7 +168,8 @@ pub enum ApplicationResetSubcode {
 
 impl ApplicationResetSubcode {
     pub fn from(value: u8) -> Self {
-        match value & 0b1111 { // Extracting the lower 4 bits
+        match value & 0b1111 {
+            // Extracting the lower 4 bits
             0b0000 => ApplicationResetSubcode::All(value),
             0b0001 => ApplicationResetSubcode::UserData(value),
             0b0010 => ApplicationResetSubcode::SimpleBilling(value),
@@ -153,7 +197,7 @@ fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> 
         let lower = digit & 0x0F;
         let upper = digit >> 4;
         if lower > 9 || upper > 9 {
-            return Err(ApplicationLayerError::IdentificationNumberError{ digits, number} );
+            return Err(ApplicationLayerError::IdentificationNumberError { digits, number });
         }
         number = number * 100 + (upper as u32 * 10) + lower as u32;
     }
@@ -192,7 +236,7 @@ impl Counter {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct FixedDataHeder{
+pub struct FixedDataHeder {
     identification_number: IdentificationNumber,
     manufacturer_code: ManufacturerCode,
     version: u8,
@@ -204,8 +248,10 @@ pub struct FixedDataHeder{
 
 #[derive(Debug, PartialEq)]
 pub enum UserDataBlock<'a> {
-    ResetAtApplicationLevel{subcode: ApplicationResetSubcode},
-    FixedDataStructure{
+    ResetAtApplicationLevel {
+        subcode: ApplicationResetSubcode,
+    },
+    FixedDataStructure {
         identification_number: IdentificationNumber,
         access_number: u8,
         status: StatusField,
@@ -213,15 +259,15 @@ pub enum UserDataBlock<'a> {
         counter1: Counter,
         counter2: Counter,
     },
-    VariableDataStructure{
+    VariableDataStructure {
         fixed_data_header: FixedDataHeader,
         variable_data_block: &'a [u8],
         mdh: u8,
-        manufacturer_specific_data: &'a [u8], 
+        manufacturer_specific_data: &'a [u8],
     },
 }
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Medium {
     Other,
     Oil,
@@ -283,16 +329,15 @@ impl Medium {
     }
 }
 
-
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct FixedDataHeader {
-    pub identification_number: IdentificationNumber, 
-    pub manufacturer: ManufacturerCode, 
+    pub identification_number: IdentificationNumber,
+    pub manufacturer: ManufacturerCode,
     pub version: u8,
     pub medium: Medium,
     pub access_number: u8,
     pub status: StatusField,
-    pub signature: u16, 
+    pub signature: u16,
 }
 
 #[derive(Debug, PartialEq)]
@@ -301,20 +346,23 @@ pub struct ManufacturerCode {
 }
 
 impl ManufacturerCode {
-
     pub fn from_id(id: u16) -> Result<Self, ApplicationLayerError> {
         let first_letter = ((id / (32 * 32)) + 64) as u8 as char;
         let second_letter = (((id % (32 * 32)) / 32) + 64) as u8 as char;
         let third_letter = ((id % 32) + 64) as u8 as char;
 
-        if first_letter.is_ascii_uppercase() && second_letter.is_ascii_uppercase() && third_letter.is_ascii_uppercase() {
-            Ok(ManufacturerCode { code: [first_letter, second_letter, third_letter] })
+        if first_letter.is_ascii_uppercase()
+            && second_letter.is_ascii_uppercase()
+            && third_letter.is_ascii_uppercase()
+        {
+            Ok(ManufacturerCode {
+                code: [first_letter, second_letter, third_letter],
+            })
         } else {
-            Err(ApplicationLayerError::InvalidManufacturerCode{code:id})
+            Err(ApplicationLayerError::InvalidManufacturerCode { code: id })
         }
     }
 }
-
 
 #[cfg(feature = "std")]
 impl fmt::Display for ManufacturerCode {
@@ -323,7 +371,7 @@ impl fmt::Display for ManufacturerCode {
     }
 }
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct MeasuredMedium {
     pub medium: Medium,
 }
@@ -337,7 +385,6 @@ impl MeasuredMedium {
 }
 
 pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerError> {
-    
     if data.is_empty() {
         return Err(ApplicationLayerError::MissingControlInformation);
     }
@@ -347,8 +394,8 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
     match control_information {
         ControlInformation::ResetAtApplicationLevel(_) => {
             let subcode = ApplicationResetSubcode::from(data[1]);
-            Ok(UserDataBlock::ResetAtApplicationLevel{subcode})
-        },
+            Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
+        }
         ControlInformation::SendData(_) => todo!(),
         ControlInformation::SelectSlave(_) => todo!(),
         ControlInformation::SynchronizeSlave(_) => todo!(),
@@ -369,29 +416,34 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
         ControlInformation::SendErrorStatus(_) => todo!(),
         ControlInformation::SendAlarmStatus(_) => todo!(),
         ControlInformation::ResponseWithVariableDataStructure(_) => {
-            Ok(UserDataBlock::VariableDataStructure{
-                fixed_data_header: FixedDataHeader{
-                    identification_number: IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?,
-                    manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([data[6], data[5]]))?,
+            Ok(UserDataBlock::VariableDataStructure {
+                fixed_data_header: FixedDataHeader {
+                    identification_number: IdentificationNumber::from_bcd_hex_digits([
+                        data[1], data[2], data[3], data[4],
+                    ])?,
+                    manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([
+                        data[6], data[5],
+                    ]))?,
                     version: data[7],
                     medium: MeasuredMedium::new(data[8]).medium,
                     access_number: data[9],
                     status: StatusField::from_bits_truncate(data[10]),
                     signature: u16::from_be_bytes([data[12], data[11]]),
                 },
-                variable_data_block: &data[13..data.len()-3],
-                mdh: data[data.len()-3],
-                manufacturer_specific_data: &data[data.len()-2..],
-                })
-        },
+                variable_data_block: &data[13..data.len() - 3],
+                mdh: data[data.len() - 3],
+                manufacturer_specific_data: &data[data.len() - 2..],
+            })
+        }
         ControlInformation::ResponseWithFixedDataStructure(_) => {
-            let identification_number = IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?;
+            let identification_number =
+                IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?;
             let access_number = data[5];
             let status = StatusField::from_bits_truncate(data[6]);
             let medium_and_unit = u16::from_be_bytes([data[7], data[8]]);
             let counter1 = Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
             let counter2 = Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
-            Ok(UserDataBlock::FixedDataStructure{
+            Ok(UserDataBlock::FixedDataStructure {
                 identification_number,
                 access_number,
                 status,
@@ -399,10 +451,9 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
                 counter1,
                 counter2,
             })
-        },
+        }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -411,70 +462,166 @@ mod tests {
 
     #[test]
     fn test_control_information() {
-        assert_eq!(ControlInformation::from(0x50), Ok(ControlInformation::ResetAtApplicationLevel(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0x51), Ok(ControlInformation::SendData(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0x52), Ok(ControlInformation::SelectSlave(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0x54), Ok(ControlInformation::SynchronizeSlave(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xB8), Ok(ControlInformation::SetBaudRate300(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xB9), Ok(ControlInformation::SetBaudRate600(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xBA), Ok(ControlInformation::SetBaudRate1200(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xBB), Ok(ControlInformation::SetBaudRate2400(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xBC), Ok(ControlInformation::SetBaudRate4800(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xBD), Ok(ControlInformation::SetBaudRate9600(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xBE), Ok(ControlInformation::SetBaudRate19200(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xBF), Ok(ControlInformation::SetBaudRate38400(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xB1), Ok(ControlInformation::OutputRAMContent(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xB2), Ok(ControlInformation::WriteRAMContent(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xB3), Ok(ControlInformation::StartCalibrationTestMode(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xB4), Ok(ControlInformation::ReadEEPROM(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0xB6), Ok(ControlInformation::StartSoftwareTest(Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0x90), Ok(ControlInformation::HashProcedure(0, Direction::MasterToSlave)));
-        assert_eq!(ControlInformation::from(0x91), Ok(ControlInformation::HashProcedure(1, Direction::MasterToSlave)));
+        assert_eq!(
+            ControlInformation::from(0x50),
+            Ok(ControlInformation::ResetAtApplicationLevel(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0x51),
+            Ok(ControlInformation::SendData(Direction::MasterToSlave))
+        );
+        assert_eq!(
+            ControlInformation::from(0x52),
+            Ok(ControlInformation::SelectSlave(Direction::MasterToSlave))
+        );
+        assert_eq!(
+            ControlInformation::from(0x54),
+            Ok(ControlInformation::SynchronizeSlave(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xB8),
+            Ok(ControlInformation::SetBaudRate300(Direction::MasterToSlave))
+        );
+        assert_eq!(
+            ControlInformation::from(0xB9),
+            Ok(ControlInformation::SetBaudRate600(Direction::MasterToSlave))
+        );
+        assert_eq!(
+            ControlInformation::from(0xBA),
+            Ok(ControlInformation::SetBaudRate1200(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xBB),
+            Ok(ControlInformation::SetBaudRate2400(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xBC),
+            Ok(ControlInformation::SetBaudRate4800(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xBD),
+            Ok(ControlInformation::SetBaudRate9600(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xBE),
+            Ok(ControlInformation::SetBaudRate19200(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xBF),
+            Ok(ControlInformation::SetBaudRate38400(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xB1),
+            Ok(ControlInformation::OutputRAMContent(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xB2),
+            Ok(ControlInformation::WriteRAMContent(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xB3),
+            Ok(ControlInformation::StartCalibrationTestMode(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0xB4),
+            Ok(ControlInformation::ReadEEPROM(Direction::MasterToSlave))
+        );
+        assert_eq!(
+            ControlInformation::from(0xB6),
+            Ok(ControlInformation::StartSoftwareTest(
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0x90),
+            Ok(ControlInformation::HashProcedure(
+                0,
+                Direction::MasterToSlave
+            ))
+        );
+        assert_eq!(
+            ControlInformation::from(0x91),
+            Ok(ControlInformation::HashProcedure(
+                1,
+                Direction::MasterToSlave
+            ))
+        );
     }
 
     #[test]
-    fn test_reset_subcode(){
+    fn test_reset_subcode() {
         // Application layer of frame | 68 04 04 68 | 53 FE 50 | 10 | B1 16
-        let data = [ 0x50, 0x10];
+        let data = [0x50, 0x10];
         let result = parse_user_data(&data);
-        assert_eq!(result, Ok(UserDataBlock::ResetAtApplicationLevel{subcode: ApplicationResetSubcode::All(0x10)}));
+        assert_eq!(
+            result,
+            Ok(UserDataBlock::ResetAtApplicationLevel {
+                subcode: ApplicationResetSubcode::All(0x10)
+            })
+        );
     }
 
     #[test]
     fn test_identification_number() -> Result<(), ApplicationLayerError> {
         let data = [0x78, 0x56, 0x34, 0x12];
         let result = IdentificationNumber::from_bcd_hex_digits(data)?;
-        assert_eq!(result, IdentificationNumber{number: 12345678});
+        assert_eq!(result, IdentificationNumber { number: 12345678 });
         Ok(())
     }
 
     #[test]
-    fn test_fixed_data_structure(){
-        let data = [  0x73,
-                                0x78,0x56,0x34,0x12,
-                                0x0A,
-                                0x00,
-                                0xE9,0x7E,
-                                0x01,0x00,0x00,0x00,
-                                0x35,0x01,0x00,0x00];
-        
+    fn test_fixed_data_structure() {
+        let data = [
+            0x73, 0x78, 0x56, 0x34, 0x12, 0x0A, 0x00, 0xE9, 0x7E, 0x01, 0x00, 0x00, 0x00, 0x35,
+            0x01, 0x00, 0x00,
+        ];
+
         let result = parse_user_data(&data);
 
-        assert_eq!(result, Ok(UserDataBlock::FixedDataStructure{
-            identification_number: IdentificationNumber{number: 12345678},
-            access_number: 0x0A,
-            status: StatusField::from_bits_truncate(0x00),
-            medium_ad_unit: 0xE97E,
-            counter1: Counter{count: 1},
-            counter2: Counter{count: 135},
-        }));
+        assert_eq!(
+            result,
+            Ok(UserDataBlock::FixedDataStructure {
+                identification_number: IdentificationNumber { number: 12345678 },
+                access_number: 0x0A,
+                status: StatusField::from_bits_truncate(0x00),
+                medium_ad_unit: 0xE97E,
+                counter1: Counter { count: 1 },
+                counter2: Counter { count: 135 },
+            })
+        );
     }
 
     #[test]
     fn test_manufacturer_code() -> Result<(), ApplicationLayerError> {
         let code = ManufacturerCode::from_id(0x1ee6)?;
-        assert_eq!(code, ManufacturerCode{code: ['G', 'W', 'F']});
+        assert_eq!(
+            code,
+            ManufacturerCode {
+                code: ['G', 'W', 'F']
+            }
+        );
         Ok(())
     }
-
 }

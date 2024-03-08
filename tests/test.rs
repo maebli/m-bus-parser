@@ -1,11 +1,10 @@
-use std::fs;
-use m_bus_parser::user_data::Medium;
-use walkdir::WalkDir;
 use hex;
+use m_bus_parser::user_data::Medium;
 use serde::Deserialize;
 use serde_xml_rs::from_str;
-#
-[derive(Debug, Deserialize)]
+use std::fs;
+use walkdir::WalkDir;
+#[derive(Debug, Deserialize)]
 pub struct MBusData {
     #[serde(rename = "SlaveInformation")]
     slave_information: SlaveInformation,
@@ -93,7 +92,10 @@ fn medium_to_str(medium: Medium) -> &'static str {
 #[cfg(test)]
 mod tests {
 
-    use m_bus_parser::{frames::{parse_frame, FrameType}, user_data::{parse_user_data, UserDataBlock}};
+    use m_bus_parser::{
+        frames::{parse_frame, FrameType},
+        user_data::{parse_user_data, UserDataBlock},
+    };
 
     use super::*;
 
@@ -105,15 +107,14 @@ mod tests {
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().map_or(false, |ext| ext == "hex"))
         {
-
-            let contents = fs::read_to_string(entry.path())
-                .expect("Something went wrong reading the file");
+            let contents =
+                fs::read_to_string(entry.path()).expect("Something went wrong reading the file");
             println!("Path: {}", entry.path().display());
             let xml_path = entry.path().with_extension("xml");
-            let xml_content = fs::read_to_string(xml_path)
-                .expect("Something went wrong reading the file");
+            let xml_content =
+                fs::read_to_string(xml_path).expect("Something went wrong reading the file");
             let mbus_data: MBusData = from_str(&xml_content).unwrap();
-            
+
             println!("{:?}", mbus_data);
             println!("Input:\n{}", contents);
 
@@ -121,29 +122,69 @@ mod tests {
             let bytes = hex::decode(contents).unwrap();
             let frame = parse_frame(bytes.as_slice()).unwrap();
 
-            if let FrameType::LongFrame { function: _, address:_, data } = frame {
-                 let user_data = parse_user_data(data).unwrap();
-                 if let UserDataBlock::VariableDataStructure { 
-                        fixed_data_header, 
-                        variable_data_block: _,
-                        mdh:_, 
-                        manufacturer_specific_data:_ } = user_data {
-                            assert!(Into::<u32>::into(fixed_data_header.identification_number) == mbus_data.slave_information.id.parse::<u32>().unwrap());
-                            let expected_manufacturer = mbus_data.slave_information.manufacturer.unwrap().into_bytes();
-                            assert_eq!(fixed_data_header.manufacturer.code[0],expected_manufacturer[0] as char);
-                            assert_eq!(fixed_data_header.manufacturer.code[1], expected_manufacturer[1] as char);
-                            assert_eq!(fixed_data_header.manufacturer.code[2], expected_manufacturer[2] as char);
-                            assert_eq!(fixed_data_header.access_number,mbus_data.slave_information.access_number as u8);
-                            assert_eq!(fixed_data_header.status.bits(), u8::from_str_radix(&mbus_data.slave_information.status, 16).unwrap());
-                            assert_eq!(fixed_data_header.signature, u16::from_str_radix(mbus_data.slave_information.signature.unwrap().as_str(), 16).unwrap());
-                            assert_eq!(fixed_data_header.version, mbus_data.slave_information.version.unwrap());
-                            assert_eq!(medium_to_str(fixed_data_header.medium), mbus_data.slave_information._medium);
-                            
-                        }
-            }else{
+            if let FrameType::LongFrame {
+                function: _,
+                address: _,
+                data,
+            } = frame
+            {
+                let user_data = parse_user_data(data).unwrap();
+                if let UserDataBlock::VariableDataStructure {
+                    fixed_data_header,
+                    variable_data_block: _,
+                    mdh: _,
+                    manufacturer_specific_data: _,
+                } = user_data
+                {
+                    assert!(
+                        Into::<u32>::into(fixed_data_header.identification_number)
+                            == mbus_data.slave_information.id.parse::<u32>().unwrap()
+                    );
+                    let expected_manufacturer = mbus_data
+                        .slave_information
+                        .manufacturer
+                        .unwrap()
+                        .into_bytes();
+                    assert_eq!(
+                        fixed_data_header.manufacturer.code[0],
+                        expected_manufacturer[0] as char
+                    );
+                    assert_eq!(
+                        fixed_data_header.manufacturer.code[1],
+                        expected_manufacturer[1] as char
+                    );
+                    assert_eq!(
+                        fixed_data_header.manufacturer.code[2],
+                        expected_manufacturer[2] as char
+                    );
+                    assert_eq!(
+                        fixed_data_header.access_number,
+                        mbus_data.slave_information.access_number as u8
+                    );
+                    assert_eq!(
+                        fixed_data_header.status.bits(),
+                        u8::from_str_radix(&mbus_data.slave_information.status, 16).unwrap()
+                    );
+                    assert_eq!(
+                        fixed_data_header.signature,
+                        u16::from_str_radix(
+                            mbus_data.slave_information.signature.unwrap().as_str(),
+                            16
+                        )
+                        .unwrap()
+                    );
+                    assert_eq!(
+                        fixed_data_header.version,
+                        mbus_data.slave_information.version.unwrap()
+                    );
+                    assert_eq!(
+                        medium_to_str(fixed_data_header.medium),
+                        mbus_data.slave_information._medium
+                    );
+                }
+            } else {
                 panic!("Frame is not a long frame");
             }
         }
     }
 }
-
