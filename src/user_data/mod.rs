@@ -22,95 +22,90 @@ bitflags::bitflags! {
 pub enum Direction {
     SlaveToMaster,
     MasterToSlave,
+    Unkown,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum ControlInformation {
-    SendData(Direction),
-    SelectSlave(Direction),
-    ResetAtApplicationLevel(Direction),
-    SynchronizeSlave(Direction),
-    SetBaudRate300(Direction),
-    SetBaudRate600(Direction),
-    SetBaudRate1200(Direction),
-    SetBaudRate2400(Direction),
-    SetBaudRate4800(Direction),
-    SetBaudRate9600(Direction),
-    SetBaudRate19200(Direction),
-    SetBaudRate38400(Direction),
-    OutputRAMContent(Direction),
-    WriteRAMContent(Direction),
-    StartCalibrationTestMode(Direction),
-    ReadEEPROM(Direction),
-    StartSoftwareTest(Direction),
-    HashProcedure(u8, Direction),
-    SendErrorStatus(Direction),
-    SendAlarmStatus(Direction),
-    ResponseWithVariableDataStructure(Direction),
-    ResponseWithFixedDataStructure(Direction),
+    SendData,
+    SelectSlave,
+    ResetAtApplicationLevel,
+    SynchronizeSlave,
+    SetBaudRate300,
+    SetBaudRate600,
+    SetBaudRate1200,
+    SetBaudRate2400,
+    SetBaudRate4800,
+    SetBaudRate9600,
+    SetBaudRate19200,
+    SetBaudRate38400,
+    OutputRAMContent,
+    WriteRAMContent,
+    StartCalibrationTestMode,
+    ReadEEPROM,
+    StartSoftwareTest,
+    HashProcedure(u8),
+    SendErrorStatus,
+    SendAlarmStatus,
+    ResponseWithVariableDataStructure,
+    ResponseWithFixedDataStructure,
 }
 
 impl ControlInformation {
     fn from(byte: u8) -> Result<ControlInformation, ApplicationLayerError> {
         match byte {
-            0x50 => Ok(ControlInformation::ResetAtApplicationLevel(
-                Direction::MasterToSlave,
-            )),
-            0x51 => Ok(ControlInformation::SendData(Direction::MasterToSlave)),
-            0x52 => Ok(ControlInformation::SelectSlave(Direction::MasterToSlave)),
-            0x54 => Ok(ControlInformation::SynchronizeSlave(
-                Direction::MasterToSlave,
-            )),
-            0xB8 => Ok(ControlInformation::SetBaudRate300(Direction::MasterToSlave)),
-            0xB9 => Ok(ControlInformation::SetBaudRate600(Direction::MasterToSlave)),
-            0xBA => Ok(ControlInformation::SetBaudRate1200(
-                Direction::MasterToSlave,
-            )),
-            0xBB => Ok(ControlInformation::SetBaudRate2400(
-                Direction::MasterToSlave,
-            )),
-            0xBC => Ok(ControlInformation::SetBaudRate4800(
-                Direction::MasterToSlave,
-            )),
-            0xBD => Ok(ControlInformation::SetBaudRate9600(
-                Direction::MasterToSlave,
-            )),
-            0xBE => Ok(ControlInformation::SetBaudRate19200(
-                Direction::MasterToSlave,
-            )),
-            0xBF => Ok(ControlInformation::SetBaudRate38400(
-                Direction::MasterToSlave,
-            )),
-            0xB1 => Ok(ControlInformation::OutputRAMContent(
-                Direction::MasterToSlave,
-            )),
-            0xB2 => Ok(ControlInformation::WriteRAMContent(
-                Direction::MasterToSlave,
-            )),
-            0xB3 => Ok(ControlInformation::StartCalibrationTestMode(
-                Direction::MasterToSlave,
-            )),
-            0xB4 => Ok(ControlInformation::ReadEEPROM(Direction::MasterToSlave)),
-            0xB6 => Ok(ControlInformation::StartSoftwareTest(
-                Direction::MasterToSlave,
-            )),
+            0x50 => Ok(ControlInformation::ResetAtApplicationLevel),
+            0x51 => Ok(ControlInformation::SendData),
+            0x52 => Ok(ControlInformation::SelectSlave),
+            0x54 => Ok(ControlInformation::SynchronizeSlave),
+            0xB8 => Ok(ControlInformation::SetBaudRate300),
+            0xB9 => Ok(ControlInformation::SetBaudRate600),
+            0xBA => Ok(ControlInformation::SetBaudRate1200),
+            0xBB => Ok(ControlInformation::SetBaudRate2400),
+            0xBC => Ok(ControlInformation::SetBaudRate4800),
+            0xBD => Ok(ControlInformation::SetBaudRate9600),
+            0xBE => Ok(ControlInformation::SetBaudRate19200),
+            0xBF => Ok(ControlInformation::SetBaudRate38400),
+            0xB1 => Ok(ControlInformation::OutputRAMContent),
+            0xB2 => Ok(ControlInformation::WriteRAMContent),
+            0xB3 => Ok(ControlInformation::StartCalibrationTestMode),
+            0xB4 => Ok(ControlInformation::ReadEEPROM),
+            0xB6 => Ok(ControlInformation::StartSoftwareTest),
             0x90..=0x97 => Ok(ControlInformation::HashProcedure(
-                byte - 0x90,
-                Direction::MasterToSlave,
+                byte - 0x90
             )),
-            0x70 => Ok(ControlInformation::SendErrorStatus(
-                Direction::SlaveToMaster,
-            )),
-            0x71 => Ok(ControlInformation::SendAlarmStatus(
-                Direction::SlaveToMaster,
-            )),
-            0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure(
-                Direction::SlaveToMaster,
-            )),
-            0x73 | 0x77 => Ok(ControlInformation::ResponseWithFixedDataStructure(
-                Direction::SlaveToMaster,
-            )),
+            0x70 => Ok(ControlInformation::SendErrorStatus),
+            0x71 => Ok(ControlInformation::SendAlarmStatus),
+            0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure),
+            0x73 | 0x77 => Ok(ControlInformation::ResponseWithFixedDataStructure),
             _ => Err(ApplicationLayerError::InvalidControlInformation { byte }),
+        }
+    }
+    fn getDirection(&self) -> Direction {
+        match self {
+            ControlInformation::ResetAtApplicationLevel => Direction::MasterToSlave, 
+            ControlInformation::SendData => Direction::MasterToSlave,
+            ControlInformation::SelectSlave => Direction::MasterToSlave,
+            ControlInformation::SynchronizeSlave => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate300 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate600 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate1200 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate2400 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate4800 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate9600 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate19200 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate38400 => Direction::MasterToSlave,
+            ControlInformation::OutputRAMContent => Direction::MasterToSlave,
+            ControlInformation::WriteRAMContent => Direction::MasterToSlave,
+            ControlInformation::StartCalibrationTestMode => Direction::MasterToSlave,
+            ControlInformation::ReadEEPROM => Direction::MasterToSlave,
+            ControlInformation::StartSoftwareTest => Direction::MasterToSlave,
+            ControlInformation::HashProcedure(_) => Direction::MasterToSlave,
+            ControlInformation::SendErrorStatus => Direction::SlaveToMaster,
+            ControlInformation::SendAlarmStatus => Direction::SlaveToMaster,
+            ControlInformation::ResponseWithVariableDataStructure => Direction::SlaveToMaster,
+            ControlInformation::ResponseWithFixedDataStructure => Direction::SlaveToMaster,
+            _ => Direction::Unkown,
         }
     }
 }
@@ -392,30 +387,30 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
     let control_information = ControlInformation::from(data[0])?;
 
     match control_information {
-        ControlInformation::ResetAtApplicationLevel(_) => {
+        ControlInformation::ResetAtApplicationLevel => {
             let subcode = ApplicationResetSubcode::from(data[1]);
             Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
         }
-        ControlInformation::SendData(_) => todo!(),
-        ControlInformation::SelectSlave(_) => todo!(),
-        ControlInformation::SynchronizeSlave(_) => todo!(),
-        ControlInformation::SetBaudRate300(_) => todo!(),
-        ControlInformation::SetBaudRate600(_) => todo!(),
-        ControlInformation::SetBaudRate1200(_) => todo!(),
-        ControlInformation::SetBaudRate2400(_) => todo!(),
-        ControlInformation::SetBaudRate4800(_) => todo!(),
-        ControlInformation::SetBaudRate9600(_) => todo!(),
-        ControlInformation::SetBaudRate19200(_) => todo!(),
-        ControlInformation::SetBaudRate38400(_) => todo!(),
-        ControlInformation::OutputRAMContent(_) => todo!(),
-        ControlInformation::WriteRAMContent(_) => todo!(),
-        ControlInformation::StartCalibrationTestMode(_) => todo!(),
-        ControlInformation::ReadEEPROM(_) => todo!(),
-        ControlInformation::StartSoftwareTest(_) => todo!(),
-        ControlInformation::HashProcedure(_, _) => todo!(),
-        ControlInformation::SendErrorStatus(_) => todo!(),
-        ControlInformation::SendAlarmStatus(_) => todo!(),
-        ControlInformation::ResponseWithVariableDataStructure(_) => {
+        ControlInformation::SendData => todo!(),
+        ControlInformation::SelectSlave => todo!(),
+        ControlInformation::SynchronizeSlave => todo!(),
+        ControlInformation::SetBaudRate300 => todo!(),
+        ControlInformation::SetBaudRate600 => todo!(),
+        ControlInformation::SetBaudRate1200 => todo!(),
+        ControlInformation::SetBaudRate2400 => todo!(),
+        ControlInformation::SetBaudRate4800 => todo!(),
+        ControlInformation::SetBaudRate9600 => todo!(),
+        ControlInformation::SetBaudRate19200 => todo!(),
+        ControlInformation::SetBaudRate38400 => todo!(),
+        ControlInformation::OutputRAMContent => todo!(),
+        ControlInformation::WriteRAMContent => todo!(),
+        ControlInformation::StartCalibrationTestMode => todo!(),
+        ControlInformation::ReadEEPROM => todo!(),
+        ControlInformation::StartSoftwareTest => todo!(),
+        ControlInformation::HashProcedure(_) => todo!(),
+        ControlInformation::SendErrorStatus => todo!(),
+        ControlInformation::SendAlarmStatus => todo!(),
+        ControlInformation::ResponseWithVariableDataStructure => {
             Ok(UserDataBlock::VariableDataStructure {
                 fixed_data_header: FixedDataHeader {
                     identification_number: IdentificationNumber::from_bcd_hex_digits([
@@ -435,7 +430,7 @@ pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerErr
                 manufacturer_specific_data: &data[data.len() - 2..],
             })
         }
-        ControlInformation::ResponseWithFixedDataStructure(_) => {
+        ControlInformation::ResponseWithFixedDataStructure => {
             let identification_number =
                 IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?;
             let access_number = data[5];
@@ -464,108 +459,82 @@ mod tests {
     fn test_control_information() {
         assert_eq!(
             ControlInformation::from(0x50),
-            Ok(ControlInformation::ResetAtApplicationLevel(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::ResetAtApplicationLevel)
         );
         assert_eq!(
             ControlInformation::from(0x51),
-            Ok(ControlInformation::SendData(Direction::MasterToSlave))
+            Ok(ControlInformation::SendData)
         );
         assert_eq!(
             ControlInformation::from(0x52),
-            Ok(ControlInformation::SelectSlave(Direction::MasterToSlave))
+            Ok(ControlInformation::SelectSlave)
         );
         assert_eq!(
             ControlInformation::from(0x54),
-            Ok(ControlInformation::SynchronizeSlave(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::SynchronizeSlave)
         );
         assert_eq!(
             ControlInformation::from(0xB8),
-            Ok(ControlInformation::SetBaudRate300(Direction::MasterToSlave))
+            Ok(ControlInformation::SetBaudRate300)
         );
         assert_eq!(
             ControlInformation::from(0xB9),
-            Ok(ControlInformation::SetBaudRate600(Direction::MasterToSlave))
+            Ok(ControlInformation::SetBaudRate600)
         );
         assert_eq!(
             ControlInformation::from(0xBA),
-            Ok(ControlInformation::SetBaudRate1200(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::SetBaudRate1200)
         );
         assert_eq!(
             ControlInformation::from(0xBB),
-            Ok(ControlInformation::SetBaudRate2400(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::SetBaudRate2400)
         );
         assert_eq!(
             ControlInformation::from(0xBC),
-            Ok(ControlInformation::SetBaudRate4800(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::SetBaudRate4800)
         );
         assert_eq!(
             ControlInformation::from(0xBD),
-            Ok(ControlInformation::SetBaudRate9600(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::SetBaudRate9600)
         );
         assert_eq!(
             ControlInformation::from(0xBE),
-            Ok(ControlInformation::SetBaudRate19200(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::SetBaudRate19200)
         );
         assert_eq!(
             ControlInformation::from(0xBF),
-            Ok(ControlInformation::SetBaudRate38400(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::SetBaudRate38400)
         );
         assert_eq!(
             ControlInformation::from(0xB1),
-            Ok(ControlInformation::OutputRAMContent(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::OutputRAMContent)
         );
         assert_eq!(
             ControlInformation::from(0xB2),
-            Ok(ControlInformation::WriteRAMContent(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::WriteRAMContent)
         );
         assert_eq!(
             ControlInformation::from(0xB3),
-            Ok(ControlInformation::StartCalibrationTestMode(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::StartCalibrationTestMode)
         );
         assert_eq!(
             ControlInformation::from(0xB4),
-            Ok(ControlInformation::ReadEEPROM(Direction::MasterToSlave))
+            Ok(ControlInformation::ReadEEPROM)
         );
         assert_eq!(
             ControlInformation::from(0xB6),
-            Ok(ControlInformation::StartSoftwareTest(
-                Direction::MasterToSlave
-            ))
+            Ok(ControlInformation::StartSoftwareTest)
         );
         assert_eq!(
             ControlInformation::from(0x90),
             Ok(ControlInformation::HashProcedure(
                 0,
-                Direction::MasterToSlave
             ))
         );
         assert_eq!(
             ControlInformation::from(0x91),
             Ok(ControlInformation::HashProcedure(
                 1,
-                Direction::MasterToSlave
             ))
         );
     }

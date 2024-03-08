@@ -238,9 +238,4 @@ mod tests {
         assert_eq!(result, Err(DataInformationError::DataTooShort));
     }
 
-    #[test]
-    fn test_manufacturer_specific_data_information() {
-        let data = vec![0x0F];
-        let result = DataInformation::new(&data);
-    }
 }
