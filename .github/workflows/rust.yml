@@ -20,6 +20,9 @@ jobs:
         override: true
     - name: Check Formatting
       run: cargo fmt -- --check
+    - name: Security audit
+      run: |
+        cargo audit
     - name: Build
       run: cargo build --verbose
     - name: Run tests
