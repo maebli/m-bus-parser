@@ -1,6 +1,6 @@
 # m-bus-parser
 
-A modern, open source parser for wired m-bus portocol according to EN 13757-2 (contains physical and link layer specificatioin) and EN 13757-3 (contains application layer specification).
+A modern, open source parser for wired m-bus portocol according to EN 13757-2 (contains physical and link layer specification) and EN 13757-3 (contains application layer specification).
 
 # Important links
 
