@@ -2,7 +2,7 @@
 //! It is used to encapsulate the application layer data
 
 #[derive(Debug, PartialEq)]
-pub enum FrameType<'a> {
+pub enum Frame<'a> {
     SingleCharacter {
         character: u8,
     },
@@ -100,65 +100,64 @@ pub enum FrameError {
     InvalidFunction { byte: u8 },
 }
 
-pub trait Frame {
-    fn from(data: &[u8]) -> Result<Self, FrameError>
-    where
-        Self: Sized;
-}
 
-pub fn parse_frame(data: &[u8]) -> Result<FrameType, FrameError> {
-    if data.is_empty() {
-        return Err(FrameError::EmptyData);
-    }
+impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
+    type Error = FrameError;
 
-    if data.len() == 1 && data[0] == 0xE5 {
-        return Ok(FrameType::SingleCharacter { character: 0xE5 });
-    }
-
-    match data[0] {
-        0x68 => {
-            if data[data.len() - 1] != 0x16 {
-                return Err(FrameError::InvalidStopByte);
-            }
-
-            if data.len() < 6 {
-                return Err(FrameError::LengthShorterThanSix { length: data.len() });
-            }
-
-            validate_checksum(&data[4..])?;
-
-            let length = data[1] as usize;
-
-            if data[1] != data[2] || data.len() != length + 6 {
-                return Err(FrameError::LengthMismatch);
-            }
-
-            let control_field = data[4];
-            match control_field {
-                0x53 => Ok(FrameType::ControlFrame {
-                    function: Function::try_from(data[4])?,
-                    address: Address::from(data[5]),
-                    data: &data[6..data.len() - 2],
-                }),
-                _ => Ok(FrameType::LongFrame {
-                    function: Function::try_from(data[4])?,
-                    address: Address::from(data[5]),
-                    data: &data[6..data.len() - 2],
-                }),
-            }
+    fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
+        if data.is_empty() {
+            return Err(FrameError::EmptyData);
         }
-        0x10 => {
-            validate_checksum(&data[1..])?;
-            if data.len() == 5 && data[4] == 0x16 {
-                Ok(FrameType::ShortFrame {
-                    function: Function::try_from(data[1])?,
-                    address: Address::from(data[2]),
-                })
-            } else {
-                Err(FrameError::LengthMismatch)
-            }
+
+        if data.len() == 1 && data[0] == 0xE5 {
+            return Ok(Frame::SingleCharacter { character: 0xE5 });
         }
-        _ => Err(FrameError::InvalidStartByte),
+
+        match data[0] {
+            0x68 => {
+                if data[data.len() - 1] != 0x16 {
+                    return Err(FrameError::InvalidStopByte);
+                }
+
+                if data.len() < 6 {
+                    return Err(FrameError::LengthShorterThanSix { length: data.len() });
+                }
+
+                validate_checksum(&data[4..])?;
+
+                let length = data[1] as usize;
+
+                if data[1] != data[2] || data.len() != length + 6 {
+                    return Err(FrameError::LengthMismatch);
+                }
+
+                let control_field = data[4];
+                match control_field {
+                    0x53 => Ok(Frame::ControlFrame {
+                        function: Function::try_from(data[4])?,
+                        address: Address::from(data[5]),
+                        data: &data[6..data.len() - 2],
+                    }),
+                    _ => Ok(Frame::LongFrame {
+                        function: Function::try_from(data[4])?,
+                        address: Address::from(data[5]),
+                        data: &data[6..data.len() - 2],
+                    }),
+                }
+            }
+            0x10 => {
+                validate_checksum(&data[1..])?;
+                if data.len() == 5 && data[4] == 0x16 {
+                    Ok(Frame::ShortFrame {
+                        function: Function::try_from(data[1])?,
+                        address: Address::from(data[2]),
+                    })
+                } else {
+                    Err(FrameError::LengthMismatch)
+                }
+            }
+            _ => Err(FrameError::InvalidStartByte),
+        }
     }
 }
 
@@ -214,11 +213,11 @@ mod tests {
 
     #[test]
     fn test_detect_frame_type() {
-        let single_character_frame = vec![0xE5];
-        let short_frame = vec![0x10, 0x7B, 0x8b, 0x06, 0x16];
-        let control_frame = vec![0x68, 0x03, 0x03, 0x68, 0x53, 0x01, 0x51, 0xA5, 0x16];
+        let single_character_frame :&[u8]= &[0xE5];
+        let short_frame:&[u8] = &[0x10, 0x7B, 0x8b, 0x06, 0x16];
+        let control_frame :&[u8]= &[0x68, 0x03, 0x03, 0x68, 0x53, 0x01, 0x51, 0xA5, 0x16];
 
-        let example = vec![
+        let example:&[u8] = &[
             0x68, 0x4D, 0x4D, 0x68, 0x08, 0x01, 0x72, 0x01, 0x00, 0x00, 0x00, 0x96, 0x15, 0x01,
             0x00, 0x18, 0x00, 0x00, 0x00, 0x0C, 0x78, 0x56, 0x00, 0x00, 0x00, 0x01, 0xFD, 0x1B,
             0x00, 0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D, 0x22, 0xFC, 0x03, 0x48,
@@ -228,19 +227,19 @@ mod tests {
         ];
 
         assert_eq!(
-            parse_frame(&single_character_frame),
-            Ok(FrameType::SingleCharacter { character: 0xE5 })
+            Frame::try_from(single_character_frame),
+            Ok(Frame::SingleCharacter { character: 0xE5 })
         );
         assert_eq!(
-            parse_frame(&short_frame),
-            Ok(FrameType::ShortFrame {
+            Frame::try_from(short_frame),
+            Ok(Frame::ShortFrame {
                 function: Function::try_from(0x7B).unwrap(),
                 address: Address::from(0x8B)
             })
         );
         assert_eq!(
-            parse_frame(&control_frame),
-            Ok(FrameType::ControlFrame {
+            Frame::try_from(control_frame),
+            Ok(Frame::ControlFrame {
                 function: Function::try_from(0x53).unwrap(),
                 address: Address::from(0x01),
                 data: &[0x51]
@@ -248,8 +247,8 @@ mod tests {
         );
 
         assert_eq!(
-            parse_frame(&example),
-            Ok(FrameType::LongFrame {
+            Frame::try_from(example),
+            Ok(Frame::LongFrame {
                 function: Function::try_from(8).unwrap(),
                 address: Address::from(1),
                 data: &[

@@ -4,7 +4,7 @@
 //! * was implemented using the publicily available documentation available at <https://m-bus.com/>
 //! # Example
 //! ```rust
-//! use m_bus_parser::frames::{parse_frame, Address, FrameType, Function};
+//! use m_bus_parser::frames::{ Address, Frame, Function};
 //!
 //! let example = vec![
 //!     0x68, 0x4D, 0x4D, 0x68,
@@ -30,9 +30,9 @@
 //!     0x1F, 0xB3, 0x16,
 //! ];
 //!
-//! let frame = parse_frame(&example).unwrap();
+//! let frame = Frame::try_from(example.as_slice()).unwrap();
 //!
-//! if let FrameType::LongFrame { function, address, data :_} = frame {
+//! if let Frame::LongFrame { function, address, data :_} = frame {
 //!     assert_eq!(function, Function::RspUd{acd: false, dfc:false});
 //!     assert_eq!(address, Address::Primary(1));
 //! }
