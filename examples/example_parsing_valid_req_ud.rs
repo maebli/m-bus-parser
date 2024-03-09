@@ -1,7 +1,4 @@
-use m_bus_parser::{
-    frames::{Frame},
-    user_data::parse_user_data,
-};
+use m_bus_parser::{frames::Frame, user_data::parse_user_data};
 use std::fs;
 use walkdir::WalkDir;
 

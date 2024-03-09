@@ -1,4 +1,4 @@
-use m_bus_parser::frames::{Address,Frame, Function};
+use m_bus_parser::frames::{Address, Frame, Function};
 
 //  This is an example of how to use the library to parse a frame.
 fn main() {
