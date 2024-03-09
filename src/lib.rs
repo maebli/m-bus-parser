@@ -37,5 +37,7 @@
 //!     assert_eq!(address, Address::Primary(1));
 //! }
 //! ```
+
+#![no_std]
 pub mod frames;
 pub mod user_data;

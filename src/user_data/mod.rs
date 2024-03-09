@@ -1,4 +1,4 @@
-//! ist a part of the application layer
+//! is a part of the application layer
 pub mod data_information;
 pub mod value_information;
 pub mod variable_user_data;

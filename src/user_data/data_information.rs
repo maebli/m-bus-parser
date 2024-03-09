@@ -200,8 +200,8 @@ mod tests {
     use super::*;
     #[test]
     fn test_data_information() {
-        let data = vec![0x13];
-        let result = DataInformation::new(&data);
+        let data = &[0x13];
+        let result = DataInformation::new(data);
         assert_eq!(
             result,
             Ok(DataInformation {
@@ -216,25 +216,25 @@ mod tests {
 
     #[test]
     fn test_invalid_data_information() {
-        let data = vec![
+        let data = &[
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::new(&data);
+        let result = DataInformation::new(data);
         assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
     #[test]
     fn test_longest_data_information_not_too_long() {
-        let data = vec![
+        let data = &[
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::new(&data);
+        let result = DataInformation::new(data);
         assert_ne!(result, Err(DataInformationError::DataTooLong));
     }
 
     #[test]
     fn test_short_data_information() {
-        let data = vec![0xFF];
-        let result = DataInformation::new(&data);
+        let data = &[0xFF];
+        let result = DataInformation::new(data);
         assert_eq!(result, Err(DataInformationError::DataTooShort));
     }
 }

@@ -167,20 +167,21 @@ pub enum VIFExtension {
     CumulativeCountMaxPower(u8),
 }
 
+const MAX_RECORDS: usize = 10;
 #[derive(Debug)]
-struct ValueInformationBlock {
-    value_information: ValueInformation,
-    value_information_extension: Option<Vec<u8>>,
+struct ValueInformationBlock<'a> {
+    _value_information: ValueInformation,
+    _value_information_extension: &'a mut [Option<u8>; MAX_RECORDS],
 }
 
 mod tests {
-
-    use super::*;
+    
+    use crate::user_data::value_information::ValueInformation;
 
     #[test]
     fn test_value_information_new() {
-        let data = vec![0x13];
-        let result = ValueInformation::new(&data);
+        let data = &[0x13];
+        let result = ValueInformation::new(data);
         assert_eq!(result, ValueInformation::Primary);
     }
 }
