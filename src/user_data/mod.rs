@@ -22,7 +22,36 @@ bitflags::bitflags! {
 pub enum Direction {
     SlaveToMaster,
     MasterToSlave,
-    Unkown,
+}
+
+// implement from trait for diirection
+impl From<ControlInformation> for Direction {
+    fn from(single_byte: ControlInformation) -> Self {
+        match single_byte {
+            ControlInformation::ResetAtApplicationLevel => Direction::MasterToSlave,
+            ControlInformation::SendData => Direction::MasterToSlave,
+            ControlInformation::SelectSlave => Direction::MasterToSlave,
+            ControlInformation::SynchronizeSlave => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate300 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate600 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate1200 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate2400 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate4800 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate9600 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate19200 => Direction::MasterToSlave,
+            ControlInformation::SetBaudRate38400 => Direction::MasterToSlave,
+            ControlInformation::OutputRAMContent => Direction::MasterToSlave,
+            ControlInformation::WriteRAMContent => Direction::MasterToSlave,
+            ControlInformation::StartCalibrationTestMode => Direction::MasterToSlave,
+            ControlInformation::ReadEEPROM => Direction::MasterToSlave,
+            ControlInformation::StartSoftwareTest => Direction::MasterToSlave,
+            ControlInformation::HashProcedure(_) => Direction::MasterToSlave,
+            ControlInformation::SendErrorStatus => Direction::SlaveToMaster,
+            ControlInformation::SendAlarmStatus => Direction::SlaveToMaster,
+            ControlInformation::ResponseWithVariableDataStructure => Direction::SlaveToMaster,
+            ControlInformation::ResponseWithFixedDataStructure => Direction::SlaveToMaster,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -77,33 +106,6 @@ impl ControlInformation {
             0x72 | 0x76 => Ok(ControlInformation::ResponseWithVariableDataStructure),
             0x73 | 0x77 => Ok(ControlInformation::ResponseWithFixedDataStructure),
             _ => Err(ApplicationLayerError::InvalidControlInformation { byte }),
-        }
-    }
-    fn getDirection(&self) -> Direction {
-        match self {
-            ControlInformation::ResetAtApplicationLevel => Direction::MasterToSlave,
-            ControlInformation::SendData => Direction::MasterToSlave,
-            ControlInformation::SelectSlave => Direction::MasterToSlave,
-            ControlInformation::SynchronizeSlave => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate300 => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate600 => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate1200 => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate2400 => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate4800 => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate9600 => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate19200 => Direction::MasterToSlave,
-            ControlInformation::SetBaudRate38400 => Direction::MasterToSlave,
-            ControlInformation::OutputRAMContent => Direction::MasterToSlave,
-            ControlInformation::WriteRAMContent => Direction::MasterToSlave,
-            ControlInformation::StartCalibrationTestMode => Direction::MasterToSlave,
-            ControlInformation::ReadEEPROM => Direction::MasterToSlave,
-            ControlInformation::StartSoftwareTest => Direction::MasterToSlave,
-            ControlInformation::HashProcedure(_) => Direction::MasterToSlave,
-            ControlInformation::SendErrorStatus => Direction::SlaveToMaster,
-            ControlInformation::SendAlarmStatus => Direction::SlaveToMaster,
-            ControlInformation::ResponseWithVariableDataStructure => Direction::SlaveToMaster,
-            ControlInformation::ResponseWithFixedDataStructure => Direction::SlaveToMaster,
-            _ => Direction::Unkown,
         }
     }
 }
