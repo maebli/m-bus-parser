@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-parser"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 crate-type = ["rlib","staticlib", "cdylib"]
 description = "A library for parsing M-Bus frames"
