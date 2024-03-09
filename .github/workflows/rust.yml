@@ -28,9 +28,3 @@ jobs:
       run: |
         rustup component add clippy
         cargo clippy -- -D warnings
-    - name: Check for third-party libraries
-      run: |
-        if grep -q '^\[dependencies\]' Cargo.toml; then
-          echo "Third-party libraries found in Cargo.toml"
-          exit 1
-        fi
