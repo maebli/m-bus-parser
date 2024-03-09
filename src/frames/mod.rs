@@ -31,8 +31,10 @@ pub enum Function {
     RspUd { acd: bool, dfc: bool },
 }
 
-impl Function {
-    fn from(byte: u8) -> Result<Function, FrameError> {
+impl TryFrom<u8> for Function {
+    type Error = FrameError;
+
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
         match byte {
             0x40 => Ok(Function::SndNk),
             0x53 => Ok(Function::SndUd { fcb: false }),
@@ -134,12 +136,12 @@ pub fn parse_frame(data: &[u8]) -> Result<FrameType, FrameError> {
             let control_field = data[4];
             match control_field {
                 0x53 => Ok(FrameType::ControlFrame {
-                    function: Function::from(data[4])?,
+                    function: Function::try_from(data[4])?,
                     address: Address::from(data[5]),
                     data: &data[6..data.len() - 2],
                 }),
                 _ => Ok(FrameType::LongFrame {
-                    function: Function::from(data[4])?,
+                    function: Function::try_from(data[4])?,
                     address: Address::from(data[5]),
                     data: &data[6..data.len() - 2],
                 }),
@@ -149,7 +151,7 @@ pub fn parse_frame(data: &[u8]) -> Result<FrameType, FrameError> {
             validate_checksum(&data[1..])?;
             if data.len() == 5 && data[4] == 0x16 {
                 Ok(FrameType::ShortFrame {
-                    function: Function::from(data[1])?,
+                    function: Function::try_from(data[1])?,
                     address: Address::from(data[2]),
                 })
             } else {
@@ -232,14 +234,14 @@ mod tests {
         assert_eq!(
             parse_frame(&short_frame),
             Ok(FrameType::ShortFrame {
-                function: Function::from(0x7B).unwrap(),
+                function: Function::try_from(0x7B).unwrap(),
                 address: Address::from(0x8B)
             })
         );
         assert_eq!(
             parse_frame(&control_frame),
             Ok(FrameType::ControlFrame {
-                function: Function::from(0x53).unwrap(),
+                function: Function::try_from(0x53).unwrap(),
                 address: Address::from(0x01),
                 data: &[0x51]
             })
@@ -248,7 +250,7 @@ mod tests {
         assert_eq!(
             parse_frame(&example),
             Ok(FrameType::LongFrame {
-                function: Function::from(8).unwrap(),
+                function: Function::try_from(8).unwrap(),
                 address: Address::from(1),
                 data: &[
                     114, 1, 0, 0, 0, 150, 21, 1, 0, 24, 0, 0, 0, 12, 120, 86, 0, 0, 0, 1, 253, 27,
