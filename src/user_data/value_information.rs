@@ -1,3 +1,5 @@
+use arrayvec::ArrayVec;
+
 #[derive(Debug, PartialEq)]
 pub enum ValueInformation {
     Primary,
@@ -169,9 +171,9 @@ pub enum VIFExtension {
 
 const MAX_RECORDS: usize = 10;
 #[derive(Debug)]
-struct ValueInformationBlock<'a> {
+struct ValueInformationBlock {
     _value_information: ValueInformation,
-    _value_information_extension: &'a mut [Option<u8>; MAX_RECORDS],
+    _value_information_extension: Option<ArrayVec<u8, MAX_RECORDS>>,
 }
 
 mod tests {
