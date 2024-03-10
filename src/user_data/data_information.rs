@@ -93,6 +93,12 @@ impl TryFrom<&[u8]> for DataInformation {
     }
 }
 
+impl DataInformation {
+    pub fn get_size(&self) -> usize {
+        self.size
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FunctionField {
     InstantaneousValue,

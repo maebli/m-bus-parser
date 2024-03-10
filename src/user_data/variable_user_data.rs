@@ -1,9 +1,7 @@
-use arrayvec::ArrayVec;
-
 use super::data_information::{self, DataInformation};
 use super::data_information::{FunctionField, Unit};
 use super::value_information::{self, ValueInformation};
-use super::{DataRecords, UserDataBlock, MAXIMUM_VARIABLE_DATA_BLOCKS};
+use super::DataRecords;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DataRecord {
@@ -32,7 +30,7 @@ impl From<data_information::DataInformationError> for DataRecordError {
 }
 
 impl From<value_information::ValueInformationError> for DataRecordError {
-    fn from(error: value_information::ValueInformationError) -> Self {
+    fn from(_error: value_information::ValueInformationError) -> Self {
         DataRecordError::DataInformationError(data_information::DataInformationError::NoData)
     }
 }
@@ -42,25 +40,14 @@ impl TryFrom<&[u8]> for DataRecord {
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
         let value_information = ValueInformation::try_from(data)?;
-        let size = data_information.size + value_information.get_size();
 
-        let storage_number = data_information.storage_number;
-
-        let function = match data_information.function_field {
-            FunctionField::InstantaneousValue => FunctionField::InstantaneousValue,
-            FunctionField::MaximumValue => FunctionField::MaximumValue,
-            FunctionField::MinimumValue => FunctionField::MinimumValue,
-            FunctionField::ValueDuringErrorState => FunctionField::ValueDuringErrorState,
-        };
-
-        /* returning some dummy */
         Ok(DataRecord {
-            function,
-            storage_number,
+            function: data_information.function_field,
+            storage_number: data_information.storage_number,
             unit: Unit::WithoutUnits,
             quantity: Quantity::Some,
             value: 0.0,
-            size,
+            size: data_information.get_size() + value_information.get_size(),
         })
     }
 }
@@ -131,13 +118,13 @@ mod tests {
         );
     }
 
-    fn test_parse_variable_data2() {
+    fn _test_parse_variable_data2() {
         /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
-        let data = &[0xDA, 0x02, 0x3B, 0x13, 0x01];
+        let _data = &[0xDA, 0x02, 0x3B, 0x13, 0x01];
     }
 
-    fn test_parse_variable_data3() {
+    fn _test_parse_variable_data3() {
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
-        let data = &[0x8B, 0x60, 0x04, 0x37, 0x18, 0x02];
+        let _data = &[0x8B, 0x60, 0x04, 0x37, 0x18, 0x02];
     }
 }
