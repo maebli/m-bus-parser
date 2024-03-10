@@ -175,7 +175,7 @@ struct ValueInformationBlock<'a> {
 }
 
 mod tests {
-    
+
     use crate::user_data::value_information::ValueInformation;
 
     #[test]

@@ -2,7 +2,7 @@ use super::data_information::{self, DataInformation};
 use super::data_information::{FunctionField, Unit};
 use super::value_information::ValueInformation;
 
-#[derive(Debug,Copy,Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DataRecord {
     function: FunctionField,
     storage_number: u64,
@@ -11,10 +11,10 @@ pub struct DataRecord {
     value: f64,
 }
 
-#[derive(Debug,Copy,PartialEq,Clone)]
-enum Quantity{
+#[derive(Debug, Copy, PartialEq, Clone)]
+enum Quantity {
     /* TODO */
-    Some
+    Some,
 }
 #[derive(Debug, PartialEq)]
 pub enum DataRecordError {
@@ -51,7 +51,6 @@ impl DataRecord {
         })
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum VariableUserDataError {
@@ -90,7 +89,7 @@ pub fn parse_variable_data(
             }
             _ => {
                 // As we don't allocate memory dynamically, ensure we do not exceed the array.
-                if count < MAXIMUM_VARIABLE_DATA_BLOCKS{
+                if count < MAXIMUM_VARIABLE_DATA_BLOCKS {
                     records[count] = Some(DataRecord::new(&data[offset..offset + 1])?);
                     count += 1;
                 }
@@ -99,7 +98,7 @@ pub fn parse_variable_data(
         }
     }
 
-    Ok(count) 
+    Ok(count)
 }
 
 mod tests {
@@ -119,9 +118,9 @@ mod tests {
         let data = &[0xDA, 0x02, 0x3B, 0x13, 0x01];
         let mut records = [None; MAXIMUM_VARIABLE_DATA_BLOCKS];
         let result = parse_variable_data(data, &mut records);
-        assert_eq!(result, Ok(5)); 
+        assert_eq!(result, Ok(5));
     }
-    
+
     fn test_parse_variable_data3() {
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let data = &[0x8B, 0x60, 0x04, 0x37, 0x18, 0x02];
