@@ -8,16 +8,15 @@ pub enum ValueInformation {
     Any,
     ManufacturerSpecific,
 }
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ValueInformationError {
     InvalidValueInformation,
 }
 
 impl TryFrom<&[u8]> for ValueInformation {
-
     type Error = ValueInformationError;
 
-    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError>{
+    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
         Ok(match data[0] {
             0x00..=0x7B => ValueInformation::Primary,
             0x7C => ValueInformation::PlainText,
