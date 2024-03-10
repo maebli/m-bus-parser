@@ -1,6 +1,8 @@
 //! is a part of the application layer
 
 use arrayvec::ArrayVec;
+
+use self::variable_user_data::DataRecord;
 pub mod data_information;
 pub mod value_information;
 pub mod variable_user_data;
@@ -8,6 +10,44 @@ pub mod variable_user_data;
 // Maximum 234 bytes for variable data blocks, each block consists of a minimum of 2 bytes
 // therefore the maximum number of blocks is 117, see https://m-bus.com/documentation-wired/06-application-layer
 const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 117;
+// Define a new struct that wraps ArrayVec
+#[derive(Debug, PartialEq)]
+pub struct DataRecords {
+    inner: ArrayVec<DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>,
+}
+
+impl DataRecords {
+    // Constructor method
+    pub fn new() -> Self {
+        DataRecords {
+            inner: ArrayVec::new(),
+        }
+    }
+
+    pub fn add_record(&mut self, record: DataRecord) -> Result<(), &'static str> {
+        if self.inner.try_push(record).is_err() {
+            Err("Maximum capacity reached")
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.inner.len() == self.inner.capacity()
+    }
+
+    pub fn last(&self) -> Option<&DataRecord> {
+        self.inner.last()
+    }
+
+    pub fn get(&self, index: usize) -> Option<&DataRecord> {
+        self.inner.get(index)
+    }
+}
 
 bitflags::bitflags! {
     #[repr(transparent)]

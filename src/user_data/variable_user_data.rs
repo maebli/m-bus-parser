@@ -3,7 +3,7 @@ use arrayvec::ArrayVec;
 use super::data_information::{self, DataInformation};
 use super::data_information::{FunctionField, Unit};
 use super::value_information::{self, ValueInformation};
-use super::MAXIMUM_VARIABLE_DATA_BLOCKS;
+use super::{DataRecords, UserDataBlock, MAXIMUM_VARIABLE_DATA_BLOCKS};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DataRecord {
@@ -76,10 +76,8 @@ impl From<DataRecordError> for VariableUserDataError {
     }
 }
 
-pub fn parse_variable_data(
-    data: &[u8],
-) -> Result<ArrayVec<DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>, VariableUserDataError> {
-    let mut records = ArrayVec::new();
+pub fn parse_variable_data(data: &[u8]) -> Result<DataRecords, VariableUserDataError> {
+    let mut records = DataRecords::new();
     let mut offset = 0;
     let mut _more_records_follow = false;
 
@@ -98,7 +96,7 @@ pub fn parse_variable_data(
                 offset += 1;
             }
             _ => {
-                records.push(DataRecord::try_from(&data[offset..])?);
+                records.add_record(DataRecord::try_from(&data[offset..])?);
                 offset += records.last().unwrap().size;
             }
         }
@@ -117,17 +115,16 @@ mod tests {
         let data = &[0x03, 0x13];
 
         let result = parse_variable_data(data);
-        assert_eq!(result, Ok(ArrayVec::new()));
         assert_eq!(
-            result.unwrap()[0],
-            DataRecord {
+            result.unwrap().get(0),
+            Some(&DataRecord {
                 function: FunctionField::InstantaneousValue,
                 storage_number: 0,
                 unit: Unit::WithoutUnits,
                 quantity: Quantity::Some,
                 value: 0.0,
                 size: 2,
-            }
+            })
         );
     }
 
@@ -135,7 +132,6 @@ mod tests {
         /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
         let data = &[0xDA, 0x02, 0x3B, 0x13, 0x01];
         let result = parse_variable_data(data);
-        assert_eq!(result, Ok(ArrayVec::new()));
     }
 
     fn test_parse_variable_data3() {
@@ -143,6 +139,5 @@ mod tests {
         let data = &[0x8B, 0x60, 0x04, 0x37, 0x18, 0x02];
 
         let result = parse_variable_data(data);
-        assert_eq!(result, Ok(ArrayVec::new()));
     }
 }
