@@ -8,10 +8,17 @@ pub enum ValueInformation {
     Any,
     ManufacturerSpecific,
 }
+#[derive(Debug,PartialEq)]
+pub enum ValueInformationError {
+    InvalidValueInformation,
+}
 
-impl ValueInformation {
-    pub fn new(data: &[u8]) -> Self {
-        match data[0] {
+impl TryFrom<&[u8]> for ValueInformation {
+
+    type Error = ValueInformationError;
+
+    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError>{
+        Ok(match data[0] {
             0x00..=0x7B => ValueInformation::Primary,
             0x7C => ValueInformation::PlainText,
             0xFD => ValueInformation::Extended(match data[1] {
@@ -91,7 +98,7 @@ impl ValueInformation {
             0x7D | 0xFE => ValueInformation::Any,
             0x7E | 0xFF => ValueInformation::ManufacturerSpecific,
             _ => unreachable!(),
-        }
+        })
     }
 }
 
@@ -178,12 +185,12 @@ struct ValueInformationBlock {
 
 mod tests {
 
-    use crate::user_data::value_information::ValueInformation;
+    use super::*;
 
     #[test]
     fn test_value_information_new() {
-        let data = &[0x13];
-        let result = ValueInformation::new(data);
-        assert_eq!(result, ValueInformation::Primary);
+        let data = [0x13];
+        let result = ValueInformation::try_from(data.as_slice());
+        assert_eq!(result, Ok(ValueInformation::Primary));
     }
 }

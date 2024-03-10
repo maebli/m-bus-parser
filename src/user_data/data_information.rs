@@ -200,7 +200,6 @@ pub enum Unit {
 #[cfg(test)]
 mod tests {
 
-
     use super::*;
     #[test]
     fn test_data_information() {
@@ -226,6 +225,7 @@ mod tests {
         let result = DataInformation::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
+
     #[test]
     fn test_longest_data_information_not_too_long() {
         let data = [

@@ -32,7 +32,7 @@ impl From<data_information::DataInformationError> for DataRecordError {
 impl DataRecord {
     pub fn new(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
-        let _value_information = ValueInformation::new(data);
+        let _value_information = ValueInformation::try_from(data);
 
         let storage_number = data_information.storage_number;
 
