@@ -92,10 +92,7 @@ fn medium_to_str(medium: Medium) -> &'static str {
 #[cfg(test)]
 mod tests {
 
-    use m_bus_parser::{
-        frames::Frame,
-        user_data::{parse_user_data, UserDataBlock},
-    };
+    use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
 
     use super::*;
 
@@ -127,7 +124,7 @@ mod tests {
                 data,
             } = frame
             {
-                let user_data = parse_user_data(data).unwrap();
+                let user_data = UserDataBlock::try_from(data).unwrap();
                 if let UserDataBlock::VariableDataStructure {
                     fixed_data_header,
                     variable_data_block: _,

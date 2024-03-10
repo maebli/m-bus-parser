@@ -3,6 +3,7 @@ use arrayvec::ArrayVec;
 use super::data_information::{self, DataInformation};
 use super::data_information::{FunctionField, Unit};
 use super::value_information::ValueInformation;
+use super::MAXIMUM_VARIABLE_DATA_BLOCKS;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DataRecord {
@@ -66,9 +67,6 @@ impl From<DataRecordError> for VariableUserDataError {
     }
 }
 
-// Maximum 234 bytes for variable data blocks, each block consists of a minimum of 2 bytes
-// therefore the maximum number of blocks is 117, see https://m-bus.com/documentation-wired/06-application-layer
-const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 117;
 pub fn parse_variable_data(
     data: &[u8],
 ) -> Result<ArrayVec<DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>, VariableUserDataError> {

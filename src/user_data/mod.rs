@@ -1,7 +1,13 @@
 //! is a part of the application layer
+
+use arrayvec::ArrayVec;
 pub mod data_information;
 pub mod value_information;
 pub mod variable_user_data;
+
+// Maximum 234 bytes for variable data blocks, each block consists of a minimum of 2 bytes
+// therefore the maximum number of blocks is 117, see https://m-bus.com/documentation-wired/06-application-layer
+const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 117;
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -242,7 +248,7 @@ pub struct FixedDataHeder {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum UserDataBlock<'a> {
+pub enum UserDataBlock {
     ResetAtApplicationLevel {
         subcode: ApplicationResetSubcode,
     },
@@ -256,9 +262,9 @@ pub enum UserDataBlock<'a> {
     },
     VariableDataStructure {
         fixed_data_header: FixedDataHeader,
-        variable_data_block: &'a [u8],
+        variable_data_block: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>,
         mdh: u8,
-        manufacturer_specific_data: &'a [u8],
+        manufacturer_specific_data: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>,
     },
 }
 
@@ -379,73 +385,84 @@ impl MeasuredMedium {
     }
 }
 
-pub fn parse_user_data(data: &[u8]) -> Result<UserDataBlock, ApplicationLayerError> {
-    if data.is_empty() {
-        return Err(ApplicationLayerError::MissingControlInformation);
-    }
+impl<'a> TryFrom<&'a [u8]> for UserDataBlock {
+    type Error = ApplicationLayerError;
 
-    let control_information = ControlInformation::from(data[0])?;
+    fn try_from(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
+        if data.is_empty() {
+            return Err(ApplicationLayerError::MissingControlInformation);
+        }
 
-    match control_information {
-        ControlInformation::ResetAtApplicationLevel => {
-            let subcode = ApplicationResetSubcode::from(data[1]);
-            Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
-        }
-        ControlInformation::SendData => todo!(),
-        ControlInformation::SelectSlave => todo!(),
-        ControlInformation::SynchronizeSlave => todo!(),
-        ControlInformation::SetBaudRate300 => todo!(),
-        ControlInformation::SetBaudRate600 => todo!(),
-        ControlInformation::SetBaudRate1200 => todo!(),
-        ControlInformation::SetBaudRate2400 => todo!(),
-        ControlInformation::SetBaudRate4800 => todo!(),
-        ControlInformation::SetBaudRate9600 => todo!(),
-        ControlInformation::SetBaudRate19200 => todo!(),
-        ControlInformation::SetBaudRate38400 => todo!(),
-        ControlInformation::OutputRAMContent => todo!(),
-        ControlInformation::WriteRAMContent => todo!(),
-        ControlInformation::StartCalibrationTestMode => todo!(),
-        ControlInformation::ReadEEPROM => todo!(),
-        ControlInformation::StartSoftwareTest => todo!(),
-        ControlInformation::HashProcedure(_) => todo!(),
-        ControlInformation::SendErrorStatus => todo!(),
-        ControlInformation::SendAlarmStatus => todo!(),
-        ControlInformation::ResponseWithVariableDataStructure => {
-            Ok(UserDataBlock::VariableDataStructure {
-                fixed_data_header: FixedDataHeader {
-                    identification_number: IdentificationNumber::from_bcd_hex_digits([
-                        data[1], data[2], data[3], data[4],
-                    ])?,
-                    manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([
-                        data[6], data[5],
-                    ]))?,
-                    version: data[7],
-                    medium: MeasuredMedium::new(data[8]).medium,
-                    access_number: data[9],
-                    status: StatusField::from_bits_truncate(data[10]),
-                    signature: u16::from_be_bytes([data[12], data[11]]),
-                },
-                variable_data_block: &data[13..data.len() - 3],
-                mdh: data[data.len() - 3],
-                manufacturer_specific_data: &data[data.len() - 2..],
-            })
-        }
-        ControlInformation::ResponseWithFixedDataStructure => {
-            let identification_number =
-                IdentificationNumber::from_bcd_hex_digits([data[1], data[2], data[3], data[4]])?;
-            let access_number = data[5];
-            let status = StatusField::from_bits_truncate(data[6]);
-            let medium_and_unit = u16::from_be_bytes([data[7], data[8]]);
-            let counter1 = Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
-            let counter2 = Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
-            Ok(UserDataBlock::FixedDataStructure {
-                identification_number,
-                access_number,
-                status,
-                medium_ad_unit: medium_and_unit,
-                counter1,
-                counter2,
-            })
+        let control_information = ControlInformation::from(data[0])?;
+
+        match control_information {
+            ControlInformation::ResetAtApplicationLevel => {
+                let subcode = ApplicationResetSubcode::from(data[1]);
+                Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
+            }
+            ControlInformation::SendData => todo!(),
+            ControlInformation::SelectSlave => todo!(),
+            ControlInformation::SynchronizeSlave => todo!(),
+            ControlInformation::SetBaudRate300 => todo!(),
+            ControlInformation::SetBaudRate600 => todo!(),
+            ControlInformation::SetBaudRate1200 => todo!(),
+            ControlInformation::SetBaudRate2400 => todo!(),
+            ControlInformation::SetBaudRate4800 => todo!(),
+            ControlInformation::SetBaudRate9600 => todo!(),
+            ControlInformation::SetBaudRate19200 => todo!(),
+            ControlInformation::SetBaudRate38400 => todo!(),
+            ControlInformation::OutputRAMContent => todo!(),
+            ControlInformation::WriteRAMContent => todo!(),
+            ControlInformation::StartCalibrationTestMode => todo!(),
+            ControlInformation::ReadEEPROM => todo!(),
+            ControlInformation::StartSoftwareTest => todo!(),
+            ControlInformation::HashProcedure(_) => todo!(),
+            ControlInformation::SendErrorStatus => todo!(),
+            ControlInformation::SendAlarmStatus => todo!(),
+            ControlInformation::ResponseWithVariableDataStructure => {
+                let variable_data_block = ArrayVec::<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>::new();
+                let manufacturer_specific_data: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS> =
+                    ArrayVec::new();
+                Ok(UserDataBlock::VariableDataStructure {
+                    fixed_data_header: FixedDataHeader {
+                        identification_number: IdentificationNumber::from_bcd_hex_digits([
+                            data[1], data[2], data[3], data[4],
+                        ])?,
+                        manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([
+                            data[6], data[5],
+                        ]))?,
+                        version: data[7],
+                        medium: MeasuredMedium::new(data[8]).medium,
+                        access_number: data[9],
+                        status: StatusField::from_bits_truncate(data[10]),
+                        signature: u16::from_be_bytes([data[12], data[11]]),
+                    },
+                    //variable_data_block: data[13..data.len() - 3],
+                    variable_data_block,
+                    mdh: data[data.len() - 3],
+                    manufacturer_specific_data,
+                })
+            }
+            ControlInformation::ResponseWithFixedDataStructure => {
+                let identification_number = IdentificationNumber::from_bcd_hex_digits([
+                    data[1], data[2], data[3], data[4],
+                ])?;
+                let access_number = data[5];
+                let status = StatusField::from_bits_truncate(data[6]);
+                let medium_and_unit = u16::from_be_bytes([data[7], data[8]]);
+                let counter1 =
+                    Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
+                let counter2 =
+                    Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
+                Ok(UserDataBlock::FixedDataStructure {
+                    identification_number,
+                    access_number,
+                    status,
+                    medium_ad_unit: medium_and_unit,
+                    counter1,
+                    counter2,
+                })
+            }
         }
     }
 }
@@ -539,7 +556,7 @@ mod tests {
     fn test_reset_subcode() {
         // Application layer of frame | 68 04 04 68 | 53 FE 50 | 10 | B1 16
         let data = [0x50, 0x10];
-        let result = parse_user_data(&data);
+        let result = UserDataBlock::try_from(data.as_slice());
         assert_eq!(
             result,
             Ok(UserDataBlock::ResetAtApplicationLevel {
@@ -563,7 +580,7 @@ mod tests {
             0x01, 0x00, 0x00,
         ];
 
-        let result = parse_user_data(&data);
+        let result = UserDataBlock::try_from(data.as_slice());
 
         assert_eq!(
             result,

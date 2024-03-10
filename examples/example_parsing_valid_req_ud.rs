@@ -1,4 +1,4 @@
-use m_bus_parser::{frames::Frame, user_data::parse_user_data};
+use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
 use std::fs;
 use walkdir::WalkDir;
 
@@ -24,7 +24,7 @@ fn main() {
             data,
         } = frame
         {
-            if let Ok(parsed) = parse_user_data(data) {
+            if let Ok(parsed) = UserDataBlock::try_from(data) {
                 println!("user data: {:?}", parsed);
             }
         }
