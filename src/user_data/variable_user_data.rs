@@ -76,33 +76,36 @@ impl From<DataRecordError> for VariableUserDataError {
     }
 }
 
-pub fn parse_variable_data(data: &[u8]) -> Result<DataRecords, VariableUserDataError> {
-    let mut records = DataRecords::new();
-    let mut offset = 0;
-    let mut _more_records_follow = false;
+impl TryFrom<&[u8]> for DataRecords {
+    type Error = VariableUserDataError;
+    fn try_from(data: &[u8]) -> Result<DataRecords, VariableUserDataError> {
+        let mut records = DataRecords::new();
+        let mut offset = 0;
+        let mut _more_records_follow = false;
 
-    while offset < data.len() {
-        match data[offset] {
-            0x0F => {
-                /* TODO: parse manufacturer specific */
-                offset = data.len();
-            }
-            0x1F => {
-                /* TODO: parse manufacturer specific */
-                _more_records_follow = true;
-                offset = data.len();
-            }
-            0x2F => {
-                offset += 1;
-            }
-            _ => {
-                records.add_record(DataRecord::try_from(&data[offset..])?);
-                offset += records.last().unwrap().size;
+        while offset < data.len() {
+            match data[offset] {
+                0x0F => {
+                    /* TODO: parse manufacturer specific */
+                    offset = data.len();
+                }
+                0x1F => {
+                    /* TODO: parse manufacturer specific */
+                    _more_records_follow = true;
+                    offset = data.len();
+                }
+                0x2F => {
+                    offset += 1;
+                }
+                _ => {
+                    let _ = records.add_record(DataRecord::try_from(&data[offset..])?);
+                    offset += records.last().unwrap().size;
+                }
             }
         }
-    }
 
-    Ok(records)
+        Ok(records)
+    }
 }
 
 mod tests {
@@ -112,9 +115,9 @@ mod tests {
     #[test]
     fn test_parse_vafriable_data() {
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
-        let data = &[0x03, 0x13];
+        let data = &[0x03, 0x13, 0x15, 0x31, 0x00];
 
-        let result = parse_variable_data(data);
+        let result = DataRecords::try_from(data.as_slice());
         assert_eq!(
             result.unwrap().get(0),
             Some(&DataRecord {
@@ -131,13 +134,10 @@ mod tests {
     fn test_parse_variable_data2() {
         /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
         let data = &[0xDA, 0x02, 0x3B, 0x13, 0x01];
-        let result = parse_variable_data(data);
     }
 
     fn test_parse_variable_data3() {
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let data = &[0x8B, 0x60, 0x04, 0x37, 0x18, 0x02];
-
-        let result = parse_variable_data(data);
     }
 }
