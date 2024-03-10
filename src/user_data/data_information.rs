@@ -4,7 +4,7 @@ pub struct DataInformation {
     pub function_field: FunctionField,
     pub data_field_coding: DataFieldCoding,
     pub data_information_extension: Option<DataInformationExtension>,
-    pub size: u32,
+    pub size: usize,
 }
 
 const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
@@ -88,7 +88,7 @@ impl TryFrom<&[u8]> for DataInformation {
             } else {
                 None
             },
-            size: extension_index as u32,
+            size: extension_index as usize,
         })
     }
 }

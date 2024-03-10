@@ -8,6 +8,19 @@ pub enum ValueInformation {
     Any,
     ManufacturerSpecific,
 }
+
+impl ValueInformation {
+    pub fn get_size(&self) -> usize {
+        match self {
+            ValueInformation::Primary => 1,
+            ValueInformation::PlainText => 1,
+            ValueInformation::Extended(_) => 2,
+            ValueInformation::Any => 1,
+            ValueInformation::ManufacturerSpecific => 1,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ValueInformationError {
     InvalidValueInformation,

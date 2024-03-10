@@ -2,7 +2,7 @@ use arrayvec::ArrayVec;
 
 use super::data_information::{self, DataInformation};
 use super::data_information::{FunctionField, Unit};
-use super::value_information::ValueInformation;
+use super::value_information::{self, ValueInformation};
 use super::MAXIMUM_VARIABLE_DATA_BLOCKS;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -12,6 +12,7 @@ pub struct DataRecord {
     unit: Unit,
     quantity: Quantity,
     value: f64,
+    size: usize,
 }
 
 #[derive(Debug, Copy, PartialEq, Clone)]
@@ -30,11 +31,18 @@ impl From<data_information::DataInformationError> for DataRecordError {
     }
 }
 
+impl From<value_information::ValueInformationError> for DataRecordError {
+    fn from(error: value_information::ValueInformationError) -> Self {
+        DataRecordError::DataInformationError(data_information::DataInformationError::NoData)
+    }
+}
+
 impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
-        let _value_information = ValueInformation::try_from(data);
+        let value_information = ValueInformation::try_from(data)?;
+        let size = data_information.size + value_information.get_size();
 
         let storage_number = data_information.storage_number;
 
@@ -52,6 +60,7 @@ impl TryFrom<&[u8]> for DataRecord {
             unit: Unit::WithoutUnits,
             quantity: Quantity::Some,
             value: 0.0,
+            size,
         })
     }
 }
@@ -90,6 +99,7 @@ pub fn parse_variable_data(
             }
             _ => {
                 records.push(DataRecord::try_from(&data[offset..])?);
+                offset += records.last().unwrap().size;
             }
         }
     }
@@ -100,12 +110,25 @@ pub fn parse_variable_data(
 mod tests {
 
     use super::*;
+
+    #[test]
     fn test_parse_vafriable_data() {
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
-        let data = &[0x03, 0x13, 0x15, 0x31, 0x00];
+        let data = &[0x03, 0x13];
 
         let result = parse_variable_data(data);
         assert_eq!(result, Ok(ArrayVec::new()));
+        assert_eq!(
+            result.unwrap()[0],
+            DataRecord {
+                function: FunctionField::InstantaneousValue,
+                storage_number: 0,
+                unit: Unit::WithoutUnits,
+                quantity: Quantity::Some,
+                value: 0.0,
+                size: 2,
+            }
+        );
     }
 
     fn test_parse_variable_data2() {
