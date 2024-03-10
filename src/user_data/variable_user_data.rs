@@ -40,15 +40,35 @@ impl TryFrom<&[u8]> for DataRecord {
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
         let value_information = ValueInformation::try_from(data)?;
-
-        Ok(DataRecord {
-            function: data_information.function_field,
-            storage_number: data_information.storage_number,
-            unit: Unit::WithoutUnits,
-            quantity: Quantity::Some,
-            value: 0.0,
-            size: data_information.get_size() + value_information.get_size(),
-        })
+        let dif_vif_size = data_information.get_size() + value_information.get_size();
+        let current_index = dif_vif_size - 1;
+        match value_information {
+            ValueInformation::Primary => {
+                let value = match data_information.data_field_coding {
+                    data_information::DataFieldCoding::Integer8Bit => data[current_index] as f64,
+                    data_information::DataFieldCoding::Integer16Bit => {
+                        ((data[current_index + 1] as u16) << 8 | data[current_index] as u16) as f64
+                    }
+                    data_information::DataFieldCoding::Integer24Bit => {
+                        ((data[current_index + 3] as u32) << 16
+                            | (data[current_index + 2] as u32) << 8
+                            | data[current_index + 1] as u32) as f64
+                    }
+                    _ => 0.0,
+                };
+                Ok(DataRecord {
+                    function: data_information.function_field,
+                    storage_number: data_information.storage_number,
+                    unit: Unit::WithoutUnits,
+                    quantity: Quantity::Some,
+                    value,
+                    size: dif_vif_size,
+                })
+            }
+            _ => Err(DataRecordError::DataInformationError(
+                data_information::DataInformationError::NoData,
+            )),
+        }
     }
 }
 
@@ -112,7 +132,7 @@ mod tests {
                 storage_number: 0,
                 unit: Unit::WithoutUnits,
                 quantity: Quantity::Some,
-                value: 0.0,
+                value: 12565.0,
                 size: 2,
             })
         );
