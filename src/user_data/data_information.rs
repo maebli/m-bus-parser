@@ -19,8 +19,10 @@ pub enum DataInformationError {
     DataTooShort,
 }
 
-impl DataInformation {
-    pub fn new(data: &[u8]) -> Result<Self, DataInformationError> {
+impl TryFrom<&[u8]> for DataInformation {
+    type Error = DataInformationError;
+
+    fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
         let first_byte = *data.get(0).ok_or(DataInformationError::DataTooLong)?;
 
         let mut storage_number = ((first_byte & 0b0100_0000) >> 6) as u64;
@@ -197,11 +199,13 @@ pub enum Unit {
 
 #[cfg(test)]
 mod tests {
+
+
     use super::*;
     #[test]
     fn test_data_information() {
-        let data = &[0x13];
-        let result = DataInformation::new(data);
+        let data = [0x13 as u8];
+        let result = DataInformation::try_from(data.as_slice());
         assert_eq!(
             result,
             Ok(DataInformation {
@@ -216,25 +220,25 @@ mod tests {
 
     #[test]
     fn test_invalid_data_information() {
-        let data = &[
+        let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::new(data);
+        let result = DataInformation::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
     #[test]
     fn test_longest_data_information_not_too_long() {
-        let data = &[
+        let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::new(data);
+        let result = DataInformation::try_from(data.as_slice());
         assert_ne!(result, Err(DataInformationError::DataTooLong));
     }
 
     #[test]
     fn test_short_data_information() {
-        let data = &[0xFF];
-        let result = DataInformation::new(data);
+        let data = [0xFF];
+        let result = DataInformation::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooShort));
     }
 }
