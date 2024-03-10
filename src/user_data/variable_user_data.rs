@@ -29,8 +29,9 @@ impl From<data_information::DataInformationError> for DataRecordError {
     }
 }
 
-impl DataRecord {
-    pub fn new(data: &[u8]) -> Result<DataRecord, DataRecordError> {
+impl TryFrom<&[u8]> for DataRecord {
+    type Error = DataRecordError;
+    fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
         let _value_information = ValueInformation::try_from(data);
 
@@ -73,22 +74,24 @@ pub fn parse_variable_data(
 ) -> Result<ArrayVec<DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>, VariableUserDataError> {
     let mut records = ArrayVec::new();
     let mut offset = 0;
-    let mut more_records_follow = false;
+    let mut _more_records_follow = false;
 
     while offset < data.len() {
         match data[offset] {
             0x0F => {
+                /* TODO: parse manufacturer specific */
                 offset = data.len();
             }
             0x1F => {
-                more_records_follow = true;
+                /* TODO: parse manufacturer specific */
+                _more_records_follow = true;
                 offset = data.len();
             }
             0x2F => {
                 offset += 1;
             }
             _ => {
-                let next_data_record = DataRecord::new(&data[offset..]);
+                records.push(DataRecord::try_from(&data[offset..])?);
             }
         }
     }
