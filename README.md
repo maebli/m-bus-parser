@@ -24,7 +24,7 @@ An outdated specification is available freely on the [m-bus website](https://m-b
 
 ## Development status 
 
-The library is currently under development. It is able to parse the link layer but not the application layer. The next goal is to parse the application layer. Once this is achieved the library will be released as `v0.1.0`. Further goals, such as decryption, will be set after this milestone is acheived. 
+The library is currently under development. It is able to parse the link layer but not the application layer. The next goal is to parse the application layer. Once this is achieved the library will be released as `v0.1.0`. Further goals, such as decryption, will be set after this milestone is achieved. 
 
 ## Example of current function
 
