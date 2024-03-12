@@ -5,7 +5,7 @@
 
 ### Introduction 
 
-m-bus-parser is an open source parser (sometimes also refered to as decoder and/or deserializer) for **wired** m-bus portocol written in rust. 
+m-bus-parser is an open source parser (sometimes also refered to as decoder and/or deserializer) of **wired** m-bus portocol and is written in rust. 
 
 "M-Bus or Meter-Bus is a European standard (EN 13757-2 physical and link layer, EN 13757-3 application layer) for the remote reading of water, gas or electricity meters. M-Bus is also usable for other types of consumption meters, such as heating systems or water meters. The M-Bus interface is made for communication on two wires, making it cost-effective." - [Wikipedia](https://en.wikipedia.org/wiki/Meter-Bus)
 
