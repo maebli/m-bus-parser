@@ -1,26 +1,32 @@
+
+# m-bus-parser (wired)
+
 [![Crates.io](https://img.shields.io/crates/v/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![Downloads](https://img.shields.io/crates/d/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![License](https://img.shields.io/crates/l/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![Documentation](https://docs.rs/m-bus-parser/badge.svg)](https://docs.rs/m-bus-parser) [![Build Status](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml/badge.svg)](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml)
 
-# m-bus-parser
+### Introduction 
 
-A modern, open source parser for wired m-bus portocol according to EN 13757-2 (contains physical and link layer specification) and EN 13757-3 (contains application layer specification).
+m-bus-parser is an open source parser (or decoder) for **wired** m-bus portocol written in rust. 
 
-# Important links
+"M-Bus or Meter-Bus is a European standard (EN 13757-2 physical and link layer, EN 13757-3 application layer) for the remote reading of water, gas or electricity meters. M-Bus is also usable for other types of consumption meters, such as heating systems or water meters. The M-Bus interface is made for communication on two wires, making it cost-effective." - [Wikipedia](https://en.wikipedia.org/wiki/Meter-Bus)
 
-- https://m-bus.com/documentation
-- https://en.wikipedia.org/wiki/Parsing
-- Similar task can be used as inspiration: https://github.com/seanmonstar/httparse
-- Implementation in C https://github.com/rscada/libmbus
+An outdated specification is available freely on the [m-bus website](https://m-bus.com/documentation). This document is a good starting point for understanding the protocol. There have been many other implementationso the specification such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in c the [java jMbus implementation ](https://github.com/qvest-digital/jmbus) or [Valley.Net.Protocols.MeterBus in C#](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/).
 
-# Goals
 
-- Written in rust with no_std
-- Releases for x86, x86_64,WebAssembly, ARM Architectures, RISC-V
-- Optimize code size over speed
+### Visualization of Protocol
+
+![](./function.png)
+
+## Aim
+
+- suitable for embedded targets `no_std`
 - Follow the Rust API Guideline https://rust-lang.github.io/api-guidelines/
-- Keep it simple
-- zero copy
+- minimal copy
 
-# Example of function
+## Development status 
+
+The library is currently under development. It is able to parse the link layer but not the application layer. The next goal is to parse the application layer. Once this is achieved the library will be released as `v0.1.0`. Further goals, such as decryption, will be set after this milestone is acheived. 
+
+## Example of current function
 
 Examples taken from https://m-bus.com/documentation-wired/06-application-layer:
 
