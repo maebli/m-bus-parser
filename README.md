@@ -47,7 +47,7 @@ Parsing the frame using the library (the data is not yet parsable with the lib):
         0x25, 0x16,
     ];
 
-    let frame = Frame::try_from(example.as_slice())).unwrap();
+    let frame = Frame::try_from(example.as_slice()))?;
 
     if let Frame::ControlFrame { function, address, data } = frame {
         assert_eq!(address, Address::Broadcast { reply_required: true });
