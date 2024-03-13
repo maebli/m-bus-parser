@@ -14,7 +14,13 @@ An outdated specification is available freely on the [m-bus website](https://m-b
 
 ### Visualization of Library Function
 
-![](./function.png)
+![](./resources/function.png)
+
+### Visualization of Serialized Application Layer
+
+The searlized application layer above can be further broken into parsable parts.
+
+![](./resources/application-layer.png)
 
 ## Aim
 
