@@ -9,7 +9,7 @@ m-bus-parser is an open source parser (sometimes also refered to as decoder and/
 
 "M-Bus or Meter-Bus is a European standard (EN 13757-2 physical and link layer, EN 13757-3 application layer) for the remote reading of water, gas or electricity meters. M-Bus is also usable for other types of consumption meters, such as heating systems or water meters. The M-Bus interface is made for communication on two wires, making it cost-effective." - [Wikipedia](https://en.wikipedia.org/wiki/Meter-Bus)
 
-An outdated specification is available freely on the [m-bus website](https://m-bus.com/documentation). This document is a good starting point for understanding the protocol. There have been many other implementationso the specification such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in c the [java jMbus implementation ](https://github.com/qvest-digital/jmbus) or [Valley.Net.Protocols.MeterBus in C#](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/).
+An outdated specification is available freely on the [m-bus website](https://m-bus.com/documentation). This document is a good starting point for understanding the protocol. There have been many other implementationso the specification such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in **c**, [jMbus](https://github.com/qvest-digital/jmbus) written in **java** or [Valley.Net.Protocols.MeterBus](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/) written in **C#**.
 
 
 ### Visualization of Library Function
