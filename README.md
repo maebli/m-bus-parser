@@ -15,7 +15,6 @@ An outdated specification is available freely on the [m-bus website](https://m-b
 ### Visualization of Library Function
 
 ![](./function.png)
-* note: serialization should say deserialzation and the rest which is not application layer is link layer
 
 ## Aim
 
