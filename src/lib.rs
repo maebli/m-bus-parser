@@ -30,7 +30,7 @@
 //!     0x1F, 0xB3, 0x16,
 //! ];
 //!
-//! let frame = Frame::try_from(example.as_slice())?
+//! let frame = Frame::try_from(example.as_slice()).unwrap();
 //!
 //! if let Frame::LongFrame { function, address, data :_} = frame {
 //!     assert_eq!(function, Function::RspUd{acd: false, dfc:false});

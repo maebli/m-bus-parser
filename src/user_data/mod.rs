@@ -17,7 +17,6 @@ pub struct DataRecords {
 }
 
 impl DataRecords {
-    // Constructor method
     pub fn new() -> Self {
         DataRecords {
             inner: ArrayVec::new(),
@@ -36,6 +35,10 @@ impl DataRecords {
         self.inner.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     pub fn is_full(&self) -> bool {
         self.inner.len() == self.inner.capacity()
     }
@@ -46,6 +49,12 @@ impl DataRecords {
 
     pub fn get(&self, index: usize) -> Option<&DataRecord> {
         self.inner.get(index)
+    }
+}
+
+impl Default for DataRecords {
+    fn default() -> Self {
+        DataRecords::new()
     }
 }
 
@@ -287,6 +296,7 @@ pub struct FixedDataHeder {
     signature: u16,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum UserDataBlock {
     ResetAtApplicationLevel {

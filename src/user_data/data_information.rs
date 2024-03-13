@@ -23,14 +23,14 @@ impl TryFrom<&[u8]> for DataInformation {
     type Error = DataInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
-        let first_byte = *data.get(0).ok_or(DataInformationError::DataTooLong)?;
+        let first_byte = *data.first().ok_or(DataInformationError::DataTooLong)?;
 
         let mut storage_number = ((first_byte & 0b0100_0000) >> 6) as u64;
 
         let mut extension_bit = data[0] & 0x80 != 0;
         let mut extension_index = 1;
-        let mut tariff = 0;
-        let mut sub_unit = 0;
+        let mut _tariff = 0;
+        let mut _sub_unit = 0;
 
         while extension_bit {
             if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
@@ -40,9 +40,9 @@ impl TryFrom<&[u8]> for DataInformation {
             let next_byte = *data
                 .get(extension_index)
                 .ok_or(DataInformationError::DataTooShort)?;
-            storage_number += (((next_byte & 0x0f) as u64) << ((extension_index * 4) + 1)) as u64;
-            sub_unit += (((next_byte & 0x40) >> 6) as u32) << extension_index;
-            tariff += (((next_byte & 0x30) >> 4) as u64) << (extension_index * 2);
+            storage_number += ((next_byte & 0x0f) as u64) << ((extension_index * 4) + 1);
+            _sub_unit += (((next_byte & 0x40) >> 6) as u32) << extension_index;
+            _tariff += (((next_byte & 0x30) >> 4) as u64) << (extension_index * 2);
             extension_bit = next_byte & 0x80 != 0;
             extension_index += 1;
         }
@@ -88,7 +88,7 @@ impl TryFrom<&[u8]> for DataInformation {
             } else {
                 None
             },
-            size: extension_index as usize,
+            size: extension_index,
         })
     }
 }

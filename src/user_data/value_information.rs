@@ -194,13 +194,12 @@ struct ValueInformationBlock {
     _value_information: ValueInformation,
     _value_information_extension: Option<ArrayVec<u8, MAX_RECORDS>>,
 }
-
 mod tests {
-
-    use super::*;
 
     #[test]
     fn test_value_information_new() {
+        use crate::user_data::value_information::ValueInformation;
+
         let data = [0x13];
         let result = ValueInformation::try_from(data.as_slice());
         assert_eq!(result, Ok(ValueInformation::Primary));
