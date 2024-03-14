@@ -1,6 +1,6 @@
+use super::data_information::FunctionField;
 use super::data_information::{self, DataInformation};
-use super::data_information::{FunctionField, Unit};
-use super::value_information::{self, ValueInformation};
+use super::value_information::{self, Unit, ValueInformation};
 use super::DataRecords;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -18,6 +18,7 @@ enum Quantity {
     /* TODO */
     Some,
 }
+
 #[derive(Debug, PartialEq)]
 pub enum DataRecordError {
     DataInformationError(data_information::DataInformationError),
@@ -39,11 +40,11 @@ impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
-        let value_information = ValueInformation::try_from(data)?;
+        let value_information = ValueInformation::try_from(&data[1..])?;
         let dif_vif_size = data_information.get_size() + value_information.get_size();
         let current_index = dif_vif_size - 1;
         match value_information {
-            ValueInformation::Primary => {
+            ValueInformation::Primary(_) => {
                 let value = match data_information.data_field_coding {
                     data_information::DataFieldCoding::Integer8Bit => data[current_index] as f64,
                     data_information::DataFieldCoding::Integer16Bit => {
@@ -59,7 +60,7 @@ impl TryFrom<&[u8]> for DataRecord {
                 Ok(DataRecord {
                     function: data_information.function_field,
                     storage_number: data_information.storage_number,
-                    unit: Unit::WithoutUnits,
+                    unit: Unit::try_from(value_information)?,
                     quantity: Quantity::Some,
                     value,
                     size: dif_vif_size,
@@ -120,11 +121,11 @@ mod tests {
     #[test]
     fn test_parse_vafriable_data() {
         use crate::user_data::{
-            data_information::{FunctionField, Unit},
-            variable_user_data::Quantity,
+            data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
             DataRecord, DataRecords,
         };
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
+        /* DIF = 0x03, VIF = 0x13, Value = 0x153100 */
         let data = &[0x03, 0x13, 0x15, 0x31, 0x00];
 
         let result = DataRecords::try_from(data.as_slice());
@@ -133,7 +134,7 @@ mod tests {
             Some(&DataRecord {
                 function: FunctionField::InstantaneousValue,
                 storage_number: 0,
-                unit: Unit::WithoutUnits,
+                unit: Unit::Liter,
                 quantity: Quantity::Some,
                 value: 12565.0,
                 size: 2,
