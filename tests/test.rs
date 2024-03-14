@@ -126,7 +126,10 @@ mod tests {
             {
                 let user_data = UserDataBlock::try_from(data).unwrap();
                 if let UserDataBlock::VariableDataStructure {
-                    fixed_data_header, ..
+                    fixed_data_header,
+                    variable_data_block: _,
+                    mdh: _,
+                    manufacturer_specific_data: _,
                 } = user_data
                 {
                     assert!(
