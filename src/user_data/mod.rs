@@ -296,7 +296,6 @@ pub struct FixedDataHeder {
     signature: u16,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum UserDataBlock {
     ResetAtApplicationLevel {
@@ -312,9 +311,7 @@ pub enum UserDataBlock {
     },
     VariableDataStructure {
         fixed_data_header: FixedDataHeader,
-        variable_data_block: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>,
-        mdh: u8,
-        manufacturer_specific_data: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>,
+        data_records: DataRecords,
     },
 }
 
@@ -470,8 +467,8 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock {
             ControlInformation::SendErrorStatus => todo!(),
             ControlInformation::SendAlarmStatus => todo!(),
             ControlInformation::ResponseWithVariableDataStructure => {
-                let variable_data_block = ArrayVec::<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>::new();
-                let manufacturer_specific_data: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS> =
+                let _variable_data_block = ArrayVec::<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>::new();
+                let _manufacturer_specific_data: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS> =
                     ArrayVec::new();
                 Ok(UserDataBlock::VariableDataStructure {
                     fixed_data_header: FixedDataHeader {
@@ -487,10 +484,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock {
                         status: StatusField::from_bits_truncate(data[10]),
                         signature: u16::from_be_bytes([data[12], data[11]]),
                     },
-                    //variable_data_block: data[13..data.len() - 3],
-                    variable_data_block,
-                    mdh: data[data.len() - 3],
-                    manufacturer_specific_data,
+                    data_records: DataRecords::new(),
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
