@@ -16,7 +16,36 @@ pub struct DataRecord {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Exponent {
-    pub inner: isize,
+    pub inner: Option<isize>,
+}
+impl From<isize> for Exponent {
+    fn from(value: isize) -> Self {
+        match value {
+            value => Exponent { inner: Some(value) },
+        }
+    }
+}
+
+impl From<&ValueInformation> for Exponent {
+    fn from(value_information: &ValueInformation) -> Exponent {
+        match value_information {
+            ValueInformation::Primary(x) => match x {
+                0..=7 | 0x28..=0x2F | 0x50..=0x57 => Exponent::from((x & 0b111) as isize - 3),
+                8..=15 | 0x30..=0x37 => Exponent::from((x & 0b111) as isize),
+                0x10..=0x17 | 0x38..=0x3F | 0x6C..=0x6D => Exponent::from((x & 0b111) as isize - 6),
+                0x20..=0x27 => Exponent::from(1),
+                0x40..=0x47 => Exponent::from((x & 0b111) as isize - 7),
+                0x48..=0x4F => Exponent::from((x & 0b111) as isize - 9),
+                0x58..=0x6B => Exponent::from((x & 0b11) as isize - 3),
+                0x6E..=0x6F => Exponent { inner: None },
+                _ => todo!("Implement the rest of the units: {:?}", x),
+            },
+            ValueInformation::PlainText => todo!(),
+            ValueInformation::Extended(_) => todo!(),
+            ValueInformation::Any => todo!(),
+            ValueInformation::ManufacturerSpecific => todo!(),
+        }
+    }
 }
 
 #[derive(Debug, Copy, PartialEq, Clone)]
@@ -72,7 +101,7 @@ impl TryFrom<&[u8]> for DataRecord {
                     function: data_information.function_field,
                     storage_number: data_information.storage_number,
                     unit: Unit::try_from(&value_information)?,
-                    exponent: Exponent::try_from(&value_information)?,
+                    exponent: Exponent::from(&value_information),
                     quantity: Quantity::Some,
                     value,
                     size: total_size,

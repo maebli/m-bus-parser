@@ -197,6 +197,8 @@ pub enum Unit {
     WattHour,
     KiloWattHour,
     MegaWattHour,
+    Joul,
+    Kilogram,
     KiloJoul,
     MegaJoul,
     GigaJoul,
@@ -211,11 +213,21 @@ pub enum Unit {
     CubicMeter,
     MegaLiterHour,
     LiterHour,
-    CubicMeterHour,
+    CubicMeterPerHour,
+    CubicMeterPerMinute,
+    CubicMeterPerSecond,
+    KilogramPerHour,
     Celsius,
+    Kelvin,
+    Bar,
     HCA,
     Reserved,
     WithoutUnits,
+    Seconds,
+    Minutes,
+    Hours,
+    Days,
+    JoulPerHour,
 }
 
 impl TryFrom<&ValueInformation> for Unit {
@@ -224,32 +236,24 @@ impl TryFrom<&ValueInformation> for Unit {
     fn try_from(value_information: &ValueInformation) -> Result<Self, ValueInformationError> {
         match value_information {
             ValueInformation::Primary(x) => match x {
-                0x12..=0x16 => Ok(Unit::CubicMeter),
-                _ => todo!("Implement the rest of the units: {:?}", x),
-            },
-            ValueInformation::PlainText => todo!(),
-            ValueInformation::Extended(_) => todo!(),
-            ValueInformation::Any => todo!(),
-            ValueInformation::ManufacturerSpecific => todo!(),
-        }
-    }
-}
+                0x00..=0x07 => Ok(Unit::WattHour),
+                0x08..=0x15 => Ok(Unit::Joul),
+                0x10..=0x17 => Ok(Unit::CubicMeter),
+                0x18..=0x1F => Ok(Unit::Kilogram),
+                0x20 | 0x24 => Ok(Unit::Seconds),
+                0x21 | 0x25 => Ok(Unit::Minutes),
+                0x22 | 0x26 => Ok(Unit::Hours),
+                0x23 | 0x27 => Ok(Unit::Days),
+                0x28..=0x2F => Ok(Unit::Watt),
+                0x30..=0x37 => Ok(Unit::JoulPerHour),
+                0x38..=0x3F => Ok(Unit::CubicMeterPerHour),
+                0x40..=0x47 => Ok(Unit::CubicMeterPerMinute),
+                0x48..=0x4F => Ok(Unit::CubicMeterPerSecond),
+                0x50..=0x57 => Ok(Unit::KilogramPerHour),
+                0x58..=0x5F | 0x64..=0x67 => Ok(Unit::Celsius),
+                0x60..=0x63 => Ok(Unit::Kelvin),
+                0x68..=0x6B => Ok(Unit::Bar),
 
-impl From<isize> for Exponent {
-    fn from(value: isize) -> Self {
-        match value {
-            value => Exponent { inner: value },
-        }
-    }
-}
-
-impl TryFrom<&ValueInformation> for Exponent {
-    type Error = ValueInformationError;
-
-    fn try_from(value_information: &ValueInformation) -> Result<Self, ValueInformationError> {
-        match value_information {
-            ValueInformation::Primary(x) => match x {
-                0x12..=0x16 => Ok(Exponent::from((x & 0b111) as isize - 3)),
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText => todo!(),
