@@ -8,10 +8,15 @@ pub struct DataRecord {
     function: FunctionField,
     storage_number: u64,
     unit: Unit,
-    exponent: isize,
+    exponent: Exponent,
     quantity: Quantity,
     value: f64,
     size: usize,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Exponent {
+    pub inner: isize,
 }
 
 #[derive(Debug, Copy, PartialEq, Clone)]
@@ -66,8 +71,8 @@ impl TryFrom<&[u8]> for DataRecord {
                 Ok(DataRecord {
                     function: data_information.function_field,
                     storage_number: data_information.storage_number,
-                    unit: Unit::try_from(value_information)?,
-                    exponent: 0,
+                    unit: Unit::try_from(&value_information)?,
+                    exponent: Exponent::try_from(&value_information)?,
                     quantity: Quantity::Some,
                     value,
                     size: total_size,
@@ -127,6 +132,7 @@ mod tests {
 
     #[test]
     fn test_parse_variable_data() {
+        use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
             data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
             DataRecord, DataRecords,
@@ -141,8 +147,8 @@ mod tests {
             Some(&DataRecord {
                 function: FunctionField::InstantaneousValue,
                 storage_number: 0,
-                unit: Unit::Liter,
-                exponent: 0,
+                unit: Unit::CubicMeter,
+                exponent: Exponent::from(-3),
                 quantity: Quantity::Some,
                 value: 12565.0,
                 size: 5,

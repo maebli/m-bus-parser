@@ -1,5 +1,7 @@
 use arrayvec::ArrayVec;
 
+use super::variable_user_data::Exponent;
+
 #[derive(Debug, PartialEq)]
 pub enum ValueInformation {
     Primary(u8),
@@ -190,80 +192,65 @@ pub enum VIFExtension {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Unit {
-    Hms,
-    DMY,
-    Wh,
-    Wh1e1,
-    Wh1e2,
-    KWh,
-    KWh1e1,
-    KWh1e2,
-    MWh,
-    MWh1e1,
-    MWh1e2,
-    KJ,
-    KJ1e1,
-    KJ1e2,
-    MJ,
-    MJ1e1,
-    MJ1e2,
-    GJ,
-    GJ1e1,
-    GJ1e2,
-    W,
-    W1e1,
-    W1e2,
-    KW,
-    KW1e1,
-    KW1e2,
-    MW,
-    MW1e1,
-    MW1e2,
-    KJH,
-    KJH1e1,
-    KJH1e2,
-    MJH,
-    MJH1e1,
-    MJH1e2,
-    GJH,
-    GJH1e1,
-    GJH1e2,
-    Ml,
-    Ml1e1,
-    Ml1e2,
+    HourMinuteSecond,
+    DayMonthYear,
+    WattHour,
+    KiloWattHour,
+    MegaWattHour,
+    KiloJoul,
+    MegaJoul,
+    GigaJoul,
+    Watt,
+    KiloWatt,
+    MegaWat,
+    KiloJoulHour,
+    MegaJoulHour,
+    GigaJoulHour,
+    MegaLiter,
     Liter,
-    L1e1,
-    L1e2,
-    M3,
-    M31e1,
-    M31e2,
-    MlH,
-    MlH1e1,
-    MlH1e2,
-    LH,
-    LH1e1,
-    LH1e2,
-    M3H,
-    M3H1e1,
-    M3H1e2,
-    Celsius1e3,
-    UnitsForHCA,
-    Reserved3A,
-    Reserved3B,
-    Reserved3C,
-    Reserved3D,
-    SameButHistoric,
+    CubicMeter,
+    MegaLiterHour,
+    LiterHour,
+    CubicMeterHour,
+    Celsius,
+    HCA,
+    Reserved,
     WithoutUnits,
 }
 
-impl TryFrom<ValueInformation> for Unit {
+impl TryFrom<&ValueInformation> for Unit {
     type Error = ValueInformationError;
 
-    fn try_from(value_information: ValueInformation) -> Result<Self, ValueInformationError> {
+    fn try_from(value_information: &ValueInformation) -> Result<Self, ValueInformationError> {
         match value_information {
             ValueInformation::Primary(x) => match x {
-                0x13 => Ok(Unit::Liter),
-                _ => todo!(),
+                0x12..=0x16 => Ok(Unit::CubicMeter),
+                _ => todo!("Implement the rest of the units: {:?}", x),
+            },
+            ValueInformation::PlainText => todo!(),
+            ValueInformation::Extended(_) => todo!(),
+            ValueInformation::Any => todo!(),
+            ValueInformation::ManufacturerSpecific => todo!(),
+        }
+    }
+}
+
+impl From<isize> for Exponent {
+    fn from(value: isize) -> Self {
+        match value {
+            value => Exponent { inner: value },
+        }
+    }
+}
+
+impl TryFrom<&ValueInformation> for Exponent {
+    type Error = ValueInformationError;
+
+    fn try_from(value_information: &ValueInformation) -> Result<Self, ValueInformationError> {
+        match value_information {
+            ValueInformation::Primary(x) => match x {
+                0x12..=0x16 => Ok(Exponent::from((x & 0b111) as isize - 3)),
+                _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText => todo!(),
             ValueInformation::Extended(_) => todo!(),
@@ -291,6 +278,6 @@ mod tests {
         let result = ValueInformation::try_from(data.as_slice()).unwrap();
         assert_eq!(result, ValueInformation::Primary(0x13));
         assert_eq!(result.get_size(), 1);
-        assert_eq!(Unit::try_from(result).unwrap(), Unit::Liter);
+        assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
     }
 }
