@@ -279,5 +279,26 @@ mod tests {
         assert_eq!(result, ValueInformation::Primary(0x13));
         assert_eq!(result.get_size(), 1);
         assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
+
+        /* VIF = 0x14 => m3^-3*1e-2 */
+        let data = [0x14];
+        let result = ValueInformation::try_from(data.as_slice()).unwrap();
+        assert_eq!(result, ValueInformation::Primary(0x14));
+        assert_eq!(result.get_size(), 1);
+        assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
+
+        /* VIF = 0x15 => m3^3*1e-2 */
+
+        let data = [0x15];
+        let result = ValueInformation::try_from(data.as_slice()).unwrap();
+        assert_eq!(result, ValueInformation::Primary(0x15));
+        assert_eq!(result.get_size(), 1);
+        assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
+
+        /* VIF = 0x16 => m3^-3*1e-1 */
+        let data = [0x16];
+        let result = ValueInformation::try_from(data.as_slice()).unwrap();
+        assert_eq!(result, ValueInformation::Primary(0x16));
+        assert_eq!(result.get_size(), 1);
     }
 }
