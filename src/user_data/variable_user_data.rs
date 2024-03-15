@@ -8,6 +8,7 @@ pub struct DataRecord {
     function: FunctionField,
     storage_number: u64,
     unit: Unit,
+    exponent: isize,
     quantity: Quantity,
     value: f64,
     size: usize,
@@ -41,16 +42,21 @@ impl TryFrom<&[u8]> for DataRecord {
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
         let value_information = ValueInformation::try_from(&data[1..])?;
-        let dif_vif_size = data_information.get_size() + value_information.get_size();
-        let current_index = dif_vif_size - 1;
+        let mut total_size = data_information.get_size() + value_information.get_size();
+        let current_index = total_size - 1;
         match value_information {
             ValueInformation::Primary(_) => {
                 let value = match data_information.data_field_coding {
-                    data_information::DataFieldCoding::Integer8Bit => data[current_index] as f64,
+                    data_information::DataFieldCoding::Integer8Bit => {
+                        total_size += 1;
+                        data[current_index] as f64
+                    }
                     data_information::DataFieldCoding::Integer16Bit => {
+                        total_size += 2;
                         ((data[current_index + 1] as u16) << 8 | data[current_index] as u16) as f64
                     }
                     data_information::DataFieldCoding::Integer24Bit => {
+                        total_size += 3;
                         ((data[current_index + 3] as u32) << 16
                             | (data[current_index + 2] as u32) << 8
                             | data[current_index + 1] as u32) as f64
@@ -61,9 +67,10 @@ impl TryFrom<&[u8]> for DataRecord {
                     function: data_information.function_field,
                     storage_number: data_information.storage_number,
                     unit: Unit::try_from(value_information)?,
+                    exponent: 0,
                     quantity: Quantity::Some,
                     value,
-                    size: dif_vif_size,
+                    size: total_size,
                 })
             }
             _ => Err(DataRecordError::DataInformationError(
@@ -119,7 +126,7 @@ impl TryFrom<&[u8]> for DataRecords {
 mod tests {
 
     #[test]
-    fn test_parse_vafriable_data() {
+    fn test_parse_variable_data() {
         use crate::user_data::{
             data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
             DataRecord, DataRecords,
@@ -135,9 +142,10 @@ mod tests {
                 function: FunctionField::InstantaneousValue,
                 storage_number: 0,
                 unit: Unit::Liter,
+                exponent: 0,
                 quantity: Quantity::Some,
                 value: 12565.0,
-                size: 2,
+                size: 5,
             })
         );
     }
