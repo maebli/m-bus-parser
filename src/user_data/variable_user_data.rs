@@ -20,9 +20,7 @@ pub struct Exponent {
 }
 impl From<isize> for Exponent {
     fn from(value: isize) -> Self {
-        match value {
-            value => Exponent { inner: Some(value) },
-        }
+        Exponent { inner: Some(value) }
     }
 }
 
