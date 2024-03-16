@@ -1,7 +1,5 @@
 use arrayvec::ArrayVec;
 
-use super::variable_user_data::Exponent;
-
 #[derive(Debug, PartialEq)]
 pub enum ValueInformation {
     Primary(u8),
@@ -235,9 +233,9 @@ impl TryFrom<&ValueInformation> for Unit {
 
     fn try_from(value_information: &ValueInformation) -> Result<Self, ValueInformationError> {
         match value_information {
-            ValueInformation::Primary(x) => match x {
+            ValueInformation::Primary(x) => match x & 0x7F {
                 0x00..=0x07 => Ok(Unit::WattHour),
-                0x08..=0x15 => Ok(Unit::Joul),
+                0x08..=0x0F => Ok(Unit::Joul),
                 0x10..=0x17 => Ok(Unit::CubicMeter),
                 0x18..=0x1F => Ok(Unit::Kilogram),
                 0x20 | 0x24 => Ok(Unit::Seconds),
