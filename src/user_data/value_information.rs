@@ -31,7 +31,7 @@ impl TryFrom<&[u8]> for ValueInformation {
 
     fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
         Ok(match data[0] {
-            0x00..=0x7B => ValueInformation::Primary(data[0]),
+            0x00..=0x7B | 0x80..=0xFA => ValueInformation::Primary(data[0]),
             0x7C => ValueInformation::PlainText,
             0xFD => ValueInformation::Extended(match data[1] {
                 0x00..=0x03 => VIFExtension::CreditOfCurrencyUnits(0b11 & data[1]),
@@ -107,9 +107,9 @@ impl TryFrom<&[u8]> for ValueInformation {
                 0x78..=0x7F => VIFExtension::CumulativeCountMaxPower(0b111 & data[1]),
                 _ => VIFExtension::Reserved,
             }),
-            0x7D | 0xFE => ValueInformation::Any,
-            0x7E | 0xFF => ValueInformation::ManufacturerSpecific,
-            _ => unreachable!(),
+            0x7E | 0xFE => ValueInformation::Any,
+            0x7F | 0xFF => ValueInformation::ManufacturerSpecific,
+            _ => unreachable!("Invalid value information: {:X}", data[0]),
         })
     }
 }
@@ -226,6 +226,9 @@ pub enum Unit {
     Hours,
     Days,
     JoulPerHour,
+    ActualityDuration,
+    TimePoint,
+    FabricationNumber,
 }
 
 impl TryFrom<&ValueInformation> for Unit {
@@ -251,7 +254,9 @@ impl TryFrom<&ValueInformation> for Unit {
                 0x58..=0x5F | 0x64..=0x67 => Ok(Unit::Celsius),
                 0x60..=0x63 => Ok(Unit::Kelvin),
                 0x68..=0x6B => Ok(Unit::Bar),
-
+                0x6C..=0x6D => Ok(Unit::TimePoint),
+                0x74..=0x77 => Ok(Unit::ActualityDuration),
+                0x78 => Ok(Unit::FabricationNumber),
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText => todo!(),

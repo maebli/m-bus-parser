@@ -1,4 +1,7 @@
-use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
+use m_bus_parser::{
+    frames::Frame,
+    user_data::{DataRecords, UserDataBlock},
+};
 use std::fs;
 use walkdir::WalkDir;
 
@@ -26,6 +29,9 @@ fn main() {
         {
             if let Ok(parsed) = UserDataBlock::try_from(data) {
                 println!("user data: {:?}", parsed);
+                if let Ok(data) = DataRecords::try_from(data) {
+                    println!("user data: {:?}", data);
+                }
             }
         }
     }

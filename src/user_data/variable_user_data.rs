@@ -27,15 +27,17 @@ impl From<isize> for Exponent {
 impl From<&ValueInformation> for Exponent {
     fn from(value_information: &ValueInformation) -> Exponent {
         match value_information {
-            ValueInformation::Primary(x) => match x {
-                0..=7 | 0x28..=0x2F | 0x50..=0x57 => Exponent::from((x & 0b111) as isize - 3),
+            ValueInformation::Primary(x) => match x & 0x7F {
+                0..=7 | 0x18..=0x1F | 0x28..=0x2F | 0x50..=0x57 => {
+                    Exponent::from((x & 0b111) as isize - 3)
+                }
                 8..=15 | 0x30..=0x37 => Exponent::from((x & 0b111) as isize),
                 0x10..=0x17 | 0x38..=0x3F | 0x6C..=0x6D => Exponent::from((x & 0b111) as isize - 6),
-                0x20..=0x27 => Exponent::from(1),
+                0x20..=0x27 | 0x74..=0x77 => Exponent::from(1),
                 0x40..=0x47 => Exponent::from((x & 0b111) as isize - 7),
                 0x48..=0x4F => Exponent::from((x & 0b111) as isize - 9),
                 0x58..=0x6B => Exponent::from((x & 0b11) as isize - 3),
-                0x6E..=0x6F => Exponent { inner: None },
+                0x6E..=0x6F | 0x78 => Exponent { inner: None },
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText => todo!(),
