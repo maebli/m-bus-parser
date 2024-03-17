@@ -5,13 +5,13 @@ use super::DataRecords;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DataRecord {
-    function: FunctionField,
-    storage_number: u64,
-    unit: Unit,
-    exponent: Exponent,
-    quantity: Quantity,
-    value: f64,
-    size: usize,
+    pub function: FunctionField,
+    pub storage_number: u64,
+    pub unit: Unit,
+    pub exponent: Exponent,
+    pub quantity: Quantity,
+    pub value: f64,
+    pub size: usize,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -47,7 +47,7 @@ impl From<&ValueInformation> for Exponent {
 }
 
 #[derive(Debug, Copy, PartialEq, Clone)]
-enum Quantity {
+pub enum Quantity {
     /* TODO */
     Some,
 }

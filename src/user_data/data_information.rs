@@ -106,6 +106,19 @@ pub enum FunctionField {
     MinimumValue,
     ValueDuringErrorState,
 }
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for FunctionField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionField::InstantaneousValue => write!(f, "Instantaneous Value"),
+            FunctionField::MaximumValue => write!(f, "Maximum Value"),
+            FunctionField::MinimumValue => write!(f, "Minimum Value"),
+            FunctionField::ValueDuringErrorState => write!(f, "Value During Error State"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpecialFunctions {
     ManufacturerSpecific,
