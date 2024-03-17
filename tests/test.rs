@@ -128,8 +128,6 @@ mod tests {
                 if let UserDataBlock::VariableDataStructure {
                     fixed_data_header,
                     variable_data_block: _,
-                    mdh: _,
-                    manufacturer_specific_data: _,
                 } = user_data
                 {
                     assert!(

@@ -313,8 +313,6 @@ pub enum UserDataBlock<'a> {
     VariableDataStructure {
         fixed_data_header: FixedDataHeader,
         variable_data_block: &'a [u8],
-        mdh: u8,
-        manufacturer_specific_data: &'a [u8],
     },
 }
 
@@ -484,9 +482,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         status: StatusField::from_bits_truncate(data[10]),
                         signature: u16::from_be_bytes([data[12], data[11]]),
                     },
-                    variable_data_block: &data[13..data.len() - 3],
-                    mdh: data[data.len() - 3],
-                    manufacturer_specific_data: &data[data.len() - 2..data.len()],
+                    variable_data_block: &data[6..data.len() - 3],
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
