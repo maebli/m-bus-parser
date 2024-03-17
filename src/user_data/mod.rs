@@ -298,7 +298,7 @@ pub struct FixedDataHeder {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
-pub enum UserDataBlock {
+pub enum UserDataBlock<'a> {
     ResetAtApplicationLevel {
         subcode: ApplicationResetSubcode,
     },
@@ -312,9 +312,9 @@ pub enum UserDataBlock {
     },
     VariableDataStructure {
         fixed_data_header: FixedDataHeader,
-        variable_data_block: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>,
+        variable_data_block: &'a [u8],
         mdh: u8,
-        manufacturer_specific_data: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>,
+        manufacturer_specific_data: &'a [u8],
     },
 }
 
@@ -435,7 +435,7 @@ impl MeasuredMedium {
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for UserDataBlock {
+impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
     type Error = ApplicationLayerError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
@@ -470,9 +470,6 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock {
             ControlInformation::SendErrorStatus => todo!(),
             ControlInformation::SendAlarmStatus => todo!(),
             ControlInformation::ResponseWithVariableDataStructure => {
-                let variable_data_block = ArrayVec::<u8, MAXIMUM_VARIABLE_DATA_BLOCKS>::new();
-                let manufacturer_specific_data: ArrayVec<u8, MAXIMUM_VARIABLE_DATA_BLOCKS> =
-                    ArrayVec::new();
                 Ok(UserDataBlock::VariableDataStructure {
                     fixed_data_header: FixedDataHeader {
                         identification_number: IdentificationNumber::from_bcd_hex_digits([
@@ -487,10 +484,9 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock {
                         status: StatusField::from_bits_truncate(data[10]),
                         signature: u16::from_be_bytes([data[12], data[11]]),
                     },
-                    //variable_data_block: data[13..data.len() - 3],
-                    variable_data_block,
+                    variable_data_block: &data[13..data.len() - 3],
                     mdh: data[data.len() - 3],
-                    manufacturer_specific_data,
+                    manufacturer_specific_data: &data[data.len() - 2..data.len()],
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
