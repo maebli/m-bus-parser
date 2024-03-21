@@ -16,7 +16,7 @@ fn main() {
     if let Frame::LongFrame {
         function,
         address,
-        data: _,
+        data,
     } = frame
     {
         assert_eq!(
@@ -27,5 +27,12 @@ fn main() {
             }
         );
         assert_eq!(address, Address::Primary(1));
+
+        if let Ok(parsed) = m_bus_parser::user_data::UserDataBlock::try_from(data) {
+            println!("user data: {:?}", parsed);
+            if let Ok(data) = m_bus_parser::user_data::DataRecords::try_from(data) {
+                println!("user data: {:?}", data);
+            }
+        }
     }
 }

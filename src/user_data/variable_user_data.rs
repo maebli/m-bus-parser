@@ -81,6 +81,15 @@ impl TryFrom<&[u8]> for DataRecord {
         match value_information {
             ValueInformation::Primary(_) => {
                 let value = match data_information.data_field_coding {
+                    data_information::DataFieldCoding::Real32Bit => {
+                        total_size += 4;
+                        f32::from_le_bytes([
+                            data[current_index],
+                            data[current_index + 1],
+                            data[current_index + 2],
+                            data[current_index + 3],
+                        ]) as f64
+                    }
                     data_information::DataFieldCoding::Integer8Bit => {
                         total_size += 1;
                         data[current_index] as f64
@@ -95,7 +104,90 @@ impl TryFrom<&[u8]> for DataRecord {
                             | (data[current_index + 2] as u32) << 8
                             | data[current_index + 1] as u32) as f64
                     }
-                    _ => 0.0,
+                    data_information::DataFieldCoding::Integer32Bit => {
+                        total_size += 4;
+                        ((data[current_index + 3] as u32) << 24
+                            | (data[current_index + 2] as u32) << 16
+                            | (data[current_index + 1] as u32) << 8
+                            | data[current_index] as u32) as f64
+                    }
+                    data_information::DataFieldCoding::Integer48Bit => {
+                        total_size += 6;
+                        ((data[current_index + 5] as u64) << 40
+                            | (data[current_index + 4] as u64) << 32
+                            | (data[current_index + 3] as u64) << 24
+                            | (data[current_index + 2] as u64) << 16
+                            | (data[current_index + 1] as u64) << 8
+                            | data[current_index] as u64) as f64
+                    }
+                    data_information::DataFieldCoding::Integer64Bit => {
+                        total_size += 8;
+                        ((data[current_index + 7] as u64) << 56
+                            | (data[current_index + 6] as u64) << 48
+                            | (data[current_index + 5] as u64) << 40
+                            | (data[current_index + 4] as u64) << 32
+                            | (data[current_index + 3] as u64) << 24
+                            | (data[current_index + 2] as u64) << 16
+                            | (data[current_index + 1] as u64) << 8
+                            | data[current_index] as u64) as f64
+                    }
+                    data_information::DataFieldCoding::BCD2Digit => {
+                        total_size += 1;
+                        ((data[current_index] >> 4) as f64 * 10.0)
+                            + (data[current_index] & 0x0F) as f64
+                    }
+                    data_information::DataFieldCoding::BCD4Digit => {
+                        total_size += 2;
+                        ((data[current_index + 1] >> 4) as f64 * 1000.0)
+                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
+                            + ((data[current_index] >> 4) as f64 * 10.0)
+                            + (data[current_index] & 0x0F) as f64
+                    }
+                    data_information::DataFieldCoding::BCD6Digit => {
+                        total_size += 3;
+                        ((data[current_index + 2] >> 4) as f64 * 100000.0)
+                            + ((data[current_index + 2] & 0x0F) as f64 * 10000.0)
+                            + ((data[current_index + 1] >> 4) as f64 * 1000.0)
+                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
+                            + ((data[current_index] >> 4) as f64 * 10.0)
+                            + (data[current_index] & 0x0F) as f64
+                    }
+                    data_information::DataFieldCoding::BCD8Digit => {
+                        total_size += 4;
+                        ((data[current_index + 3] >> 4) as f64 * 10000000.0)
+                            + ((data[current_index + 3] & 0x0F) as f64 * 1000000.0)
+                            + ((data[current_index + 2] >> 4) as f64 * 100000.0)
+                            + ((data[current_index + 2] & 0x0F) as f64 * 10000.0)
+                            + ((data[current_index + 1] >> 4) as f64 * 1000.0)
+                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
+                            + ((data[current_index] >> 4) as f64 * 10.0)
+                            + (data[current_index] & 0x0F) as f64
+                    }
+                    data_information::DataFieldCoding::BCDDigit12 => {
+                        total_size += 6;
+                        ((data[current_index + 5] >> 4) as f64 * 100000000000.0)
+                            + ((data[current_index + 5] & 0x0F) as f64 * 10000000000.0)
+                            + ((data[current_index + 4] >> 4) as f64 * 1000000000.0)
+                            + ((data[current_index + 4] & 0x0F) as f64 * 100000000.0)
+                            + ((data[current_index + 3] >> 4) as f64 * 10000000.0)
+                            + ((data[current_index + 3] & 0x0F) as f64 * 1000000.0)
+                            + ((data[current_index + 2] >> 4) as f64 * 100000.0)
+                            + ((data[current_index + 2] & 0x0F) as f64 * 10000.0)
+                            + ((data[current_index + 1] >> 4) as f64 * 1000.0)
+                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
+                            + ((data[current_index] >> 4) as f64 * 10.0)
+                            + (data[current_index] & 0x0F) as f64
+                    }
+                    data_information::DataFieldCoding::NoData => 0.0,
+                    data_information::DataFieldCoding::SelectionForReadout => {
+                        total_size += 1;
+                        0.0
+                    }
+                    data_information::DataFieldCoding::SpecialFunctions(_) => {
+                        total_size += 1;
+                        0.0
+                    }
+                    data_information::DataFieldCoding::VariableLength => 0.0,
                 };
                 Ok(DataRecord {
                     function: data_information.function_field,

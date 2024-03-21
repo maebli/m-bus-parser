@@ -32,7 +32,7 @@ impl TryFrom<&[u8]> for ValueInformation {
     fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
         Ok(match data[0] {
             0x00..=0x7B | 0x80..=0xFA => ValueInformation::Primary(data[0]),
-            0x7C => ValueInformation::PlainText,
+            0x7C | 0xFC => ValueInformation::PlainText,
             0xFD => ValueInformation::Extended(match data[1] {
                 0x00..=0x03 => VIFExtension::CreditOfCurrencyUnits(0b11 & data[1]),
                 0x04..=0x07 => VIFExtension::DebitOfCurrencyUnits(0b11 & data[1]),
