@@ -482,7 +482,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         status: StatusField::from_bits_truncate(data[10]),
                         signature: u16::from_be_bytes([data[12], data[11]]),
                     },
-                    variable_data_block: &data[6..data.len() - 3],
+                    variable_data_block: &data[13..data.len()],
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
