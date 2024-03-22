@@ -78,8 +78,9 @@ impl TryFrom<&[u8]> for DataRecord {
         let value_information = ValueInformation::try_from(&data[1..])?;
         let mut total_size = data_information.get_size() + value_information.get_size();
         let current_index = total_size - 1;
+        let current_index = total_size;
         match value_information {
-            ValueInformation::Primary(_) => {
+            ValueInformation::Primary(_) | ValueInformation::Extended(_) => {
                 let value = match data_information.data_field_coding {
                     data_information::DataFieldCoding::Real32Bit => {
                         total_size += 4;
@@ -100,9 +101,9 @@ impl TryFrom<&[u8]> for DataRecord {
                     }
                     data_information::DataFieldCoding::Integer24Bit => {
                         total_size += 3;
-                        ((data[current_index + 3] as u32) << 16
-                            | (data[current_index + 2] as u32) << 8
-                            | data[current_index + 1] as u32) as f64
+                        ((data[current_index + 2] as u32) << 16
+                            | (data[current_index + 1] as u32) << 8
+                            | data[current_index] as u32) as f64
                     }
                     data_information::DataFieldCoding::Integer32Bit => {
                         total_size += 4;
@@ -239,7 +240,8 @@ impl TryFrom<&[u8]> for DataRecords {
                     offset += 1;
                 }
                 _ => {
-                    let _ = records.add_record(DataRecord::try_from(&data[offset..])?);
+                    let record = DataRecord::try_from(&data[offset..])?;
+                    let _ = records.add_record(record);
                     offset += records.last().unwrap().size;
                 }
             }
