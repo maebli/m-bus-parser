@@ -12,7 +12,7 @@ m-bus-parser is an open source parser (sometimes also refered to as decoder and/
 
 An outdated specification is available freely on the [m-bus website](https://m-bus.com/documentation). This document is a good starting point for understanding the protocol. There have been many other implementationso the specification.
 
- such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in **c**, [jMbus](https://github.com/qvest-digital/jmbus) written in **java**,[Valley.Net.Protocols.MeterBus](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/) written in **C#**, or [tmbus](https://dev-lab.github.io/tmbus/) written n javascript.
+ such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in **c**, [jMbus](https://github.com/qvest-digital/jmbus) written in **java**,[Valley.Net.Protocols.MeterBus](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/) written in **C#**, or [tmbus](https://dev-lab.github.io/tmbus/) written in javascript.
 
 
 ### Visualization of Library Function
