@@ -77,7 +77,6 @@ impl TryFrom<&[u8]> for DataRecord {
         let data_information = DataInformation::try_from(data)?;
         let value_information = ValueInformation::try_from(&data[1..])?;
         let mut total_size = data_information.get_size() + value_information.get_size();
-        let current_index = total_size - 1;
         let current_index = total_size;
         match value_information {
             ValueInformation::Primary(_) | ValueInformation::Extended(_) => {
