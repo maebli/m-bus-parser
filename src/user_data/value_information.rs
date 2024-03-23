@@ -229,6 +229,7 @@ pub enum Unit {
     ActualityDuration,
     TimePoint,
     FabricationNumber,
+    MegaWatt,
 }
 
 impl TryFrom<&ValueInformation> for Unit {
@@ -260,7 +261,22 @@ impl TryFrom<&ValueInformation> for Unit {
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText => todo!(),
-            ValueInformation::Extended(_) => todo!(),
+            ValueInformation::Extended(x) => match x {
+                VIFExtension::EnergyMWh(_) => Ok(Unit::MegaWattHour),
+                VIFExtension::EnergyGJ(_) => Ok(Unit::GigaJoul),
+                VIFExtension::VolumeM3(_) => Ok(Unit::CubicMeter),
+                VIFExtension::PowerMW(_) => Ok(Unit::MegaWatt),
+                VIFExtension::PowerGJH(_) => Ok(Unit::GigaJoulHour),
+                VIFExtension::FlowTemperature(_) => Ok(Unit::Celsius),
+                VIFExtension::ReturnTemperature(_) => Ok(Unit::Celsius),
+                VIFExtension::TemperatureDifference(_) => Ok(Unit::Celsius),
+                VIFExtension::ExternalTemperature(_) => Ok(Unit::Celsius),
+                VIFExtension::ColdWarmTemperatureLimitFarenheit(_) => Ok(Unit::Celsius),
+                VIFExtension::ColdWarmTemperatureLimitCelsius(_) => Ok(Unit::Celsius),
+                VIFExtension::CumulativeCountMaxPower(_) => Ok(Unit::Watt),
+                VIFExtension::DigitalInput => Ok(Unit::WithoutUnits),
+                _ => todo!("Implement the rest of the units: {:?}", x),
+            },
             ValueInformation::Any => todo!(),
             ValueInformation::ManufacturerSpecific => todo!(),
         }

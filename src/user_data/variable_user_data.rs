@@ -41,7 +41,10 @@ impl From<&ValueInformation> for Exponent {
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText => todo!(),
-            ValueInformation::Extended(_) => todo!(),
+            ValueInformation::Extended(x) => match x {
+                value_information::VIFExtension::DigitalInput => Exponent { inner: None },
+                _ => todo!("Implement the rest of the units: {:?}", x),
+            },
             ValueInformation::Any => todo!(),
             ValueInformation::ManufacturerSpecific => todo!(),
         }
