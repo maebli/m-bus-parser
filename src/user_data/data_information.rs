@@ -128,6 +128,123 @@ pub enum SpecialFunctions {
     GlobalReadoutRequest,
 }
 
+pub struct Value {
+    pub data: f64,
+    pub byte_size: usize,
+}
+
+impl DataFieldCoding {
+    pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
+        match *self {
+            DataFieldCoding::Real32Bit => Value {
+                data: f32::from_le_bytes([data[0], data[1], data[2], data[3]]) as f64,
+                byte_size: 4,
+            },
+            DataFieldCoding::Integer8Bit => Value {
+                data: data[0] as f64,
+                byte_size: 1,
+            },
+            DataFieldCoding::Integer16Bit => Value {
+                data: ((data[1] as u16) << 8 | data[0] as u16) as f64,
+                byte_size: 2,
+            },
+            DataFieldCoding::Integer24Bit => Value {
+                data: ((data[2] as u32) << 16 | (data[1] as u32) << 8 | data[0] as u32) as f64,
+                byte_size: 3,
+            },
+            DataFieldCoding::Integer32Bit => Value {
+                data: ((data[3] as u32) << 24
+                    | (data[2] as u32) << 16
+                    | (data[1] as u32) << 8
+                    | data[0] as u32) as f64,
+                byte_size: 4,
+            },
+            DataFieldCoding::Integer48Bit => Value {
+                data: ((data[5] as u64) << 40
+                    | (data[4] as u64) << 32
+                    | (data[3] as u64) << 24
+                    | (data[2] as u64) << 16
+                    | (data[1] as u64) << 8
+                    | data[0] as u64) as f64,
+                byte_size: 6,
+            },
+            DataFieldCoding::Integer64Bit => Value {
+                data: ((data[7] as u64) << 56
+                    | (data[6] as u64) << 48
+                    | (data[5] as u64) << 40
+                    | (data[4] as u64) << 32
+                    | (data[3] as u64) << 24
+                    | (data[2] as u64) << 16
+                    | (data[1] as u64) << 8
+                    | data[0] as u64) as f64,
+                byte_size: 8,
+            },
+            DataFieldCoding::BCD2Digit => Value {
+                data: ((data[0] >> 4) as f64 * 10.0) + (data[0] & 0x0F) as f64,
+                byte_size: 1,
+            },
+            DataFieldCoding::BCD4Digit => Value {
+                data: ((data[1] >> 4) as f64 * 1000.0)
+                    + ((data[1] & 0x0F) as f64 * 100.0)
+                    + ((data[0] >> 4) as f64 * 10.0)
+                    + (data[0] & 0x0F) as f64,
+                byte_size: 2,
+            },
+            DataFieldCoding::BCD6Digit => Value {
+                data: ((data[2] >> 4) as f64 * 100000.0)
+                    + ((data[2] & 0x0F) as f64 * 10000.0)
+                    + ((data[1] >> 4) as f64 * 1000.0)
+                    + ((data[1] & 0x0F) as f64 * 100.0)
+                    + ((data[0] >> 4) as f64 * 10.0)
+                    + (data[0] & 0x0F) as f64,
+                byte_size: 3,
+            },
+            DataFieldCoding::BCD8Digit => Value {
+                data: ((data[3] >> 4) as f64 * 10000000.0)
+                    + ((data[3] & 0x0F) as f64 * 1000000.0)
+                    + ((data[2] >> 4) as f64 * 100000.0)
+                    + ((data[2] & 0x0F) as f64 * 10000.0)
+                    + ((data[1] >> 4) as f64 * 1000.0)
+                    + ((data[1] & 0x0F) as f64 * 100.0)
+                    + ((data[0] >> 4) as f64 * 10.0)
+                    + (data[0] & 0x0F) as f64,
+                byte_size: 4,
+            },
+            DataFieldCoding::BCDDigit12 => Value {
+                data: ((data[5] >> 4) as f64 * 100000000000.0)
+                    + ((data[5] & 0x0F) as f64 * 10000000000.0)
+                    + ((data[4] >> 4) as f64 * 1000000000.0)
+                    + ((data[4] & 0x0F) as f64 * 100000000.0)
+                    + ((data[3] >> 4) as f64 * 10000000.0)
+                    + ((data[3] & 0x0F) as f64 * 1000000.0)
+                    + ((data[2] >> 4) as f64 * 100000.0)
+                    + ((data[2] & 0x0F) as f64 * 10000.0)
+                    + ((data[1] >> 4) as f64 * 1000.0)
+                    + ((data[1] & 0x0F) as f64 * 100.0)
+                    + ((data[0] >> 4) as f64 * 10.0)
+                    + (data[0] & 0x0F) as f64,
+                byte_size: 6,
+            },
+            DataFieldCoding::NoData => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::SelectionForReadout => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::SpecialFunctions(_) => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::VariableLength => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DataFieldCoding {
     NoData,

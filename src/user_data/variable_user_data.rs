@@ -24,6 +24,35 @@ impl From<isize> for Exponent {
     }
 }
 
+impl From<&ValueInformation> for Quantity {
+    fn from(value_information: &ValueInformation) -> Quantity {
+        match value_information {
+            ValueInformation::Primary(x) => match x {
+                0x00..=0x0F => Quantity::Energy,
+                0x10..=0x17 => Quantity::Volume,
+                0x18..=0x1F => Quantity::Mass,
+                0x20..=0x27 => Quantity::Duration,
+                0x28..=0x37 => Quantity::Power,
+                0x38..=0x4F => Quantity::VolumeFlow,
+                0x50..=0x57 => Quantity::MassFlow,
+                0x58..=0x67 => Quantity::Temperature,
+                0x68..=0x6B => Quantity::Pressure,
+                0x6C..=0x6D => Quantity::TimePoint,
+                0x74..=0x77 => Quantity::Duration,
+                0x78 => Quantity::IdentificationNumber,
+                _ => todo!("Implement the rest of the units: {:?}", x),
+            },
+            ValueInformation::PlainText => Quantity::PlainText,
+            ValueInformation::Extended(x) => match x {
+                value_information::VIFExtension::DigitalInput => Quantity::BinaryDigitalInput,
+                _ => todo!("Implement the rest of the units: {:?}", x),
+            },
+            ValueInformation::Any => todo!(),
+            ValueInformation::ManufacturerSpecific => todo!(),
+        }
+    }
+}
+
 impl From<&ValueInformation> for Exponent {
     fn from(value_information: &ValueInformation) -> Exponent {
         match value_information {
@@ -40,7 +69,7 @@ impl From<&ValueInformation> for Exponent {
                 0x6E..=0x6F | 0x78 => Exponent { inner: None },
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
-            ValueInformation::PlainText => todo!(),
+            ValueInformation::PlainText => Exponent { inner: None },
             ValueInformation::Extended(x) => match x {
                 value_information::VIFExtension::DigitalInput => Exponent { inner: None },
                 _ => todo!("Implement the rest of the units: {:?}", x),
@@ -53,8 +82,26 @@ impl From<&ValueInformation> for Exponent {
 
 #[derive(Debug, Copy, PartialEq, Clone)]
 pub enum Quantity {
-    /* TODO */
-    Some,
+    Volume,
+    Energy,
+    ManufacturerSpecific,
+    ErrorFlags,
+    TimePoint,
+    VolumeFlow,
+    MassFlow,
+    Mass,
+    Temperature,
+    FlowTemperature,
+    TemperatureDifference,
+    BinaryDigitalInput,
+    RelativeHumidity,
+    AveragingDuration,
+    ExternalTemperature,
+    Duration,
+    Power,
+    Pressure,
+    IdentificationNumber,
+    PlainText,
 }
 
 #[derive(Debug, PartialEq)]
@@ -79,129 +126,30 @@ impl TryFrom<&[u8]> for DataRecord {
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
         let value_information = ValueInformation::try_from(&data[1..])?;
-        let mut total_size = data_information.get_size() + value_information.get_size();
-        let current_index = total_size;
+        let meta_size = data_information.get_size() + value_information.get_size();
+        let value = data_information
+            .data_field_coding
+            .extract_from_bytes(&data[meta_size..]);
+        let total_size = meta_size + value.byte_size;
         match value_information {
-            ValueInformation::Primary(_) | ValueInformation::Extended(_) => {
-                let value = match data_information.data_field_coding {
-                    data_information::DataFieldCoding::Real32Bit => {
-                        total_size += 4;
-                        f32::from_le_bytes([
-                            data[current_index],
-                            data[current_index + 1],
-                            data[current_index + 2],
-                            data[current_index + 3],
-                        ]) as f64
-                    }
-                    data_information::DataFieldCoding::Integer8Bit => {
-                        total_size += 1;
-                        data[current_index] as f64
-                    }
-                    data_information::DataFieldCoding::Integer16Bit => {
-                        total_size += 2;
-                        ((data[current_index + 1] as u16) << 8 | data[current_index] as u16) as f64
-                    }
-                    data_information::DataFieldCoding::Integer24Bit => {
-                        total_size += 3;
-                        ((data[current_index + 2] as u32) << 16
-                            | (data[current_index + 1] as u32) << 8
-                            | data[current_index] as u32) as f64
-                    }
-                    data_information::DataFieldCoding::Integer32Bit => {
-                        total_size += 4;
-                        ((data[current_index + 3] as u32) << 24
-                            | (data[current_index + 2] as u32) << 16
-                            | (data[current_index + 1] as u32) << 8
-                            | data[current_index] as u32) as f64
-                    }
-                    data_information::DataFieldCoding::Integer48Bit => {
-                        total_size += 6;
-                        ((data[current_index + 5] as u64) << 40
-                            | (data[current_index + 4] as u64) << 32
-                            | (data[current_index + 3] as u64) << 24
-                            | (data[current_index + 2] as u64) << 16
-                            | (data[current_index + 1] as u64) << 8
-                            | data[current_index] as u64) as f64
-                    }
-                    data_information::DataFieldCoding::Integer64Bit => {
-                        total_size += 8;
-                        ((data[current_index + 7] as u64) << 56
-                            | (data[current_index + 6] as u64) << 48
-                            | (data[current_index + 5] as u64) << 40
-                            | (data[current_index + 4] as u64) << 32
-                            | (data[current_index + 3] as u64) << 24
-                            | (data[current_index + 2] as u64) << 16
-                            | (data[current_index + 1] as u64) << 8
-                            | data[current_index] as u64) as f64
-                    }
-                    data_information::DataFieldCoding::BCD2Digit => {
-                        total_size += 1;
-                        ((data[current_index] >> 4) as f64 * 10.0)
-                            + (data[current_index] & 0x0F) as f64
-                    }
-                    data_information::DataFieldCoding::BCD4Digit => {
-                        total_size += 2;
-                        ((data[current_index + 1] >> 4) as f64 * 1000.0)
-                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
-                            + ((data[current_index] >> 4) as f64 * 10.0)
-                            + (data[current_index] & 0x0F) as f64
-                    }
-                    data_information::DataFieldCoding::BCD6Digit => {
-                        total_size += 3;
-                        ((data[current_index + 2] >> 4) as f64 * 100000.0)
-                            + ((data[current_index + 2] & 0x0F) as f64 * 10000.0)
-                            + ((data[current_index + 1] >> 4) as f64 * 1000.0)
-                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
-                            + ((data[current_index] >> 4) as f64 * 10.0)
-                            + (data[current_index] & 0x0F) as f64
-                    }
-                    data_information::DataFieldCoding::BCD8Digit => {
-                        total_size += 4;
-                        ((data[current_index + 3] >> 4) as f64 * 10000000.0)
-                            + ((data[current_index + 3] & 0x0F) as f64 * 1000000.0)
-                            + ((data[current_index + 2] >> 4) as f64 * 100000.0)
-                            + ((data[current_index + 2] & 0x0F) as f64 * 10000.0)
-                            + ((data[current_index + 1] >> 4) as f64 * 1000.0)
-                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
-                            + ((data[current_index] >> 4) as f64 * 10.0)
-                            + (data[current_index] & 0x0F) as f64
-                    }
-                    data_information::DataFieldCoding::BCDDigit12 => {
-                        total_size += 6;
-                        ((data[current_index + 5] >> 4) as f64 * 100000000000.0)
-                            + ((data[current_index + 5] & 0x0F) as f64 * 10000000000.0)
-                            + ((data[current_index + 4] >> 4) as f64 * 1000000000.0)
-                            + ((data[current_index + 4] & 0x0F) as f64 * 100000000.0)
-                            + ((data[current_index + 3] >> 4) as f64 * 10000000.0)
-                            + ((data[current_index + 3] & 0x0F) as f64 * 1000000.0)
-                            + ((data[current_index + 2] >> 4) as f64 * 100000.0)
-                            + ((data[current_index + 2] & 0x0F) as f64 * 10000.0)
-                            + ((data[current_index + 1] >> 4) as f64 * 1000.0)
-                            + ((data[current_index + 1] & 0x0F) as f64 * 100.0)
-                            + ((data[current_index] >> 4) as f64 * 10.0)
-                            + (data[current_index] & 0x0F) as f64
-                    }
-                    data_information::DataFieldCoding::NoData => 0.0,
-                    data_information::DataFieldCoding::SelectionForReadout => {
-                        total_size += 1;
-                        0.0
-                    }
-                    data_information::DataFieldCoding::SpecialFunctions(_) => {
-                        total_size += 1;
-                        0.0
-                    }
-                    data_information::DataFieldCoding::VariableLength => 0.0,
-                };
-                Ok(DataRecord {
-                    function: data_information.function_field,
-                    storage_number: data_information.storage_number,
-                    unit: Unit::try_from(&value_information)?,
-                    exponent: Exponent::from(&value_information),
-                    quantity: Quantity::Some,
-                    value,
-                    size: total_size,
-                })
-            }
+            ValueInformation::Primary(_) | ValueInformation::Extended(_) => Ok(DataRecord {
+                function: data_information.function_field,
+                storage_number: data_information.storage_number,
+                unit: Unit::try_from(&value_information)?,
+                exponent: Exponent::from(&value_information),
+                quantity: Quantity::from(&value_information),
+                value: value.data,
+                size: total_size,
+            }),
+            ValueInformation::PlainText => Ok(DataRecord {
+                function: data_information.function_field,
+                storage_number: data_information.storage_number,
+                unit: Unit::try_from(&value_information)?,
+                exponent: Exponent::from(&value_information),
+                quantity: Quantity::from(&value_information),
+                value: 0.0,
+                size: total_size,
+            }),
             _ => Err(DataRecordError::DataInformationError(
                 data_information::DataInformationError::NoData,
             )),
@@ -223,7 +171,7 @@ impl From<DataRecordError> for VariableUserDataError {
 impl TryFrom<&[u8]> for DataRecords {
     type Error = VariableUserDataError;
     fn try_from(data: &[u8]) -> Result<DataRecords, VariableUserDataError> {
-        let mut records = DataRecords::new();
+        let records = DataRecords::new();
         let mut offset = 0;
         let mut _more_records_follow = false;
 
@@ -242,8 +190,7 @@ impl TryFrom<&[u8]> for DataRecords {
                     offset += 1;
                 }
                 _ => {
-                    let record = DataRecord::try_from(&data[offset..])?;
-                    let _ = records.add_record(record);
+                    let _record = DataRecord::try_from(&data[offset..]);
                     offset += records.last().unwrap().size;
                 }
             }
@@ -274,9 +221,34 @@ mod tests {
                 storage_number: 0,
                 unit: Unit::CubicMeter,
                 exponent: Exponent::from(-3),
-                quantity: Quantity::Some,
+                quantity: Quantity::Volume,
                 value: 12565.0,
                 size: 5,
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_variable_data2() {
+        use crate::user_data::variable_user_data::Exponent;
+        use crate::user_data::{
+            data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
+            DataRecord, DataRecords,
+        };
+        /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
+        let data = &[0x01, 0xFD, 0x1B, 0x00];
+
+        let result = DataRecords::try_from(data.as_slice());
+        assert_eq!(
+            result.unwrap().get(0),
+            Some(&DataRecord {
+                function: FunctionField::InstantaneousValue,
+                storage_number: 0,
+                unit: Unit::WithoutUnits,
+                exponent: Exponent { inner: None },
+                quantity: Quantity::BinaryDigitalInput,
+                value: 0.0,
+                size: 4,
             })
         );
     }
