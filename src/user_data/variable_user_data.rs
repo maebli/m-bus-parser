@@ -132,15 +132,6 @@ impl TryFrom<&[u8]> for DataRecord {
             .extract_from_bytes(&data[meta_size..]);
         let total_size = meta_size + value.byte_size;
         match value_information {
-            ValueInformation::Primary(_) | ValueInformation::Extended(_) => Ok(DataRecord {
-                function: data_information.function_field,
-                storage_number: data_information.storage_number,
-                unit: Unit::try_from(&value_information)?,
-                exponent: Exponent::from(&value_information),
-                quantity: Quantity::from(&value_information),
-                value: value.data,
-                size: total_size,
-            }),
             ValueInformation::PlainText => Ok(DataRecord {
                 function: data_information.function_field,
                 storage_number: data_information.storage_number,
@@ -150,9 +141,15 @@ impl TryFrom<&[u8]> for DataRecord {
                 value: 0.0,
                 size: total_size,
             }),
-            _ => Err(DataRecordError::DataInformationError(
-                data_information::DataInformationError::NoData,
-            )),
+            _ => Ok(DataRecord {
+                function: data_information.function_field,
+                storage_number: data_information.storage_number,
+                unit: Unit::try_from(&value_information)?,
+                exponent: Exponent::from(&value_information),
+                quantity: Quantity::from(&value_information),
+                value: value.data,
+                size: total_size,
+            }),
         }
     }
 }
@@ -171,7 +168,7 @@ impl From<DataRecordError> for VariableUserDataError {
 impl TryFrom<&[u8]> for DataRecords {
     type Error = VariableUserDataError;
     fn try_from(data: &[u8]) -> Result<DataRecords, VariableUserDataError> {
-        let records = DataRecords::new();
+        let mut records = DataRecords::new();
         let mut offset = 0;
         let mut _more_records_follow = false;
 
@@ -190,7 +187,8 @@ impl TryFrom<&[u8]> for DataRecords {
                     offset += 1;
                 }
                 _ => {
-                    let _record = DataRecord::try_from(&data[offset..]);
+                    let record = DataRecord::try_from(&data[offset..])?;
+                    let _ = records.add_record(record);
                     offset += records.last().unwrap().size;
                 }
             }
