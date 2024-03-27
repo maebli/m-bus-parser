@@ -230,6 +230,7 @@ pub enum Unit {
     TimePoint,
     FabricationNumber,
     MegaWatt,
+    PlainText,
 }
 
 impl TryFrom<&ValueInformation> for Unit {
@@ -260,7 +261,7 @@ impl TryFrom<&ValueInformation> for Unit {
                 0x78 => Ok(Unit::FabricationNumber),
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
-            ValueInformation::PlainText => todo!(),
+            ValueInformation::PlainText => Ok(Unit::PlainText),
             ValueInformation::Extended(x) => match x {
                 VIFExtension::EnergyMWh(_) => Ok(Unit::MegaWattHour),
                 VIFExtension::EnergyGJ(_) => Ok(Unit::GigaJoul),
@@ -323,5 +324,17 @@ mod tests {
         let result = ValueInformation::try_from(data.as_slice()).unwrap();
         assert_eq!(result, ValueInformation::Primary(0x16));
         assert_eq!(result.get_size(), 1);
+    }
+
+    #[test]
+    fn test_plain_text_vif() {
+        use crate::user_data::value_information::ValueInformation;
+
+        // VIF  LEN(3) 'R'   'H'  '%'    VIFE
+        //0xFC, 0x03, 0x48, 0x52, 0x25, 0x74,
+        // %RH
+        let data = [0xFC, 0x03, 0x48, 0x52, 0x25, 0x74];
+        let result = ValueInformation::try_from(data.as_slice()).unwrap();
+        assert_eq!(result, ValueInformation::PlainText);
     }
 }

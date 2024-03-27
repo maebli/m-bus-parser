@@ -126,30 +126,37 @@ impl TryFrom<&[u8]> for DataRecord {
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformation::try_from(data)?;
         let value_information = ValueInformation::try_from(&data[1..])?;
-        let meta_size = data_information.get_size() + value_information.get_size();
-        let value = data_information
-            .data_field_coding
-            .extract_from_bytes(&data[meta_size..]);
-        let total_size = meta_size + value.byte_size;
+        let value_and_data_information_size =
+            data_information.get_size() + value_information.get_size();
         match value_information {
-            ValueInformation::PlainText => Ok(DataRecord {
-                function: data_information.function_field,
-                storage_number: data_information.storage_number,
-                unit: Unit::try_from(&value_information)?,
-                exponent: Exponent::from(&value_information),
-                quantity: Quantity::from(&value_information),
-                value: 0.0,
-                size: total_size,
-            }),
-            _ => Ok(DataRecord {
-                function: data_information.function_field,
-                storage_number: data_information.storage_number,
-                unit: Unit::try_from(&value_information)?,
-                exponent: Exponent::from(&value_information),
-                quantity: Quantity::from(&value_information),
-                value: value.data,
-                size: total_size,
-            }),
+            ValueInformation::PlainText => {
+                let plaintext_size = data[value_and_data_information_size] as usize;
+                let total_size = value_and_data_information_size + plaintext_size + 1;
+                Ok(DataRecord {
+                    function: data_information.function_field,
+                    storage_number: data_information.storage_number,
+                    unit: Unit::try_from(&value_information)?,
+                    exponent: Exponent::from(&value_information),
+                    quantity: Quantity::from(&value_information),
+                    value: 0.0,
+                    size: total_size,
+                })
+            }
+            _ => {
+                let value = data_information
+                    .data_field_coding
+                    .extract_from_bytes(&data[value_and_data_information_size..]);
+                let total_size = value_and_data_information_size + value.byte_size;
+                Ok(DataRecord {
+                    function: data_information.function_field,
+                    storage_number: data_information.storage_number,
+                    unit: Unit::try_from(&value_information)?,
+                    exponent: Exponent::from(&value_information),
+                    quantity: Quantity::from(&value_information),
+                    value: value.data,
+                    size: total_size,
+                })
+            }
         }
     }
 }
@@ -247,6 +254,32 @@ mod tests {
                 quantity: Quantity::BinaryDigitalInput,
                 value: 0.0,
                 size: 4,
+            })
+        );
+    }
+    /*  Out: PlainText : Unit "%RH"  Value:   33.96
+    In: 0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D*/
+    #[test]
+    fn test_parse_variable_data3() {
+        use crate::user_data::variable_user_data::Exponent;
+        use crate::user_data::{
+            data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
+            DataRecord, DataRecords,
+        };
+        /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
+        let data = &[0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D];
+
+        let result = DataRecords::try_from(data.as_slice());
+        assert_eq!(
+            result.unwrap().get(0),
+            Some(&DataRecord {
+                function: FunctionField::InstantaneousValue,
+                storage_number: 0,
+                unit: Unit::PlainText,
+                exponent: Exponent::from(-2),
+                quantity: Quantity::PlainText,
+                value: 33.96,
+                size: 9,
             })
         );
     }
