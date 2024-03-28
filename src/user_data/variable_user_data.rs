@@ -42,7 +42,7 @@ impl From<&ValueInformation> for Quantity {
                 0x78 => Quantity::IdentificationNumber,
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
-            ValueInformation::PlainText(_, _) => Quantity::PlainText,
+            ValueInformation::PlainText(_) => Quantity::PlainText,
             ValueInformation::Extended(x) => match x {
                 value_information::VIFExtension::DigitalInput => Quantity::BinaryDigitalInput,
                 _ => todo!("Implement the rest of the units: {:?}", x),
@@ -69,7 +69,7 @@ impl From<&ValueInformation> for Exponent {
                 0x6E..=0x6F | 0x78 => Exponent { inner: None },
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
-            ValueInformation::PlainText(_, _) => Exponent { inner: None },
+            ValueInformation::PlainText(_) => Exponent { inner: None },
             ValueInformation::Extended(x) => match x {
                 value_information::VIFExtension::DigitalInput => Exponent { inner: None },
                 _ => todo!("Implement the rest of the units: {:?}", x),
@@ -129,7 +129,7 @@ impl TryFrom<&[u8]> for DataRecord {
         let value_and_data_information_size =
             data_information.get_size() + value_information.get_size();
         match value_information {
-            ValueInformation::PlainText(_, _) => {
+            ValueInformation::PlainText(_) => {
                 let plaintext_size = data[value_and_data_information_size] as usize;
                 let total_size = value_and_data_information_size + plaintext_size + 1;
                 Ok(DataRecord {
