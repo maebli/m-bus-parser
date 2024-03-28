@@ -339,15 +339,45 @@ mod tests {
         assert_eq!(result.get_size(), 1);
     }
 
+    //
+    // To solve this descrpeancy the parser needs to be configurable
+    // it should try to parse according to mbus and if it fails it should try to parse
+    // with the wrong, but common, method
+
     #[test]
-    fn test_plain_text_vif() {
+    fn test_plain_text_vif_common_none_norm_conform() {
         use crate::user_data::value_information::VIFExtension;
         use crate::user_data::value_information::ValueInformation;
         use arrayvec::ArrayVec;
+        // This is how the VIF is encoded in the test vectors
+        // It is however none norm conform, see the next example which follows
+        // the MBUS Norm which explicitly states that the VIIFE should be after the VIF
+        // not aftter the ASCII plain text and its size
         // VIF  LEN(3) 'R'   'H'  '%'    VIFE
         //0xFC, 0x03, 0x48, 0x52, 0x25, 0x74,
         // %RH
         let data = [0xFC, 0x03, 0x48, 0x52, 0x25, 0x74];
+        let mut a = ArrayVec::<u8, 10>::new();
+        a.try_extend_from_slice(&data[2..5]).unwrap();
+        a.reverse();
+        let result = ValueInformation::try_from(data.as_slice()).unwrap();
+        assert_eq!(
+            result,
+            ValueInformation::PlainText(a, Some(VIFExtension::Reserved))
+        );
+        assert_eq!(result.get_size(), 6);
+    }
+
+    #[test]
+    fn test_plain_text_vif_norm_conform() {
+        use crate::user_data::value_information::VIFExtension;
+        use crate::user_data::value_information::ValueInformation;
+        use arrayvec::ArrayVec;
+        // This is the ascii conform method of encoding the VIF
+        // VIF  VIFE  LEN(3) 'R'   'H'  '%'
+        //0xFC, 0x74, 0x03, 0x48, 0x52, 0x25,
+        // %RH
+        let data = [0xFC, 0x74, 0x03, 0x48, 0x52, 0x25];
         let mut a = ArrayVec::<u8, 10>::new();
         a.try_extend_from_slice(&data[2..5]).unwrap();
         a.reverse();
