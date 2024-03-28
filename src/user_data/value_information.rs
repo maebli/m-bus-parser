@@ -1,9 +1,18 @@
 use arrayvec::ArrayVec;
 
+const MAX_PLAIN_TEXT_VIF_SIZE: usize = 10;
+/* TODO add suppor for 2 - 10 VIFE */
+const MAX_VIF_RECORDS: usize = 10;
+#[derive(Debug)]
+struct ValueInformationBlock {
+    _value_information: ValueInformation,
+    _value_information_extension: Option<ArrayVec<u8, MAX_VIF_RECORDS>>,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ValueInformation {
     Primary(u8),
-    PlainText,
+    PlainText(ArrayVec<u8, MAX_PLAIN_TEXT_VIF_SIZE>, Option<VIFExtension>),
     Extended(VIFExtension),
     Any,
     ManufacturerSpecific,
@@ -13,7 +22,8 @@ impl ValueInformation {
     pub fn get_size(&self) -> usize {
         match self {
             ValueInformation::Primary(_) => 1,
-            ValueInformation::PlainText => 1,
+            ValueInformation::PlainText(x, None) => x.len() + 2,
+            ValueInformation::PlainText(x, Some(_)) => x.len() + 3,
             ValueInformation::Extended(_) => 2,
             ValueInformation::Any => 1,
             ValueInformation::ManufacturerSpecific => 1,
@@ -32,7 +42,15 @@ impl TryFrom<&[u8]> for ValueInformation {
     fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
         Ok(match data[0] {
             0x00..=0x7B | 0x80..=0xFA => ValueInformation::Primary(data[0]),
-            0x7C | 0xFC => ValueInformation::PlainText,
+            0x7C | 0xFC => {
+                let mut vif = ArrayVec::new();
+                let len = data[1] as usize;
+                for i in 0..len {
+                    vif.push(data[i + 2]);
+                }
+                vif.reverse();
+                ValueInformation::PlainText(vif, None)
+            }
             0xFD => ValueInformation::Extended(match data[1] {
                 0x00..=0x03 => VIFExtension::CreditOfCurrencyUnits(0b11 & data[1]),
                 0x04..=0x07 => VIFExtension::DebitOfCurrencyUnits(0b11 & data[1]),
@@ -261,7 +279,8 @@ impl TryFrom<&ValueInformation> for Unit {
                 0x78 => Ok(Unit::FabricationNumber),
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
-            ValueInformation::PlainText => Ok(Unit::PlainText),
+            ValueInformation::PlainText(_, None) => Ok(Unit::PlainText),
+            ValueInformation::PlainText(_, Some(_)) => Ok(Unit::PlainText),
             ValueInformation::Extended(x) => match x {
                 VIFExtension::EnergyMWh(_) => Ok(Unit::MegaWattHour),
                 VIFExtension::EnergyGJ(_) => Ok(Unit::GigaJoul),
@@ -284,12 +303,6 @@ impl TryFrom<&ValueInformation> for Unit {
     }
 }
 
-const MAX_RECORDS: usize = 10;
-#[derive(Debug)]
-struct ValueInformationBlock {
-    _value_information: ValueInformation,
-    _value_information_extension: Option<ArrayVec<u8, MAX_RECORDS>>,
-}
 mod tests {
 
     #[test]
@@ -328,13 +341,21 @@ mod tests {
 
     #[test]
     fn test_plain_text_vif() {
+        use crate::user_data::value_information::VIFExtension;
         use crate::user_data::value_information::ValueInformation;
-
+        use arrayvec::ArrayVec;
         // VIF  LEN(3) 'R'   'H'  '%'    VIFE
         //0xFC, 0x03, 0x48, 0x52, 0x25, 0x74,
         // %RH
         let data = [0xFC, 0x03, 0x48, 0x52, 0x25, 0x74];
+        let mut a = ArrayVec::<u8, 10>::new();
+        a.try_extend_from_slice(&data[2..5]).unwrap();
+        a.reverse();
         let result = ValueInformation::try_from(data.as_slice()).unwrap();
-        assert_eq!(result, ValueInformation::PlainText);
+        assert_eq!(
+            result,
+            ValueInformation::PlainText(a, Some(VIFExtension::Reserved))
+        );
+        assert_eq!(result.get_size(), 6);
     }
 }
