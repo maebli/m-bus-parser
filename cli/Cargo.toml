@@ -22,3 +22,5 @@ lto = true        # Enable Link Time Optimization
 codegen-units = 1 # Reduce codegen units to improve optimizations
 
 [dependencies]
+m-bus-parser = { path = "..", version = "0.0.3" }
+clap = "4.5.4"
