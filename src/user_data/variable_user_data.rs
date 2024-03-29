@@ -1,5 +1,5 @@
 use super::data_information::FunctionField;
-use super::data_information::{self, DataInformation};
+use super::data_information::{self, DataInformationField};
 use super::value_information::{self, Unit, ValueInformation};
 use super::DataRecords;
 
@@ -124,7 +124,7 @@ impl From<value_information::ValueInformationError> for DataRecordError {
 impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
-        let data_information = DataInformation::try_from(data)?;
+        let data_information = DataInformationField::try_from(data)?;
         let value_information = ValueInformation::try_from(&data[1..])?;
         let value_and_data_information_size =
             data_information.get_size() + value_information.get_size();

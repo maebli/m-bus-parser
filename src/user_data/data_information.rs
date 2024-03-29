@@ -1,16 +1,21 @@
+pub struct DataInformationBlock {
+    pub _data_information_field: DataInformationField,
+    pub _data_information_field_extension: Option<DataInformationExtensionField>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct DataInformation {
+pub struct DataInformationField {
     pub storage_number: u64,
     pub function_field: FunctionField,
     pub data_field_coding: DataFieldCoding,
-    pub data_information_extension: Option<DataInformationExtension>,
+    pub data_information_extension: Option<DataInformationExtensionField>,
     pub size: usize,
 }
 
 const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DataInformationExtension {}
+pub struct DataInformationExtensionField {}
 
 #[derive(Debug, PartialEq)]
 pub enum DataInformationError {
@@ -19,7 +24,7 @@ pub enum DataInformationError {
     DataTooShort,
 }
 
-impl TryFrom<&[u8]> for DataInformation {
+impl TryFrom<&[u8]> for DataInformationField {
     type Error = DataInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
@@ -79,12 +84,12 @@ impl TryFrom<&[u8]> for DataInformation {
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
-        Ok(DataInformation {
+        Ok(DataInformationField {
             storage_number,
             function_field,
             data_field_coding,
             data_information_extension: if extension_bit {
-                Some(DataInformationExtension {})
+                Some(DataInformationExtensionField {})
             } else {
                 None
             },
@@ -93,7 +98,7 @@ impl TryFrom<&[u8]> for DataInformation {
     }
 }
 
-impl DataInformation {
+impl DataInformationField {
     pub fn get_size(&self) -> usize {
         self.size
     }
@@ -272,10 +277,10 @@ mod tests {
     #[test]
     fn test_data_information() {
         let data = [0x13 as u8];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationField::try_from(data.as_slice());
         assert_eq!(
             result,
-            Ok(DataInformation {
+            Ok(DataInformationField {
                 storage_number: 0,
                 function_field: FunctionField::MaximumValue,
                 data_field_coding: DataFieldCoding::Integer24Bit,
@@ -290,7 +295,7 @@ mod tests {
         let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationField::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
 
@@ -299,14 +304,14 @@ mod tests {
         let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationField::try_from(data.as_slice());
         assert_ne!(result, Err(DataInformationError::DataTooLong));
     }
 
     #[test]
     fn test_short_data_information() {
         let data = [0xFF];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationField::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooShort));
     }
 }
