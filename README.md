@@ -6,7 +6,7 @@
 
 ### Introduction 
 
-** For contributing see [CONTRIBUTING.md](./CONTRIBUTING.md) **
+*For contributing see [CONTRIBUTING.md](./CONTRIBUTING.md)*
 
 m-bus-parser is an open source parser (sometimes also refered to as decoder and/or deserializer) of **wired** m-bus portocol and is written in rust. 
 
