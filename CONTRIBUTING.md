@@ -11,7 +11,7 @@ Before diving into the code a good starting point for understanding what the pro
 
 # Conduct
 
-Code of conduct is taken form the [rust project code of conduct](https://www.rust-lang.org/policies/code-of-conduct).
+Code of conduct is taken from the [rust project code of conduct](https://www.rust-lang.org/policies/code-of-conduct).
 
 
 # Getting started
