@@ -12,10 +12,13 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
 
         if vif.has_extension() {
             let mut offset = 1;
-            while offset < data.len() && vife.last().unwrap().has_extension() {
+            while offset < data.len() {
                 let vife_data = data[offset];
                 vife.push(ValueInformationFieldExtension { data: vife_data });
                 offset += 1;
+                if !vife.last().unwrap().has_extension() {
+                    break;
+                }
             }
         }
         Ok(ValueInformationBlock {
@@ -329,7 +332,6 @@ mod tests {
 
     #[test]
     fn test_plain_text_vif_norm_conform() {
-        use arrayvec::ArrayVec;
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
         // 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25,
@@ -340,7 +342,9 @@ mod tests {
         // according to the Norm the LEN and ASCII is not part tof the VIB
         let data = [0xFC, 0x74];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result.get_size(), 6);
+        assert_eq!(result.get_size(), 2);
+        assert_eq!(result.value_information.data, 0xFC);
+        assert_eq!(result.value_information_extension.unwrap()[0].data, 0x74);
     }
 
     fn _test_plain_text_vif_common_none_norm_conform() {
@@ -353,6 +357,7 @@ mod tests {
         // 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74,
         // %RH
         // VIFE = 0x74 => E111 0nnn Multiplicative correction factor for value (not unit): 10nnn–6 => 10^-2
+        // when not following the norm the LEN and ASCII is part of the VIB
         let data = [0xFC, 0x03, 0x48, 0x52, 0x25, 0x74];
         let mut a = ArrayVec::<u8, 10>::new();
         a.try_extend_from_slice(&data[2..5]).unwrap();
