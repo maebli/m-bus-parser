@@ -6,7 +6,7 @@ This document aims to provide a guideline for people wanting to contribute to th
 
 # Conduct
 
-Code of conduct is taken form the (rust project code of conduct)[https://www.rust-lang.org/policies/code-of-conduct].
+Code of conduct is taken form the [rust project code of conduct](https://www.rust-lang.org/policies/code-of-conduct).
 
 
 # Getting started
