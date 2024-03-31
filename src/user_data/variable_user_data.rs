@@ -43,12 +43,9 @@ impl From<&ValueInformation> for Quantity {
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText(_) => Quantity::PlainText,
-            ValueInformation::Extended(x) => match x {
-                value_information::VIFExtension::DigitalInput => Quantity::BinaryDigitalInput,
-                _ => todo!("Implement the rest of the units: {:?}", x),
-            },
-            ValueInformation::Any => todo!(),
-            ValueInformation::ManufacturerSpecific => todo!(),
+            ValueInformation::Extended(_) => todo!(),
+            ValueInformation::Any(_) => todo!(),
+            ValueInformation::ManufacturerSpecific(_) => todo!(),
         }
     }
 }
@@ -70,12 +67,9 @@ impl From<&ValueInformation> for Exponent {
                 _ => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformation::PlainText(_) => Exponent { inner: None },
-            ValueInformation::Extended(x) => match x {
-                value_information::VIFExtension::DigitalInput => Exponent { inner: None },
-                _ => todo!("Implement the rest of the units: {:?}", x),
-            },
-            ValueInformation::Any => todo!(),
-            ValueInformation::ManufacturerSpecific => todo!(),
+            ValueInformation::Extended(x) => todo!(),
+            ValueInformation::Any(_) => todo!(),
+            ValueInformation::ManufacturerSpecific(_) => todo!(),
         }
     }
 }
@@ -125,9 +119,8 @@ impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_information = DataInformationField::try_from(data)?;
-        let value_information = ValueInformation::try_from(&data[1..])?;
-        let value_and_data_information_size =
-            data_information.get_size() + value_information.get_size();
+        let value_information = ValueInformation::Any(false);
+        let value_and_data_information_size = data_information.get_size();
         match value_information {
             ValueInformation::PlainText(_) => {
                 let plaintext_size = data[value_and_data_information_size] as usize;
@@ -135,7 +128,7 @@ impl TryFrom<&[u8]> for DataRecord {
                 Ok(DataRecord {
                     function: data_information.function_field,
                     storage_number: data_information.storage_number,
-                    unit: Unit::try_from(&value_information)?,
+                    unit: Unit::ActualityDuration,
                     exponent: Exponent::from(&value_information),
                     quantity: Quantity::from(&value_information),
                     value: 0.0,
@@ -150,7 +143,7 @@ impl TryFrom<&[u8]> for DataRecord {
                 Ok(DataRecord {
                     function: data_information.function_field,
                     storage_number: data_information.storage_number,
-                    unit: Unit::try_from(&value_information)?,
+                    unit: Unit::Bar,
                     exponent: Exponent::from(&value_information),
                     quantity: Quantity::from(&value_information),
                     value: value.data,

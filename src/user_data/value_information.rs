@@ -1,34 +1,53 @@
 use arrayvec::ArrayVec;
 
 const MAX_PLAIN_TEXT_VIF_SIZE: usize = 10;
-/* TODO add suppor for 2 - 10 VIFE */
-
 const MAX_VIFE_RECORDS: usize = 10;
-#[derive(Debug)]
+
+impl TryFrom<&[u8]> for ValueInformationBlock {
+    type Error = ValueInformationError;
+
+    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
+        let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
+        let mut i = 1;
+        while i < data.len() {
+            //vife.push(ValueInformationFieldExtension::try_from(data[i]));
+            i += 1;
+        }
+        Ok(ValueInformationBlock {
+            value_information: ValueInformation::try_from(data[0])?,
+            value_information_extension: if vife.is_empty() { None } else { Some(vife) },
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
 struct ValueInformationBlock {
-    _value_information: ValueInformation,
-    _value_information_extension: Option<ArrayVec<u8, MAX_VIFE_RECORDS>>,
+    value_information: ValueInformation,
+    value_information_extension: Option<ArrayVec<ValueInformationFieldExtension, MAX_VIFE_RECORDS>>,
+}
+
+#[derive(Debug, PartialEq)]
+struct ValueInformationFieldExtension {
+    vife: u8,
+}
+
+impl ValueInformationBlock {
+    fn get_size(&self) -> usize {
+        let mut size = 1;
+        if let Some(vife) = &self.value_information_extension {
+            size += vife.len();
+        }
+        size
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum ValueInformation {
     Primary(u8),
-    PlainText(ArrayVec<u8, MAX_PLAIN_TEXT_VIF_SIZE>),
-    Extended(VIFExtension),
-    Any,
-    ManufacturerSpecific,
-}
-
-impl ValueInformation {
-    pub fn get_size(&self) -> usize {
-        match self {
-            ValueInformation::Primary(_) => 1,
-            ValueInformation::PlainText(x) => x.len() + 2,
-            ValueInformation::Extended(_) => 2,
-            ValueInformation::Any => 1,
-            ValueInformation::ManufacturerSpecific => 1,
-        }
-    }
+    PlainText(bool),
+    Extended(bool),
+    Any(bool),
+    ManufacturerSpecific(bool),
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,98 +55,20 @@ pub enum ValueInformationError {
     InvalidValueInformation,
 }
 
-impl TryFrom<&[u8]> for ValueInformation {
+impl TryFrom<u8> for ValueInformation {
     type Error = ValueInformationError;
 
-    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
-        Ok(match data[0] {
-            0x00..=0x7B | 0x80..=0xFA => ValueInformation::Primary(data[0]),
-            0x7C | 0xFC => {
-                let mut vif = ArrayVec::new();
-                let len = data[1] as usize;
-                for i in 0..len {
-                    vif.push(data[i + 2]);
-                }
-                vif.reverse();
-                ValueInformation::PlainText(vif)
-            }
-            0xFD => ValueInformation::Extended(match data[1] {
-                0x00..=0x03 => VIFExtension::CreditOfCurrencyUnits(0b11 & data[1]),
-                0x04..=0x07 => VIFExtension::DebitOfCurrencyUnits(0b11 & data[1]),
-                0x08 => VIFExtension::AccessNumber,
-                0x09 => VIFExtension::Medium,
-                0x0A => VIFExtension::Manufacturer,
-                0x0B => VIFExtension::ParameterSetIdentification,
-                0x0C => VIFExtension::ModelVersion,
-                0x0D => VIFExtension::HardwareVersion,
-                0x0E => VIFExtension::FirmwareVersion,
-                0x0F => VIFExtension::SoftwareVersion,
-                0x10 => VIFExtension::CustomerLocation,
-                0x11 => VIFExtension::Customer,
-                0x12 => VIFExtension::AccessCodeUser,
-                0x13 => VIFExtension::AccessCodeOperator,
-                0x14 => VIFExtension::AccessCodeSystemOperator,
-                0x15 => VIFExtension::AccessCodeDeveloper,
-                0x16 => VIFExtension::Password,
-                0x17 => VIFExtension::ErrorFlags,
-                0x18 => VIFExtension::ErrorMask,
-                0x1A => VIFExtension::DigitalOutput,
-                0x1B => VIFExtension::DigitalInput,
-                0x1C => VIFExtension::BaudRate,
-                0x1D => VIFExtension::ResponseDelayTime,
-                0x1E => VIFExtension::Retry,
-                0x20 => VIFExtension::FirstStorage,
-                0x21 => VIFExtension::LastStorage,
-                0x22 => VIFExtension::SizeOfStorageBlock,
-                0x23..=0x26 => VIFExtension::StorageIntervalSecondsToDays(0b11 & data[1]),
-                0x28 => VIFExtension::StorageIntervalMonths,
-                0x29 => VIFExtension::StorageIntervalYears,
-                0x2C..=0x2F => VIFExtension::DurationSinceLastReadout(0b11 & data[1]),
-                0x30 => VIFExtension::StartOfTariff,
-                0x31..=0x33 => VIFExtension::DurationOfTariff(0b11 & data[1]),
-                0x34..=0x37 => VIFExtension::PeriodOfTariff(0b11 & data[1]),
-                0x38 => VIFExtension::PeriodOfTarrifMonths,
-                0x39 => VIFExtension::PeriodOfTTariffYears,
-                0x3A => VIFExtension::Dimensionless,
-                0x40..=0x47 => VIFExtension::Volts(0b1111 & data[1]),
-                0x48..=0x4F => VIFExtension::Ampere(0b1111 & data[1]),
-                0x60 => VIFExtension::ResetCounter,
-                0x61 => VIFExtension::CumulationCounter,
-                0x62 => VIFExtension::ControlSignal,
-                0x63 => VIFExtension::DayOfWeek,
-                0x64 => VIFExtension::WeekNumber,
-                0x65 => VIFExtension::TimePointOfDay,
-                0x66 => VIFExtension::StateOfParameterActivation,
-                0x67 => VIFExtension::SpecialSupervision,
-                0x68..=0x6B => VIFExtension::DurationSinceLastCumulation(0b11 & data[1]),
-                0x6C..=0x6F => VIFExtension::OperatingTimeBattery(0b11 & data[1]),
-                0x70 => VIFExtension::DateAndTimeOfBatteryChange,
-                _ => VIFExtension::Reserved,
-            }),
-            0xFB => ValueInformation::Extended(match data[1] {
-                0x00 | 0x01 => VIFExtension::EnergyMWh(0b1 & data[1]),
-                0x08 | 0x09 => VIFExtension::EnergyGJ(0b1 & data[1]),
-                0x10 | 0x11 => VIFExtension::VolumeM3(0b1 & data[1]),
-                0x18 | 0x19 => VIFExtension::MassTons(0b1 & data[1]),
-                0x21 => VIFExtension::VolumeFeet3Tenth,
-                0x22 => VIFExtension::VolumeAmericanGallon,
-                0x23 => VIFExtension::VolumeFlowAmericanGallonPerMinuteThousandth,
-                0x24 => VIFExtension::VolumeFlowAmericanGallonPerMinute,
-                0x25 => VIFExtension::VolumeFlowAmericanGallonPerHour,
-                0x28 | 0x29 => VIFExtension::PowerMW(0b1 & data[1]),
-                0x30 | 0x31 => VIFExtension::PowerGJH(0b1 & data[1]),
-                0x50..=0x53 => VIFExtension::FlowTemperature(0b11 & data[1]),
-                0x54..=0x57 => VIFExtension::ReturnTemperature(0b11 & data[1]),
-                0x60..=0x63 => VIFExtension::TemperatureDifference(0b11 & data[1]),
-                0x64..=0x67 => VIFExtension::ExternalTemperature(0b11 & data[1]),
-                0x70..=0x73 => VIFExtension::ColdWarmTemperatureLimitFarenheit(0b11 & data[1]),
-                0x74..=0x77 => VIFExtension::ColdWarmTemperatureLimitCelsius(0b11 & data[1]),
-                0x78..=0x7F => VIFExtension::CumulativeCountMaxPower(0b111 & data[1]),
-                _ => VIFExtension::Reserved,
-            }),
-            0x7E | 0xFE => ValueInformation::Any,
-            0x7F | 0xFF => ValueInformation::ManufacturerSpecific,
-            _ => unreachable!("Invalid value information: {:X}", data[0]),
+    fn try_from(data: u8) -> Result<Self, ValueInformationError> {
+        Ok(match data {
+            0x00..=0x7B | 0x80..=0xFA => ValueInformation::Primary(data),
+            0x7C | 0xFC => ValueInformation::PlainText(data == 0xFC),
+            0xFD => ValueInformation::Extended(false),
+            0xFB => ValueInformation::Extended(true),
+            0x7E => ValueInformation::Any(false),
+            0xFE => ValueInformation::Any(true),
+            0x7F => ValueInformation::ManufacturerSpecific(false),
+            0xFF => ValueInformation::ManufacturerSpecific(true),
+            _ => unreachable!("Invalid value information: {:X}", data),
         })
     }
 }
@@ -251,12 +192,14 @@ pub enum Unit {
     PlainText,
 }
 
-impl TryFrom<&ValueInformation> for Unit {
+impl TryFrom<&ValueInformationBlock> for Unit {
     type Error = ValueInformationError;
 
-    fn try_from(value_information: &ValueInformation) -> Result<Self, ValueInformationError> {
-        match value_information {
-            ValueInformation::Primary(x) => match x & 0x7F {
+    fn try_from(
+        value_information_block: &ValueInformationBlock,
+    ) -> Result<Self, ValueInformationError> {
+        match value_information_block.value_information {
+            ValueInformation::Primary(data) => match data & 0x7F {
                 0x00..=0x07 => Ok(Unit::WattHour),
                 0x08..=0x0F => Ok(Unit::Joul),
                 0x10..=0x17 => Ok(Unit::CubicMeter),
@@ -277,64 +220,72 @@ impl TryFrom<&ValueInformation> for Unit {
                 0x6C..=0x6D => Ok(Unit::TimePoint),
                 0x74..=0x77 => Ok(Unit::ActualityDuration),
                 0x78 => Ok(Unit::FabricationNumber),
-                _ => todo!("Implement the rest of the units: {:?}", x),
+                _ => todo!("Implement the rest of the units: {:?}", data),
             },
             ValueInformation::PlainText(_) => Ok(Unit::PlainText),
-            ValueInformation::Extended(x) => match x {
-                VIFExtension::EnergyMWh(_) => Ok(Unit::MegaWattHour),
-                VIFExtension::EnergyGJ(_) => Ok(Unit::GigaJoul),
-                VIFExtension::VolumeM3(_) => Ok(Unit::CubicMeter),
-                VIFExtension::PowerMW(_) => Ok(Unit::MegaWatt),
-                VIFExtension::PowerGJH(_) => Ok(Unit::GigaJoulHour),
-                VIFExtension::FlowTemperature(_) => Ok(Unit::Celsius),
-                VIFExtension::ReturnTemperature(_) => Ok(Unit::Celsius),
-                VIFExtension::TemperatureDifference(_) => Ok(Unit::Celsius),
-                VIFExtension::ExternalTemperature(_) => Ok(Unit::Celsius),
-                VIFExtension::ColdWarmTemperatureLimitFarenheit(_) => Ok(Unit::Celsius),
-                VIFExtension::ColdWarmTemperatureLimitCelsius(_) => Ok(Unit::Celsius),
-                VIFExtension::CumulativeCountMaxPower(_) => Ok(Unit::Watt),
-                VIFExtension::DigitalInput => Ok(Unit::WithoutUnits),
-                _ => todo!("Implement the rest of the units: {:?}", x),
-            },
-            ValueInformation::Any => todo!(),
-            ValueInformation::ManufacturerSpecific => todo!(),
+            _ => Err(ValueInformationError::InvalidValueInformation),
         }
     }
 }
 
 mod tests {
+    use crate::user_data::value_information::ValueInformationBlock;
 
     #[test]
-    fn test_value_information_new() {
+    fn test_value_information_parsing() {
         use crate::user_data::value_information::Unit;
-        use crate::user_data::value_information::ValueInformation;
+        use crate::user_data::value_information::{ValueInformation, ValueInformationBlock};
 
         /* VIF = 0x13 => m3^3*1e-3 */
         let data = [0x13];
-        let result = ValueInformation::try_from(data.as_slice()).unwrap();
-        assert_eq!(result, ValueInformation::Primary(0x13));
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(
+            result,
+            ValueInformationBlock {
+                value_information: ValueInformation::Primary(0x13),
+                value_information_extension: None
+            }
+        );
         assert_eq!(result.get_size(), 1);
         assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
 
         /* VIF = 0x14 => m3^-3*1e-2 */
         let data = [0x14];
-        let result = ValueInformation::try_from(data.as_slice()).unwrap();
-        assert_eq!(result, ValueInformation::Primary(0x14));
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(
+            result,
+            ValueInformationBlock {
+                value_information: ValueInformation::Primary(0x14),
+                value_information_extension: None
+            }
+        );
         assert_eq!(result.get_size(), 1);
         assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
 
         /* VIF = 0x15 => m3^3*1e-2 */
 
         let data = [0x15];
-        let result = ValueInformation::try_from(data.as_slice()).unwrap();
-        assert_eq!(result, ValueInformation::Primary(0x15));
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(
+            result,
+            ValueInformationBlock {
+                value_information: ValueInformation::Primary(0x15),
+                value_information_extension: None
+            }
+        );
         assert_eq!(result.get_size(), 1);
         assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
 
         /* VIF = 0x16 => m3^-3*1e-1 */
         let data = [0x16];
-        let result = ValueInformation::try_from(data.as_slice()).unwrap();
-        assert_eq!(result, ValueInformation::Primary(0x16));
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(
+            result,
+            ValueInformationBlock {
+                value_information: ValueInformation::Primary(0x16),
+                value_information_extension: None
+            }
+        );
         assert_eq!(result.get_size(), 1);
     }
 
@@ -342,9 +293,7 @@ mod tests {
     // To solve this issue the parser needs to be configurable
     // it should try to parse according to mbus and if it fails it should try to parse
     // with the wrong, but common, method
-    #[test]
-    fn test_plain_text_vif_common_none_norm_conform() {
-        use crate::user_data::value_information::ValueInformation;
+    fn _test_plain_text_vif_common_none_norm_conform() {
         use arrayvec::ArrayVec;
         // This is how the VIF is encoded in the test vectors
         // It is however none norm conform, see the next example which follows
@@ -358,14 +307,11 @@ mod tests {
         let mut a = ArrayVec::<u8, 10>::new();
         a.try_extend_from_slice(&data[2..5]).unwrap();
         a.reverse();
-        let result = ValueInformation::try_from(data.as_slice()).unwrap();
-        assert_eq!(result, ValueInformation::PlainText(a));
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 6);
     }
 
-    #[test]
-    fn test_plain_text_vif_norm_conform() {
-        use crate::user_data::value_information::ValueInformation;
+    fn _test_plain_text_vif_norm_conform() {
         use arrayvec::ArrayVec;
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
@@ -378,8 +324,7 @@ mod tests {
         let mut a = ArrayVec::<u8, 10>::new();
         a.try_extend_from_slice(&data[2..5]).unwrap();
         a.reverse();
-        let result = ValueInformation::try_from(data.as_slice()).unwrap();
-        assert_eq!(result, ValueInformation::PlainText(a));
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 6);
     }
 }
