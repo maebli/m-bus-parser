@@ -1,7 +1,7 @@
 use super::data_information::FunctionField;
 use super::data_information::{self};
 use super::value_information::{
-    self, Unit, ValueInformationBlock, ValueInformationCoding, ValueInformationField,
+    Unit, ValueInformationBlock, ValueInformationCoding, ValueInformationField,
 };
 use super::DataRecords;
 
@@ -116,12 +116,6 @@ impl From<data_information::DataInformationError> for DataRecordError {
     }
 }
 
-impl From<value_information::ValueInformationError> for DataRecordError {
-    fn from(_error: value_information::ValueInformationError) -> Self {
-        DataRecordError::DataInformationError(data_information::DataInformationError::NoData)
-    }
-}
-
 impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
@@ -192,7 +186,8 @@ mod tests {
     fn test_parse_variable_data() {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
-            data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
+            data_information::FunctionField,
+            variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
@@ -218,7 +213,8 @@ mod tests {
     fn test_parse_variable_data2() {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
-            data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
+            data_information::FunctionField,
+            variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
         /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
@@ -244,7 +240,8 @@ mod tests {
     fn test_parse_variable_data3() {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
-            data_information::FunctionField, value_information::Unit, variable_user_data::Quantity,
+            data_information::FunctionField,
+            variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
