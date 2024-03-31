@@ -1,6 +1,8 @@
 use super::data_information::FunctionField;
-use super::data_information::{self, DataInformationField};
-use super::value_information::{self, Unit, ValueInformation};
+use super::data_information::{self};
+use super::value_information::{
+    self, Unit, ValueInformation, ValueInformationBlock, ValueInformationCoding,
+};
 use super::DataRecords;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -24,10 +26,11 @@ impl From<isize> for Exponent {
     }
 }
 
-impl From<&ValueInformation> for Quantity {
-    fn from(value_information: &ValueInformation) -> Quantity {
-        match value_information {
-            ValueInformation::Primary(x) => match x {
+impl From<ValueInformationBlock> for Quantity {
+    fn from(value_information_block: ValueInformationBlock) -> Quantity {
+        match ValueInformationCoding::from(&value_information_block.value_information) {
+            ValueInformationCoding::Primary => match value_information_block.value_information.data
+            {
                 0x00..=0x0F => Quantity::Energy,
                 0x10..=0x17 => Quantity::Volume,
                 0x18..=0x1F => Quantity::Mass,
@@ -40,36 +43,40 @@ impl From<&ValueInformation> for Quantity {
                 0x6C..=0x6D => Quantity::TimePoint,
                 0x74..=0x77 => Quantity::Duration,
                 0x78 => Quantity::IdentificationNumber,
-                _ => todo!("Implement the rest of the units: {:?}", x),
+                x => todo!("Implement the rest of the units: {:?}", x),
             },
-            ValueInformation::PlainText(_) => Quantity::PlainText,
-            ValueInformation::Extended(_) => todo!(),
-            ValueInformation::Any(_) => todo!(),
-            ValueInformation::ManufacturerSpecific(_) => todo!(),
+            ValueInformationCoding::PlainText => todo!(),
+            ValueInformationCoding::LineaVIFExtension => todo!(),
+            ValueInformationCoding::Any => todo!(),
+            ValueInformationCoding::ManufacturerSpecific => todo!(),
         }
     }
 }
 
-impl From<&ValueInformation> for Exponent {
-    fn from(value_information: &ValueInformation) -> Exponent {
-        match value_information {
-            ValueInformation::Primary(x) => match x & 0x7F {
+impl From<ValueInformation> for Exponent {
+    fn from(value_information_block: ValueInformation) -> Exponent {
+        match ValueInformationCoding::from(&value_information_block) {
+            ValueInformationCoding::Primary => match value_information_block.data & 0x7F {
                 0..=7 | 0x18..=0x1F | 0x28..=0x2F | 0x50..=0x57 => {
-                    Exponent::from((x & 0b111) as isize - 3)
+                    Exponent::from((value_information_block.data & 0b111) as isize - 3)
                 }
-                8..=15 | 0x30..=0x37 => Exponent::from((x & 0b111) as isize),
-                0x10..=0x17 | 0x38..=0x3F | 0x6C..=0x6D => Exponent::from((x & 0b111) as isize - 6),
+                8..=15 | 0x30..=0x37 => {
+                    Exponent::from((value_information_block.data & 0b111) as isize)
+                }
+                0x10..=0x17 | 0x38..=0x3F | 0x6C..=0x6D => {
+                    Exponent::from((value_information_block.data & 0b111) as isize - 6)
+                }
                 0x20..=0x27 | 0x74..=0x77 => Exponent::from(1),
-                0x40..=0x47 => Exponent::from((x & 0b111) as isize - 7),
-                0x48..=0x4F => Exponent::from((x & 0b111) as isize - 9),
-                0x58..=0x6B => Exponent::from((x & 0b11) as isize - 3),
+                0x40..=0x47 => Exponent::from((value_information_block.data & 0b111) as isize - 7),
+                0x48..=0x4F => Exponent::from((value_information_block.data & 0b111) as isize - 9),
+                0x58..=0x6B => Exponent::from((value_information_block.data & 0b11) as isize - 3),
                 0x6E..=0x6F | 0x78 => Exponent { inner: None },
-                _ => todo!("Implement the rest of the units: {:?}", x),
+                data => todo!("Implement the rest of the units: {:?}", data),
             },
-            ValueInformation::PlainText(_) => Exponent { inner: None },
-            ValueInformation::Extended(x) => todo!(),
-            ValueInformation::Any(_) => todo!(),
-            ValueInformation::ManufacturerSpecific(_) => todo!(),
+            ValueInformationCoding::PlainText => Exponent { inner: None },
+            ValueInformationCoding::LineaVIFExtension => todo!(),
+            ValueInformationCoding::Any => todo!(),
+            ValueInformationCoding::ManufacturerSpecific => todo!(),
         }
     }
 }
@@ -118,39 +125,20 @@ impl From<value_information::ValueInformationError> for DataRecordError {
 impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
-        let data_information = DataInformationField::try_from(data)?;
-        let value_information = ValueInformation::Any(false);
-        let value_and_data_information_size = data_information.get_size();
-        match value_information {
-            ValueInformation::PlainText(_) => {
-                let plaintext_size = data[value_and_data_information_size] as usize;
-                let total_size = value_and_data_information_size + plaintext_size + 1;
-                Ok(DataRecord {
-                    function: data_information.function_field,
-                    storage_number: data_information.storage_number,
-                    unit: Unit::ActualityDuration,
-                    exponent: Exponent::from(&value_information),
-                    quantity: Quantity::from(&value_information),
-                    value: 0.0,
-                    size: total_size,
-                })
-            }
-            _ => {
-                let value = data_information
-                    .data_field_coding
-                    .extract_from_bytes(&data[value_and_data_information_size..]);
-                let total_size = value_and_data_information_size + value.byte_size;
-                Ok(DataRecord {
-                    function: data_information.function_field,
-                    storage_number: data_information.storage_number,
-                    unit: Unit::Bar,
-                    exponent: Exponent::from(&value_information),
-                    quantity: Quantity::from(&value_information),
-                    value: value.data,
-                    size: total_size,
-                })
-            }
-        }
+        let function = FunctionField::InstantaneousValue;
+        let value = 0.0;
+        let unit = Unit::ActualityDuration;
+        let exponent = Exponent { inner: None };
+        let quantity = Quantity::AveragingDuration;
+        Ok(DataRecord {
+            function,
+            storage_number: 0,
+            unit,
+            exponent,
+            quantity,
+            value,
+            size: 3,
+        })
     }
 }
 

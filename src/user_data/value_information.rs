@@ -7,30 +7,65 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     type Error = ValueInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
-        let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
+        let mut vife = ArrayVec::<ValueInformationFieldExtensionCoding, MAX_VIFE_RECORDS>::new();
+        let vif = ValueInformation::from(data[0]);
+
         let mut i = 1;
-        while (data[i] & 0x80) != 0 && i < data.len() {
-            vife.push(ValueInformationFieldExtension::try_from(data[i])?);
-            i += 1;
-        }
         Ok(ValueInformationBlock {
-            value_information: ValueInformation::try_from(data[0])?,
+            value_information: vif,
             value_information_extension: if vife.is_empty() { None } else { Some(vife) },
         })
     }
 }
 
 #[derive(Debug, PartialEq)]
-struct ValueInformationBlock {
-    value_information: ValueInformation,
-    value_information_extension: Option<ArrayVec<ValueInformationFieldExtension, MAX_VIFE_RECORDS>>,
+pub struct ValueInformationBlock {
+    pub value_information: ValueInformation,
+    pub value_information_extension:
+        Option<ArrayVec<ValueInformationFieldExtensionCoding, MAX_VIFE_RECORDS>>,
 }
 
 #[derive(Debug, PartialEq)]
-enum ValueInformationFieldExtension {
-    MainVIFCodeExtension(u8),
-    AlternateVIFCodeExtension(u8),
-    OrthogonalVIFECodeExtension(u8),
+pub struct ValueInformation {
+    pub data: u8,
+}
+
+impl From<&ValueInformation> for ValueInformationCoding {
+    fn from(value_information: &ValueInformation) -> Self {
+        match value_information.data {
+            0x00..=0x7B | 0x80..=0xFA => ValueInformationCoding::Primary,
+            0x7C | 0xFC => ValueInformationCoding::PlainText,
+            0xFD => ValueInformationCoding::LineaVIFExtension,
+            0xFB => ValueInformationCoding::Any,
+            0x7E => ValueInformationCoding::ManufacturerSpecific,
+            0xFE => ValueInformationCoding::ManufacturerSpecific,
+            0x7F => ValueInformationCoding::ManufacturerSpecific,
+            0xFF => ValueInformationCoding::ManufacturerSpecific,
+            _ => unreachable!("Invalid value information: {:X}", value_information.data),
+        }
+    }
+}
+
+impl ValueInformation {
+    fn has_extension(&self) -> bool {
+        self.data & 0x80 != 0
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ValueInformationCoding {
+    Primary,
+    PlainText,
+    LineaVIFExtension,
+    Any,
+    ManufacturerSpecific,
+}
+
+#[derive(Debug, PartialEq)]
+enum ValueInformationFieldExtensionCoding {
+    MainVIFCodeExtension,
+    AlternateVIFCodeExtension,
+    OrthogonalVIFECodeExtension,
 }
 
 impl ValueInformationBlock {
@@ -43,15 +78,44 @@ impl ValueInformationBlock {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum ValueInformation {
-    Primary(u8),
-    PlainText(bool),
-    FirstVIFExtension,
-    SecondVIFExtension,
-    ThidVIFExtension,
-    Any(bool),
-    ManufacturerSpecific(bool),
+impl TryFrom<ValueInformationBlock> for Unit {
+    type Error = ValueInformationError;
+
+    fn try_from(
+        value_information_block: ValueInformationBlock,
+    ) -> Result<Self, ValueInformationError> {
+        match ValueInformationCoding::from(&value_information_block.value_information) {
+            ValueInformationCoding::Primary => match value_information_block.value_information.data
+            {
+                0x00..=0x07 => Ok(Unit::WattHour),
+                0x08..=0x0F => Ok(Unit::Joul),
+                0x10..=0x17 => Ok(Unit::CubicMeter),
+                0x18..=0x1F => Ok(Unit::Kilogram),
+                0x20 | 0x24 => Ok(Unit::Seconds),
+                0x21 | 0x25 => Ok(Unit::Minutes),
+                0x22 | 0x26 => Ok(Unit::Hours),
+                0x23 | 0x27 => Ok(Unit::Days),
+                0x28..=0x2F => Ok(Unit::Watt),
+                0x30..=0x37 => Ok(Unit::JoulPerHour),
+                0x38..=0x3F => Ok(Unit::CubicMeterPerHour),
+                0x40..=0x47 => Ok(Unit::CubicMeterPerMinute),
+                0x48..=0x4F => Ok(Unit::CubicMeterPerSecond),
+                0x50..=0x57 => Ok(Unit::KilogramPerHour),
+                0x58..=0x5F | 0x64..=0x67 => Ok(Unit::Celsius),
+                0x60..=0x63 => Ok(Unit::Kelvin),
+                0x68..=0x6B => Ok(Unit::Bar),
+                0x6C..=0x6D => Ok(Unit::TimePoint),
+                0x74..=0x77 => Ok(Unit::ActualityDuration),
+                0x78 => Ok(Unit::FabricationNumber),
+                x => todo!("Implement the rest of the units: {:?}", x),
+            },
+            ValueInformationCoding::PlainText => Ok(Unit::PlainText),
+            _ => todo!(
+                "Implement the rest of the units: {:?}",
+                value_information_block
+            ),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -59,21 +123,9 @@ pub enum ValueInformationError {
     InvalidValueInformation,
 }
 
-impl TryFrom<u8> for ValueInformation {
-    type Error = ValueInformationError;
-
-    fn try_from(data: u8) -> Result<Self, ValueInformationError> {
-        Ok(match data {
-            0x00..=0x7B | 0x80..=0xFA => ValueInformation::Primary(data),
-            0x7C | 0xFC => ValueInformation::PlainText(data == 0xFC),
-            0xFD => ValueInformation::Extended(false),
-            0xFB => ValueInformation::Extended(true),
-            0x7E => ValueInformation::Any(false),
-            0xFE => ValueInformation::Any(true),
-            0x7F => ValueInformation::ManufacturerSpecific(false),
-            0xFF => ValueInformation::ManufacturerSpecific(true),
-            _ => unreachable!("Invalid value information: {:X}", data),
-        })
+impl From<u8> for ValueInformation {
+    fn from(data: u8) -> Self {
+        ValueInformation { data }
     }
 }
 
@@ -196,42 +248,6 @@ pub enum Unit {
     PlainText,
 }
 
-impl TryFrom<&ValueInformationBlock> for Unit {
-    type Error = ValueInformationError;
-
-    fn try_from(
-        value_information_block: &ValueInformationBlock,
-    ) -> Result<Self, ValueInformationError> {
-        match value_information_block.value_information {
-            ValueInformation::Primary(data) => match data & 0x7F {
-                0x00..=0x07 => Ok(Unit::WattHour),
-                0x08..=0x0F => Ok(Unit::Joul),
-                0x10..=0x17 => Ok(Unit::CubicMeter),
-                0x18..=0x1F => Ok(Unit::Kilogram),
-                0x20 | 0x24 => Ok(Unit::Seconds),
-                0x21 | 0x25 => Ok(Unit::Minutes),
-                0x22 | 0x26 => Ok(Unit::Hours),
-                0x23 | 0x27 => Ok(Unit::Days),
-                0x28..=0x2F => Ok(Unit::Watt),
-                0x30..=0x37 => Ok(Unit::JoulPerHour),
-                0x38..=0x3F => Ok(Unit::CubicMeterPerHour),
-                0x40..=0x47 => Ok(Unit::CubicMeterPerMinute),
-                0x48..=0x4F => Ok(Unit::CubicMeterPerSecond),
-                0x50..=0x57 => Ok(Unit::KilogramPerHour),
-                0x58..=0x5F | 0x64..=0x67 => Ok(Unit::Celsius),
-                0x60..=0x63 => Ok(Unit::Kelvin),
-                0x68..=0x6B => Ok(Unit::Bar),
-                0x6C..=0x6D => Ok(Unit::TimePoint),
-                0x74..=0x77 => Ok(Unit::ActualityDuration),
-                0x78 => Ok(Unit::FabricationNumber),
-                _ => todo!("Implement the rest of the units: {:?}", data),
-            },
-            ValueInformation::PlainText(_) => Ok(Unit::PlainText),
-            _ => Err(ValueInformationError::InvalidValueInformation),
-        }
-    }
-}
-
 mod tests {
     use crate::user_data::value_information::ValueInformationBlock;
 
@@ -246,12 +262,12 @@ mod tests {
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::Primary(0x13),
+                value_information: ValueInformation::from(0x13),
                 value_information_extension: None
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
+        assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
 
         /* VIF = 0x14 => m3^-3*1e-2 */
         let data = [0x14];
@@ -259,12 +275,12 @@ mod tests {
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::Primary(0x14),
+                value_information: ValueInformation::from(0x14),
                 value_information_extension: None
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
+        assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
 
         /* VIF = 0x15 => m3^3*1e-2 */
 
@@ -273,12 +289,12 @@ mod tests {
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::Primary(0x15),
+                value_information: ValueInformation::from(0x15),
                 value_information_extension: None
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(Unit::try_from(&result).unwrap(), Unit::CubicMeter);
+        assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
 
         /* VIF = 0x16 => m3^-3*1e-1 */
         let data = [0x16];
@@ -286,7 +302,7 @@ mod tests {
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::Primary(0x16),
+                value_information: ValueInformation::from(0x16),
                 value_information_extension: None
             }
         );
