@@ -4,6 +4,11 @@ This docuement is new, so its much appreciated, if you ask question or give feed
 
 This document aims to provide a guideline for people wanting to contribute to the project. It does not aim to describe the project, please see the README.md for this. 
 
+# Playful start
+
+
+Before diving into the code a good starting point for understanding what the project is about and what one of the use cases is, you can play with the (live decode in javascript called tmbus)[https://dev-lab.github.io/tmbus/tmbus.htm]. This will provide a good intuition for what the project is about. Go to the folder `tests/rscada/test-frames` and copy the hex string into the input field of the tmbus website. See what the expected output is. Try to undestand the output. Change the input and see how the output changes. Note, becasue there is a check sum changing the input manually is not trivial and requires calculating the right checksum for the frame.
+
 # Conduct
 
 Code of conduct is taken form the [rust project code of conduct](https://www.rust-lang.org/policies/code-of-conduct).

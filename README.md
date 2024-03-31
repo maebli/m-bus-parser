@@ -6,18 +6,23 @@
 
 ### Introduction 
 
+** For contributing see [CONTRIBUTING.md](./CONTRIBUTING.md) **
+
 m-bus-parser is an open source parser (sometimes also refered to as decoder and/or deserializer) of **wired** m-bus portocol and is written in rust. 
 
 "M-Bus or Meter-Bus is a European standard (EN 13757-2 physical and link layer, EN 13757-3 application layer) for the remote reading of water, gas or electricity meters. M-Bus is also usable for other types of consumption meters, such as heating systems or water meters. The M-Bus interface is made for communication on two wires, making it cost-effective." - [Wikipedia](https://en.wikipedia.org/wiki/Meter-Bus)
 
-An outdated specification is available freely on the [m-bus website](https://m-bus.com/documentation). This document is a good starting point for understanding the protocol. There have been many other implementations of the specification.
+An outdated specification is available freely on the [m-bus website](https://m-bus.com/documentation). This document is a good starting point for understanding the protocol. There have been many other implementations of the specification. 
 
+Furthermore, the Open Metering System (OMS) Group has published a specification for the m-bus protocol. This specification is available for free on the [OMS website](https://www.oms-group.org/en/) or more specificially [here](https://oms-group.org/en/open-metering-system/oms-specification).
 
 
  such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in **c**, [jMbus](https://github.com/qvest-digital/jmbus) written in **java**,[Valley.Net.Protocols.MeterBus](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/) written in **C#**, [tmbus](https://dev-lab.github.io/tmbus/) written in javascript or [pyMeterBus](https://github.com/ganehag/pyMeterBus) written in python.
 
 
 ### Visualization of Library Function
+
+Do not get confused about the different types of frame types. The most important one to understand at first is the `LongFrame` which is the most common frame type. The others are for example for searching for a slave or for setting the primary address of a slave. This is not of primary intrest for most users. Visualization was made with the help of the tool [excalidraw](https://excalidraw.com/).
 
 ![](./resources/function.png)
 
