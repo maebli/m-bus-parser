@@ -9,8 +9,8 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
         let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
         let mut i = 1;
-        while i < data.len() {
-            //vife.push(ValueInformationFieldExtension::try_from(data[i]));
+        while (data[i] & 0x80) != 0 && i < data.len() {
+            vife.push(ValueInformationFieldExtension::try_from(data[i])?);
             i += 1;
         }
         Ok(ValueInformationBlock {
@@ -27,8 +27,10 @@ struct ValueInformationBlock {
 }
 
 #[derive(Debug, PartialEq)]
-struct ValueInformationFieldExtension {
-    vife: u8,
+enum ValueInformationFieldExtension {
+    MainVIFCodeExtension(u8),
+    AlternateVIFCodeExtension(u8),
+    OrthogonalVIFECodeExtension(u8),
 }
 
 impl ValueInformationBlock {
@@ -45,7 +47,9 @@ impl ValueInformationBlock {
 pub enum ValueInformation {
     Primary(u8),
     PlainText(bool),
-    Extended(bool),
+    FirstVIFExtension,
+    SecondVIFExtension,
+    ThidVIFExtension,
     Any(bool),
     ManufacturerSpecific(bool),
 }
