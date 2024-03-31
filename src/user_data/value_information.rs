@@ -7,10 +7,17 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     type Error = ValueInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
-        let mut vife = ArrayVec::<ValueInformationFieldExtensionCoding, MAX_VIFE_RECORDS>::new();
-        let vif = ValueInformation::from(data[0]);
+        let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
+        let vif = ValueInformationField::from(data[0]);
 
-        let mut i = 1;
+        if vif.has_extension() {
+            let mut offset = 1;
+            while offset < data.len() && vife.last().unwrap().has_extension() {
+                let vife_data = data[offset];
+                vife.push(ValueInformationFieldExtension { data: vife_data });
+                offset += 1;
+            }
+        }
         Ok(ValueInformationBlock {
             value_information: vif,
             value_information_extension: if vife.is_empty() { None } else { Some(vife) },
@@ -20,18 +27,23 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
 
 #[derive(Debug, PartialEq)]
 pub struct ValueInformationBlock {
-    pub value_information: ValueInformation,
+    pub value_information: ValueInformationField,
     pub value_information_extension:
-        Option<ArrayVec<ValueInformationFieldExtensionCoding, MAX_VIFE_RECORDS>>,
+        Option<ArrayVec<ValueInformationFieldExtension, MAX_VIFE_RECORDS>>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ValueInformation {
+pub struct ValueInformationField {
     pub data: u8,
 }
 
-impl From<&ValueInformation> for ValueInformationCoding {
-    fn from(value_information: &ValueInformation) -> Self {
+#[derive(Debug, PartialEq)]
+pub struct ValueInformationFieldExtension {
+    pub data: u8,
+}
+
+impl From<&ValueInformationField> for ValueInformationCoding {
+    fn from(value_information: &ValueInformationField) -> Self {
         match value_information.data {
             0x00..=0x7B | 0x80..=0xFA => ValueInformationCoding::Primary,
             0x7C | 0xFC => ValueInformationCoding::PlainText,
@@ -46,7 +58,13 @@ impl From<&ValueInformation> for ValueInformationCoding {
     }
 }
 
-impl ValueInformation {
+impl ValueInformationField {
+    fn has_extension(&self) -> bool {
+        self.data & 0x80 != 0
+    }
+}
+
+impl ValueInformationFieldExtension {
     fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
@@ -123,9 +141,9 @@ pub enum ValueInformationError {
     InvalidValueInformation,
 }
 
-impl From<u8> for ValueInformation {
+impl From<u8> for ValueInformationField {
     fn from(data: u8) -> Self {
-        ValueInformation { data }
+        ValueInformationField { data }
     }
 }
 
@@ -254,55 +272,55 @@ mod tests {
     #[test]
     fn test_value_information_parsing() {
         use crate::user_data::value_information::Unit;
-        use crate::user_data::value_information::{ValueInformation, ValueInformationBlock};
+        use crate::user_data::value_information::{ValueInformationBlock, ValueInformationField};
 
-        /* VIF = 0x13 => m3^3*1e-3 */
+        /* VIB = 0x13 => m3^3*1e-3 */
         let data = [0x13];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::from(0x13),
+                value_information: ValueInformationField::from(0x13),
                 value_information_extension: None
             }
         );
         assert_eq!(result.get_size(), 1);
         assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
 
-        /* VIF = 0x14 => m3^-3*1e-2 */
+        /* VIB = 0x14 => m3^-3*1e-2 */
         let data = [0x14];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::from(0x14),
+                value_information: ValueInformationField::from(0x14),
                 value_information_extension: None
             }
         );
         assert_eq!(result.get_size(), 1);
         assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
 
-        /* VIF = 0x15 => m3^3*1e-2 */
+        /* VIB = 0x15 => m3^3*1e-2 */
 
         let data = [0x15];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::from(0x15),
+                value_information: ValueInformationField::from(0x15),
                 value_information_extension: None
             }
         );
         assert_eq!(result.get_size(), 1);
         assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
 
-        /* VIF = 0x16 => m3^-3*1e-1 */
+        /* VIB = 0x16 => m3^-3*1e-1 */
         let data = [0x16];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(
             result,
             ValueInformationBlock {
-                value_information: ValueInformation::from(0x16),
+                value_information: ValueInformationField::from(0x16),
                 value_information_extension: None
             }
         );

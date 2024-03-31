@@ -1,7 +1,7 @@
 use super::data_information::FunctionField;
 use super::data_information::{self};
 use super::value_information::{
-    self, Unit, ValueInformation, ValueInformationBlock, ValueInformationCoding,
+    self, Unit, ValueInformationBlock, ValueInformationCoding, ValueInformationField,
 };
 use super::DataRecords;
 
@@ -53,8 +53,8 @@ impl From<ValueInformationBlock> for Quantity {
     }
 }
 
-impl From<ValueInformation> for Exponent {
-    fn from(value_information_block: ValueInformation) -> Exponent {
+impl From<ValueInformationField> for Exponent {
+    fn from(value_information_block: ValueInformationField) -> Exponent {
         match ValueInformationCoding::from(&value_information_block) {
             ValueInformationCoding::Primary => match value_information_block.data & 0x7F {
                 0..=7 | 0x18..=0x1F | 0x28..=0x2F | 0x50..=0x57 => {
