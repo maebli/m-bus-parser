@@ -1,6 +1,5 @@
 use arrayvec::ArrayVec;
 
-const MAX_PLAIN_TEXT_VIF_SIZE: usize = 10;
 const MAX_VIFE_RECORDS: usize = 10;
 
 impl TryFrom<&[u8]> for ValueInformationBlock {
@@ -14,10 +13,26 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
             let mut offset = 1;
             while offset < data.len() {
                 let vife_data = data[offset];
-                vife.push(ValueInformationFieldExtension { data: vife_data });
+                let current_vife = ValueInformationFieldExtension {
+                    data: vife_data,
+                    coding: match (offset, vife_data) {
+                        (0, 0xFB) => ValueInformationFieldExtensionCoding::MainVIFCodeExtension,
+                        (0, 0xFC) => {
+                            ValueInformationFieldExtensionCoding::AlternateVIFCodeExtension
+                        }
+                        (0, 0xEF) => {
+                            ValueInformationFieldExtensionCoding::ReservedAlternateVIFCodeExtension
+                        }
+                        _ => ValueInformationFieldExtensionCoding::ComninableOrthogonalVIFECodeExtension,
+                    },
+                };
+                vife.push(current_vife);
                 offset += 1;
                 if !vife.last().unwrap().has_extension() {
                     break;
+                }
+                if vife.len() > MAX_VIFE_RECORDS {
+                    return Err(ValueInformationError::InvalidValueInformation);
                 }
             }
         }
@@ -43,6 +58,7 @@ pub struct ValueInformationField {
 #[derive(Debug, PartialEq)]
 pub struct ValueInformationFieldExtension {
     pub data: u8,
+    pub coding: ValueInformationFieldExtensionCoding,
 }
 
 impl From<&ValueInformationField> for ValueInformationCoding {
@@ -83,10 +99,11 @@ pub enum ValueInformationCoding {
 }
 
 #[derive(Debug, PartialEq)]
-enum ValueInformationFieldExtensionCoding {
+pub enum ValueInformationFieldExtensionCoding {
     MainVIFCodeExtension,
     AlternateVIFCodeExtension,
-    OrthogonalVIFECodeExtension,
+    ReservedAlternateVIFCodeExtension,
+    ComninableOrthogonalVIFECodeExtension,
 }
 
 impl ValueInformationBlock {
@@ -270,10 +287,9 @@ pub enum Unit {
 }
 
 mod tests {
-    use crate::user_data::value_information::ValueInformationBlock;
 
     #[test]
-    fn test_value_information_parsing() {
+    fn test_single_byte_primary_value_information_parsing() {
         use crate::user_data::value_information::Unit;
         use crate::user_data::value_information::{ValueInformationBlock, ValueInformationField};
 
@@ -304,7 +320,6 @@ mod tests {
         assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
 
         /* VIB = 0x15 => m3^3*1e-2 */
-
         let data = [0x15];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(
@@ -331,7 +346,40 @@ mod tests {
     }
 
     #[test]
+    fn test_multibyte_primary_value_information() {
+        use crate::user_data::value_information::ValueInformationBlock;
+        /* 1 VIF, 1 - 10 orthogonal VIFE */
+
+        /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
+        /* VIFE 0x12 => Combinable Orthogonal VIFE meaning "averaged" */
+        /* VIB = 0x96, 0x12 */
+        let data = [0x96, 0x12];
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(result.get_size(), 2);
+
+        /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
+        /* VIFE 0x92 = 0x12 | 0x80  => Combinable Orthogonal VIFE meaning "averaged" with extension */
+        /* VIFE 0x20 => Combinable Orthogonal VIFE meaning "per second" */
+        /* VIB = 0x96, 0x92,0x20 */
+
+        let data = [0x96, 0x92, 0x20];
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(result.get_size(), 3);
+
+        /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
+        /* VIFE 0x92 = 0x12 | 0x80  => Combinable Orthogonal VIFE meaning "averaged" with extension */
+        /* VIFE 0xA0= 0x20 | 0x80 => Combinable Orthogonal VIFE meaning "per second" */
+        /* VIFE 0x2D => Combinable Orthogonal VIFE meaning "per m3". This cancels out the ViF m3, which is useless
+        but till a valid VIB */
+        /* VIB = 0x96, 0x92,0xA0, 0x2D */
+        let data = [0x96, 0x92, 0xA0, 0x2D];
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(result.get_size(), 4);
+    }
+
+    #[test]
     fn test_plain_text_vif_norm_conform() {
+        use crate::user_data::value_information::{Unit, ValueInformationBlock};
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
         // 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25,
@@ -344,25 +392,16 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information.data, 0xFC);
-        assert_eq!(result.value_information_extension.unwrap()[0].data, 0x74);
-    }
+        assert_eq!(Unit::try_from(result).unwrap(), Unit::PlainText);
 
-    fn _test_plain_text_vif_common_none_norm_conform() {
-        use arrayvec::ArrayVec;
         // This is how the VIF is encoded in the test vectors
-        // It is however none norm conform, see the next example which follows
-        // the MBUS Norm which explicitly states that the VIIFE should be after the VIF
-        // not aftter the ASCII plain text and its size
         // VIF  LEN(3) 'R'   'H'  '%'    VIFE
         // 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74,
         // %RH
         // VIFE = 0x74 => E111 0nnn Multiplicative correction factor for value (not unit): 10nnn–6 => 10^-2
         // when not following the norm the LEN and ASCII is part of the VIB
-        let data = [0xFC, 0x03, 0x48, 0x52, 0x25, 0x74];
-        let mut a = ArrayVec::<u8, 10>::new();
-        a.try_extend_from_slice(&data[2..5]).unwrap();
-        a.reverse();
-        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result.get_size(), 6);
+        // It is however none norm conform, see the next example which follows
+        // the MBUS Norm which explicitly states that the VIIFE should be after the VIF
+        // not aftter the ASCII plain text and its size
     }
 }
