@@ -116,43 +116,66 @@ impl ValueInformationBlock {
     }
 }
 
-impl TryFrom<ValueInformationBlock> for Unit {
+impl TryFrom<ValueInformationBlock> for ValueInformation {
     type Error = ValueInformationError;
 
     fn try_from(
         value_information_block: ValueInformationBlock,
     ) -> Result<Self, ValueInformationError> {
+        let mut units = ArrayVec::<Unit, 10>::new();
+
         match ValueInformationCoding::from(&value_information_block.value_information) {
-            ValueInformationCoding::Primary => match value_information_block.value_information.data
-            {
-                0x00..=0x07 => Ok(Unit::WattHour),
-                0x08..=0x0F => Ok(Unit::Joul),
-                0x10..=0x17 => Ok(Unit::CubicMeter),
-                0x18..=0x1F => Ok(Unit::Kilogram),
-                0x20 | 0x24 => Ok(Unit::Seconds),
-                0x21 | 0x25 => Ok(Unit::Minutes),
-                0x22 | 0x26 => Ok(Unit::Hours),
-                0x23 | 0x27 => Ok(Unit::Days),
-                0x28..=0x2F => Ok(Unit::Watt),
-                0x30..=0x37 => Ok(Unit::JoulPerHour),
-                0x38..=0x3F => Ok(Unit::CubicMeterPerHour),
-                0x40..=0x47 => Ok(Unit::CubicMeterPerMinute),
-                0x48..=0x4F => Ok(Unit::CubicMeterPerSecond),
-                0x50..=0x57 => Ok(Unit::KilogramPerHour),
-                0x58..=0x5F | 0x64..=0x67 => Ok(Unit::Celsius),
-                0x60..=0x63 => Ok(Unit::Kelvin),
-                0x68..=0x6B => Ok(Unit::Bar),
-                0x6C..=0x6D => Ok(Unit::TimePoint),
-                0x74..=0x77 => Ok(Unit::ActualityDuration),
-                0x78 => Ok(Unit::FabricationNumber),
-                x => todo!("Implement the rest of the units: {:?}", x),
-            },
-            ValueInformationCoding::PlainText => Ok(Unit::PlainText),
+            ValueInformationCoding::Primary => {
+                let u = match value_information_block.value_information.data {
+                    0x00..=0x07 => Unit::WattHour,
+                    0x08..=0x0F => Unit::Joul,
+                    0x10..=0x17 => Unit::CubicMeter,
+                    0x18..=0x1F => Unit::Kilogram,
+                    0x20 | 0x24 => Unit::Seconds,
+                    0x21 | 0x25 => Unit::Minutes,
+                    0x22 | 0x26 => Unit::Hours,
+                    0x23 | 0x27 => Unit::Days,
+                    0x28..=0x2F => Unit::Watt,
+                    0x30..=0x37 => Unit::JoulPerHour,
+                    0x38..=0x3F => Unit::CubicMeterPerHour,
+                    0x40..=0x47 => Unit::CubicMeterPerMinute,
+                    0x48..=0x4F => Unit::CubicMeterPerSecond,
+                    0x50..=0x57 => Unit::KilogramPerHour,
+                    0x58..=0x5F | 0x64..=0x67 => Unit::Celsius,
+                    0x60..=0x63 => Unit::Kelvin,
+                    0x68..=0x6B => Unit::Bar,
+                    0x6C..=0x6D => Unit::TimePoint,
+                    0x74..=0x77 => Unit::ActualityDuration,
+                    0x78 => Unit::FabricationNumber,
+                    x => todo!("Implement the rest of the units: {:?}", x),
+                };
+                /* consume orthogonal vife */
+                units.push(u);
+                while let Some(vife) = value_information_block.value_information_extension.as_ref()
+                {
+                    for v in vife {
+                        let u = match v.data & 0x7F {
+                            0x12 => Unit::Average,
+                            _ => todo!("Implement the rest of the units: {:?}", v),
+                        };
+                        units.push(u);
+                    }
+                }
+            }
+            ValueInformationCoding::PlainText => {
+                units.push(Unit::PlainText);
+            }
             _ => todo!(
                 "Implement the rest of the units: {:?}",
                 value_information_block
             ),
         }
+
+        Ok(ValueInformation {
+            offset: 0,
+            multiplier: 0,
+            units,
+        })
     }
 }
 
@@ -241,6 +264,16 @@ pub enum VIFExtension {
     CumulativeCountMaxPower(u8),
 }
 
+/// This is the most important type of the this file and represents
+/// the whole information inside the value information block
+/// value(x) = (multiplier * value + offset) * units
+#[derive(Debug, PartialEq)]
+pub struct ValueInformation {
+    pub offset: usize,
+    pub multiplier: usize,
+    pub units: ArrayVec<Unit, 10>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Unit {
     HourMinuteSecond,
@@ -284,9 +317,39 @@ pub enum Unit {
     FabricationNumber,
     MegaWatt,
     PlainText,
+    Average,
+    InverseCompactProfile,
+    RelativeDeviation,
+    RecordErrorCodes,
+    StandardConformDataContent,
+    CompactProfileWithRegisterNumbers,
+    CompactProfile,
+    PerSecond,
+    PerMinute,
+    PerHour,
+    PerDay,
+    PerWeek,
+    PerMonth,
+    PerYear,
+    PerRevolutionOrMeasurement,
+    IncrementPerInputPulseOnChannelP,
+    IncrementPerOutputPulseOnChannelP,
+    PerLiter,
+    PerCubicMeter,
+    PerKiloGram,
+    PerKelvin,
+    PerKiloWattHour,
+    PerGigaJoul,
+    PerKiloWatt,
+    PerKelvinLiter,
+    PerVolt,
+    PerAmpere,
 }
 
 mod tests {
+    use arrayvec::ArrayVec;
+
+    use crate::user_data::value_information::ValueInformation;
 
     #[test]
     fn test_single_byte_primary_value_information_parsing() {
@@ -304,7 +367,18 @@ mod tests {
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
+        assert_eq!(
+            ValueInformation::try_from(result).unwrap(),
+            ValueInformation {
+                offset: 0,
+                multiplier: 0,
+                units: {
+                    let mut x = ArrayVec::<Unit, 10>::new();
+                    x.push(Unit::CubicMeter);
+                    x
+                }
+            }
+        );
 
         /* VIB = 0x14 => m3^-3*1e-2 */
         let data = [0x14];
@@ -317,7 +391,18 @@ mod tests {
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
+        assert_eq!(
+            ValueInformation::try_from(result).unwrap(),
+            ValueInformation {
+                offset: 0,
+                multiplier: 0,
+                units: {
+                    let mut x = ArrayVec::<Unit, 10>::new();
+                    x.push(Unit::CubicMeter);
+                    x
+                }
+            }
+        );
 
         /* VIB = 0x15 => m3^3*1e-2 */
         let data = [0x15];
@@ -330,7 +415,18 @@ mod tests {
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(Unit::try_from(result).unwrap(), Unit::CubicMeter);
+        assert_eq!(
+            ValueInformation::try_from(result).unwrap(),
+            ValueInformation {
+                offset: 0,
+                multiplier: 0,
+                units: {
+                    let mut x = ArrayVec::<Unit, 10>::new();
+                    x.push(Unit::CubicMeter);
+                    x
+                }
+            }
+        );
 
         /* VIB = 0x16 => m3^-3*1e-1 */
         let data = [0x16];
@@ -392,7 +488,18 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information.data, 0xFC);
-        assert_eq!(Unit::try_from(result).unwrap(), Unit::PlainText);
+        assert_eq!(
+            ValueInformation::try_from(result).unwrap(),
+            ValueInformation {
+                offset: 0,
+                multiplier: 0,
+                units: {
+                    let mut x = ArrayVec::<Unit, 10>::new();
+                    x.push(Unit::PlainText);
+                    x
+                }
+            }
+        );
 
         // This is how the VIF is encoded in the test vectors
         // VIF  LEN(3) 'R'   'H'  '%'    VIFE
