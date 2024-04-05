@@ -257,7 +257,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
 
         Ok(ValueInformation {
             offset: 0,
-            multiplier: 0,
+            decimal_scale_exponent: 0,
             units,
             labels,
         })
@@ -356,7 +356,7 @@ pub enum VIFExtension {
 pub struct ValueInformation {
     pub offset: usize,
     pub labels: ArrayVec<ValueLabel, 10>,
-    pub multiplier: usize,
+    pub decimal_scale_exponent: isize,
     pub units: ArrayVec<Unit, 10>,
 }
 
@@ -382,7 +382,7 @@ pub enum ValueLabel {
     HourMinuteSecond,
     DayMonthYear,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
     pub name: UnitName,
     pub exponent: i32,
@@ -434,17 +434,20 @@ mod tests {
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
                 offset: 0,
-                multiplier: 0,
+                decimal_scale_exponent: -3,
                 units: {
-                    letmutx = ArrayVec::<UnitName, 10>::new();
+                    let mut x = ArrayVec::<Unit, 10>::new();
                     x.push(Unit {
                         name: UnitName::Meter,
                         exponent: 3,
                     });
                     x
                 },
-                value_type: ValueLabel::Instantaneous,
-                labels: todo!()
+                labels: {
+                    let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Instantaneous);
+                    x
+                }
             }
         );
 
@@ -463,13 +466,20 @@ mod tests {
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
                 offset: 0,
-                multiplier: 0,
+                decimal_scale_exponent: -2,
                 units: {
-                    let mut x = ArrayVec::<UnitName, 10>::new();
-                    x.push(UnitName::CubicMeter);
+                    let mut x = ArrayVec::<Unit, 10>::new();
+                    x.push(Unit {
+                        name: UnitName::Meter,
+                        exponent: 3,
+                    });
                     x
                 },
-                value_type: ValueLabel::Instantaneous,
+                labels: {
+                    let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Instantaneous);
+                    x
+                }
             }
         );
 
@@ -488,13 +498,20 @@ mod tests {
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
                 offset: 0,
-                multiplier: 0,
+                decimal_scale_exponent: -2,
                 units: {
-                    let mut x = ArrayVec::<UnitName, 10>::new();
-                    x.push(UnitName::CubicMeter);
+                    let mut x = ArrayVec::<Unit, 10>::new();
+                    x.push(Unit {
+                        name: UnitName::Meter,
+                        exponent: 3,
+                    });
                     x
                 },
-                value_type: ValueLabel::Instantaneous,
+                labels: {
+                    let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Instantaneous);
+                    x
+                }
             }
         );
 
@@ -523,10 +540,11 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
-        assert_eq!(
-            ValueInformation::try_from(result).unwrap().value_type,
-            ValueLabel::Averaged
-        );
+        assert_eq!(ValueInformation::try_from(result).unwrap().labels, {
+            let mut x = ArrayVec::<ValueLabel, 10>::new();
+            x.push(ValueLabel::Averaged);
+            x
+        });
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
         /* VIFE 0x92 = 0x12 | 0x80  => Combinable Orthogonal VIFE meaning "averaged" with extension */
@@ -537,10 +555,11 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 3);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
-        assert_eq!(
-            ValueInformation::try_from(result).unwrap().value_type,
-            ValueLabel::Averaged
-        );
+        assert_eq!(ValueInformation::try_from(result).unwrap().labels, {
+            let mut x = ArrayVec::<ValueLabel, 10>::new();
+            x.push(ValueLabel::Averaged);
+            x
+        });
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
         /* VIFE 0x92 = 0x12 | 0x80  => Combinable Orthogonal VIFE meaning "averaged" with extension */
@@ -552,10 +571,11 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 4);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
-        assert_eq!(
-            ValueInformation::try_from(result).unwrap().value_type,
-            ValueLabel::Averaged
-        );
+        assert_eq!(ValueInformation::try_from(result).unwrap().labels, {
+            let mut x = ArrayVec::<ValueLabel, 10>::new();
+            x.push(ValueLabel::Averaged);
+            x
+        });
     }
 
     #[test]
@@ -577,13 +597,16 @@ mod tests {
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
                 offset: 0,
-                multiplier: 0,
+                decimal_scale_exponent: 0,
                 units: {
-                    let mut x = ArrayVec::<UnitName, 10>::new();
-                    x.push(UnitName::PlainText);
+                    let mut x = ArrayVec::<Unit, 10>::new();
                     x
                 },
-                value_type: ValueLabel::Instantaneous,
+                labels: {
+                    let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::PlainText);
+                    x
+                }
             }
         );
 

@@ -1,7 +1,7 @@
 use super::data_information::FunctionField;
 use super::data_information::{self};
 use super::value_information::{
-    UnitName, ValueInformationBlock, ValueInformationCoding, ValueInformationField,
+    Unit, UnitName, ValueInformationBlock, ValueInformationCoding, ValueInformationField,
 };
 use super::DataRecords;
 
@@ -9,7 +9,7 @@ use super::DataRecords;
 pub struct DataRecord {
     pub function: FunctionField,
     pub storage_number: u64,
-    pub unit: UnitName,
+    pub unit: Unit,
     pub exponent: Exponent,
     pub quantity: Quantity,
     pub value: f64,
@@ -121,7 +121,10 @@ impl TryFrom<&[u8]> for DataRecord {
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let function = FunctionField::InstantaneousValue;
         let value = 0.0;
-        let unit = UnitName::ActualityDuration;
+        let unit = Unit {
+            name: UnitName::Meter,
+            exponent: 0,
+        };
         let exponent = Exponent { inner: None };
         let quantity = Quantity::AveragingDuration;
         Ok(DataRecord {
@@ -181,13 +184,14 @@ impl TryFrom<&[u8]> for DataRecords {
 }
 
 mod tests {
+    use crate::user_data::value_information::UnitName;
 
     #[test]
     fn test_parse_variable_data() {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
             data_information::FunctionField,
-            variable_user_data::{Quantity, UnitName},
+            variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
@@ -200,7 +204,10 @@ mod tests {
             Some(&DataRecord {
                 function: FunctionField::InstantaneousValue,
                 storage_number: 0,
-                unit: UnitName::CubicMeter,
+                unit: Unit {
+                    name: UnitName::Meter,
+                    exponent: 0
+                },
                 exponent: Exponent::from(-3),
                 quantity: Quantity::Volume,
                 value: 12565.0,
@@ -214,7 +221,7 @@ mod tests {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
             data_information::FunctionField,
-            variable_user_data::{Quantity, UnitName},
+            variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
         /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
@@ -226,7 +233,10 @@ mod tests {
             Some(&DataRecord {
                 function: FunctionField::InstantaneousValue,
                 storage_number: 0,
-                unit: UnitName::WithoutUnits,
+                unit: Unit {
+                    name: UnitName::Meter,
+                    exponent: 0
+                },
                 exponent: Exponent { inner: None },
                 quantity: Quantity::BinaryDigitalInput,
                 value: 0.0,
@@ -241,7 +251,7 @@ mod tests {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
             data_information::FunctionField,
-            variable_user_data::{Quantity, UnitName},
+            variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
@@ -253,7 +263,10 @@ mod tests {
             Some(&DataRecord {
                 function: FunctionField::InstantaneousValue,
                 storage_number: 0,
-                unit: UnitName::PlainText,
+                unit: Unit {
+                    name: UnitName::Meter,
+                    exponent: 0
+                },
                 exponent: Exponent::from(-2),
                 quantity: Quantity::PlainText,
                 value: 33.96,
