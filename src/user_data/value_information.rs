@@ -123,47 +123,131 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
         value_information_block: ValueInformationBlock,
     ) -> Result<Self, ValueInformationError> {
         let mut units = ArrayVec::<Unit, 10>::new();
-
+        let mut labels = ArrayVec::<ValueLabel, 10>::new();
         match ValueInformationCoding::from(&value_information_block.value_information) {
             ValueInformationCoding::Primary => {
-                let u = match value_information_block.value_information.data {
-                    0x00..=0x07 => Unit::WattHour,
-                    0x08..=0x0F => Unit::Joul,
-                    0x10..=0x17 => Unit::CubicMeter,
-                    0x18..=0x1F => Unit::Kilogram,
-                    0x20 | 0x24 => Unit::Seconds,
-                    0x21 | 0x25 => Unit::Minutes,
-                    0x22 | 0x26 => Unit::Hours,
-                    0x23 | 0x27 => Unit::Days,
-                    0x28..=0x2F => Unit::Watt,
-                    0x30..=0x37 => Unit::JoulPerHour,
-                    0x38..=0x3F => Unit::CubicMeterPerHour,
-                    0x40..=0x47 => Unit::CubicMeterPerMinute,
-                    0x48..=0x4F => Unit::CubicMeterPerSecond,
-                    0x50..=0x57 => Unit::KilogramPerHour,
-                    0x58..=0x5F | 0x64..=0x67 => Unit::Celsius,
-                    0x60..=0x63 => Unit::Kelvin,
-                    0x68..=0x6B => Unit::Bar,
-                    0x6C..=0x6D => Unit::TimePoint,
-                    0x74..=0x77 => Unit::ActualityDuration,
-                    0x78 => Unit::FabricationNumber,
-                    x => todo!("Implement the rest of the units: {:?}", x),
+                match value_information_block.value_information.data & 0x7F {
+                    0x00..=0x07 => {
+                        units.push(Unit {
+                            name: UnitName::Watt,
+                            exponent: 1,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Watt,
+                            exponent: 1,
+                        });
+                    }
+                    0x08..=0x0F => units.push(Unit {
+                        name: UnitName::Joul,
+                        exponent: 1,
+                    }),
+                    0x10..=0x17 => units.push(Unit {
+                        name: UnitName::Meter,
+                        exponent: 3,
+                    }),
+                    0x18..=0x1F => units.push(Unit {
+                        name: UnitName::Kilogram,
+                        exponent: 1,
+                    }),
+                    0x20 | 0x24 => units.push(Unit {
+                        name: UnitName::Seconds,
+                        exponent: 1,
+                    }),
+                    0x21 | 0x25 => units.push(Unit {
+                        name: UnitName::Minutes,
+                        exponent: 1,
+                    }),
+                    0x22 | 0x26 => units.push(Unit {
+                        name: UnitName::Hours,
+                        exponent: 1,
+                    }),
+                    0x23 | 0x27 => units.push(Unit {
+                        name: UnitName::Days,
+                        exponent: 1,
+                    }),
+                    0x28..=0x2F => units.push(Unit {
+                        name: UnitName::Watt,
+                        exponent: 1,
+                    }),
+                    0x30..=0x37 => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Hours,
+                            exponent: -1,
+                        });
+                    }
+                    0x38..=0x3F => {
+                        units.push(Unit {
+                            name: UnitName::Meter,
+                            exponent: 3,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Hours,
+                            exponent: -1,
+                        });
+                    }
+                    0x40..=0x47 => {
+                        units.push(Unit {
+                            name: UnitName::Meter,
+                            exponent: 3,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Minutes,
+                            exponent: -1,
+                        });
+                    }
+                    0x48..=0x4F => {
+                        units.push(Unit {
+                            name: UnitName::Meter,
+                            exponent: 3,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Seconds,
+                            exponent: -1,
+                        });
+                    }
+                    0x50..=0x57 => {
+                        units.push(Unit {
+                            name: UnitName::Kilogram,
+                            exponent: 3,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Hours,
+                            exponent: -1,
+                        });
+                    }
+                    0x58..=0x5F | 0x64..=0x67 => units.push(Unit {
+                        name: UnitName::Celsius,
+                        exponent: 1,
+                    }),
+                    0x60..=0x63 => units.push(Unit {
+                        name: UnitName::Kelvin,
+                        exponent: 1,
+                    }),
+                    0x68..=0x6B => units.push(Unit {
+                        name: UnitName::Bar,
+                        exponent: 1,
+                    }),
+                    0x6C..=0x6D => labels.push(ValueLabel::TimePoint),
+                    0x74..=0x77 => labels.push(ValueLabel::ActualityDuration),
+                    0x78 => labels.push(ValueLabel::FabricationNumber),
+                    x => todo!("Implement the rest of the units: {:X?}", x),
                 };
                 /* consume orthogonal vife */
-                units.push(u);
-                while let Some(vife) = value_information_block.value_information_extension.as_ref()
-                {
+                if let Some(vife) = &value_information_block.value_information_extension {
                     for v in vife {
-                        let u = match v.data & 0x7F {
-                            0x12 => Unit::Average,
-                            _ => todo!("Implement the rest of the units: {:?}", v),
+                        match v.data & 0x7F {
+                            0x12 => labels.push(ValueLabel::Averaged),
+                            _ => todo!("Implement the rest of the units: {:X?}", v),
                         };
-                        units.push(u);
                     }
                 }
             }
             ValueInformationCoding::PlainText => {
-                units.push(Unit::PlainText);
+                labels.push(ValueLabel::PlainText);
             }
             _ => todo!(
                 "Implement the rest of the units: {:?}",
@@ -175,6 +259,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
             offset: 0,
             multiplier: 0,
             units,
+            labels,
         })
     }
 }
@@ -270,37 +355,45 @@ pub enum VIFExtension {
 #[derive(Debug, PartialEq)]
 pub struct ValueInformation {
     pub offset: usize,
+    pub labels: ArrayVec<ValueLabel, 10>,
     pub multiplier: usize,
     pub units: ArrayVec<Unit, 10>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Unit {
+#[derive(Debug, PartialEq)]
+pub enum ValueLabel {
+    Instantaneous,
+    Averaged,
+    Integral,
+    Parameter,
+    InverseCompactProfile,
+    RelativeDeviation,
+    RecoordErrorCodes,
+    StandardConformDataContent,
+    CompactProfileWithRegisterNumbers,
+    CompactProfile,
+    ActualityDuration,
+    TimePoint,
+    FabricationNumber,
+    PlainText,
+    RevolutionOrMeasurement,
+    IncrementPerInputPulseOnChannelP,
+    IncrementPerOutputPulseOnChannelP,
     HourMinuteSecond,
     DayMonthYear,
-    WattHour,
-    KiloWattHour,
-    MegaWattHour,
+}
+#[derive(Debug, PartialEq)]
+pub struct Unit {
+    pub name: UnitName,
+    pub exponent: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UnitName {
+    Watt,
     Joul,
     Kilogram,
-    KiloJoul,
-    MegaJoul,
-    GigaJoul,
-    Watt,
-    KiloWatt,
-    MegaWat,
-    KiloJoulHour,
-    MegaJoulHour,
-    GigaJoulHour,
-    MegaLiter,
-    Liter,
-    CubicMeter,
-    MegaLiterHour,
-    LiterHour,
-    CubicMeterPerHour,
-    CubicMeterPerMinute,
-    CubicMeterPerSecond,
-    KilogramPerHour,
+    Meter,
     Celsius,
     Kelvin,
     Bar,
@@ -311,49 +404,19 @@ pub enum Unit {
     Minutes,
     Hours,
     Days,
-    JoulPerHour,
-    ActualityDuration,
-    TimePoint,
-    FabricationNumber,
-    MegaWatt,
-    PlainText,
-    Average,
-    InverseCompactProfile,
-    RelativeDeviation,
-    RecordErrorCodes,
-    StandardConformDataContent,
-    CompactProfileWithRegisterNumbers,
-    CompactProfile,
-    PerSecond,
-    PerMinute,
-    PerHour,
-    PerDay,
-    PerWeek,
-    PerMonth,
-    PerYear,
-    PerRevolutionOrMeasurement,
-    IncrementPerInputPulseOnChannelP,
-    IncrementPerOutputPulseOnChannelP,
-    PerLiter,
-    PerCubicMeter,
-    PerKiloGram,
-    PerKelvin,
-    PerKiloWattHour,
-    PerGigaJoul,
-    PerKiloWatt,
-    PerKelvinLiter,
-    PerVolt,
-    PerAmpere,
 }
 
 mod tests {
+
     use arrayvec::ArrayVec;
 
-    use crate::user_data::value_information::ValueInformation;
+    use crate::user_data::value_information::{
+        Unit, ValueInformation, ValueInformationField, ValueLabel,
+    };
 
     #[test]
     fn test_single_byte_primary_value_information_parsing() {
-        use crate::user_data::value_information::Unit;
+        use crate::user_data::value_information::UnitName;
         use crate::user_data::value_information::{ValueInformationBlock, ValueInformationField};
 
         /* VIB = 0x13 => m3^3*1e-3 */
@@ -373,10 +436,15 @@ mod tests {
                 offset: 0,
                 multiplier: 0,
                 units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(Unit::CubicMeter);
+                    letmutx = ArrayVec::<UnitName, 10>::new();
+                    x.push(Unit {
+                        name: UnitName::Meter,
+                        exponent: 3,
+                    });
                     x
-                }
+                },
+                value_type: ValueLabel::Instantaneous,
+                labels: todo!()
             }
         );
 
@@ -397,10 +465,11 @@ mod tests {
                 offset: 0,
                 multiplier: 0,
                 units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(Unit::CubicMeter);
+                    let mut x = ArrayVec::<UnitName, 10>::new();
+                    x.push(UnitName::CubicMeter);
                     x
-                }
+                },
+                value_type: ValueLabel::Instantaneous,
             }
         );
 
@@ -421,10 +490,11 @@ mod tests {
                 offset: 0,
                 multiplier: 0,
                 units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(Unit::CubicMeter);
+                    let mut x = ArrayVec::<UnitName, 10>::new();
+                    x.push(UnitName::CubicMeter);
                     x
-                }
+                },
+                value_type: ValueLabel::Instantaneous,
             }
         );
 
@@ -436,7 +506,7 @@ mod tests {
             ValueInformationBlock {
                 value_information: ValueInformationField::from(0x16),
                 value_information_extension: None
-            }
+            },
         );
         assert_eq!(result.get_size(), 1);
     }
@@ -452,6 +522,11 @@ mod tests {
         let data = [0x96, 0x12];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
+        assert_eq!(result.value_information, ValueInformationField::from(0x96));
+        assert_eq!(
+            ValueInformation::try_from(result).unwrap().value_type,
+            ValueLabel::Averaged
+        );
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
         /* VIFE 0x92 = 0x12 | 0x80  => Combinable Orthogonal VIFE meaning "averaged" with extension */
@@ -461,21 +536,31 @@ mod tests {
         let data = [0x96, 0x92, 0x20];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 3);
+        assert_eq!(result.value_information, ValueInformationField::from(0x96));
+        assert_eq!(
+            ValueInformation::try_from(result).unwrap().value_type,
+            ValueLabel::Averaged
+        );
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
         /* VIFE 0x92 = 0x12 | 0x80  => Combinable Orthogonal VIFE meaning "averaged" with extension */
         /* VIFE 0xA0= 0x20 | 0x80 => Combinable Orthogonal VIFE meaning "per second" */
-        /* VIFE 0x2D => Combinable Orthogonal VIFE meaning "per m3". This cancels out the ViF m3, which is useless
+        /* VIFE 0x2D => Combinable Orthogonal VIFE meaning "per m3". This cancels out the VIF m3, which is useless
         but till a valid VIB */
         /* VIB = 0x96, 0x92,0xA0, 0x2D */
         let data = [0x96, 0x92, 0xA0, 0x2D];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 4);
+        assert_eq!(result.value_information, ValueInformationField::from(0x96));
+        assert_eq!(
+            ValueInformation::try_from(result).unwrap().value_type,
+            ValueLabel::Averaged
+        );
     }
 
     #[test]
     fn test_plain_text_vif_norm_conform() {
-        use crate::user_data::value_information::{Unit, ValueInformationBlock};
+        use crate::user_data::value_information::{UnitName, ValueInformationBlock};
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
         // 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25,
@@ -494,10 +579,11 @@ mod tests {
                 offset: 0,
                 multiplier: 0,
                 units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(Unit::PlainText);
+                    let mut x = ArrayVec::<UnitName, 10>::new();
+                    x.push(UnitName::PlainText);
                     x
-                }
+                },
+                value_type: ValueLabel::Instantaneous,
             }
         );
 
