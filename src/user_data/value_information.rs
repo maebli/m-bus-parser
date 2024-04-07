@@ -150,19 +150,19 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         exponent: 1,
                     }),
                     0x20 | 0x24 => units.push(Unit {
-                        name: UnitName::Seconds,
+                        name: UnitName::Second,
                         exponent: 1,
                     }),
                     0x21 | 0x25 => units.push(Unit {
-                        name: UnitName::Minutes,
+                        name: UnitName::Minute,
                         exponent: 1,
                     }),
                     0x22 | 0x26 => units.push(Unit {
-                        name: UnitName::Hours,
+                        name: UnitName::Hour,
                         exponent: 1,
                     }),
                     0x23 | 0x27 => units.push(Unit {
-                        name: UnitName::Days,
+                        name: UnitName::Day,
                         exponent: 1,
                     }),
                     0x28..=0x2F => units.push(Unit {
@@ -175,7 +175,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             exponent: 1,
                         });
                         units.push(Unit {
-                            name: UnitName::Hours,
+                            name: UnitName::Hour,
                             exponent: -1,
                         });
                     }
@@ -185,7 +185,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             exponent: 3,
                         });
                         units.push(Unit {
-                            name: UnitName::Hours,
+                            name: UnitName::Hour,
                             exponent: -1,
                         });
                     }
@@ -195,7 +195,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             exponent: 3,
                         });
                         units.push(Unit {
-                            name: UnitName::Minutes,
+                            name: UnitName::Minute,
                             exponent: -1,
                         });
                     }
@@ -205,7 +205,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             exponent: 3,
                         });
                         units.push(Unit {
-                            name: UnitName::Seconds,
+                            name: UnitName::Second,
                             exponent: -1,
                         });
                     }
@@ -215,7 +215,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             exponent: 3,
                         });
                         units.push(Unit {
-                            name: UnitName::Hours,
+                            name: UnitName::Hour,
                             exponent: -1,
                         });
                     }
@@ -241,6 +241,99 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                     for v in vife {
                         match v.data & 0x7F {
                             0x12 => labels.push(ValueLabel::Averaged),
+                            0x13 => labels.push(ValueLabel::InverseCompactProfile),
+                            0x14 => labels.push(ValueLabel::RelativeDeviation),
+                            0x15 => labels.push(ValueLabel::RecoordErrorCodes),
+                            0x16 => labels.push(ValueLabel::StandardConformDataContent),
+                            0x17 => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
+                            0x18 => labels.push(ValueLabel::CompactProfile),
+                            0x19 => units.push(Unit {
+                                name: UnitName::Second,
+                                exponent: -1,
+                            }),
+                            0x1A => units.push(Unit {
+                                name: UnitName::Minute,
+                                exponent: -1,
+                            }),
+                            0x1B => units.push(Unit {
+                                name: UnitName::Hour,
+                                exponent: -1,
+                            }),
+                            0x1C => units.push(Unit {
+                                name: UnitName::Day,
+                                exponent: -1,
+                            }),
+                            0x1D => units.push(Unit {
+                                name: UnitName::Week,
+                                exponent: -1,
+                            }),
+                            0x1E => units.push(Unit {
+                                name: UnitName::Month,
+                                exponent: -1,
+                            }),
+                            0x1F => units.push(Unit {
+                                name: UnitName::Year,
+                                exponent: -1,
+                            }),
+                            0x20 => units.push(Unit {
+                                name: UnitName::Revolution,
+                                exponent: -1,
+                            }),
+                            0x21 => {
+                                units.push(Unit {
+                                    name: UnitName::Increment,
+                                    exponent: 1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::InputPulseOnChannelP,
+                                    exponent: -1,
+                                })
+                            }
+                            0x22 => {
+                                units.push(Unit {
+                                    name: UnitName::Increment,
+                                    exponent: 1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::OutputPulseOnChannelP,
+                                    exponent: -1,
+                                })
+                            }
+                            0x23 => {
+                                units.push(Unit {
+                                    name: UnitName::Liter,
+                                    exponent: 1,
+                                });
+                            }
+                            0x24 => {
+                                units.push(Unit {
+                                    name: UnitName::Meter,
+                                    exponent: -3,
+                                });
+                            }
+                            0x25 => {
+                                units.push(Unit {
+                                    name: UnitName::Kilogram,
+                                    exponent: -1,
+                                });
+                            }
+                            0x26 => {
+                                units.push(Unit {
+                                    name: UnitName::Kelvin,
+                                    exponent: -1,
+                                });
+                            }
+                            0x27 => {
+                                units.push(Unit {
+                                    name: UnitName::Watt,
+                                    exponent: -1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::Hour,
+                                    exponent: 1,
+                                });
+                            }
+
                             _ => todo!("Implement the rest of the units: {:X?}", v),
                         };
                     }
@@ -400,10 +493,18 @@ pub enum UnitName {
     HCA,
     Reserved,
     WithoutUnits,
-    Seconds,
-    Minutes,
-    Hours,
-    Days,
+    Second,
+    Minute,
+    Hour,
+    Day,
+    Week,
+    Month,
+    Year,
+    Revolution,
+    Increment,
+    InputPulseOnChannelP,
+    OutputPulseOnChannelP,
+    Liter,
 }
 
 mod tests {
