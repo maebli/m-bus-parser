@@ -124,6 +124,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
     ) -> Result<Self, ValueInformationError> {
         let mut units = ArrayVec::<Unit, 10>::new();
         let mut labels = ArrayVec::<ValueLabel, 10>::new();
+        let mut decimal_scale_exponent = 0;
         match ValueInformationCoding::from(&value_information_block.value_information) {
             ValueInformationCoding::Primary => {
                 match value_information_block.value_information.data & 0x7F {
@@ -330,7 +331,80 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                                 });
                                 units.push(Unit {
                                     name: UnitName::Hour,
+                                    exponent: -1,
+                                });
+                                decimal_scale_exponent -= 3;
+                            }
+                            0x28 => {
+                                units.push(Unit {
+                                    name: UnitName::Joul,
+                                    exponent: -1,
+                                });
+                                decimal_scale_exponent += -9;
+                            }
+                            0x29 => {
+                                units.push(Unit {
+                                    name: UnitName::Watt,
+                                    exponent: -1,
+                                });
+                                decimal_scale_exponent += -3;
+                            }
+                            0x2A => {
+                                units.push(Unit {
+                                    name: UnitName::Kelvin,
+                                    exponent: -1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::Liter,
+                                    exponent: -1,
+                                });
+                            }
+                            0x2B => {
+                                units.push(Unit {
+                                    name: UnitName::Volt,
+                                    exponent: -1,
+                                });
+                            }
+                            0x2C => {
+                                units.push(Unit {
+                                    name: UnitName::Ampere,
+                                    exponent: -1,
+                                });
+                            }
+                            0x2D => {
+                                units.push(Unit {
+                                    name: UnitName::Second,
                                     exponent: 1,
+                                });
+                            }
+                            0x2E => {
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::Volt,
+                                    exponent: -1,
+                                });
+                            }
+                            0x2F => {
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::Ampere,
+                                    exponent: -1,
+                                });
+                            }
+                            0x30 => {
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::Ampere,
+                                    exponent: -1,
                                 });
                             }
 
@@ -350,7 +424,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
 
         Ok(ValueInformation {
             offset: 0,
-            decimal_scale_exponent: 0,
+            decimal_scale_exponent,
             units,
             labels,
         })
@@ -505,6 +579,8 @@ pub enum UnitName {
     InputPulseOnChannelP,
     OutputPulseOnChannelP,
     Liter,
+    Volt,
+    Ampere,
 }
 
 mod tests {
