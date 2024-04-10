@@ -407,7 +407,39 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                                     exponent: -1,
                                 });
                             }
-
+                            0x31 => {
+                                labels.push(ValueLabel::StartDateOf);
+                            }
+                            0x32 => {
+                                labels.push(ValueLabel::VifContinsUncorrectedUnitOrValue);
+                            }
+                            0x33 => {
+                                labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive);
+                            }
+                            0x34 => {
+                                labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative);
+                            }
+                            0x3D => {
+                                labels.push(ValueLabel::NoneMetricUnits);
+                            }
+                            0x3E => {
+                                labels.push(ValueLabel::ValueAtBaseConditions);
+                            }
+                            0x3F => {
+                                labels.push(ValueLabel::ObisDecleration);
+                            }
+                            0x40 => {
+                                labels.push(ValueLabel::UpperLimitValue);
+                            }
+                            0x41 => {
+                                labels.push(ValueLabel::LowerLimitValue);
+                            }
+                            0x42 => {
+                                labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue);
+                            }
+                            0x43 => {
+                                labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue);
+                            }
                             _ => todo!("Implement the rest of the units: {:X?}", v),
                         };
                     }
@@ -548,6 +580,17 @@ pub enum ValueLabel {
     IncrementPerOutputPulseOnChannelP,
     HourMinuteSecond,
     DayMonthYear,
+    StartDateOf,
+    VifContinsUncorrectedUnitOrValue,
+    AccumulationOnlyIfValueIsPositive,
+    AccumulationOnlyIfValueIsNegative,
+    NoneMetricUnits,
+    ValueAtBaseConditions,
+    ObisDecleration,
+    UpperLimitValue,
+    LowerLimitValue,
+    NumberOfExceedsOfUpperLimitValue,
+    NumberOfExceedsOfLowerLimitValue,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
