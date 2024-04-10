@@ -241,90 +241,112 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                 if let Some(vife) = &value_information_block.value_information_extension {
                     for v in vife {
                         match v.data & 0x7F {
+                            0x00..=0x0F => labels.push(ValueLabel::ReservedForObjectActions),
+                            0x10..=0x11 => labels.push(ValueLabel::Reserved),
                             0x12 => labels.push(ValueLabel::Averaged),
                             0x13 => labels.push(ValueLabel::InverseCompactProfile),
                             0x14 => labels.push(ValueLabel::RelativeDeviation),
-                            0x15 => labels.push(ValueLabel::RecoordErrorCodes),
-                            0x16 => labels.push(ValueLabel::StandardConformDataContent),
-                            0x17 => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
-                            0x18 => labels.push(ValueLabel::CompactProfile),
-                            0x19 => units.push(Unit {
+                            0x15..=0x1C => labels.push(ValueLabel::RecoordErrorCodes),
+                            0x1D => labels.push(ValueLabel::StandardConformDataContent),
+                            0x1E => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
+                            0x1F => labels.push(ValueLabel::CompactProfile),
+                            0x20 => units.push(Unit {
                                 name: UnitName::Second,
                                 exponent: -1,
                             }),
-                            0x1A => units.push(Unit {
+                            0x21 => units.push(Unit {
                                 name: UnitName::Minute,
                                 exponent: -1,
                             }),
-                            0x1B => units.push(Unit {
+                            0x22 => units.push(Unit {
                                 name: UnitName::Hour,
                                 exponent: -1,
                             }),
-                            0x1C => units.push(Unit {
+                            0x23 => units.push(Unit {
                                 name: UnitName::Day,
                                 exponent: -1,
                             }),
-                            0x1D => units.push(Unit {
+                            0x24 => units.push(Unit {
                                 name: UnitName::Week,
                                 exponent: -1,
                             }),
-                            0x1E => units.push(Unit {
+                            0x25 => units.push(Unit {
                                 name: UnitName::Month,
                                 exponent: -1,
                             }),
-                            0x1F => units.push(Unit {
+                            0x26 => units.push(Unit {
                                 name: UnitName::Year,
                                 exponent: -1,
                             }),
-                            0x20 => units.push(Unit {
+                            0x27 => units.push(Unit {
                                 name: UnitName::Revolution,
                                 exponent: -1,
                             }),
-                            0x21 => {
+                            0x28 => {
                                 units.push(Unit {
                                     name: UnitName::Increment,
                                     exponent: 1,
                                 });
                                 units.push(Unit {
-                                    name: UnitName::InputPulseOnChannelP,
+                                    name: UnitName::InputPulseOnChannel0,
                                     exponent: -1,
                                 })
                             }
-                            0x22 => {
+                            0x29 => {
                                 units.push(Unit {
                                     name: UnitName::Increment,
                                     exponent: 1,
                                 });
                                 units.push(Unit {
-                                    name: UnitName::OutputPulseOnChannelP,
+                                    name: UnitName::OutputPulseOnChannel0,
                                     exponent: -1,
                                 })
                             }
-                            0x23 => {
+                            0x2A => {
+                                units.push(Unit {
+                                    name: UnitName::Increment,
+                                    exponent: 1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::InputPulseOnChannel1,
+                                    exponent: -1,
+                                })
+                            }
+                            0x2B => {
+                                units.push(Unit {
+                                    name: UnitName::Increment,
+                                    exponent: 1,
+                                });
+                                units.push(Unit {
+                                    name: UnitName::OutputPulseOnChannel1,
+                                    exponent: -1,
+                                })
+                            }
+                            0x2C => {
                                 units.push(Unit {
                                     name: UnitName::Liter,
                                     exponent: 1,
                                 });
                             }
-                            0x24 => {
+                            0x2D => {
                                 units.push(Unit {
                                     name: UnitName::Meter,
                                     exponent: -3,
                                 });
                             }
-                            0x25 => {
+                            0x2E => {
                                 units.push(Unit {
                                     name: UnitName::Kilogram,
                                     exponent: -1,
                                 });
                             }
-                            0x26 => {
+                            0x2F => {
                                 units.push(Unit {
                                     name: UnitName::Kelvin,
                                     exponent: -1,
                                 });
                             }
-                            0x27 => {
+                            0x30 => {
                                 units.push(Unit {
                                     name: UnitName::Watt,
                                     exponent: -1,
@@ -335,21 +357,21 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                                 });
                                 decimal_scale_exponent -= 3;
                             }
-                            0x28 => {
+                            0x31 => {
                                 units.push(Unit {
                                     name: UnitName::Joul,
                                     exponent: -1,
                                 });
                                 decimal_scale_exponent += -9;
                             }
-                            0x29 => {
+                            0x32 => {
                                 units.push(Unit {
                                     name: UnitName::Watt,
                                     exponent: -1,
                                 });
                                 decimal_scale_exponent += -3;
                             }
-                            0x2A => {
+                            0x33 => {
                                 units.push(Unit {
                                     name: UnitName::Kelvin,
                                     exponent: -1,
@@ -359,25 +381,25 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                                     exponent: -1,
                                 });
                             }
-                            0x2B => {
+                            0x34 => {
                                 units.push(Unit {
                                     name: UnitName::Volt,
                                     exponent: -1,
                                 });
                             }
-                            0x2C => {
+                            0x35 => {
                                 units.push(Unit {
                                     name: UnitName::Ampere,
                                     exponent: -1,
                                 });
                             }
-                            0x2D => {
+                            0x36 => {
                                 units.push(Unit {
                                     name: UnitName::Second,
                                     exponent: 1,
                                 });
                             }
-                            0x2E => {
+                            0x37 => {
                                 units.push(Unit {
                                     name: UnitName::Second,
                                     exponent: 1,
@@ -387,7 +409,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                                     exponent: -1,
                                 });
                             }
-                            0x2F => {
+                            0x38 => {
                                 units.push(Unit {
                                     name: UnitName::Second,
                                     exponent: 1,
@@ -397,26 +419,16 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                                     exponent: -1,
                                 });
                             }
-                            0x30 => {
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::Ampere,
-                                    exponent: -1,
-                                });
-                            }
-                            0x31 => {
+                            0x39 => {
                                 labels.push(ValueLabel::StartDateOf);
                             }
-                            0x32 => {
+                            0x3A => {
                                 labels.push(ValueLabel::VifContinsUncorrectedUnitOrValue);
                             }
-                            0x33 => {
+                            0x3B => {
                                 labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive);
                             }
-                            0x34 => {
+                            0x3C => {
                                 labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative);
                             }
                             0x3D => {
@@ -562,6 +574,8 @@ pub struct ValueInformation {
 #[derive(Debug, PartialEq)]
 pub enum ValueLabel {
     Instantaneous,
+    ReservedForObjectActions,
+    Reserved,
     Averaged,
     Integral,
     Parameter,
@@ -619,8 +633,10 @@ pub enum UnitName {
     Year,
     Revolution,
     Increment,
-    InputPulseOnChannelP,
-    OutputPulseOnChannelP,
+    InputPulseOnChannel0,
+    OutputPulseOnChannel0,
+    InputPulseOnChannel1,
+    OutputPulseOnChannel1,
     Liter,
     Volt,
     Ampere,
