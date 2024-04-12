@@ -443,15 +443,40 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             0x40 => {
                                 labels.push(ValueLabel::UpperLimitValue);
                             }
-                            0x41 => {
+                            0x48 => {
                                 labels.push(ValueLabel::LowerLimitValue);
                             }
-                            0x42 => {
+                            0x41 => {
                                 labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue);
                             }
-                            0x43 => {
+                            0x49 => {
                                 labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue);
                             }
+                            0x42 => {
+                                labels.push(ValueLabel::DateOfBeginFirstLowerLimitExceed);
+                            }
+                            0x43 => {
+                                labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed);
+                            }
+                            0x46 => {
+                                labels.push(ValueLabel::DateOfBeginLastLowerLimitExceed);
+                            }
+                            0x47 => {
+                                labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed);
+                            }
+                            0x4A => {
+                                labels.push(ValueLabel::DateOfEndLastLowerLimitExceed);
+                            }
+                            0x4B => {
+                                labels.push(ValueLabel::DateOfEndLastUpperLimitExceed);
+                            }
+                            0x4E => {
+                                labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed);
+                            }
+                            0x4F => {
+                                labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed);
+                            }
+
                             _ => todo!("Implement the rest of the units: {:X?}", v),
                         };
                     }
@@ -605,6 +630,15 @@ pub enum ValueLabel {
     LowerLimitValue,
     NumberOfExceedsOfUpperLimitValue,
     NumberOfExceedsOfLowerLimitValue,
+    DateOfBeginFirstLowerLimitExceed,
+    DateOfBeginFirstUpperLimitExceed,
+    DateOfBeginLastLowerLimitExceed,
+    DateOfBeginLastUpperLimitExceed,
+    DateOfEndLastLowerLimitExceed,
+    DateOfEndLastUpperLimitExceed,
+    DateOfEndFirstLowerLimitExceed,
+    DateOfEndFirstUpperLimitExceed,
+    DateOfEnd,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
