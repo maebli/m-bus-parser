@@ -125,6 +125,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
         let mut units = ArrayVec::<Unit, 10>::new();
         let mut labels = ArrayVec::<ValueLabel, 10>::new();
         let mut decimal_scale_exponent = 0;
+        let mut decimal_offset_exponent = 0;
         match ValueInformationCoding::from(&value_information_block.value_information) {
             ValueInformationCoding::Primary => {
                 match value_information_block.value_information.data & 0x7F {
@@ -588,7 +589,80 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                                     exponent: 1,
                                 });
                             }
-
+                            0x60 => {
+                                labels.push(ValueLabel::DurationOfFirst);
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                            }
+                            0x61 => {
+                                labels.push(ValueLabel::DurationOfFirst);
+                                units.push(Unit {
+                                    name: UnitName::Minute,
+                                    exponent: 1,
+                                });
+                            }
+                            0x62 => {
+                                labels.push(ValueLabel::DurationOfFirst);
+                                units.push(Unit {
+                                    name: UnitName::Hour,
+                                    exponent: 1,
+                                });
+                            }
+                            0x63 => {
+                                labels.push(ValueLabel::DurationOfFirst);
+                                units.push(Unit {
+                                    name: UnitName::Day,
+                                    exponent: 1,
+                                });
+                            }
+                            0x64 => {
+                                labels.push(ValueLabel::DurationOfLast);
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                            }
+                            0x65 => {
+                                labels.push(ValueLabel::DurationOfLast);
+                                units.push(Unit {
+                                    name: UnitName::Minute,
+                                    exponent: 1,
+                                });
+                            }
+                            0x66 => {
+                                labels.push(ValueLabel::DurationOfLast);
+                                units.push(Unit {
+                                    name: UnitName::Day,
+                                    exponent: 1,
+                                });
+                            }
+                            0x68 => labels.push(ValueLabel::ValueDuringLowerValueExeed),
+                            0x6C => labels.push(ValueLabel::ValueDuringUpperValueExceed),
+                            0x69 => labels.push(ValueLabel::LeakageValues),
+                            0x6D => labels.push(ValueLabel::OverflowValues),
+                            0x6A => labels.push(ValueLabel::DateOfBeginFirst),
+                            0x6B => labels.push(ValueLabel::DateOfBeginLast),
+                            0x6E => labels.push(ValueLabel::DateOfEndLast),
+                            0x6F => labels.push(ValueLabel::DateOfEndFirst),
+                            0x70..=0x77 => {
+                                decimal_scale_exponent += (v.data & 0b111) as isize - 6;
+                            }
+                            0x78..=0x7B => {
+                                decimal_offset_exponent += (v.data & 0b11) as isize - 3;
+                            }
+                            0x7D => {
+                                labels.push(ValueLabel::MultiplicativeCorrectionFactor103);
+                            }
+                            0x7E => {
+                                labels.push(ValueLabel::FutureValue);
+                            }
+                            0x7F => {
+                                labels.push(
+                                    ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific,
+                                );
+                            }
                             _ => todo!("Implement the rest of the units: {:X?}", v),
                         };
                     }
@@ -604,7 +678,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
         }
 
         Ok(ValueInformation {
-            offset: 0,
+            decimal_offset_exponent,
             decimal_scale_exponent,
             units,
             labels,
@@ -702,7 +776,7 @@ pub enum VIFExtension {
 /// value(x) = (multiplier * value + offset) * units
 #[derive(Debug, PartialEq)]
 pub struct ValueInformation {
-    pub offset: usize,
+    pub decimal_offset_exponent: isize,
     pub labels: ArrayVec<ValueLabel, 10>,
     pub decimal_scale_exponent: isize,
     pub units: ArrayVec<Unit, 10>,
@@ -754,6 +828,20 @@ pub enum ValueLabel {
     DurationOfFirstUpperLimitExceed,
     DurationOfLastLowerLimitExceed,
     DurationOfLastUpperLimitExceed,
+    DurationOfFirst,
+    DurationOfLast,
+    ValueDuringLowerValueExeed,
+    ValueDuringUpperValueExceed,
+    LeakageValues,
+    OverflowValues,
+    DateOfBeginLast,
+    DateOfBeginFirst,
+    DateOfEndLast,
+    DateOfEndFirst,
+    ExtensionOfCombinableOrthogonalVIFE,
+    MultiplicativeCorrectionFactor103,
+    FutureValue,
+    NextVIFEAndDataOfThisBlockAreManufacturerSpecific,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
@@ -818,7 +906,7 @@ mod tests {
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
-                offset: 0,
+                decimal_offset_exponent: 0,
                 decimal_scale_exponent: -3,
                 units: {
                     let mut x = ArrayVec::<Unit, 10>::new();
@@ -850,7 +938,7 @@ mod tests {
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
-                offset: 0,
+                decimal_offset_exponent: 0,
                 decimal_scale_exponent: -2,
                 units: {
                     let mut x = ArrayVec::<Unit, 10>::new();
@@ -882,7 +970,7 @@ mod tests {
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
-                offset: 0,
+                decimal_offset_exponent: 0,
                 decimal_scale_exponent: -2,
                 units: {
                     let mut x = ArrayVec::<Unit, 10>::new();
@@ -981,7 +1069,7 @@ mod tests {
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
-                offset: 0,
+                decimal_offset_exponent: 0,
                 decimal_scale_exponent: 0,
                 units: {
                     let mut x = ArrayVec::<Unit, 10>::new();
