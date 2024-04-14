@@ -476,6 +476,118 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             0x4F => {
                                 labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed);
                             }
+                            0x50 => {
+                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                            }
+                            0x51 => {
+                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Minute,
+                                    exponent: 1,
+                                });
+                            }
+                            0x52 => {
+                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Hour,
+                                    exponent: 1,
+                                });
+                            }
+                            0x53 => {
+                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Day,
+                                    exponent: 1,
+                                });
+                            }
+                            0x54 => {
+                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                            }
+                            0x55 => {
+                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Minute,
+                                    exponent: 1,
+                                });
+                            }
+                            0x56 => {
+                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Hour,
+                                    exponent: 1,
+                                });
+                            }
+                            0x57 => {
+                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Day,
+                                    exponent: 1,
+                                });
+                            }
+                            0x58 => {
+                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                            }
+                            0x59 => {
+                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Minute,
+                                    exponent: 1,
+                                });
+                            }
+                            0x5A => {
+                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Hour,
+                                    exponent: 1,
+                                });
+                            }
+                            0x5B => {
+                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Day,
+                                    exponent: 1,
+                                });
+                            }
+                            0x5C => {
+                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Second,
+                                    exponent: 1,
+                                });
+                            }
+                            0x5D => {
+                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Minute,
+                                    exponent: 1,
+                                });
+                            }
+                            0x5E => {
+                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Hour,
+                                    exponent: 1,
+                                });
+                            }
+                            0x5F => {
+                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                                units.push(Unit {
+                                    name: UnitName::Day,
+                                    exponent: 1,
+                                });
+                            }
 
                             _ => todo!("Implement the rest of the units: {:X?}", v),
                         };
@@ -638,7 +750,10 @@ pub enum ValueLabel {
     DateOfEndLastUpperLimitExceed,
     DateOfEndFirstLowerLimitExceed,
     DateOfEndFirstUpperLimitExceed,
-    DateOfEnd,
+    DurationOfFirstLowerLimitExceed,
+    DurationOfFirstUpperLimitExceed,
+    DurationOfLastLowerLimitExceed,
+    DurationOfLastUpperLimitExceed,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
