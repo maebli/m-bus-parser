@@ -138,11 +138,17 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             name: UnitName::Watt,
                             exponent: 1,
                         });
+                        decimal_scale_exponent =
+                            (value_information_block.value_information.data & 0b111) as isize - 3;
                     }
-                    0x08..=0x0F => units.push(Unit {
-                        name: UnitName::Joul,
-                        exponent: 1,
-                    }),
+                    0x08..=0x0F => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent =
+                            (value_information_block.value_information.data & 0b111) as isize;
+                    }
                     0x10..=0x17 => {
                         units.push(Unit {
                             name: UnitName::Meter,
@@ -151,14 +157,20 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         decimal_scale_exponent =
                             (value_information_block.value_information.data & 0b111) as isize - 6;
                     }
-                    0x18..=0x1F => units.push(Unit {
-                        name: UnitName::Kilogram,
-                        exponent: 1,
-                    }),
-                    0x20 | 0x24 => units.push(Unit {
-                        name: UnitName::Second,
-                        exponent: 1,
-                    }),
+                    0x18..=0x1F => {
+                        units.push(Unit {
+                            name: UnitName::Kilogram,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent =
+                            (value_information_block.value_information.data & 0b111) as isize - 3;
+                    }
+                    0x20 | 0x24 => {
+                        units.push(Unit {
+                            name: UnitName::Second,
+                            exponent: 1,
+                        });
+                    }
                     0x21 | 0x25 => units.push(Unit {
                         name: UnitName::Minute,
                         exponent: 1,
@@ -171,10 +183,14 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         name: UnitName::Day,
                         exponent: 1,
                     }),
-                    0x28..=0x2F => units.push(Unit {
-                        name: UnitName::Watt,
-                        exponent: 1,
-                    }),
+                    0x28..=0x2F => {
+                        units.push(Unit {
+                            name: UnitName::Watt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b111) as isize - 3;
+                    }
                     0x30..=0x37 => {
                         units.push(Unit {
                             name: UnitName::Joul,
@@ -184,6 +200,8 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             name: UnitName::Hour,
                             exponent: -1,
                         });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b111) as isize;
                     }
                     0x38..=0x3F => {
                         units.push(Unit {

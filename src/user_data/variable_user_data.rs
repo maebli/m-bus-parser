@@ -184,16 +184,17 @@ impl TryFrom<&[u8]> for DataRecords {
 }
 
 mod tests {
-    use crate::user_data::value_information::UnitName;
 
     #[test]
     fn test_parse_variable_data() {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
             data_information::FunctionField,
+            value_information::UnitName,
             variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
+
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
         /* DIF = 0x03, VIF = 0x13, Value = 0x153100 */
         let data = &[0x03, 0x13, 0x15, 0x31, 0x00];
@@ -221,6 +222,7 @@ mod tests {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
             data_information::FunctionField,
+            value_information::UnitName,
             variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
@@ -251,6 +253,7 @@ mod tests {
         use crate::user_data::variable_user_data::Exponent;
         use crate::user_data::{
             data_information::FunctionField,
+            value_information::UnitName,
             variable_user_data::{Quantity, Unit},
             DataRecord, DataRecords,
         };
