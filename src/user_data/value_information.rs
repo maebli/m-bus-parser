@@ -124,7 +124,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
     ) -> Result<Self, ValueInformationError> {
         let mut units = ArrayVec::<Unit, 10>::new();
         let mut labels = ArrayVec::<ValueLabel, 10>::new();
-        let mut decimal_scale_exponent = 0;
+        let mut decimal_scale_exponent: isize = 0;
         let mut decimal_offset_exponent = 0;
         match ValueInformationCoding::from(&value_information_block.value_information) {
             ValueInformationCoding::Primary => {
@@ -143,10 +143,14 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         name: UnitName::Joul,
                         exponent: 1,
                     }),
-                    0x10..=0x17 => units.push(Unit {
-                        name: UnitName::Meter,
-                        exponent: 3,
-                    }),
+                    0x10..=0x17 => {
+                        units.push(Unit {
+                            name: UnitName::Meter,
+                            exponent: 3,
+                        });
+                        decimal_scale_exponent =
+                            (value_information_block.value_information.data & 0b111) as isize - 6;
+                    }
                     0x18..=0x1F => units.push(Unit {
                         name: UnitName::Kilogram,
                         exponent: 1,
@@ -916,11 +920,7 @@ mod tests {
                     });
                     x
                 },
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Instantaneous);
-                    x
-                }
+                labels: ArrayVec::<ValueLabel, 10>::new()
             }
         );
 
@@ -948,11 +948,7 @@ mod tests {
                     });
                     x
                 },
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Instantaneous);
-                    x
-                }
+                labels: ArrayVec::<ValueLabel, 10>::new()
             }
         );
 
@@ -971,7 +967,7 @@ mod tests {
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
                 decimal_offset_exponent: 0,
-                decimal_scale_exponent: -2,
+                decimal_scale_exponent: -1,
                 units: {
                     let mut x = ArrayVec::<Unit, 10>::new();
                     x.push(Unit {
@@ -980,11 +976,7 @@ mod tests {
                     });
                     x
                 },
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Instantaneous);
-                    x
-                }
+                labels: ArrayVec::<ValueLabel, 10>::new()
             }
         );
 
