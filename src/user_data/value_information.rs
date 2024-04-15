@@ -289,7 +289,85 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                     &mut decimal_offset_exponent,
                 );
             }
-            ValueInformationCoding::LineaVIFExtension => {}
+            ValueInformationCoding::LineaVIFExtension => {
+                let vife = value_information_block
+                    .value_information_extension
+                    .as_ref()
+                    .ok_or(Self::Error::InvalidValueInformation)?;
+                match vife[0].data & 0x7F {
+                    0x00..=0x03 => {
+                        units.push(Unit {
+                            name: UnitName::LocalMoneyCurrency,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Credit);
+                        decimal_scale_exponent = (vife[0].data & 0b11) as isize - 3;
+                    }
+                    0x04..=0x07 => {
+                        units.push(Unit {
+                            name: UnitName::LocalMoneyCurrency,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Debit);
+                        decimal_scale_exponent = (vife[0].data & 0b11) as isize - 3;
+                    }
+                    0x08 => {
+                        labels.push(ValueLabel::UniqueMessageIdentificationOrAccessNumber);
+                    }
+                    0x09 => {
+                        labels.push(ValueLabel::DeviceType);
+                    }
+                    0x0A => {
+                        labels.push(ValueLabel::Manufacturer);
+                    }
+                    0x0B => {
+                        labels.push(ValueLabel::ParameterSetIdentification);
+                    }
+                    0x0C => {
+                        labels.push(ValueLabel::ModelOrVersion);
+                    }
+                    0x0D => {
+                        labels.push(ValueLabel::HardwareVersion);
+                    }
+                    0x0E => {
+                        labels.push(ValueLabel::MetrologyFirmwareVersion);
+                    }
+                    0x0F => {
+                        labels.push(ValueLabel::OtherSoftwareVersion);
+                    }
+                    0x10 => {
+                        labels.push(ValueLabel::CustomerLocation);
+                    }
+                    0x11 => {
+                        labels.push(ValueLabel::Customer);
+                    }
+                    0x12 => {
+                        labels.push(ValueLabel::AccessCodeUser);
+                    }
+                    0x13 => {
+                        labels.push(ValueLabel::AccessCodeOperator);
+                    }
+                    0x14 => {
+                        labels.push(ValueLabel::AccessCodeSystemOperator);
+                    }
+                    0x15 => {
+                        labels.push(ValueLabel::AccessCodeDeveloper);
+                    }
+                    0x16 => {
+                        labels.push(ValueLabel::Password);
+                    }
+                    0x17 => {
+                        labels.push(ValueLabel::ErrorFlags);
+                    }
+                    0x18 => {
+                        labels.push(ValueLabel::ErrorMask);
+                    }
+                    0x19 => {
+                        labels.push(ValueLabel::SecurityKey);
+                    }
+                    _ => todo!("Implement the rest of the units: {:X?}", vife),
+                }
+            }
             ValueInformationCoding::PlainText => {
                 labels.push(ValueLabel::PlainText);
             }
@@ -756,8 +834,6 @@ impl From<u8> for ValueInformationField {
 
 #[derive(Debug, PartialEq)]
 pub enum VIFExtension {
-    CreditOfCurrencyUnits(u8),
-    DebitOfCurrencyUnits(u8),
     AccessNumber,
     Medium,
     Manufacturer,
@@ -784,18 +860,16 @@ pub enum VIFExtension {
     FirstStorage,
     LastStorage,
     SizeOfStorageBlock,
-    StorageIntervalSecondsToDays(u8),
+    StorageIntervalSecondsToDays,
     StorageIntervalMonths,
     StorageIntervalYears,
-    DurationSinceLastReadout(u8),
+    DurationSinceLastReadout,
     StartOfTariff,
-    DurationOfTariff(u8),
-    PeriodOfTariff(u8),
+    DurationOfTariff,
+    PeriodOfTariff,
     PeriodOfTarrifMonths,
     PeriodOfTTariffYears,
     Dimensionless,
-    Volts(u8),
-    Ampere(u8),
     ResetCounter,
     CumulationCounter,
     ControlSignal,
@@ -804,28 +878,22 @@ pub enum VIFExtension {
     TimePointOfDay,
     StateOfParameterActivation,
     SpecialSupervision,
-    DurationSinceLastCumulation(u8),
-    OperatingTimeBattery(u8),
+    DurationSinceLastCumulation,
+    OperatingTimeBattery,
     DateAndTimeOfBatteryChange,
-    EnergyMWh(u8),
-    EnergyGJ(u8),
-    VolumeM3(u8),
-    MassTons(u8),
     VolumeFeet3Tenth,
     VolumeAmericanGallonTenth,
     VolumeAmericanGallon,
     VolumeFlowAmericanGallonPerMinuteThousandth,
     VolumeFlowAmericanGallonPerMinute,
     VolumeFlowAmericanGallonPerHour,
-    PowerMW(u8),
-    PowerGJH(u8),
-    FlowTemperature(u8),
-    ReturnTemperature(u8),
-    TemperatureDifference(u8),
-    ExternalTemperature(u8),
-    ColdWarmTemperatureLimitFarenheit(u8),
-    ColdWarmTemperatureLimitCelsius(u8),
-    CumulativeCountMaxPower(u8),
+    FlowTemperature,
+    ReturnTemperature,
+    TemperatureDifference,
+    ExternalTemperature,
+    ColdWarmTemperatureLimitFarenheit,
+    ColdWarmTemperatureLimitCelsius,
+    CumulativeCountMaxPower,
 }
 
 /// This is the most important type of the this file and represents
@@ -899,6 +967,26 @@ pub enum ValueLabel {
     MultiplicativeCorrectionFactor103,
     FutureValue,
     NextVIFEAndDataOfThisBlockAreManufacturerSpecific,
+    Credit,
+    Debit,
+    UniqueMessageIdentificationOrAccessNumber,
+    DeviceType,
+    Manufacturer,
+    ParameterSetIdentification,
+    ModelOrVersion,
+    HardwareVersion,
+    MetrologyFirmwareVersion,
+    OtherSoftwareVersion,
+    CustomerLocation,
+    Customer,
+    AccessCodeUser,
+    AccessCodeOperator,
+    AccessCodeSystemOperator,
+    AccessCodeDeveloper,
+    Password,
+    ErrorFlags,
+    ErrorMask,
+    SecurityKey,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
@@ -934,6 +1022,7 @@ pub enum UnitName {
     Liter,
     Volt,
     Ampere,
+    LocalMoneyCurrency,
 }
 
 mod tests {
