@@ -281,435 +281,15 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                     x => todo!("Implement the rest of the units: {:X?}", x),
                 };
                 /* consume orthogonal vife */
-                if let Some(vife) = &value_information_block.value_information_extension {
-                    for v in vife {
-                        match v.data & 0x7F {
-                            0x00..=0x0F => labels.push(ValueLabel::ReservedForObjectActions),
-                            0x10..=0x11 => labels.push(ValueLabel::Reserved),
-                            0x12 => labels.push(ValueLabel::Averaged),
-                            0x13 => labels.push(ValueLabel::InverseCompactProfile),
-                            0x14 => labels.push(ValueLabel::RelativeDeviation),
-                            0x15..=0x1C => labels.push(ValueLabel::RecoordErrorCodes),
-                            0x1D => labels.push(ValueLabel::StandardConformDataContent),
-                            0x1E => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
-                            0x1F => labels.push(ValueLabel::CompactProfile),
-                            0x20 => units.push(Unit {
-                                name: UnitName::Second,
-                                exponent: -1,
-                            }),
-                            0x21 => units.push(Unit {
-                                name: UnitName::Minute,
-                                exponent: -1,
-                            }),
-                            0x22 => units.push(Unit {
-                                name: UnitName::Hour,
-                                exponent: -1,
-                            }),
-                            0x23 => units.push(Unit {
-                                name: UnitName::Day,
-                                exponent: -1,
-                            }),
-                            0x24 => units.push(Unit {
-                                name: UnitName::Week,
-                                exponent: -1,
-                            }),
-                            0x25 => units.push(Unit {
-                                name: UnitName::Month,
-                                exponent: -1,
-                            }),
-                            0x26 => units.push(Unit {
-                                name: UnitName::Year,
-                                exponent: -1,
-                            }),
-                            0x27 => units.push(Unit {
-                                name: UnitName::Revolution,
-                                exponent: -1,
-                            }),
-                            0x28 => {
-                                units.push(Unit {
-                                    name: UnitName::Increment,
-                                    exponent: 1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::InputPulseOnChannel0,
-                                    exponent: -1,
-                                })
-                            }
-                            0x29 => {
-                                units.push(Unit {
-                                    name: UnitName::Increment,
-                                    exponent: 1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::OutputPulseOnChannel0,
-                                    exponent: -1,
-                                })
-                            }
-                            0x2A => {
-                                units.push(Unit {
-                                    name: UnitName::Increment,
-                                    exponent: 1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::InputPulseOnChannel1,
-                                    exponent: -1,
-                                })
-                            }
-                            0x2B => {
-                                units.push(Unit {
-                                    name: UnitName::Increment,
-                                    exponent: 1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::OutputPulseOnChannel1,
-                                    exponent: -1,
-                                })
-                            }
-                            0x2C => {
-                                units.push(Unit {
-                                    name: UnitName::Liter,
-                                    exponent: 1,
-                                });
-                            }
-                            0x2D => {
-                                units.push(Unit {
-                                    name: UnitName::Meter,
-                                    exponent: -3,
-                                });
-                            }
-                            0x2E => {
-                                units.push(Unit {
-                                    name: UnitName::Kilogram,
-                                    exponent: -1,
-                                });
-                            }
-                            0x2F => {
-                                units.push(Unit {
-                                    name: UnitName::Kelvin,
-                                    exponent: -1,
-                                });
-                            }
-                            0x30 => {
-                                units.push(Unit {
-                                    name: UnitName::Watt,
-                                    exponent: -1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::Hour,
-                                    exponent: -1,
-                                });
-                                decimal_scale_exponent -= 3;
-                            }
-                            0x31 => {
-                                units.push(Unit {
-                                    name: UnitName::Joul,
-                                    exponent: -1,
-                                });
-                                decimal_scale_exponent += -9;
-                            }
-                            0x32 => {
-                                units.push(Unit {
-                                    name: UnitName::Watt,
-                                    exponent: -1,
-                                });
-                                decimal_scale_exponent += -3;
-                            }
-                            0x33 => {
-                                units.push(Unit {
-                                    name: UnitName::Kelvin,
-                                    exponent: -1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::Liter,
-                                    exponent: -1,
-                                });
-                            }
-                            0x34 => {
-                                units.push(Unit {
-                                    name: UnitName::Volt,
-                                    exponent: -1,
-                                });
-                            }
-                            0x35 => {
-                                units.push(Unit {
-                                    name: UnitName::Ampere,
-                                    exponent: -1,
-                                });
-                            }
-                            0x36 => {
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                            }
-                            0x37 => {
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::Volt,
-                                    exponent: -1,
-                                });
-                            }
-                            0x38 => {
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                                units.push(Unit {
-                                    name: UnitName::Ampere,
-                                    exponent: -1,
-                                });
-                            }
-                            0x39 => {
-                                labels.push(ValueLabel::StartDateOf);
-                            }
-                            0x3A => {
-                                labels.push(ValueLabel::VifContinsUncorrectedUnitOrValue);
-                            }
-                            0x3B => {
-                                labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive);
-                            }
-                            0x3C => {
-                                labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative);
-                            }
-                            0x3D => {
-                                labels.push(ValueLabel::NoneMetricUnits);
-                            }
-                            0x3E => {
-                                labels.push(ValueLabel::ValueAtBaseConditions);
-                            }
-                            0x3F => {
-                                labels.push(ValueLabel::ObisDecleration);
-                            }
-                            0x40 => {
-                                labels.push(ValueLabel::UpperLimitValue);
-                            }
-                            0x48 => {
-                                labels.push(ValueLabel::LowerLimitValue);
-                            }
-                            0x41 => {
-                                labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue);
-                            }
-                            0x49 => {
-                                labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue);
-                            }
-                            0x42 => {
-                                labels.push(ValueLabel::DateOfBeginFirstLowerLimitExceed);
-                            }
-                            0x43 => {
-                                labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed);
-                            }
-                            0x46 => {
-                                labels.push(ValueLabel::DateOfBeginLastLowerLimitExceed);
-                            }
-                            0x47 => {
-                                labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed);
-                            }
-                            0x4A => {
-                                labels.push(ValueLabel::DateOfEndLastLowerLimitExceed);
-                            }
-                            0x4B => {
-                                labels.push(ValueLabel::DateOfEndLastUpperLimitExceed);
-                            }
-                            0x4E => {
-                                labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed);
-                            }
-                            0x4F => {
-                                labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed);
-                            }
-                            0x50 => {
-                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                            }
-                            0x51 => {
-                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Minute,
-                                    exponent: 1,
-                                });
-                            }
-                            0x52 => {
-                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Hour,
-                                    exponent: 1,
-                                });
-                            }
-                            0x53 => {
-                                labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Day,
-                                    exponent: 1,
-                                });
-                            }
-                            0x54 => {
-                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                            }
-                            0x55 => {
-                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Minute,
-                                    exponent: 1,
-                                });
-                            }
-                            0x56 => {
-                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Hour,
-                                    exponent: 1,
-                                });
-                            }
-                            0x57 => {
-                                labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Day,
-                                    exponent: 1,
-                                });
-                            }
-                            0x58 => {
-                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                            }
-                            0x59 => {
-                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Minute,
-                                    exponent: 1,
-                                });
-                            }
-                            0x5A => {
-                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Hour,
-                                    exponent: 1,
-                                });
-                            }
-                            0x5B => {
-                                labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Day,
-                                    exponent: 1,
-                                });
-                            }
-                            0x5C => {
-                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                            }
-                            0x5D => {
-                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Minute,
-                                    exponent: 1,
-                                });
-                            }
-                            0x5E => {
-                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Hour,
-                                    exponent: 1,
-                                });
-                            }
-                            0x5F => {
-                                labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                                units.push(Unit {
-                                    name: UnitName::Day,
-                                    exponent: 1,
-                                });
-                            }
-                            0x60 => {
-                                labels.push(ValueLabel::DurationOfFirst);
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                            }
-                            0x61 => {
-                                labels.push(ValueLabel::DurationOfFirst);
-                                units.push(Unit {
-                                    name: UnitName::Minute,
-                                    exponent: 1,
-                                });
-                            }
-                            0x62 => {
-                                labels.push(ValueLabel::DurationOfFirst);
-                                units.push(Unit {
-                                    name: UnitName::Hour,
-                                    exponent: 1,
-                                });
-                            }
-                            0x63 => {
-                                labels.push(ValueLabel::DurationOfFirst);
-                                units.push(Unit {
-                                    name: UnitName::Day,
-                                    exponent: 1,
-                                });
-                            }
-                            0x64 => {
-                                labels.push(ValueLabel::DurationOfLast);
-                                units.push(Unit {
-                                    name: UnitName::Second,
-                                    exponent: 1,
-                                });
-                            }
-                            0x65 => {
-                                labels.push(ValueLabel::DurationOfLast);
-                                units.push(Unit {
-                                    name: UnitName::Minute,
-                                    exponent: 1,
-                                });
-                            }
-                            0x66 => {
-                                labels.push(ValueLabel::DurationOfLast);
-                                units.push(Unit {
-                                    name: UnitName::Day,
-                                    exponent: 1,
-                                });
-                            }
-                            0x68 => labels.push(ValueLabel::ValueDuringLowerValueExeed),
-                            0x6C => labels.push(ValueLabel::ValueDuringUpperValueExceed),
-                            0x69 => labels.push(ValueLabel::LeakageValues),
-                            0x6D => labels.push(ValueLabel::OverflowValues),
-                            0x6A => labels.push(ValueLabel::DateOfBeginFirst),
-                            0x6B => labels.push(ValueLabel::DateOfBeginLast),
-                            0x6E => labels.push(ValueLabel::DateOfEndLast),
-                            0x6F => labels.push(ValueLabel::DateOfEndFirst),
-                            0x70..=0x77 => {
-                                decimal_scale_exponent += (v.data & 0b111) as isize - 6;
-                            }
-                            0x78..=0x7B => {
-                                decimal_offset_exponent += (v.data & 0b11) as isize - 3;
-                            }
-                            0x7D => {
-                                labels.push(ValueLabel::MultiplicativeCorrectionFactor103);
-                            }
-                            0x7E => {
-                                labels.push(ValueLabel::FutureValue);
-                            }
-                            0x7F => {
-                                labels.push(
-                                    ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific,
-                                );
-                            }
-                            _ => todo!("Implement the rest of the units: {:X?}", v),
-                        };
-                    }
-                }
+                consume_orthhogonal_vife(
+                    &value_information_block,
+                    &mut labels,
+                    &mut units,
+                    &mut decimal_scale_exponent,
+                    &mut decimal_offset_exponent,
+                );
             }
+            ValueInformationCoding::LineaVIFExtension => {}
             ValueInformationCoding::PlainText => {
                 labels.push(ValueLabel::PlainText);
             }
@@ -725,6 +305,441 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
             units,
             labels,
         })
+    }
+}
+
+fn consume_orthhogonal_vife(
+    value_information_block: &ValueInformationBlock,
+    labels: &mut ArrayVec<ValueLabel, 10>,
+    units: &mut ArrayVec<Unit, 10>,
+    decimal_scale_exponent: &mut isize,
+    decimal_offset_exponent: &mut isize,
+) {
+    if let Some(vife) = &value_information_block.value_information_extension {
+        for v in vife {
+            match v.data & 0x7F {
+                0x00..=0x0F => labels.push(ValueLabel::ReservedForObjectActions),
+                0x10..=0x11 => labels.push(ValueLabel::Reserved),
+                0x12 => labels.push(ValueLabel::Averaged),
+                0x13 => labels.push(ValueLabel::InverseCompactProfile),
+                0x14 => labels.push(ValueLabel::RelativeDeviation),
+                0x15..=0x1C => labels.push(ValueLabel::RecoordErrorCodes),
+                0x1D => labels.push(ValueLabel::StandardConformDataContent),
+                0x1E => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
+                0x1F => labels.push(ValueLabel::CompactProfile),
+                0x20 => units.push(Unit {
+                    name: UnitName::Second,
+                    exponent: -1,
+                }),
+                0x21 => units.push(Unit {
+                    name: UnitName::Minute,
+                    exponent: -1,
+                }),
+                0x22 => units.push(Unit {
+                    name: UnitName::Hour,
+                    exponent: -1,
+                }),
+                0x23 => units.push(Unit {
+                    name: UnitName::Day,
+                    exponent: -1,
+                }),
+                0x24 => units.push(Unit {
+                    name: UnitName::Week,
+                    exponent: -1,
+                }),
+                0x25 => units.push(Unit {
+                    name: UnitName::Month,
+                    exponent: -1,
+                }),
+                0x26 => units.push(Unit {
+                    name: UnitName::Year,
+                    exponent: -1,
+                }),
+                0x27 => units.push(Unit {
+                    name: UnitName::Revolution,
+                    exponent: -1,
+                }),
+                0x28 => {
+                    units.push(Unit {
+                        name: UnitName::Increment,
+                        exponent: 1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::InputPulseOnChannel0,
+                        exponent: -1,
+                    })
+                }
+                0x29 => {
+                    units.push(Unit {
+                        name: UnitName::Increment,
+                        exponent: 1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::OutputPulseOnChannel0,
+                        exponent: -1,
+                    })
+                }
+                0x2A => {
+                    units.push(Unit {
+                        name: UnitName::Increment,
+                        exponent: 1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::InputPulseOnChannel1,
+                        exponent: -1,
+                    })
+                }
+                0x2B => {
+                    units.push(Unit {
+                        name: UnitName::Increment,
+                        exponent: 1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::OutputPulseOnChannel1,
+                        exponent: -1,
+                    })
+                }
+                0x2C => {
+                    units.push(Unit {
+                        name: UnitName::Liter,
+                        exponent: 1,
+                    });
+                }
+                0x2D => {
+                    units.push(Unit {
+                        name: UnitName::Meter,
+                        exponent: -3,
+                    });
+                }
+                0x2E => {
+                    units.push(Unit {
+                        name: UnitName::Kilogram,
+                        exponent: -1,
+                    });
+                }
+                0x2F => {
+                    units.push(Unit {
+                        name: UnitName::Kelvin,
+                        exponent: -1,
+                    });
+                }
+                0x30 => {
+                    units.push(Unit {
+                        name: UnitName::Watt,
+                        exponent: -1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::Hour,
+                        exponent: -1,
+                    });
+                    *decimal_scale_exponent -= 3;
+                }
+                0x31 => {
+                    units.push(Unit {
+                        name: UnitName::Joul,
+                        exponent: -1,
+                    });
+                    *decimal_scale_exponent += -9;
+                }
+                0x32 => {
+                    units.push(Unit {
+                        name: UnitName::Watt,
+                        exponent: -1,
+                    });
+                    *decimal_scale_exponent += -3;
+                }
+                0x33 => {
+                    units.push(Unit {
+                        name: UnitName::Kelvin,
+                        exponent: -1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::Liter,
+                        exponent: -1,
+                    });
+                }
+                0x34 => {
+                    units.push(Unit {
+                        name: UnitName::Volt,
+                        exponent: -1,
+                    });
+                }
+                0x35 => {
+                    units.push(Unit {
+                        name: UnitName::Ampere,
+                        exponent: -1,
+                    });
+                }
+                0x36 => {
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                }
+                0x37 => {
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::Volt,
+                        exponent: -1,
+                    });
+                }
+                0x38 => {
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                    units.push(Unit {
+                        name: UnitName::Ampere,
+                        exponent: -1,
+                    });
+                }
+                0x39 => {
+                    labels.push(ValueLabel::StartDateOf);
+                }
+                0x3A => {
+                    labels.push(ValueLabel::VifContinsUncorrectedUnitOrValue);
+                }
+                0x3B => {
+                    labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive);
+                }
+                0x3C => {
+                    labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative);
+                }
+                0x3D => {
+                    labels.push(ValueLabel::NoneMetricUnits);
+                }
+                0x3E => {
+                    labels.push(ValueLabel::ValueAtBaseConditions);
+                }
+                0x3F => {
+                    labels.push(ValueLabel::ObisDecleration);
+                }
+                0x40 => {
+                    labels.push(ValueLabel::UpperLimitValue);
+                }
+                0x48 => {
+                    labels.push(ValueLabel::LowerLimitValue);
+                }
+                0x41 => {
+                    labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue);
+                }
+                0x49 => {
+                    labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue);
+                }
+                0x42 => {
+                    labels.push(ValueLabel::DateOfBeginFirstLowerLimitExceed);
+                }
+                0x43 => {
+                    labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed);
+                }
+                0x46 => {
+                    labels.push(ValueLabel::DateOfBeginLastLowerLimitExceed);
+                }
+                0x47 => {
+                    labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed);
+                }
+                0x4A => {
+                    labels.push(ValueLabel::DateOfEndLastLowerLimitExceed);
+                }
+                0x4B => {
+                    labels.push(ValueLabel::DateOfEndLastUpperLimitExceed);
+                }
+                0x4E => {
+                    labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed);
+                }
+                0x4F => {
+                    labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed);
+                }
+                0x50 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                }
+                0x51 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Minute,
+                        exponent: 1,
+                    });
+                }
+                0x52 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Hour,
+                        exponent: 1,
+                    });
+                }
+                0x53 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Day,
+                        exponent: 1,
+                    });
+                }
+                0x54 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                }
+                0x55 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Minute,
+                        exponent: 1,
+                    });
+                }
+                0x56 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Hour,
+                        exponent: 1,
+                    });
+                }
+                0x57 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Day,
+                        exponent: 1,
+                    });
+                }
+                0x58 => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                }
+                0x59 => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Minute,
+                        exponent: 1,
+                    });
+                }
+                0x5A => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Hour,
+                        exponent: 1,
+                    });
+                }
+                0x5B => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Day,
+                        exponent: 1,
+                    });
+                }
+                0x5C => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                }
+                0x5D => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Minute,
+                        exponent: 1,
+                    });
+                }
+                0x5E => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Hour,
+                        exponent: 1,
+                    });
+                }
+                0x5F => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(Unit {
+                        name: UnitName::Day,
+                        exponent: 1,
+                    });
+                }
+                0x60 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                }
+                0x61 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(Unit {
+                        name: UnitName::Minute,
+                        exponent: 1,
+                    });
+                }
+                0x62 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(Unit {
+                        name: UnitName::Hour,
+                        exponent: 1,
+                    });
+                }
+                0x63 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(Unit {
+                        name: UnitName::Day,
+                        exponent: 1,
+                    });
+                }
+                0x64 => {
+                    labels.push(ValueLabel::DurationOfLast);
+                    units.push(Unit {
+                        name: UnitName::Second,
+                        exponent: 1,
+                    });
+                }
+                0x65 => {
+                    labels.push(ValueLabel::DurationOfLast);
+                    units.push(Unit {
+                        name: UnitName::Minute,
+                        exponent: 1,
+                    });
+                }
+                0x66 => {
+                    labels.push(ValueLabel::DurationOfLast);
+                    units.push(Unit {
+                        name: UnitName::Day,
+                        exponent: 1,
+                    });
+                }
+                0x68 => labels.push(ValueLabel::ValueDuringLowerValueExeed),
+                0x6C => labels.push(ValueLabel::ValueDuringUpperValueExceed),
+                0x69 => labels.push(ValueLabel::LeakageValues),
+                0x6D => labels.push(ValueLabel::OverflowValues),
+                0x6A => labels.push(ValueLabel::DateOfBeginFirst),
+                0x6B => labels.push(ValueLabel::DateOfBeginLast),
+                0x6E => labels.push(ValueLabel::DateOfEndLast),
+                0x6F => labels.push(ValueLabel::DateOfEndFirst),
+                0x70..=0x77 => {
+                    *decimal_scale_exponent += (v.data & 0b111) as isize - 6;
+                }
+                0x78..=0x7B => {
+                    *decimal_offset_exponent += (v.data & 0b11) as isize - 3;
+                }
+                0x7D => {
+                    labels.push(ValueLabel::MultiplicativeCorrectionFactor103);
+                }
+                0x7E => {
+                    labels.push(ValueLabel::FutureValue);
+                }
+                0x7F => {
+                    labels.push(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific);
+                }
+                _ => todo!("Implement the rest of the units: {:X?}", v),
+            };
+        }
     }
 }
 
