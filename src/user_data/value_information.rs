@@ -107,7 +107,7 @@ pub enum ValueInformationFieldExtensionCoding {
 }
 
 impl ValueInformationBlock {
-    fn get_size(&self) -> usize {
+    fn _get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
             size += vife.len();
@@ -923,16 +923,13 @@ pub enum UnitName {
 
 mod tests {
 
-    use arrayvec::ArrayVec;
-
-    use crate::user_data::value_information::{
-        Unit, ValueInformation, ValueInformationField, ValueLabel,
-    };
-
     #[test]
     fn test_single_byte_primary_value_information_parsing() {
         use crate::user_data::value_information::UnitName;
-        use crate::user_data::value_information::{ValueInformationBlock, ValueInformationField};
+        use crate::user_data::value_information::{
+            Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
+        };
+        use arrayvec::ArrayVec;
 
         /* VIB = 0x13 => m3^3*1e-3 */
         let data = [0x13];
@@ -944,7 +941,7 @@ mod tests {
                 value_information_extension: None
             }
         );
-        assert_eq!(result.get_size(), 1);
+        assert_eq!(result._get_size(), 1);
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
@@ -972,7 +969,7 @@ mod tests {
                 value_information_extension: None
             }
         );
-        assert_eq!(result.get_size(), 1);
+        assert_eq!(result._get_size(), 1);
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
@@ -1000,7 +997,7 @@ mod tests {
                 value_information_extension: None
             }
         );
-        assert_eq!(result.get_size(), 1);
+        assert_eq!(result._get_size(), 1);
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
             ValueInformation {
@@ -1028,12 +1025,16 @@ mod tests {
                 value_information_extension: None
             },
         );
-        assert_eq!(result.get_size(), 1);
+        assert_eq!(result._get_size(), 1);
     }
 
     #[test]
     fn test_multibyte_primary_value_information() {
-        use crate::user_data::value_information::{UnitName, ValueInformationBlock};
+        use crate::user_data::value_information::UnitName;
+        use crate::user_data::value_information::{
+            Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
+        };
+        use arrayvec::ArrayVec;
         /* 1 VIF, 1 - 10 orthogonal VIFE */
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
@@ -1041,7 +1042,7 @@ mod tests {
         /* VIB = 0x96, 0x12 */
         let data = [0x96, 0x12];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result.get_size(), 2);
+        assert_eq!(result._get_size(), 2);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(ValueInformation::try_from(result).unwrap().labels, {
             let mut x = ArrayVec::<ValueLabel, 10>::new();
@@ -1056,7 +1057,7 @@ mod tests {
 
         let data = [0x96, 0x92, 0x20];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result.get_size(), 3);
+        assert_eq!(result._get_size(), 3);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
@@ -1091,7 +1092,7 @@ mod tests {
         /* VIB = 0x96, 0x92,0xA0, 0x2D */
         let data = [0x96, 0x92, 0xA0, 0x2D];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result.get_size(), 4);
+        assert_eq!(result._get_size(), 4);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
@@ -1125,7 +1126,11 @@ mod tests {
 
     #[test]
     fn test_plain_text_vif_norm_conform() {
-        use crate::user_data::value_information::{UnitName, ValueInformationBlock};
+        use arrayvec::ArrayVec;
+
+        use crate::user_data::value_information::{Unit, ValueInformation, ValueLabel};
+
+        use crate::user_data::value_information::ValueInformationBlock;
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
         // 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25,
@@ -1136,7 +1141,7 @@ mod tests {
         // according to the Norm the LEN and ASCII is not part tof the VIB
         let data = [0xFC, 0x74];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result.get_size(), 2);
+        assert_eq!(result._get_size(), 2);
         assert_eq!(result.value_information.data, 0xFC);
         assert_eq!(
             ValueInformation::try_from(result).unwrap(),
