@@ -212,6 +212,8 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             name: UnitName::Hour,
                             exponent: -1,
                         });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b111) as isize - 6;
                     }
                     0x40..=0x47 => {
                         units.push(Unit {
@@ -222,6 +224,8 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             name: UnitName::Minute,
                             exponent: -1,
                         });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b111) as isize - 7;
                     }
                     0x48..=0x4F => {
                         units.push(Unit {
@@ -232,6 +236,8 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             name: UnitName::Second,
                             exponent: -1,
                         });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b111) as isize - 9;
                     }
                     0x50..=0x57 => {
                         units.push(Unit {
@@ -242,19 +248,33 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                             name: UnitName::Hour,
                             exponent: -1,
                         });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b111) as isize - 3;
                     }
-                    0x58..=0x5F | 0x64..=0x67 => units.push(Unit {
-                        name: UnitName::Celsius,
-                        exponent: 1,
-                    }),
-                    0x60..=0x63 => units.push(Unit {
-                        name: UnitName::Kelvin,
-                        exponent: 1,
-                    }),
-                    0x68..=0x6B => units.push(Unit {
-                        name: UnitName::Bar,
-                        exponent: 1,
-                    }),
+                    0x58..=0x5F | 0x64..=0x67 => {
+                        units.push(Unit {
+                            name: UnitName::Celsius,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b11) as isize - 3;
+                    }
+                    0x60..=0x63 => {
+                        units.push(Unit {
+                            name: UnitName::Kelvin,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b11) as isize - 3;
+                    }
+                    0x68..=0x6B => {
+                        units.push(Unit {
+                            name: UnitName::Bar,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b11) as isize - 3;
+                    }
                     0x6C..=0x6D => labels.push(ValueLabel::TimePoint),
                     0x74..=0x77 => labels.push(ValueLabel::ActualityDuration),
                     0x78 => labels.push(ValueLabel::FabricationNumber),
