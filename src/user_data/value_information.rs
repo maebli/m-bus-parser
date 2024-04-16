@@ -601,10 +601,28 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                     0x76 => {
                         labels.push(ValueLabel::DataContainerForManufacturerSpecificProtocol);
                     }
-                    0x7D => { /*
-
-                         */
-                    }
+                    0x7D => match vife[1].data & 0x7F {
+                        0x00 => {
+                            labels.push(ValueLabel::CurrentlySelectedApplication);
+                        }
+                        0x02 => {
+                            units.push(Unit {
+                                name: UnitName::Month,
+                                exponent: 1,
+                            });
+                            labels.push(ValueLabel::RemainingBatteryLifeTime);
+                        }
+                        0x03 => {
+                            units.push(Unit {
+                                name: UnitName::Year,
+                                exponent: 1,
+                            });
+                            labels.push(ValueLabel::RemainingBatteryLifeTime);
+                        }
+                        _ => {
+                            labels.push(ValueLabel::Reserved);
+                        }
+                    },
                     _ => {
                         labels.push(ValueLabel::Reserved);
                     }
@@ -1199,6 +1217,7 @@ pub enum ValueLabel {
     RemainingBatteryLifeTime,
     NumberOfTimesTheMeterWasStopped,
     DataContainerForManufacturerSpecificProtocol,
+    CurrentlySelectedApplication,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
