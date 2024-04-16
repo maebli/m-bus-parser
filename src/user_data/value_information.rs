@@ -365,7 +365,249 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                     0x19 => {
                         labels.push(ValueLabel::SecurityKey);
                     }
-                    _ => todo!("Implement the rest of the units: {:X?}", vife),
+                    0x1A => {
+                        labels.push(ValueLabel::DigitalOutput);
+                        labels.push(ValueLabel::Binary);
+                    }
+                    0x1B => {
+                        labels.push(ValueLabel::DigitalInput);
+                        labels.push(ValueLabel::Binary);
+                    }
+                    0x1C => {
+                        units.push(Unit {
+                            name: UnitName::Symbol,
+                            exponent: 1,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Second,
+                            exponent: -1,
+                        });
+                        labels.push(ValueLabel::BaudRate);
+                    }
+                    0x1D => {
+                        units.push(Unit {
+                            name: UnitName::BitTime,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::ResponseDelayTime);
+                    }
+                    0x1E => {
+                        labels.push(ValueLabel::Retry);
+                    }
+                    0x1F => {
+                        labels.push(ValueLabel::RemoteControl);
+                    }
+                    0x20 => {
+                        labels.push(ValueLabel::FirstStorageForCycleStorage);
+                    }
+                    0x21 => {
+                        labels.push(ValueLabel::LastStorageForCycleStorage);
+                    }
+                    0x22 => {
+                        labels.push(ValueLabel::SizeOfStorageBlock);
+                    }
+                    0x23 => {
+                        labels.push(ValueLabel::DescripitonOfTariffAndSubunit);
+                    }
+                    0x24 => {
+                        units.push(Unit {
+                            name: UnitName::Second,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::StorageInterval);
+                    }
+                    0x25 => {
+                        units.push(Unit {
+                            name: UnitName::Minute,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::StorageInterval);
+                    }
+                    0x26 => {
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::StorageInterval);
+                    }
+                    0x27 => {
+                        units.push(Unit {
+                            name: UnitName::Day,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::StorageInterval);
+                    }
+                    0x28 => {
+                        units.push(Unit {
+                            name: UnitName::Month,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::StorageInterval);
+                    }
+                    0x29 => {
+                        units.push(Unit {
+                            name: UnitName::Year,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::StorageInterval);
+                    }
+                    0x30 => {
+                        labels.push(ValueLabel::Dimensionless);
+                    }
+                    0x31 => {
+                        labels.push(ValueLabel::DataContainerForWmbusProtocol);
+                    }
+                    0x32 => {
+                        units.push(Unit {
+                            name: UnitName::Second,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                    }
+                    0x33 => {
+                        units.push(Unit {
+                            name: UnitName::Minute,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                    }
+                    0x34 => {
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                    }
+                    0x35 => {
+                        units.push(Unit {
+                            name: UnitName::Day,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                    }
+                    0x50..=0x5F => {
+                        units.push(Unit {
+                            name: UnitName::Volt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = (vife[0].data & 0b1111) as isize - 9;
+                    }
+                    0x60 => {
+                        labels.push(ValueLabel::ResetCounter);
+                    }
+                    0x61 => {
+                        labels.push(ValueLabel::CumulationCounter);
+                    }
+                    0x62 => {
+                        labels.push(ValueLabel::ControlSignal);
+                    }
+                    0x63 => {
+                        labels.push(ValueLabel::DayOfWeek);
+                    }
+                    0x64 => {
+                        labels.push(ValueLabel::WeekNumber);
+                    }
+                    0x65 => {
+                        labels.push(ValueLabel::TimePointOfChangeOfTariff);
+                    }
+                    0x66 => {
+                        labels.push(ValueLabel::StateOfParameterActivation);
+                    }
+                    0x67 => {
+                        labels.push(ValueLabel::SpecialSupplierInformation);
+                    }
+                    0x68 => {
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::DurationSinceLastCumulation);
+                    }
+                    0x69 => {
+                        units.push(Unit {
+                            name: UnitName::Day,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::DurationSinceLastCumulation);
+                    }
+                    0x6A => {
+                        units.push(Unit {
+                            name: UnitName::Month,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::DurationSinceLastCumulation);
+                    }
+                    0x6B => {
+                        units.push(Unit {
+                            name: UnitName::Year,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::DurationSinceLastCumulation);
+                    }
+                    0x6C => {
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::OperatingTimeBattery);
+                    }
+                    0x6D => {
+                        units.push(Unit {
+                            name: UnitName::Day,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::OperatingTimeBattery);
+                    }
+                    0x6E => {
+                        units.push(Unit {
+                            name: UnitName::Month,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::OperatingTimeBattery);
+                    }
+                    0x6F => {
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::OperatingTimeBattery);
+                    }
+                    0x70 => {
+                        units.push(Unit {
+                            name: UnitName::Second,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::DateAndTimeOfBatteryChange);
+                    }
+                    0x71 => {
+                        units.push(Unit {
+                            name: UnitName::DecibelMilliWatt,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::RFPowerLevel);
+                    }
+                    0x72 => {
+                        labels.push(ValueLabel::DaylightSavingBeginningEndingDeviation);
+                    }
+                    0x73 => {
+                        labels.push(ValueLabel::ListeningWindowManagementData);
+                    }
+                    0x74 => {
+                        labels.push(ValueLabel::RemainingBatteryLifeTime);
+                    }
+                    0x75 => {
+                        labels.push(ValueLabel::NumberOfTimesTheMeterWasStopped);
+                    }
+                    0x76 => {
+                        labels.push(ValueLabel::DataContainerForManufacturerSpecificProtocol);
+                    }
+                    0x7D => { /*
+
+                         */
+                    }
+                    _ => {
+                        labels.push(ValueLabel::Reserved);
+                    }
                 }
             }
             ValueInformationCoding::PlainText => {
@@ -815,7 +1057,9 @@ fn consume_orthhogonal_vife(
                 0x7F => {
                     labels.push(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific);
                 }
-                _ => todo!("Implement the rest of the units: {:X?}", v),
+                _ => {
+                    labels.push(ValueLabel::Reserved);
+                }
             };
         }
     }
@@ -830,70 +1074,6 @@ impl From<u8> for ValueInformationField {
     fn from(data: u8) -> Self {
         ValueInformationField { data }
     }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum VIFExtension {
-    AccessNumber,
-    Medium,
-    Manufacturer,
-    ParameterSetIdentification,
-    ModelVersion,
-    HardwareVersion,
-    FirmwareVersion,
-    SoftwareVersion,
-    CustomerLocation,
-    Customer,
-    AccessCodeUser,
-    AccessCodeOperator,
-    AccessCodeSystemOperator,
-    AccessCodeDeveloper,
-    Password,
-    ErrorFlags,
-    ErrorMask,
-    Reserved,
-    DigitalOutput,
-    DigitalInput,
-    BaudRate,
-    ResponseDelayTime,
-    Retry,
-    FirstStorage,
-    LastStorage,
-    SizeOfStorageBlock,
-    StorageIntervalSecondsToDays,
-    StorageIntervalMonths,
-    StorageIntervalYears,
-    DurationSinceLastReadout,
-    StartOfTariff,
-    DurationOfTariff,
-    PeriodOfTariff,
-    PeriodOfTarrifMonths,
-    PeriodOfTTariffYears,
-    Dimensionless,
-    ResetCounter,
-    CumulationCounter,
-    ControlSignal,
-    DayOfWeek,
-    WeekNumber,
-    TimePointOfDay,
-    StateOfParameterActivation,
-    SpecialSupervision,
-    DurationSinceLastCumulation,
-    OperatingTimeBattery,
-    DateAndTimeOfBatteryChange,
-    VolumeFeet3Tenth,
-    VolumeAmericanGallonTenth,
-    VolumeAmericanGallon,
-    VolumeFlowAmericanGallonPerMinuteThousandth,
-    VolumeFlowAmericanGallonPerMinute,
-    VolumeFlowAmericanGallonPerHour,
-    FlowTemperature,
-    ReturnTemperature,
-    TemperatureDifference,
-    ExternalTemperature,
-    ColdWarmTemperatureLimitFarenheit,
-    ColdWarmTemperatureLimitCelsius,
-    CumulativeCountMaxPower,
 }
 
 /// This is the most important type of the this file and represents
@@ -987,6 +1167,39 @@ pub enum ValueLabel {
     ErrorFlags,
     ErrorMask,
     SecurityKey,
+    DigitalInput,
+    DigitalOutput,
+    Binary,
+    BaudRate,
+    ResponseDelayTime,
+    Retry,
+    RemoteControl,
+    FirstStorageForCycleStorage,
+    LastStorageForCycleStorage,
+    SizeOfStorageBlock,
+    DescripitonOfTariffAndSubunit,
+    StorageInterval,
+    Dimensionless,
+    DataContainerForWmbusProtocol,
+    PeriodOfNormalDataTransmition,
+    ResetCounter,
+    CumulationCounter,
+    ControlSignal,
+    DayOfWeek,
+    WeekNumber,
+    TimePointOfChangeOfTariff,
+    StateOfParameterActivation,
+    SpecialSupplierInformation,
+    DurationSinceLastCumulation,
+    OperatingTimeBattery,
+    DateAndTimeOfBatteryChange,
+    RFPowerLevel,
+    DaylightSavingBeginningEndingDeviation,
+    ListeningWindowManagementData,
+    RemainingBatteryLifeTime,
+    NumberOfTimesTheMeterWasStopped,
+    DataContainerForManufacturerSpecificProtocol,
+    Reserved,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
@@ -1023,6 +1236,9 @@ pub enum UnitName {
     Volt,
     Ampere,
     LocalMoneyCurrency,
+    Symbol,
+    BitTime,
+    DecibelMilliWatt,
 }
 
 mod tests {
