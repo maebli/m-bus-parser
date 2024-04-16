@@ -66,8 +66,8 @@ impl From<&ValueInformationField> for ValueInformationCoding {
         match value_information.data {
             0x00..=0x7B | 0x80..=0xFA => ValueInformationCoding::Primary,
             0x7C | 0xFC => ValueInformationCoding::PlainText,
-            0xFD => ValueInformationCoding::LineaVIFExtension,
-            0xFB => ValueInformationCoding::Any,
+            0xFD => ValueInformationCoding::MainVIFExtension,
+            0xFB => ValueInformationCoding::AlternateVIFExtension,
             0x7E => ValueInformationCoding::ManufacturerSpecific,
             0xFE => ValueInformationCoding::ManufacturerSpecific,
             0x7F => ValueInformationCoding::ManufacturerSpecific,
@@ -93,8 +93,8 @@ impl ValueInformationFieldExtension {
 pub enum ValueInformationCoding {
     Primary,
     PlainText,
-    LineaVIFExtension,
-    Any,
+    MainVIFExtension,
+    AlternateVIFExtension,
     ManufacturerSpecific,
 }
 
@@ -289,7 +289,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                     &mut decimal_offset_exponent,
                 );
             }
-            ValueInformationCoding::LineaVIFExtension => {
+            ValueInformationCoding::MainVIFExtension => {
                 let vife = value_information_block
                     .value_information_extension
                     .as_ref()
@@ -626,6 +626,87 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                     _ => {
                         labels.push(ValueLabel::Reserved);
                     }
+                }
+            }
+            ValueInformationCoding::AlternateVIFExtension => {
+                let vife = value_information_block
+                    .value_information_extension
+                    .as_ref()
+                    .ok_or(Self::Error::InvalidValueInformation)?;
+                match vife[0].data & 0x7F {
+                    0x00 => {
+                        units.push(Unit {
+                            name: UnitName::Watt,
+                            exponent: 3,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: -1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 5;
+                    }
+                    0x01 => {
+                        units.push(Unit {
+                            name: UnitName::Watt,
+                            exponent: 3,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: -1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 6;
+                    }
+                    0x02 => {
+                        units.push(Unit {
+                            name: UnitName::ReactiveWatt,
+                            exponent: 1,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 3;
+                    }
+                    0x03 => {
+                        units.push(Unit {
+                            name: UnitName::ReactiveWatt,
+                            exponent: 1,
+                        });
+                        units.push(Unit {
+                            name: UnitName::Hour,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 4;
+                    }
+                    0x80 => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 8;
+                    }
+                    0x81 => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 9;
+                    }
+                    0x82 => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 5;
+                    }
+                    _ => todo!("Implement the rest of the units: {:X?}", vife[0].data),
                 }
             }
             ValueInformationCoding::PlainText => {
@@ -1218,6 +1299,7 @@ pub enum ValueLabel {
     NumberOfTimesTheMeterWasStopped,
     DataContainerForManufacturerSpecificProtocol,
     CurrentlySelectedApplication,
+    Energy,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
@@ -1228,6 +1310,7 @@ pub struct Unit {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnitName {
     Watt,
+    ReactiveWatt,
     Joul,
     Kilogram,
     Meter,

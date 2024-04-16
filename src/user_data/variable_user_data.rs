@@ -46,8 +46,8 @@ impl From<ValueInformationBlock> for Quantity {
                 x => todo!("Implement the rest of the units: {:?}", x),
             },
             ValueInformationCoding::PlainText => todo!(),
-            ValueInformationCoding::LineaVIFExtension => todo!(),
-            ValueInformationCoding::Any => todo!(),
+            ValueInformationCoding::MainVIFExtension => todo!(),
+            ValueInformationCoding::AlternateVIFExtension => todo!(),
             ValueInformationCoding::ManufacturerSpecific => todo!(),
         }
     }
@@ -74,8 +74,8 @@ impl From<ValueInformationField> for Exponent {
                 data => todo!("Implement the rest of the units: {:?}", data),
             },
             ValueInformationCoding::PlainText => Exponent { inner: None },
-            ValueInformationCoding::LineaVIFExtension => todo!(),
-            ValueInformationCoding::Any => todo!(),
+            ValueInformationCoding::MainVIFExtension => todo!(),
+            ValueInformationCoding::AlternateVIFExtension => todo!(),
             ValueInformationCoding::ManufacturerSpecific => todo!(),
         }
     }
