@@ -1199,7 +1199,6 @@ pub enum ValueLabel {
     RemainingBatteryLifeTime,
     NumberOfTimesTheMeterWasStopped,
     DataContainerForManufacturerSpecificProtocol,
-    Reserved,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
