@@ -682,7 +682,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         labels.push(ValueLabel::Energy);
                         decimal_scale_exponent = 4;
                     }
-                    0x80 => {
+                    0x08 => {
                         units.push(Unit {
                             name: UnitName::Joul,
                             exponent: 1,
@@ -690,7 +690,7 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         labels.push(ValueLabel::Energy);
                         decimal_scale_exponent = 8;
                     }
-                    0x81 => {
+                    0x09 => {
                         units.push(Unit {
                             name: UnitName::Joul,
                             exponent: 1,
@@ -698,13 +698,51 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         labels.push(ValueLabel::Energy);
                         decimal_scale_exponent = 9;
                     }
-                    0x82 => {
+                    0x0C => {
                         units.push(Unit {
                             name: UnitName::Joul,
                             exponent: 1,
                         });
                         labels.push(ValueLabel::Energy);
                         decimal_scale_exponent = 5;
+                    }
+                    0x0D => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 6;
+                    }
+                    0x0E => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 7;
+                    }
+                    0x0F => {
+                        units.push(Unit {
+                            name: UnitName::Joul,
+                            exponent: 1,
+                        });
+                        labels.push(ValueLabel::Energy);
+                        decimal_scale_exponent = 8;
+                    }
+                    0x10 => {
+                        units.push(Unit {
+                            name: UnitName::Meter,
+                            exponent: 3,
+                        });
+                        decimal_scale_exponent = 2;
+                    }
+                    0x11 => {
+                        units.push(Unit {
+                            name: UnitName::Meter,
+                            exponent: 3,
+                        });
+                        decimal_scale_exponent = 3;
                     }
 
                     _ => todo!("Implement the rest of the units: {:X?}", vife[0].data),
