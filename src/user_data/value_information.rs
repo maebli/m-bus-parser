@@ -744,6 +744,84 @@ impl TryFrom<ValueInformationBlock> for ValueInformation {
                         });
                         decimal_scale_exponent = 3;
                     }
+                    0x14 => {
+                        units.push(Unit {
+                            name: UnitName::ReactiveWatt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = -3;
+                    }
+                    0x15 => {
+                        units.push(Unit {
+                            name: UnitName::ReactiveWatt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = -2;
+                    }
+                    0x16 => {
+                        units.push(Unit {
+                            name: UnitName::ReactiveWatt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = -1;
+                    }
+                    0x17 => {
+                        units.push(Unit {
+                            name: UnitName::ReactiveWatt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = 0;
+                    }
+                    0x18 => {
+                        units.push(Unit {
+                            name: UnitName::Tonne,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = 2;
+                    }
+                    0x19 => {
+                        units.push(Unit {
+                            name: UnitName::Tonne,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = 3;
+                    }
+                    0x1A => {
+                        units.push(Unit {
+                            name: UnitName::Percent,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = -1;
+                        labels.push(ValueLabel::RelativeHumidity);
+                    }
+                    0x20 => {
+                        units.push(Unit {
+                            name: UnitName::Feet,
+                            exponent: 3,
+                        });
+                        decimal_scale_exponent = 0;
+                    }
+                    0x21 => {
+                        units.push(Unit {
+                            name: UnitName::Feet,
+                            exponent: 3,
+                        });
+                        decimal_scale_exponent = 1;
+                    }
+                    0x28 => {
+                        units.push(Unit {
+                            name: UnitName::Watt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = 5;
+                    }
+                    0x29 => {
+                        units.push(Unit {
+                            name: UnitName::Watt,
+                            exponent: 1,
+                        });
+                        decimal_scale_exponent = 6;
+                    }
 
                     _ => todo!("Implement the rest of the units: {:X?}", vife[0].data),
                 }
@@ -1388,6 +1466,7 @@ pub enum ValueLabel {
     DataPresentedWithTypeD,
     DirectionFromCommunicationPartnerToMeter,
     DirectionFromMeterToCommunicationPartner,
+    RelativeHumidity,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
@@ -1399,9 +1478,12 @@ pub struct Unit {
 pub enum UnitName {
     Watt,
     ReactiveWatt,
+    ApparentWatt,
     Joul,
     Kilogram,
+    Tonne,
     Meter,
+    Feet,
     Celsius,
     Kelvin,
     Bar,
@@ -1428,6 +1510,7 @@ pub enum UnitName {
     Symbol,
     BitTime,
     DecibelMilliWatt,
+    Percent,
 }
 
 mod tests {
