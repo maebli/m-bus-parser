@@ -1585,7 +1585,6 @@ impl From<u8> for ValueInformationField {
         ValueInformationField { data }
     }
 }
-
 /// This is the most important type of the this file and represents
 /// the whole information inside the value information block
 /// value(x) = (multiplier * value + offset) * units

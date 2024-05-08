@@ -2,8 +2,10 @@
 
 use arrayvec::ArrayVec;
 
-use self::variable_user_data::DataRecord;
+use self::data_record::DataRecord;
+
 pub mod data_information;
+pub mod data_record;
 pub mod value_information;
 pub mod variable_user_data;
 
@@ -13,7 +15,7 @@ const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 117;
 // Define a new struct that wraps ArrayVec
 #[derive(Debug, PartialEq)]
 pub struct DataRecords {
-    inner: ArrayVec<DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>,
+    inner: ArrayVec<data_record::DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>,
 }
 
 impl DataRecords {
@@ -23,7 +25,7 @@ impl DataRecords {
         }
     }
 
-    pub fn add_record(&mut self, record: DataRecord) -> Result<(), &'static str> {
+    pub fn add_record(&mut self, record: data_record::DataRecord) -> Result<(), &'static str> {
         if self.inner.try_push(record).is_err() {
             Err("Maximum capacity reached")
         } else {

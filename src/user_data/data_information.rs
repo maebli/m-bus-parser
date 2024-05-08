@@ -1,10 +1,75 @@
+use arrayvec::ArrayVec;
+
+use super::value_information::{ValueInformation, ValueInformationFieldExtension};
+
+const MAX_DIFE_RECORDS: usize = 10;
+#[derive(Debug, PartialEq)]
 pub struct DataInformationBlock {
-    pub _data_information_field: DataInformationField,
-    pub _data_information_field_extension: Option<DataInformationExtensionField>,
+    pub _data_information_field: DataInformation,
+    pub _data_information_field_extension:
+        Option<ArrayVec<ValueInformationFieldExtension, MAX_DIFE_RECORDS>>,
+}
+#[derive(Debug, PartialEq)]
+pub struct DataInformationField {
+    pub data: u8,
+}
+
+impl From<u8> for DataInformationField {
+    fn from(data: u8) -> Self {
+        DataInformationField { data }
+    }
+}
+
+impl From<u8> for DataInformationFieldExtension {
+    fn from(data: u8) -> Self {
+        DataInformationFieldExtension { data }
+    }
+}
+
+pub struct DataInformationFieldExtension {
+    pub data: u8,
+}
+
+impl TryFrom<&[u8]> for DataInformationBlock {
+    type Error = DataInformationError;
+
+    fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
+        let dife = ArrayVec::<ValueInformationFieldExtension, MAX_DIFE_RECORDS>::new();
+        let dif = DataInformationField::from(data[0]);
+
+        if dif.has_extension() {
+            let mut offset = 1;
+            while offset < data.len() {
+                let next_byte = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
+                let dife = DataInformationFieldExtension::from(next_byte);
+                if dife.has_extension() {
+                    offset += 1;
+                } else {
+                    break;
+                }
+            }
+        };
+        Ok(DataInformationBlock {
+            _data_information_field: DataInformation::try_from(data)?,
+            _data_information_field_extension: if dife.is_empty() { None } else { Some(dife) },
+        })
+    }
+}
+
+impl DataInformationField {
+    fn has_extension(&self) -> bool {
+        self.data & 0x80 != 0
+    }
+}
+
+impl DataInformationFieldExtension {
+    fn has_extension(&self) -> bool {
+        self.data & 0x80 != 0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DataInformationField {
+pub struct DataInformation {
     pub storage_number: u64,
     pub function_field: FunctionField,
     pub data_field_coding: DataFieldCoding,
@@ -24,7 +89,7 @@ pub enum DataInformationError {
     DataTooShort,
 }
 
-impl TryFrom<&[u8]> for DataInformationField {
+impl TryFrom<&[u8]> for DataInformation {
     type Error = DataInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
@@ -84,7 +149,7 @@ impl TryFrom<&[u8]> for DataInformationField {
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
-        Ok(DataInformationField {
+        Ok(DataInformation {
             storage_number,
             function_field,
             data_field_coding,
@@ -98,7 +163,7 @@ impl TryFrom<&[u8]> for DataInformationField {
     }
 }
 
-impl DataInformationField {
+impl DataInformation {
     pub fn get_size(&self) -> usize {
         self.size
     }
@@ -277,10 +342,10 @@ mod tests {
     #[test]
     fn test_data_information() {
         let data = [0x13 as u8];
-        let result = DataInformationField::try_from(data.as_slice());
+        let result = DataInformation::try_from(data.as_slice());
         assert_eq!(
             result,
-            Ok(DataInformationField {
+            Ok(DataInformation {
                 storage_number: 0,
                 function_field: FunctionField::MaximumValue,
                 data_field_coding: DataFieldCoding::Integer24Bit,
@@ -295,7 +360,7 @@ mod tests {
         let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformationField::try_from(data.as_slice());
+        let result = DataInformation::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
 
@@ -304,14 +369,14 @@ mod tests {
         let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformationField::try_from(data.as_slice());
+        let result = DataInformation::try_from(data.as_slice());
         assert_ne!(result, Err(DataInformationError::DataTooLong));
     }
 
     #[test]
     fn test_short_data_information() {
         let data = [0xFF];
-        let result = DataInformationField::try_from(data.as_slice());
+        let result = DataInformation::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooShort));
     }
 }
