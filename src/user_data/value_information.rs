@@ -1,11 +1,13 @@
 use arrayvec::ArrayVec;
 
+use super::data_information::DataInformationError;
+
 const MAX_VIFE_RECORDS: usize = 10;
 
 impl TryFrom<&[u8]> for ValueInformationBlock {
-    type Error = ValueInformationError;
+    type Error = DataInformationError;
 
-    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
+    fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
         let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
         let vif = ValueInformationField::from(data[0]);
 
@@ -32,7 +34,7 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                     break;
                 }
                 if vife.len() > MAX_VIFE_RECORDS {
-                    return Err(ValueInformationError::InvalidValueInformation);
+                    return Err(DataInformationError::InvalidValueInformation);
                 }
             }
         }

@@ -1,17 +1,26 @@
+use super::data_information::{self};
+use super::value_information::ValueInformationFieldExtension;
 use arrayvec::ArrayVec;
-
-use super::value_information::{ValueInformation, ValueInformationFieldExtension};
 
 const MAX_DIFE_RECORDS: usize = 10;
 #[derive(Debug, PartialEq)]
 pub struct DataInformationBlock {
-    pub _data_information_field: DataInformation,
-    pub _data_information_field_extension:
+    pub data_information_field: DataInformation,
+    pub data_information_field_extension:
         Option<ArrayVec<ValueInformationFieldExtension, MAX_DIFE_RECORDS>>,
 }
 #[derive(Debug, PartialEq)]
 pub struct DataInformationField {
     pub data: u8,
+}
+pub enum DataRecordError {
+    DataInformationError(data_information::DataInformationError),
+}
+
+impl From<data_information::DataInformationError> for DataRecordError {
+    fn from(error: data_information::DataInformationError) -> Self {
+        DataRecordError::DataInformationError(error)
+    }
 }
 
 impl From<u8> for DataInformationField {
@@ -50,8 +59,8 @@ impl TryFrom<&[u8]> for DataInformationBlock {
             }
         };
         Ok(DataInformationBlock {
-            _data_information_field: DataInformation::try_from(data)?,
-            _data_information_field_extension: if dife.is_empty() { None } else { Some(dife) },
+            data_information_field: DataInformation::try_from(data)?,
+            data_information_field_extension: if dife.is_empty() { None } else { Some(dife) },
         })
     }
 }
@@ -87,6 +96,7 @@ pub enum DataInformationError {
     NoData,
     DataTooLong,
     DataTooShort,
+    InvalidValueInformation,
 }
 
 impl TryFrom<&[u8]> for DataInformation {
