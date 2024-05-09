@@ -1,5 +1,6 @@
 use super::{
-    data_information::DataInformationBlock, value_information::ValueInformationBlock,
+    data_information::{DataInformation, DataInformationBlock},
+    value_information::{ValueInformation, ValueInformationBlock},
     variable_user_data::DataRecordError,
 };
 
@@ -9,22 +10,37 @@ pub struct DataRecordHeader {
     pub value_information_block: ValueInformationBlock,
 }
 #[derive(Debug, PartialEq)]
+pub struct RawData {}
+#[derive(Debug, PartialEq)]
 pub struct Data {}
 
 #[derive(Debug, PartialEq)]
 pub struct DataRecord {
+    pub raw_data_record: RawDataRecord,
+    pub processed_data: ProcessedDataRecord,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct RawDataRecord {
     pub header: DataRecordHeader,
+    pub data: RawData,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ProcessedDataRecord {
+    pub value_information: ValueInformation,
+    pub data_information: DataInformation,
     pub data: Data,
 }
 
-impl TryFrom<&[u8]> for DataRecord {
+impl TryFrom<&[u8]> for RawDataRecord {
     type Error = DataRecordError;
-    fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
+    fn try_from(data: &[u8]) -> Result<RawDataRecord, DataRecordError> {
         let header = DataRecordHeader {
             data_information_block: DataInformationBlock::try_from(data)?,
             value_information_block: ValueInformationBlock::try_from(data)?,
         };
-        let data = Data {};
-        Ok(DataRecord { header, data })
+        let data = RawData {};
+        Ok(RawDataRecord { header, data })
     }
 }
