@@ -1,3 +1,5 @@
+use crate::user_data::data_information::DataInformationField;
+
 use super::{
     data_information::{DataInformation, DataInformationBlock},
     value_information::{ValueInformation, ValueInformationBlock},

@@ -5,7 +5,7 @@ use arrayvec::ArrayVec;
 const MAX_DIFE_RECORDS: usize = 10;
 #[derive(Debug, PartialEq)]
 pub struct DataInformationBlock {
-    pub data_information_field: DataInformation,
+    pub data_information_field: DataInformationField,
     pub data_information_field_extension:
         Option<ArrayVec<ValueInformationFieldExtension, MAX_DIFE_RECORDS>>,
 }
@@ -59,7 +59,7 @@ impl TryFrom<&[u8]> for DataInformationBlock {
             }
         };
         Ok(DataInformationBlock {
-            data_information_field: DataInformation::try_from(data)?,
+            data_information_field: DataInformationField::from(dif),
             data_information_field_extension: if dife.is_empty() { None } else { Some(dife) },
         })
     }
@@ -99,41 +99,44 @@ pub enum DataInformationError {
     InvalidValueInformation,
 }
 
-impl TryFrom<&[u8]> for DataInformation {
+impl TryFrom<&DataInformationBlock> for DataInformation {
     type Error = DataInformationError;
 
-    fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
-        let first_byte = *data.first().ok_or(DataInformationError::DataTooLong)?;
+    fn try_from(
+        data_information_block: &DataInformationBlock,
+    ) -> Result<Self, DataInformationError> {
+        let dif = data_information_block.data_information_field.data;
+        let possible_difes = &data_information_block.data_information_field_extension;
+        let mut storage_number = ((dif & 0b0100_0000) >> 6) as u64;
 
-        let mut storage_number = ((first_byte & 0b0100_0000) >> 6) as u64;
-
-        let mut extension_bit = data[0] & 0x80 != 0;
+        let mut extension_bit = dif & 0x80 != 0;
         let mut extension_index = 1;
         let mut _tariff = 0;
         let mut _sub_unit = 0;
+        let mut first_dife = None;
 
-        while extension_bit {
-            if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
-                return Err(DataInformationError::DataTooLong);
+        if let Some(difes) = possible_difes {
+            first_dife = Some(difes[0].data);
+            for dife in difes {
+                if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
+                    return Err(DataInformationError::DataTooLong);
+                }
+                let dife = dife.data;
+                storage_number += ((dife & 0x0f) as u64) << ((extension_index * 4) + 1);
+                _sub_unit += (((dife & 0x40) >> 6) as u32) << extension_index;
+                _tariff += (((dife & 0x30) >> 4) as u64) << (extension_index * 2);
+                extension_bit = dife & 0x80 != 0;
+                extension_index += 1;
             }
-
-            let next_byte = *data
-                .get(extension_index)
-                .ok_or(DataInformationError::DataTooShort)?;
-            storage_number += ((next_byte & 0x0f) as u64) << ((extension_index * 4) + 1);
-            _sub_unit += (((next_byte & 0x40) >> 6) as u32) << extension_index;
-            _tariff += (((next_byte & 0x30) >> 4) as u64) << (extension_index * 2);
-            extension_bit = next_byte & 0x80 != 0;
-            extension_index += 1;
         }
 
-        let function_field = match (data[0] & 0b0011_0000) >> 4 {
+        let function_field = match (dif & 0b0011_0000) >> 4 {
             0b00 => FunctionField::InstantaneousValue,
             0b01 => FunctionField::MaximumValue,
             0b10 => FunctionField::MinimumValue,
             _ => FunctionField::ValueDuringErrorState,
         };
-        let data_field_coding = match data[0] & 0b0000_1111 {
+        let data_field_coding = match dif & 0b0000_1111 {
             0b0000 => DataFieldCoding::NoData,
             0b0001 => DataFieldCoding::Integer8Bit,
             0b0010 => DataFieldCoding::Integer16Bit,
@@ -149,7 +152,7 @@ impl TryFrom<&[u8]> for DataInformation {
             0b1100 => DataFieldCoding::BCD8Digit,
             0b1101 => DataFieldCoding::VariableLength,
             0b1110 => DataFieldCoding::BCDDigit12,
-            0b1111 => DataFieldCoding::SpecialFunctions(match data[1] {
+            0b1111 => DataFieldCoding::SpecialFunctions(match first_dife.unwrap() {
                 0x0F => SpecialFunctions::ManufacturerSpecific,
                 0x1F => SpecialFunctions::MoreRecordsFollow,
                 0x2F => SpecialFunctions::IdleFiller,
@@ -352,7 +355,8 @@ mod tests {
     #[test]
     fn test_data_information() {
         let data = [0x13 as u8];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationBlock::try_from(data.as_slice());
+        let result = DataInformation::try_from(&result.unwrap());
         assert_eq!(
             result,
             Ok(DataInformation {
@@ -370,7 +374,7 @@ mod tests {
         let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationBlock::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooLong));
     }
 
@@ -379,14 +383,14 @@ mod tests {
         let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
         ];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationBlock::try_from(data.as_slice());
         assert_ne!(result, Err(DataInformationError::DataTooLong));
     }
 
     #[test]
     fn test_short_data_information() {
         let data = [0xFF];
-        let result = DataInformation::try_from(data.as_slice());
+        let result = DataInformationBlock::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooShort));
     }
 }

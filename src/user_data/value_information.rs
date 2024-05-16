@@ -2018,7 +2018,7 @@ mod tests {
                 decimal_offset_exponent: 0,
                 decimal_scale_exponent: 0,
                 units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
+                    let x = ArrayVec::<Unit, 10>::new();
                     x
                 },
                 labels: {
