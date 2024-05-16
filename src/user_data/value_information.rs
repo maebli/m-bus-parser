@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 
-use super::data_information::DataInformationError;
+use super::{data_information::DataInformationError, data_record::Data};
 
 const MAX_VIFE_RECORDS: usize = 10;
 
@@ -118,12 +118,12 @@ impl ValueInformationBlock {
     }
 }
 
-impl TryFrom<ValueInformationBlock> for ValueInformation {
-    type Error = ValueInformationError;
+impl TryFrom<&ValueInformationBlock> for ValueInformation {
+    type Error = DataInformationError;
 
     fn try_from(
-        value_information_block: ValueInformationBlock,
-    ) -> Result<Self, ValueInformationError> {
+        value_information_block: &ValueInformationBlock,
+    ) -> Result<Self, DataInformationError> {
         let mut units = ArrayVec::<Unit, 10>::new();
         let mut labels = ArrayVec::<ValueLabel, 10>::new();
         let mut decimal_scale_exponent: isize = 0;
@@ -1812,7 +1812,7 @@ mod tests {
         );
         assert_eq!(result._get_size(), 1);
         assert_eq!(
-            ValueInformation::try_from(result).unwrap(),
+            ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 decimal_offset_exponent: 0,
                 decimal_scale_exponent: -3,
@@ -1840,7 +1840,7 @@ mod tests {
         );
         assert_eq!(result._get_size(), 1);
         assert_eq!(
-            ValueInformation::try_from(result).unwrap(),
+            ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 decimal_offset_exponent: 0,
                 decimal_scale_exponent: -2,
@@ -1868,7 +1868,7 @@ mod tests {
         );
         assert_eq!(result._get_size(), 1);
         assert_eq!(
-            ValueInformation::try_from(result).unwrap(),
+            ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 decimal_offset_exponent: 0,
                 decimal_scale_exponent: -1,
@@ -1913,7 +1913,7 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result._get_size(), 2);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
-        assert_eq!(ValueInformation::try_from(result).unwrap().labels, {
+        assert_eq!(ValueInformation::try_from(&result).unwrap().labels, {
             let mut x = ArrayVec::<ValueLabel, 10>::new();
             x.push(ValueLabel::Averaged);
             x
@@ -1929,7 +1929,7 @@ mod tests {
         assert_eq!(result._get_size(), 3);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(
-            ValueInformation::try_from(result).unwrap(),
+            ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();
@@ -1964,7 +1964,7 @@ mod tests {
         assert_eq!(result._get_size(), 4);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(
-            ValueInformation::try_from(result).unwrap(),
+            ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();
@@ -2013,7 +2013,7 @@ mod tests {
         assert_eq!(result._get_size(), 2);
         assert_eq!(result.value_information.data, 0xFC);
         assert_eq!(
-            ValueInformation::try_from(result).unwrap(),
+            ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 decimal_offset_exponent: 0,
                 decimal_scale_exponent: 0,
