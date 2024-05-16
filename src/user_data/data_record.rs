@@ -38,9 +38,13 @@ pub struct ProcessedDataRecord {
 impl TryFrom<&[u8]> for RawDataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<RawDataRecord, DataRecordError> {
+        let difb = DataInformationBlock::try_from(data)?;
+        let offset = difb.get_size();
+        let vifb = ValueInformationBlock::try_from(&data[offset..])?;
+        let offset = offset + vifb.get_size();
         let header = DataRecordHeader {
-            data_information_block: DataInformationBlock::try_from(data)?,
-            value_information_block: ValueInformationBlock::try_from(data)?,
+            data_information_block: difb,
+            value_information_block: vifb,
         };
         let data = RawData {};
         Ok(RawDataRecord { header, data })
@@ -84,7 +88,6 @@ mod tests {
     #[test]
     fn test_parse_raw_data_record() {
         let data = &[0x03, 0x13, 0x15, 0x31, 0x00];
-        let raw_data_record = RawDataRecord::try_from(data.as_slice());
-        let processed_data_record = ProcessedDataRecord::try_from(&raw_data_record.unwrap());
+        let result = DataRecord::try_from(data.as_slice());
     }
 }

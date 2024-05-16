@@ -109,7 +109,7 @@ pub enum ValueInformationFieldExtensionCoding {
 }
 
 impl ValueInformationBlock {
-    fn _get_size(&self) -> usize {
+    pub fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
             size += vife.len();
@@ -1810,7 +1810,7 @@ mod tests {
                 value_information_extension: None
             }
         );
-        assert_eq!(result._get_size(), 1);
+        assert_eq!(result.get_size(), 1);
         assert_eq!(
             ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
@@ -1838,7 +1838,7 @@ mod tests {
                 value_information_extension: None
             }
         );
-        assert_eq!(result._get_size(), 1);
+        assert_eq!(result.get_size(), 1);
         assert_eq!(
             ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
@@ -1866,7 +1866,7 @@ mod tests {
                 value_information_extension: None
             }
         );
-        assert_eq!(result._get_size(), 1);
+        assert_eq!(result.get_size(), 1);
         assert_eq!(
             ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
@@ -1894,7 +1894,7 @@ mod tests {
                 value_information_extension: None
             },
         );
-        assert_eq!(result._get_size(), 1);
+        assert_eq!(result.get_size(), 1);
     }
 
     #[test]
@@ -1911,7 +1911,7 @@ mod tests {
         /* VIB = 0x96, 0x12 */
         let data = [0x96, 0x12];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result._get_size(), 2);
+        assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(ValueInformation::try_from(&result).unwrap().labels, {
             let mut x = ArrayVec::<ValueLabel, 10>::new();
@@ -1926,7 +1926,7 @@ mod tests {
 
         let data = [0x96, 0x92, 0x20];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result._get_size(), 3);
+        assert_eq!(result.get_size(), 3);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(
             ValueInformation::try_from(&result).unwrap(),
@@ -1961,7 +1961,7 @@ mod tests {
         /* VIB = 0x96, 0x92,0xA0, 0x2D */
         let data = [0x96, 0x92, 0xA0, 0x2D];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result._get_size(), 4);
+        assert_eq!(result.get_size(), 4);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(
             ValueInformation::try_from(&result).unwrap(),
@@ -2010,7 +2010,7 @@ mod tests {
         // according to the Norm the LEN and ASCII is not part tof the VIB
         let data = [0xFC, 0x74];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result._get_size(), 2);
+        assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information.data, 0xFC);
         assert_eq!(
             ValueInformation::try_from(&result).unwrap(),

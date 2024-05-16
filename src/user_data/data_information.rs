@@ -9,6 +9,17 @@ pub struct DataInformationBlock {
     pub data_information_field_extension:
         Option<ArrayVec<ValueInformationFieldExtension, MAX_DIFE_RECORDS>>,
 }
+
+impl DataInformationBlock {
+    pub fn get_size(&self) -> usize {
+        let mut size = 1;
+        if let Some(vife) = &self.data_information_field_extension {
+            size += vife.len();
+        }
+        size
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct DataInformationField {
     pub data: u8,
