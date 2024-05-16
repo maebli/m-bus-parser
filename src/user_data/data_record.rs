@@ -56,7 +56,6 @@ impl TryFrom<&RawDataRecordHeader> for ProcessedDataRecordHeader {
             ValueInformation::try_from(&raw_data_record_header.value_information_block)?;
         let data_information =
             DataInformation::try_from(&raw_data_record_header.data_information_block)?;
-        let data = Data {};
         Ok(ProcessedDataRecordHeader {
             value_information,
             data_information,
@@ -81,7 +80,7 @@ impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_record_header = DataRecordHeader::try_from(data)?;
-        let data = Data {};
+        let data = Data::try_from(&data_record_header);
         Ok(DataRecord {
             value_information: data_record_header
                 .processed_data_record_header
@@ -89,8 +88,15 @@ impl TryFrom<&[u8]> for DataRecord {
             data_information: data_record_header
                 .processed_data_record_header
                 .data_information,
-            data,
+            data: data?,
         })
+    }
+}
+
+impl TryFrom<&DataRecordHeader> for Data {
+    type Error = DataRecordError;
+    fn try_from(data_record_header: &DataRecordHeader) -> Result<Data, DataRecordError> {
+        Ok(Data {})
     }
 }
 
