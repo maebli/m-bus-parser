@@ -7,7 +7,7 @@ license = "MIT"
 homepage = "https://maebli.github.io/"
 repository = "https://github.com/maebli/m-bus-parser"
 readme = "README.md"
-author = "Michael Aebli"
+authors = ["Michael Aebli"]
 keywords = ["m-bus", "parser", "parse", "cli"]
 
 [dev-dependencies]
@@ -16,11 +16,6 @@ keywords = ["m-bus", "parser", "parse", "cli"]
 
 [features]
 
-[profile.release]
-opt-level = 'z'   # Optimize for size
-lto = true        # Enable Link Time Optimization
-codegen-units = 1 # Reduce codegen units to improve optimizations
-
 [dependencies]
 m-bus-parser = { path = "..", version = "0.0.3" }
-clap = "4.5.4"
+clap = { version = "4.5.4", features = ["derive"] }
