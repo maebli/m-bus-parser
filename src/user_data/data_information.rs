@@ -1,5 +1,6 @@
 use super::data_information::{self};
 use super::value_information::ValueInformationFieldExtension;
+use super::variable_user_data::DataRecordError;
 use arrayvec::ArrayVec;
 
 const MAX_DIFE_RECORDS: usize = 10;
@@ -23,9 +24,6 @@ impl DataInformationBlock {
 #[derive(Debug, PartialEq)]
 pub struct DataInformationField {
     pub data: u8,
-}
-pub enum DataRecordError {
-    DataInformationError(data_information::DataInformationError),
 }
 
 impl From<data_information::DataInformationError> for DataRecordError {
@@ -187,6 +185,178 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
     }
 }
 
+#[derive(PartialEq, Debug)]
+pub struct Data {
+    value: Option<f64>,
+}
+
+impl DataFieldCoding {
+    pub fn parse(&self, input: &[u8]) -> Result<Data, DataRecordError> {
+        match self {
+            DataFieldCoding::NoData => Ok(Data { value: None }),
+
+            DataFieldCoding::Integer8Bit => {
+                if input.len() < 1 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = input[0] as i8;
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::Integer16Bit => {
+                if input.len() < 2 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = i16::from_le_bytes(input[0..2].try_into().unwrap());
+
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::Integer24Bit => {
+                if input.len() < 3 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = ((input[0] as i32)
+                    | ((input[1] as i32) << 8)
+                    | ((input[2] as i32) << 16)) as i32;
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::Integer32Bit => {
+                if input.len() < 4 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = i32::from_le_bytes(input[0..4].try_into().unwrap());
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::Real32Bit => {
+                if input.len() < 4 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = f32::from_le_bytes(input[0..4].try_into().unwrap());
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::Integer48Bit => {
+                if input.len() < 6 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = ((input[0] as i64)
+                    | ((input[1] as i64) << 8)
+                    | ((input[2] as i64) << 16)
+                    | ((input[3] as i64) << 24)
+                    | ((input[4] as i64) << 32)
+                    | ((input[5] as i64) << 40)) as i64;
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::Integer64Bit => {
+                if input.len() < 8 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = i64::from_le_bytes(input[0..8].try_into().unwrap());
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::SelectionForReadout => {
+                // Implementation depends on the specific format for this variant
+                todo!()
+            }
+
+            DataFieldCoding::BCD2Digit => {
+                if input.len() < 1 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = bcd_to_u8(input[0]);
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::BCD4Digit => {
+                if input.len() < 2 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = bcd_to_u16(&input[0..2]);
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::BCD6Digit => {
+                if input.len() < 3 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = bcd_to_u32(&input[0..3]);
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::BCD8Digit => {
+                if input.len() < 4 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = bcd_to_u32(&input[0..4]);
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::VariableLength => {
+                // Variable length data parsing
+                todo!()
+            }
+
+            DataFieldCoding::BCDDigit12 => {
+                if input.len() < 6 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let value = bcd_to_u48(&input[0..6]);
+                Ok(Data {
+                    value: Some(value as f64),
+                })
+            }
+
+            DataFieldCoding::SpecialFunctions(code) => {
+                // Special functions parsing based on the code
+                todo!()
+            }
+        }
+    }
+}
+
+// Helper functions for BCD parsing
+fn bcd_to_u8(bcd: u8) -> u8 {
+    ((bcd >> 4) * 10 + (bcd & 0x0F)) as u8
+}
+
+fn bcd_to_u16(bcd: &[u8]) -> u16 {
+    (bcd_to_u8(bcd[0]) as u16 * 100 + bcd_to_u8(bcd[1]) as u16) as u16
+}
+
+fn bcd_to_u32(bcd: &[u8]) -> u32 {
+    (bcd_to_u16(&bcd[0..2]) as u32 * 10000 + bcd_to_u16(&bcd[2..4]) as u32) as u32
+}
+
+fn bcd_to_u48(bcd: &[u8]) -> u64 {
+    (bcd_to_u32(&bcd[0..4]) as u64 * 1000000 + bcd_to_u16(&bcd[4..6]) as u64) as u64
+}
 impl DataInformation {
     pub fn get_size(&self) -> usize {
         self.size

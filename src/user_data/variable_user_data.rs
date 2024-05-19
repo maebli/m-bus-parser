@@ -4,12 +4,7 @@ use super::DataRecords;
 #[derive(Debug, PartialEq)]
 pub enum DataRecordError {
     DataInformationError(data_information::DataInformationError),
-}
-
-impl From<data_information::DataInformationError> for DataRecordError {
-    fn from(error: data_information::DataInformationError) -> Self {
-        DataRecordError::DataInformationError(error)
-    }
+    InsufficientData,
 }
 
 #[derive(Debug, PartialEq)]

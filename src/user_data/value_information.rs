@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 
-use super::{data_information::DataInformationError, data_record::Data};
+use super::data_information::DataInformationError;
 
 const MAX_VIFE_RECORDS: usize = 10;
 

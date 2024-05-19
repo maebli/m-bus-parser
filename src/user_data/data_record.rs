@@ -1,5 +1,5 @@
 use super::{
-    data_information::{DataInformation, DataInformationBlock},
+    data_information::{Data, DataInformation, DataInformationBlock},
     value_information::{ValueInformation, ValueInformationBlock},
     variable_user_data::DataRecordError,
 };
@@ -18,15 +18,9 @@ pub struct ProcessedDataRecordHeader {
 
 #[derive(Debug, PartialEq)]
 pub struct DataRecord {
-    pub value_information: ValueInformation,
-    pub data_information: DataInformation,
+    pub data_record_header: DataRecordHeader,
     pub data: Data,
 }
-
-#[derive(Debug, PartialEq)]
-pub struct RawData {}
-#[derive(Debug, PartialEq)]
-pub struct Data {}
 
 #[derive(Debug, PartialEq)]
 pub struct DataRecordHeader {
@@ -80,31 +74,29 @@ impl TryFrom<&[u8]> for DataRecord {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_record_header = DataRecordHeader::try_from(data)?;
-        let data = Data::try_from(&data_record_header);
+        let offset = data_record_header
+            .raw_data_record_header
+            .data_information_block
+            .get_size()
+            + data_record_header
+                .raw_data_record_header
+                .value_information_block
+                .get_size();
+        let data = data_record_header
+            .processed_data_record_header
+            .data_information
+            .data_field_coding
+            .parse(&data[offset..])?;
         Ok(DataRecord {
-            value_information: data_record_header
-                .processed_data_record_header
-                .value_information,
-            data_information: data_record_header
-                .processed_data_record_header
-                .data_information,
-            data: data?,
+            data_record_header,
+            data,
         })
-    }
-}
-
-impl TryFrom<&DataRecordHeader> for Data {
-    type Error = DataRecordError;
-    fn try_from(data_record_header: &DataRecordHeader) -> Result<Data, DataRecordError> {
-        Ok(Data {})
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::user_data::data_information::DataInformationField;
-    use crate::user_data::value_information::ValueInformationField;
 
     #[test]
     fn test_parse_raw_data_record() {
