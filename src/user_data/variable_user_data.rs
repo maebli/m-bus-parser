@@ -1,4 +1,5 @@
 use super::data_information::{self};
+use super::data_record::DataRecord;
 use super::DataRecords;
 
 #[derive(Debug, PartialEq)]
@@ -40,9 +41,9 @@ impl TryFrom<&[u8]> for DataRecords {
                     offset += 1;
                 }
                 _ => {
-                    //let record = DataRecord::try_from(&data[offset..])?;
-                    //let _ = records.add_record(record);
-                    //offset += records.last().unwrap().size;
+                    let record = DataRecord::try_from(&data[offset..])?;
+                    offset += record.get_size();
+                    let _res = records.add_record(record);
                 }
             }
         }

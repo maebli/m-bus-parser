@@ -188,12 +188,22 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
 #[derive(PartialEq, Debug)]
 pub struct Data {
     value: Option<f64>,
+    size: usize,
+}
+
+impl Data {
+    pub fn get_size(&self) -> usize {
+        self.size
+    }
 }
 
 impl DataFieldCoding {
     pub fn parse(&self, input: &[u8]) -> Result<Data, DataRecordError> {
         match self {
-            DataFieldCoding::NoData => Ok(Data { value: None }),
+            DataFieldCoding::NoData => Ok(Data {
+                value: None,
+                size: 0,
+            }),
 
             DataFieldCoding::Integer8Bit => {
                 if input.len() < 1 {
@@ -202,6 +212,7 @@ impl DataFieldCoding {
                 let value = input[0] as i8;
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 1,
                 })
             }
 
@@ -213,6 +224,7 @@ impl DataFieldCoding {
 
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 2,
                 })
             }
 
@@ -225,6 +237,7 @@ impl DataFieldCoding {
                     | ((input[2] as i32) << 16)) as i32;
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 3,
                 })
             }
 
@@ -235,6 +248,7 @@ impl DataFieldCoding {
                 let value = i32::from_le_bytes(input[0..4].try_into().unwrap());
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 4,
                 })
             }
 
@@ -245,6 +259,7 @@ impl DataFieldCoding {
                 let value = f32::from_le_bytes(input[0..4].try_into().unwrap());
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 4,
                 })
             }
 
@@ -260,6 +275,7 @@ impl DataFieldCoding {
                     | ((input[5] as i64) << 40)) as i64;
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 6,
                 })
             }
 
@@ -270,6 +286,7 @@ impl DataFieldCoding {
                 let value = i64::from_le_bytes(input[0..8].try_into().unwrap());
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 8,
                 })
             }
 
@@ -285,6 +302,7 @@ impl DataFieldCoding {
                 let value = bcd_to_u8(input[0]);
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 1,
                 })
             }
 
@@ -295,6 +313,7 @@ impl DataFieldCoding {
                 let value = bcd_to_u16(&input[0..2]);
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 2,
                 })
             }
 
@@ -305,6 +324,7 @@ impl DataFieldCoding {
                 let value = bcd_to_u32(&input[0..3]);
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 3,
                 })
             }
 
@@ -315,6 +335,7 @@ impl DataFieldCoding {
                 let value = bcd_to_u32(&input[0..4]);
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 4,
                 })
             }
 
@@ -330,10 +351,11 @@ impl DataFieldCoding {
                 let value = bcd_to_u48(&input[0..6]);
                 Ok(Data {
                     value: Some(value as f64),
+                    size: 6,
                 })
             }
 
-            DataFieldCoding::SpecialFunctions(code) => {
+            DataFieldCoding::SpecialFunctions(_code) => {
                 // Special functions parsing based on the code
                 todo!()
             }

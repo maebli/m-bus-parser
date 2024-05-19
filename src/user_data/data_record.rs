@@ -22,10 +22,28 @@ pub struct DataRecord {
     pub data: Data,
 }
 
+impl DataRecord {
+    pub fn get_size(&self) -> usize {
+        self.data_record_header.get_size() + self.data.get_size()
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct DataRecordHeader {
     pub raw_data_record_header: RawDataRecordHeader,
     pub processed_data_record_header: ProcessedDataRecordHeader,
+}
+
+impl DataRecordHeader {
+    pub fn get_size(&self) -> usize {
+        self.raw_data_record_header
+            .data_information_block
+            .get_size()
+            + self
+                .raw_data_record_header
+                .value_information_block
+                .get_size()
+    }
 }
 
 impl TryFrom<&[u8]> for RawDataRecordHeader {
@@ -101,6 +119,6 @@ mod tests {
     #[test]
     fn test_parse_raw_data_record() {
         let data = &[0x03, 0x13, 0x15, 0x31, 0x00];
-        let result = DataRecordHeader::try_from(data.as_slice());
+        let _result = DataRecordHeader::try_from(data.as_slice());
     }
 }
