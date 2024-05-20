@@ -278,6 +278,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             (value_information_block.value_information.data & 0b11) as isize - 3;
                     }
                     0x6C..=0x6D => labels.push(ValueLabel::TimePoint),
+                    0x72..=0x75 => labels.push(ValueLabel::AveragingDuration),
                     0x74..=0x77 => labels.push(ValueLabel::ActualityDuration),
                     0x78 => labels.push(ValueLabel::FabricationNumber),
                     x => todo!("Implement the rest of the units: {:X?}", x),
@@ -1613,6 +1614,7 @@ pub enum ValueLabel {
     CompactProfileWithRegisterNumbers,
     CompactProfile,
     ActualityDuration,
+    AveragingDuration,
     TimePoint,
     FabricationNumber,
     PlainText,

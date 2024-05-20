@@ -63,6 +63,7 @@ fn main() {
             println!("variable_data_block: {:?}", variable_data_block);
             let data_records = m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
             assert!(data_records.is_ok());
+            println!("data_records: {:?}", data_records.unwrap());
         }
     }
 }
