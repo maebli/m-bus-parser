@@ -68,7 +68,7 @@ impl TryFrom<&[u8]> for DataInformationBlock {
             }
         };
         Ok(DataInformationBlock {
-            data_information_field: DataInformationField::from(dif),
+            data_information_field: dif,
             data_information_field_extension: if dife.is_empty() { None } else { Some(dife) },
         })
     }
@@ -206,7 +206,7 @@ impl DataFieldCoding {
             }),
 
             DataFieldCoding::Integer8Bit => {
-                if input.len() < 1 {
+                if input.is_empty() {
                     return Err(DataRecordError::InsufficientData);
                 }
                 let value = input[0] as i8;
@@ -232,9 +232,8 @@ impl DataFieldCoding {
                 if input.len() < 3 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let value = ((input[0] as i32)
-                    | ((input[1] as i32) << 8)
-                    | ((input[2] as i32) << 16)) as i32;
+                let value =
+                    (input[0] as i32) | ((input[1] as i32) << 8) | ((input[2] as i32) << 16);
                 Ok(Data {
                     value: Some(value as f64),
                     size: 3,
@@ -267,12 +266,12 @@ impl DataFieldCoding {
                 if input.len() < 6 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let value = ((input[0] as i64)
+                let value = (input[0] as i64)
                     | ((input[1] as i64) << 8)
                     | ((input[2] as i64) << 16)
                     | ((input[3] as i64) << 24)
                     | ((input[4] as i64) << 32)
-                    | ((input[5] as i64) << 40)) as i64;
+                    | ((input[5] as i64) << 40);
                 Ok(Data {
                     value: Some(value as f64),
                     size: 6,
@@ -296,7 +295,7 @@ impl DataFieldCoding {
             }
 
             DataFieldCoding::BCD2Digit => {
-                if input.len() < 1 {
+                if input.is_empty() {
                     return Err(DataRecordError::InsufficientData);
                 }
                 let value = bcd_to_u8(input[0]);
@@ -365,7 +364,7 @@ impl DataFieldCoding {
 
 // Helper functions for BCD parsing
 fn bcd_to_u8(bcd: u8) -> u8 {
-    ((bcd >> 4) * 10 + (bcd & 0x0F)) as u8
+    (bcd >> 4) * 10 + (bcd & 0x0F)
 }
 
 fn bcd_to_u16(bcd: &[u8]) -> u16 {

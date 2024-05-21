@@ -278,14 +278,14 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             (value_information_block.value_information.data & 0b11) as isize - 3;
                     }
                     0x6C..=0x6D => labels.push(ValueLabel::TimePoint),
-                    0x72..=0x75 => labels.push(ValueLabel::AveragingDuration),
+                    0x72..=0x73 => labels.push(ValueLabel::AveragingDuration),
                     0x74..=0x77 => labels.push(ValueLabel::ActualityDuration),
                     0x78 => labels.push(ValueLabel::FabricationNumber),
                     x => todo!("Implement the rest of the units: {:X?}", x),
                 };
                 /* consume orthogonal vife */
                 consume_orthhogonal_vife(
-                    &value_information_block,
+                    value_information_block,
                     &mut labels,
                     &mut units,
                     &mut decimal_scale_exponent,
