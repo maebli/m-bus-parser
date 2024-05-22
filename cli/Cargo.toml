@@ -19,3 +19,6 @@ keywords = ["m-bus", "parser", "parse", "cli"]
 [dependencies]
 m-bus-parser = { path = "..", version = "0.0.4" }
 clap = { version = "4.5.4", features = ["derive"] }
+colored = "2.0"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
