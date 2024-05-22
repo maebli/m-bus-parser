@@ -1,5 +1,3 @@
-use core::intrinsics::offset;
-
 use super::data_information::{self};
 use super::value_information::ValueInformationFieldExtension;
 use super::variable_user_data::DataRecordError;
