@@ -368,22 +368,22 @@ impl DataFieldCoding {
     }
 }
 
-// Helper functions for BCD parsing
 fn bcd_to_u8(bcd: u8) -> u8 {
     (bcd >> 4) * 10 + (bcd & 0x0F)
 }
 
 fn bcd_to_u16(bcd: &[u8]) -> u16 {
-    (bcd_to_u8(bcd[0]) as u16 * 100 + bcd_to_u8(bcd[1]) as u16) as u16
+    (bcd_to_u8(bcd[1]) as u16 * 100 + bcd_to_u8(bcd[0]) as u16) as u16
 }
 
 fn bcd_to_u32(bcd: &[u8]) -> u32 {
-    (bcd_to_u16(&bcd[0..2]) as u32 * 10000 + bcd_to_u16(&bcd[2..4]) as u32) as u32
+    (bcd_to_u16(&bcd[2..4]) as u32 * 10000 + bcd_to_u16(&bcd[0..2]) as u32) as u32
 }
 
 fn bcd_to_u48(bcd: &[u8]) -> u64 {
-    (bcd_to_u32(&bcd[0..4]) as u64 * 1000000 + bcd_to_u16(&bcd[4..6]) as u64) as u64
+    (bcd_to_u32(&bcd[4..6]) as u64 * 1000000 + bcd_to_u16(&bcd[0..2]) as u64) as u64
 }
+
 impl DataInformation {
     pub fn get_size(&self) -> usize {
         self.size
