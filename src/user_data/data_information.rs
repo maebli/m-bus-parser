@@ -52,12 +52,16 @@ impl TryFrom<&[u8]> for DataInformationBlock {
     type Error = DataInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
+        if data.len() > MAXIMUM_DATA_INFORMATION_SIZE {
+            return Err(DataInformationError::DataTooLong);
+        }
+
         let dife = ArrayVec::<ValueInformationFieldExtension, MAX_DIFE_RECORDS>::new();
         let dif = DataInformationField::from(data[0]);
 
         if dif.has_extension() {
             let mut offset = 1;
-            while offset < data.len() {
+            while offset <= data.len() {
                 let next_byte = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
                 let dife = DataInformationFieldExtension::from(next_byte);
                 if dife.has_extension() {
