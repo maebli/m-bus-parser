@@ -1,4 +1,4 @@
-use m_bus_parser::user_data::variable_user_data::DataRecord;
+use m_bus_parser::user_data::data_record::DataRecord;
 
 fn main() {
     /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */

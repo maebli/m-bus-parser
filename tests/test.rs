@@ -92,7 +92,10 @@ fn medium_to_str(medium: Medium) -> &'static str {
 #[cfg(test)]
 mod tests {
 
-    use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
+    use m_bus_parser::{
+        frames::Frame,
+        user_data::{DataRecords, UserDataBlock},
+    };
 
     use super::*;
 
@@ -127,7 +130,7 @@ mod tests {
                 let user_data = UserDataBlock::try_from(data).unwrap();
                 if let UserDataBlock::VariableDataStructure {
                     fixed_data_header,
-                    variable_data_block: _,
+                    variable_data_block: variable_user_data,
                 } = user_data
                 {
                     assert!(
@@ -175,6 +178,9 @@ mod tests {
                         medium_to_str(fixed_data_header.medium),
                         mbus_data.slave_information._medium
                     );
+                    //  TODO: fix this:
+                    //let data_record = DataRecords::try_from(variable_user_data);
+                    //println!("{:#?}", data_record);
                 }
             } else {
                 panic!("Frame is not a long frame");

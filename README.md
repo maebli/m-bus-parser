@@ -32,6 +32,11 @@ The searlized application layer above can be further broken into parsable parts.
 
 ![](./resources/application-layer.png)
 
+
+### Value Information Block Serialization
+
+![](./resources/application-layer-valueinformationblock.png)
+
 ## Aim
 
 - suitable for embedded targets `no_std`
