@@ -29,7 +29,7 @@ fn main() {
             variable_data_block,
         }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
         {
-            println!("fixed_data_header: {:?}", fixed_data_header);
+            println!("fixed_data_header: {:#?}", fixed_data_header);
             println!("variable_data_block: {:?}", variable_data_block);
             let data_records = m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
             assert!(data_records.is_ok());
