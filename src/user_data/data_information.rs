@@ -1,3 +1,5 @@
+use core::intrinsics::offset;
+
 use super::data_information::{self};
 use super::value_information::ValueInformationFieldExtension;
 use super::variable_user_data::DataRecordError;
@@ -52,10 +54,6 @@ impl TryFrom<&[u8]> for DataInformationBlock {
     type Error = DataInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
-        if data.len() > MAXIMUM_DATA_INFORMATION_SIZE {
-            return Err(DataInformationError::DataTooLong);
-        }
-
         let dife = ArrayVec::<ValueInformationFieldExtension, MAX_DIFE_RECORDS>::new();
         let dif = DataInformationField::from(data[0]);
 
@@ -70,7 +68,11 @@ impl TryFrom<&[u8]> for DataInformationBlock {
                     break;
                 }
             }
+            if offset > MAXIMUM_DATA_INFORMATION_SIZE {
+                return Err(DataInformationError::DataTooLong);
+            }
         };
+
         Ok(DataInformationBlock {
             data_information_field: dif,
             data_information_field_extension: if dife.is_empty() { None } else { Some(dife) },
