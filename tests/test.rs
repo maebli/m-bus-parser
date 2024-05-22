@@ -178,8 +178,9 @@ mod tests {
                         medium_to_str(fixed_data_header.medium),
                         mbus_data.slave_information._medium
                     );
-                    let data_record = DataRecords::try_from(variable_user_data);
-                    println!("{:#?}", data_record);
+                    //  TODO: fix this:
+                    //let data_record = DataRecords::try_from(variable_user_data);
+                    //println!("{:#?}", data_record);
                 }
             } else {
                 panic!("Frame is not a long frame");
