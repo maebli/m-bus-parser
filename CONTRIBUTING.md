@@ -7,7 +7,7 @@ This document aims to provide a guideline for people wanting to contribute to th
 # Playful start
 
 
-Before diving into the code a good starting point for understanding what the project is about and what one of the use cases is, you can play with the (live decode in javascript called tmbus)[https://dev-lab.github.io/tmbus/tmbus.htm]. This will provide a good intuition for what the project is about. Go to the folder `tests/rscada/test-frames` and copy the hex string into the input field of the tmbus website. See what the expected output is. Try to undestand the output. Change the input and see how the output changes. Note, becasue there is a check sum changing the input manually is not trivial and requires calculating the right checksum for the frame.
+Before diving into the code a good starting point for understanding what the project is about and what one of the use cases is, you can play with the [live decode in javascript called tmbus](https://dev-lab.github.io/tmbus/tmbus.htm). This will provide a good intuition for what the project is about. Go to the folder `tests/rscada/test-frames` and copy the hex string into the input field of the tmbus website. See what the expected output is. Try to undestand the output. Change the input and see how the output changes. Note, becasue there is a check sum changing the input manually is not trivial and requires calculating the right checksum for the frame.
 
 # Conduct
 
@@ -31,7 +31,7 @@ The code and its function may be confusing at first. The following resouces may 
 
 
 ## Making changes to the code
-1. (Install the rust toolchain)[https://www.rust-lang.org/tools/install]
+1. [Install the rust toolchain](https://www.rust-lang.org/tools/install)
 2. Install your favorite IDE such as vscode, intellij or neovim
 3. Install git and clone the repository `git clone git@github.com:maebli/m-bus-parser.git`
 4. Run the tests `cargo test` and see if you can run the tests
