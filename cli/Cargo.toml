@@ -16,6 +16,7 @@ keywords = ["m-bus", "parser", "parse", "cli"]
 
 [features]
 
+
 [dependencies]
-m-bus-parser = { path = "..", version = "0.0.4" }
+m-bus-parser = { path = "..", version = "0.0.4", features = ["std"] }
 clap = { version = "4.5.4", features = ["derive"] }

@@ -1,4 +1,6 @@
 //! is a part of the application layer
+#[cfg(feature = "std")]
+use std::fmt;
 
 use arrayvec::ArrayVec;
 
@@ -185,11 +187,15 @@ impl fmt::Display for ApplicationLayerError {
             ApplicationLayerError::InvalidControlInformation { byte } => {
                 write!(f, "Invalid control information: {}", byte)
             }
-            ApplicationLayerError::IdentificationNumberError => {
-                write!(f, "Invalid identification number")
-            }
             ApplicationLayerError::InvalidManufacturerCode { code } => {
                 write!(f, "Invalid manufacturer code: {}", code)
+            }
+            ApplicationLayerError::IdentificationNumberError { digits, number } => {
+                write!(
+                    f,
+                    "Invalid identification number: {:?}, number: {}",
+                    digits, number
+                )
             }
         }
     }

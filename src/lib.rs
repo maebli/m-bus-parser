@@ -38,6 +38,13 @@
 //! }
 //! ```
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(not(feature = "std"))]
+extern crate core;
+
 pub mod frames;
 pub mod user_data;
