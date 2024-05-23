@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use prettytable::{format, row, Table};
 use std::fs;
 use std::path::PathBuf;
 
@@ -83,12 +84,50 @@ fn parse_data(data: &[u8]) {
                 raw_data: data.to_vec(),
             };
 
-            println!(
-                "id:{}",
-                parsed_data.fixed_data_header.identification_number.number
-            );
+            let mut table = Table::new();
+            table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
 
-            println!("{:#?}", parsed_data);
+            table.set_titles(row![
+                "Identification Number",
+                "Manufacturer",
+                "Access Number",
+                "Status",
+                "Signature",
+                "Version",
+                "Medium",
+            ]);
+            table.add_row(row![
+                parsed_data.fixed_data_header.identification_number.number,
+                parsed_data.fixed_data_header.manufacturer,
+                parsed_data.fixed_data_header.access_number,
+                parsed_data.fixed_data_header.status,
+                parsed_data.fixed_data_header.signature,
+                parsed_data.fixed_data_header.version,
+                parsed_data.fixed_data_header.medium,
+            ]);
+
+            table.printstd();
+            table = Table::new();
+
+            table.set_titles(row!["Value", "Data Information",]);
+            for record in parsed_data.data_records.inner.iter() {
+                table.add_row(row![
+                    format!(
+                        "{}{}",
+                        record.data,
+                        record
+                            .data_record_header
+                            .processed_data_record_header
+                            .value_information
+                    ),
+                    record
+                        .data_record_header
+                        .processed_data_record_header
+                        .data_information
+                ]);
+            }
+
+            table.printstd();
         }
     }
 }

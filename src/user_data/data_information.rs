@@ -99,6 +99,17 @@ pub struct DataInformation {
     pub size: usize,
 }
 
+#[cfg(feature = "std")]
+impl std::fmt::Display for DataInformation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{},{},{}",
+            self.storage_number, self.function_field, self.data_field_coding
+        )
+    }
+}
+
 const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -193,6 +204,15 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
 pub struct Data {
     value: Option<f64>,
     size: usize,
+}
+#[cfg(feature = "std")]
+impl std::fmt::Display for Data {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.value {
+            Some(value) => write!(f, "({}", value),
+            None => write!(f, "No Data"),
+        }
+    }
 }
 
 impl Data {
@@ -401,9 +421,9 @@ pub enum FunctionField {
 impl std::fmt::Display for FunctionField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FunctionField::InstantaneousValue => write!(f, "Instantaneous Value"),
-            FunctionField::MaximumValue => write!(f, "Maximum Value"),
-            FunctionField::MinimumValue => write!(f, "Minimum Value"),
+            FunctionField::InstantaneousValue => write!(f, "Inst"),
+            FunctionField::MaximumValue => write!(f, "Max"),
+            FunctionField::MinimumValue => write!(f, "Min"),
             FunctionField::ValueDuringErrorState => write!(f, "Value During Error State"),
         }
     }
@@ -553,6 +573,30 @@ pub enum DataFieldCoding {
     VariableLength,
     BCDDigit12,
     SpecialFunctions(SpecialFunctions),
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for DataFieldCoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataFieldCoding::NoData => write!(f, "No Data"),
+            DataFieldCoding::Integer8Bit => write!(f, "8-bit Integer"),
+            DataFieldCoding::Integer16Bit => write!(f, "16-bit Integer"),
+            DataFieldCoding::Integer24Bit => write!(f, "24-bit Integer"),
+            DataFieldCoding::Integer32Bit => write!(f, "32-bit Integer"),
+            DataFieldCoding::Real32Bit => write!(f, "32-bit Real"),
+            DataFieldCoding::Integer48Bit => write!(f, "48-bit Integer"),
+            DataFieldCoding::Integer64Bit => write!(f, "64-bit Integer"),
+            DataFieldCoding::SelectionForReadout => write!(f, "Selection for Readout"),
+            DataFieldCoding::BCD2Digit => write!(f, "BCD 2-digit"),
+            DataFieldCoding::BCD4Digit => write!(f, "BCD 4-digit"),
+            DataFieldCoding::BCD6Digit => write!(f, "BCD 6-digit"),
+            DataFieldCoding::BCD8Digit => write!(f, "BCD 8-digit"),
+            DataFieldCoding::VariableLength => write!(f, "Variable Length"),
+            DataFieldCoding::BCDDigit12 => write!(f, "BCD 12-digit"),
+            DataFieldCoding::SpecialFunctions(code) => write!(f, "Special Functions ({:?})", code),
+        }
+    }
 }
 
 #[cfg(test)]

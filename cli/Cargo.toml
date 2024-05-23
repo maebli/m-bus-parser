@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-parser-cli"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 description = "A cli to use the library for parsing M-Bus frames"
 license = "MIT"
@@ -20,3 +20,4 @@ keywords = ["m-bus", "parser", "parse", "cli"]
 [dependencies]
 m-bus-parser = { path = "..", version = "0.0.4", features = ["std"] }
 clap = { version = "4.5.4", features = ["derive"] }
+prettytable-rs = "^0.10"

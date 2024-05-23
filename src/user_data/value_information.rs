@@ -1,3 +1,5 @@
+use core::fmt;
+
 use arrayvec::ArrayVec;
 
 use super::data_information::DataInformationError;
@@ -1599,6 +1601,27 @@ pub struct ValueInformation {
     pub units: ArrayVec<Unit, 10>,
 }
 
+#[cfg(feature = "std")]
+impl fmt::Display for ValueInformation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "+{})^{}",
+            self.decimal_offset_exponent, self.decimal_scale_exponent
+        )?;
+        write!(f, "[ ")?;
+        for unit in &self.units {
+            write!(f, "{} ", unit)?;
+        }
+        write!(f, " ]")?;
+        write!(f, "( ")?;
+        for label in &self.labels {
+            write!(f, "{:?} ", label)?;
+        }
+        write!(f, ")")
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ValueLabel {
     Instantaneous,
@@ -1750,6 +1773,17 @@ pub struct Unit {
     pub exponent: i32,
 }
 
+#[cfg(feature = "std")]
+impl fmt::Display for Unit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.exponent == 1 {
+            write!(f, "{}", self.name)
+        } else {
+            write!(f, "{}^{}", self.name, self.exponent)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnitName {
     Watt,
@@ -1790,6 +1824,52 @@ pub enum UnitName {
     Degree,
     Hertz,
     HCAUnit,
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for UnitName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UnitName::Watt => write!(f, "W"),
+            UnitName::ReactiveWatt => write!(f, "W (reactive)"),
+            UnitName::ApparentWatt => write!(f, "W (apparent)"),
+            UnitName::Joul => write!(f, "J"),
+            UnitName::Kilogram => write!(f, "Kg"),
+            UnitName::Tonne => write!(f, "t"),
+            UnitName::Meter => write!(f, "m"),
+            UnitName::Feet => write!(f, "ft"),
+            UnitName::Celsius => write!(f, "°C"),
+            UnitName::Kelvin => write!(f, "°K"),
+            UnitName::Bar => write!(f, "Bar"),
+            UnitName::HCA => write!(f, "HCA"),
+            UnitName::Reserved => write!(f, "Reserved"),
+            UnitName::WithoutUnits => write!(f, "-"),
+            UnitName::Second => write!(f, "s"),
+            UnitName::Minute => write!(f, "min"),
+            UnitName::Hour => write!(f, "h"),
+            UnitName::Day => write!(f, "day"),
+            UnitName::Week => write!(f, "week"),
+            UnitName::Month => write!(f, "month"),
+            UnitName::Year => write!(f, "year"),
+            UnitName::Revolution => write!(f, "revolution"),
+            UnitName::Increment => write!(f, "increment"),
+            UnitName::InputPulseOnChannel0 => write!(f, "InputPulseOnChannel0"),
+            UnitName::OutputPulseOnChannel0 => write!(f, "OutputPulseOnChannel0"),
+            UnitName::InputPulseOnChannel1 => write!(f, "InputPulseOnChannel1"),
+            UnitName::OutputPulseOnChannel1 => write!(f, "OutputPulseOnChannel1"),
+            UnitName::Liter => write!(f, "l"),
+            UnitName::Volt => write!(f, "A"),
+            UnitName::Ampere => write!(f, "A"),
+            UnitName::LocalMoneyCurrency => write!(f, "$ (local)"),
+            UnitName::Symbol => write!(f, "Symbol"),
+            UnitName::BitTime => write!(f, "BitTime"),
+            UnitName::DecibelMilliWatt => write!(f, "dBmW"),
+            UnitName::Percent => write!(f, "%"),
+            UnitName::Degree => write!(f, "°"),
+            UnitName::Hertz => write!(f, "Hz"),
+            UnitName::HCAUnit => write!(f, "HCAUnit"),
+        }
+    }
 }
 
 mod tests {

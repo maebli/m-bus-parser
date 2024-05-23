@@ -17,7 +17,7 @@ const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 117;
 // Define a new struct that wraps ArrayVec
 #[derive(Debug, PartialEq)]
 pub struct DataRecords {
-    inner: ArrayVec<data_record::DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>,
+    pub inner: ArrayVec<data_record::DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>,
 }
 
 impl DataRecords {
@@ -74,6 +74,41 @@ bitflags::bitflags! {
         const MANUFACTURER_SPECIFIC_1   = 0b00100000;
         const MANUFACTURER_SPECIFIC_2   = 0b01000000;
         const MANUFACTURER_SPECIFIC_3   = 0b10000000;
+    }
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for StatusField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut status = String::new();
+        if self.contains(StatusField::COUNTER_BINARY_SIGNED) {
+            status.push_str("Counter binary signed, ");
+        }
+        if self.contains(StatusField::COUNTER_FIXED_DATE) {
+            status.push_str("Counter fixed date, ");
+        }
+        if self.contains(StatusField::POWER_LOW) {
+            status.push_str("Power low, ");
+        }
+        if self.contains(StatusField::PERMANENT_ERROR) {
+            status.push_str("Permanent error, ");
+        }
+        if self.contains(StatusField::TEMPORARY_ERROR) {
+            status.push_str("Temporary error, ");
+        }
+        if self.contains(StatusField::MANUFACTURER_SPECIFIC_1) {
+            status.push_str("Manufacturer specific 1, ");
+        }
+        if self.contains(StatusField::MANUFACTURER_SPECIFIC_2) {
+            status.push_str("Manufacturer specific 2, ");
+        }
+        if self.contains(StatusField::MANUFACTURER_SPECIFIC_3) {
+            status.push_str("Manufacturer specific 3, ");
+        }
+        if status.is_empty() {
+            status.push_str("No Error(s)");
+        }
+        write!(f, "{}", status.trim_end_matches(", "))
     }
 }
 
@@ -383,6 +418,36 @@ impl Medium {
             0x20..=0xFF => Medium::Reserved,
             _ => Medium::Unknown,
         }
+    }
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for Medium {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let medium = match self {
+            Medium::Other => "Other",
+            Medium::Oil => "Oil",
+            Medium::Electricity => "Electricity",
+            Medium::Gas => "Gas",
+            Medium::Heat => "Heat",
+            Medium::Steam => "Steam",
+            Medium::HotWater => "Hot water",
+            Medium::Water => "Water",
+            Medium::HeatCostAllocator => "Heat Cost Allocator",
+            Medium::Reserved => "Reserved",
+            Medium::GasMode2 => "Gas Mode 2",
+            Medium::HeatMode2 => "Heat Mode 2",
+            Medium::HotWaterMode2 => "Hot Water Mode 2",
+            Medium::WaterMode2 => "Water Mode 2",
+            Medium::HeatCostAllocator2 => "Heat Cost Allocator 2",
+            Medium::ReservedMode2 => "Reserved",
+            Medium::Unknown => "Unknown",
+            Medium::ColdWater => "Cold Water",
+            Medium::DualWater => "Dual Water",
+            Medium::Pressure => "Pressure",
+            Medium::ADConverter => "AD Converter",
+        };
+        write!(f, "{}", medium)
     }
 }
 
