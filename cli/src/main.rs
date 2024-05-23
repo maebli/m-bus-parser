@@ -23,6 +23,13 @@ enum Command {
     },
 }
 
+#[derive(Debug)]
+struct Data {
+    raw_data: Vec<u8>,
+    fixed_data_header: m_bus_parser::user_data::FixedDataHeader,
+    data_records: m_bus_parser::user_data::DataRecords,
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -53,34 +60,35 @@ fn main() {
 }
 
 fn parse_data(data: &[u8]) {
-    use m_bus_parser::frames::{Address, Frame, Function};
+    use m_bus_parser::frames::Frame;
 
     let frame = Frame::try_from(data).expect("Failed to parse frame");
 
     if let Frame::LongFrame {
-        function,
-        address,
+        function: _,
+        address: _,
         data,
     } = frame
     {
-        assert_eq!(
-            function,
-            Function::RspUd {
-                acd: false,
-                dfc: false
-            }
-        );
-        assert_eq!(address, Address::Primary(8));
-
         if let Ok(m_bus_parser::user_data::UserDataBlock::VariableDataStructure {
             fixed_data_header,
             variable_data_block,
         }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
         {
-            println!("fixed_data_header: {:#?}", fixed_data_header);
-            println!("variable_data_block: {:?}", variable_data_block);
-            let data_records = m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
-            println!("data_records: {:#?}", data_records.unwrap());
+            let data_records = m_bus_parser::user_data::DataRecords::try_from(variable_data_block)
+                .expect("Failed to parse data records");
+            let parsed_data = Data {
+                fixed_data_header,
+                data_records,
+                raw_data: data.to_vec(),
+            };
+
+            println!(
+                "id:{}",
+                parsed_data.fixed_data_header.identification_number.number
+            );
+
+            println!("{:#?}", parsed_data);
         }
     }
 }

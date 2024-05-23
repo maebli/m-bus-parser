@@ -264,7 +264,7 @@ pub struct Counter {
 
 #[derive(Debug, PartialEq)]
 pub struct IdentificationNumber {
-    number: u32,
+    pub number: u32,
 }
 
 impl From<IdentificationNumber> for u32 {
