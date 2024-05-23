@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use prettytable::{format, row, Table};
 use std::fs;
 use std::path::PathBuf;
+use std::str;
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -37,27 +38,32 @@ fn main() {
     match cli.command {
         Command::Parse { file, data } => {
             if let Some(file_path) = file {
-                let file_content = fs::read(file_path).expect("Failed to read the file");
-                parse_data(&file_content);
+                let file_content = fs::read_to_string(file_path).expect("Failed to read the file");
+                let data_bytes = clean_and_convert(&file_content);
+                parse_data(&data_bytes);
             } else if let Some(data_string) = data {
-                let data_bytes: Vec<u8> = data_string
-                    .split(',')
-                    .map(|s| {
-                        let trimmed = s.trim();
-                        if trimmed.starts_with("0x") {
-                            u8::from_str_radix(&trimmed[2..], 16)
-                        } else {
-                            u8::from_str_radix(trimmed, 16)
-                        }
-                        .expect("Invalid byte value")
-                    })
-                    .collect();
+                let data_bytes = clean_and_convert(&data_string);
                 parse_data(&data_bytes);
             } else {
                 eprintln!("Either --file or --data must be provided");
             }
         }
     }
+}
+
+fn clean_and_convert(input: &str) -> Vec<u8> {
+    let input = input.trim();
+    let cleaned_data: String = input.replace("0x", "").replace(" ", "").replace(",", "");
+
+    // Convert pairs of characters into bytes
+    cleaned_data
+        .as_bytes()
+        .chunks(2)
+        .map(|chunk| {
+            let byte_str = str::from_utf8(chunk).expect("Invalid UTF-8 sequence");
+            u8::from_str_radix(byte_str, 16).expect("Invalid byte value")
+        })
+        .collect()
 }
 
 fn parse_data(data: &[u8]) {
