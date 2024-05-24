@@ -391,15 +391,29 @@ fn bcd_to_u8(bcd: u8) -> u8 {
 }
 
 fn bcd_to_u16(bcd: &[u8]) -> u16 {
-    (bcd_to_u8(bcd[1]) as u16 * 100 + bcd_to_u8(bcd[0]) as u16) as u16
+    match bcd.len() {
+        1 => bcd_to_u8(bcd[0]) as u16,
+        2 => (bcd_to_u8(bcd[1]) as u16 * 100 + bcd_to_u8(bcd[0]) as u16) as u16,
+        _ => panic!(
+            "BCD input length must be either 1 or 2 but got {}",
+            bcd.len()
+        ),
+    }
 }
 
 fn bcd_to_u32(bcd: &[u8]) -> u32 {
-    (bcd_to_u16(&bcd[2..4]) as u32 * 10000 + bcd_to_u16(&bcd[0..2]) as u32) as u32
+    match bcd.len() {
+        3 => (bcd_to_u8(bcd[2]) as u32 * 10000 + bcd_to_u16(&bcd[0..2]) as u32) as u32,
+        4 => (bcd_to_u16(&bcd[2..4]) as u32 * 10000 + bcd_to_u16(&bcd[0..2]) as u32) as u32,
+        _ => panic!(
+            "BCD input length must be either 3 or 4 but got {}",
+            bcd.len()
+        ),
+    }
 }
 
 fn bcd_to_u48(bcd: &[u8]) -> u64 {
-    (bcd_to_u32(&bcd[4..6]) as u64 * 1000000 + bcd_to_u16(&bcd[0..2]) as u64) as u64
+    (bcd_to_u32(&bcd[2..6]) as u64 * 1000000 + bcd_to_u16(&bcd[0..2]) as u64) as u64
 }
 
 impl DataInformation {

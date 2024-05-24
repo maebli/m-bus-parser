@@ -10,6 +10,9 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     type Error = DataInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
+        if data.is_empty() {
+            return Err(DataInformationError::InvalidValueInformation);
+        }
         let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
         let vif = ValueInformationField::from(data[0]);
 
