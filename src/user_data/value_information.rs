@@ -1609,7 +1609,7 @@ impl fmt::Display for ValueInformation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "+{})^{}",
+            "+{})e{}",
             self.decimal_offset_exponent, self.decimal_scale_exponent
         )?;
         write!(f, "[ ")?;
