@@ -27,7 +27,7 @@ enum Command {
 
 #[derive(Debug)]
 struct Data {
-    raw_data: Vec<u8>,
+    _raw_data: Vec<u8>,
     fixed_data_header: m_bus_parser::user_data::FixedDataHeader,
     data_records: m_bus_parser::user_data::DataRecords,
 }
@@ -87,7 +87,7 @@ fn parse_data(data: &[u8]) {
             let parsed_data = Data {
                 fixed_data_header,
                 data_records,
-                raw_data: data.to_vec(),
+                _raw_data: data.to_vec(),
             };
 
             let mut table = Table::new();
