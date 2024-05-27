@@ -10,9 +10,6 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     type Error = DataInformationError;
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
-        if data.is_empty() {
-            return Err(DataInformationError::InvalidValueInformation);
-        }
         let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
         let vif = ValueInformationField::from(data[0]);
 
@@ -1099,10 +1096,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
             ValueInformationCoding::PlainText => {
                 labels.push(ValueLabel::PlainText);
             }
-            _ => todo!(
-                "Implement the rest of the units: {:?}",
-                value_information_block
-            ),
+            x => todo!("Implement the rest of the units: {:?}", x),
         }
 
         Ok(ValueInformation {
@@ -1612,14 +1606,14 @@ impl fmt::Display for ValueInformation {
             "+{})e{}",
             self.decimal_offset_exponent, self.decimal_scale_exponent
         )?;
-        write!(f, "[ ")?;
+        write!(f, "[")?;
         for unit in &self.units {
             write!(f, "{} ", unit)?;
         }
-        write!(f, " ]")?;
-        write!(f, "( ")?;
+        write!(f, "]")?;
+        write!(f, "(")?;
         for label in &self.labels {
-            write!(f, "{:?} ", label)?;
+            write!(f, "{:?}, ", label)?;
         }
         write!(f, ")")
     }
