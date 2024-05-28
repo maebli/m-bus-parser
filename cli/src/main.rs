@@ -53,7 +53,7 @@ fn main() {
 
 fn clean_and_convert(input: &str) -> Vec<u8> {
     let input = input.trim();
-    let cleaned_data: String = input.replace("0x", "").replace(" ", "").replace(",", "");
+    let cleaned_data: String = input.replace("0x", "").replace([' ', ','], "");
 
     // Convert pairs of characters into bytes
     cleaned_data
