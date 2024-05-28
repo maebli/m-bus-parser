@@ -9,6 +9,7 @@ repository = "https://github.com/maebli/m-bus-parser"
 readme = "README.md"
 authors = ["Michael Aebli"]
 keywords = ["m-bus", "parser", "parse"]
+exclude = ["/resources", "/tests", "/benches", "examples"]
 
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"]
