@@ -1,5 +1,3 @@
-use core::fmt;
-
 use arrayvec::ArrayVec;
 
 use super::data_information::DataInformationError;
