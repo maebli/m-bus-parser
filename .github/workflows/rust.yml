@@ -4,13 +4,15 @@ on:
   push:
     branches: [main]
     tags:
-      - 'v*' # Ensures the workflow also triggers on tag pushes that start with 'v'
+      - 'v*'
+      - 'cli-v*'
   pull_request:
     branches: [main]
 
 jobs:
-  build:
+  build-library:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (!startsWith(github.ref, 'refs/tags/cli-v'))
     steps:
       - uses: actions/checkout@v2
       - name: Set up Rust
@@ -22,21 +24,44 @@ jobs:
       - name: Check Formatting
         run: cargo fmt -- --check
       - name: Security audit
-        run: |
-          cargo audit
-      - name: Build
+        run: cargo audit
+      - name: Build Library
         run: cargo build --verbose
-      - name: Run tests
+      - name: Run Library Tests
         run: cargo test --verbose
       - name: Lint with Clippy
         run: |
           rustup component add clippy
           cargo clippy -- -D warnings
 
-  publish:
-    needs: build
+  build-cli:
     runs-on: ubuntu-latest
-    # This job only runs if the GitHub event that triggered the workflow is a push to a tag starting with 'v'
+    needs: build-library
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build CLI
+        run: |
+          cd cli/src
+          cargo build --verbose
+      - name: Run CLI Tests
+        run: |
+          cd cli/src
+          cargo test --verbose
+      - name: Lint CLI with Clippy
+        run: |
+          rustup component add clippy
+          cd cli/src
+          cargo clippy -- -D warnings
+
+  publish-library:
+    needs: build-library
+    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v2
@@ -46,8 +71,25 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
-      - name: Publish to crates.io
+      - name: Publish Library to crates.io
         uses: actions-rs/cargo@v1
         with:
           command: publish
           args: --token ${{ secrets.CRATESTOKEN }}
+
+  publish-cli:
+    needs: build-cli
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/cli-v')
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Publish CLI to crates.io
+        run: |
+          cd cli/src
+          cargo publish --token ${{ secrets.CRATESTOKEN }}
