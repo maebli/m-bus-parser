@@ -1,6 +1,8 @@
-use arrayvec::ArrayVec;
+#[cfg(feature = "std")]
+use std::fmt;
 
 use super::data_information::DataInformationError;
+use arrayvec::ArrayVec;
 
 const MAX_VIFE_RECORDS: usize = 10;
 
