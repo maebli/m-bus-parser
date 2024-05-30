@@ -70,14 +70,26 @@ mod tests {
         /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
         let _data = &[0x01, 0xFD, 0x1B, 0x00];
     }
+
     /*  Out: PlainText : Unit "%RH"  Value:   33.96
     In: 0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D*/
+    #[cfg(feature = "plaintext-before-extension")]
     #[test]
     fn test_parse_variable_data3() {
         use crate::user_data::DataRecords;
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let data = &[0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D];
+        let _data = DataRecords::try_from(data.as_slice());
+    }
 
+    /*  Out: PlainText : Unit "%RH"  Value:   33.96
+    In: 0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D*/
+    #[cfg(not(feature = "plaintext-before-extension"))]
+    #[test]
+    fn test_parse_variable_data3() {
+        use crate::user_data::DataRecords;
+        /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
+        let data = &[0x02, 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25, 0x44, 0x0D];
         let _data = DataRecords::try_from(data.as_slice());
     }
 

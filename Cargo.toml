@@ -27,6 +27,7 @@ bindgen = "0.69.4"
 
 [features]
 std = []
+plaintext-before-extension = []
 
 [profile.release]
 opt-level = 'z'   # Optimize for size

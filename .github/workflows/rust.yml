@@ -29,6 +29,8 @@ jobs:
         run: cargo build --verbose
       - name: Run Library Tests
         run: cargo test --verbose
+      - name: Run Library Tests with plaintext before with enabled
+        run: cargo test --verbose -F plaintext-before-extension
       - name: Lint with Clippy
         run: |
           rustup component add clippy

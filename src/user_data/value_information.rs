@@ -12,6 +12,12 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
         let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
         let vif = ValueInformationField::from(data[0]);
+        let mut plaintext_vife: Option<ArrayVec<char, 9>> = None;
+
+        #[cfg(feature = "plaintext-before-extension")]
+        if vif.value_information_contans_ascii() {
+            plaintext_vife = Some(extract_plaintext_vife(&data[1..]));
+        }
 
         if vif.has_extension() {
             let mut offset = 1;
@@ -39,12 +45,27 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                     return Err(DataInformationError::InvalidValueInformation);
                 }
             }
+            #[cfg(not(feature = "plaintext-before-extension"))]
+            if vif.value_information_contans_ascii() {
+                plaintext_vife = Some(extract_plaintext_vife(&data[offset..]));
+            }
         }
+
         Ok(ValueInformationBlock {
             value_information: vif,
             value_information_extension: if vife.is_empty() { None } else { Some(vife) },
+            plaintext_vife,
         })
     }
+}
+
+fn extract_plaintext_vife(data: &[u8]) -> ArrayVec<char, 9> {
+    let ascii_length = data[0] as usize;
+    let mut ascii = ArrayVec::<char, 9>::new();
+    for item in data[0..ascii_length].iter() {
+        ascii.push(*item as char);
+    }
+    ascii
 }
 
 #[derive(Debug, PartialEq)]
@@ -52,11 +73,18 @@ pub struct ValueInformationBlock {
     pub value_information: ValueInformationField,
     pub value_information_extension:
         Option<ArrayVec<ValueInformationFieldExtension, MAX_VIFE_RECORDS>>,
+    pub plaintext_vife: Option<ArrayVec<char, 9>>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ValueInformationField {
     pub data: u8,
+}
+
+impl ValueInformationField {
+    fn value_information_contans_ascii(&self) -> bool {
+        self.data & 0x7C == 0x7C
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -1094,6 +1122,9 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                 }
             }
             ValueInformationCoding::PlainText => {
+                // we need to check if the next byte is equivalent to the length of the rest of the
+                // the data. In this case it is very likely that, this is how the payload is built up.
+
                 labels.push(ValueLabel::PlainText);
             }
             x => todo!("Implement the rest of the units: {:?}", x),
@@ -1886,7 +1917,8 @@ mod tests {
             result,
             ValueInformationBlock {
                 value_information: ValueInformationField::from(0x13),
-                value_information_extension: None
+                value_information_extension: None,
+                plaintext_vife: None
             }
         );
         assert_eq!(result.get_size(), 1);
@@ -1914,7 +1946,8 @@ mod tests {
             result,
             ValueInformationBlock {
                 value_information: ValueInformationField::from(0x14),
-                value_information_extension: None
+                value_information_extension: None,
+                plaintext_vife: None
             }
         );
         assert_eq!(result.get_size(), 1);
@@ -1942,7 +1975,8 @@ mod tests {
             result,
             ValueInformationBlock {
                 value_information: ValueInformationField::from(0x15),
-                value_information_extension: None
+                value_information_extension: None,
+                plaintext_vife: None
             }
         );
         assert_eq!(result.get_size(), 1);
@@ -1970,7 +2004,8 @@ mod tests {
             result,
             ValueInformationBlock {
                 value_information: ValueInformationField::from(0x16),
-                value_information_extension: None
+                value_information_extension: None,
+                plaintext_vife: None
             },
         );
         assert_eq!(result.get_size(), 1);
@@ -2072,6 +2107,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(feature = "plaintext-before-extension"))]
     #[test]
     fn test_plain_text_vif_norm_conform() {
         use arrayvec::ArrayVec;
@@ -2086,8 +2122,10 @@ mod tests {
         // Combinable (orthogonal) VIFE-Code extension table
         // VIFE = 0x74 => E111 0nnn Multiplicative correction factor for value (not unit): 10nnn–6 => 10^-2
         //
-        // according to the Norm the LEN and ASCII is not part tof the VIB
-        let data = [0xFC, 0x74];
+        // according to the Norm the LEN and ASCII is not part tof the VIB however this makes parsing
+        // cumbersome so we include it in the VIB
+
+        let data = [0xFC, 0x74, 0x03, 0x48, 0x52, 0x25];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information.data, 0xFC);
