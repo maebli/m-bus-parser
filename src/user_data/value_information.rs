@@ -144,6 +144,10 @@ impl ValueInformationBlock {
         if let Some(vife) = &self.value_information_extension {
             size += vife.len();
         }
+        if let Some(plaintext_vife) = &self.plaintext_vife {
+            // 1 byte for the length of the ASCII string
+            size += plaintext_vife.len() + 1;
+        }
         size
     }
 }
