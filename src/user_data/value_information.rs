@@ -2162,7 +2162,7 @@ mod tests {
     }
 
     #[test]
-    fn test_b() {
+    fn test_short_vif_with_vife() {
         use crate::user_data::value_information::ValueInformationBlock;
         let data = [253, 27];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
