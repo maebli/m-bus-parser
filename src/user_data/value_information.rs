@@ -83,7 +83,7 @@ pub struct ValueInformationField {
 
 impl ValueInformationField {
     fn value_information_contans_ascii(&self) -> bool {
-        self.data & 0x7C == 0x7C
+        self.data == 0x7C || self.data == 0xFC
     }
 }
 
@@ -2159,5 +2159,13 @@ mod tests {
         // It is however none norm conform, see the next example which follows
         // the MBUS Norm which explicitly states that the VIIFE should be after the VIF
         // not aftter the ASCII plain text and its size
+    }
+
+    #[test]
+    fn test_b() {
+        use crate::user_data::value_information::ValueInformationBlock;
+        let data = [253, 27];
+        let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+        assert_eq!(result.get_size(), 2);
     }
 }

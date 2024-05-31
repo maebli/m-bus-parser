@@ -27,6 +27,8 @@ use m_bus_parser::frames::{Address, Frame, Function};
 ///       Averaging Duration      0 hours
 ///
 //  This is an example of how to use the library to parse a frame.
+
+#[cfg(feature = "plaintext-before-extension")]
 fn main() {
     let example = vec![
         0x68, 0x4D, 0x4D, 0x68, 0x08, 0x01, 0x72, 0x01, 0x00, 0x00, 0x00, 0x96, 0x15, 0x01, 0x00,
