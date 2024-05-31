@@ -1,5 +1,4 @@
 use super::data_information::{self};
-use super::value_information::ValueInformationFieldExtension;
 use super::variable_user_data::DataRecordError;
 use arrayvec::ArrayVec;
 
@@ -8,7 +7,7 @@ const MAX_DIFE_RECORDS: usize = 10;
 pub struct DataInformationBlock {
     pub data_information_field: DataInformationField,
     pub data_information_field_extension:
-        Option<ArrayVec<ValueInformationFieldExtension, MAX_DIFE_RECORDS>>,
+        Option<ArrayVec<DataInformationFieldExtension, MAX_DIFE_RECORDS>>,
 }
 
 impl DataInformationBlock {
@@ -44,6 +43,7 @@ impl From<u8> for DataInformationFieldExtension {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct DataInformationFieldExtension {
     pub data: u8,
 }
@@ -55,7 +55,7 @@ impl TryFrom<&[u8]> for DataInformationBlock {
         if data.is_empty() {
             return Err(DataInformationError::NoData);
         }
-        let dife = ArrayVec::<ValueInformationFieldExtension, MAX_DIFE_RECORDS>::new();
+        let mut dife = ArrayVec::<DataInformationFieldExtension, MAX_DIFE_RECORDS>::new();
         let dif = DataInformationField::from(data[0]);
 
         if dif.has_extension() {
@@ -66,8 +66,9 @@ impl TryFrom<&[u8]> for DataInformationBlock {
                     return Err(DataInformationError::DataTooLong);
                 }
                 let next_byte = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
-                let dife = DataInformationFieldExtension::from(next_byte);
-                if dife.has_extension() {
+                let next_dife = DataInformationFieldExtension::from(next_byte);
+                dife.push(next_dife);
+                if dife.last().unwrap().has_extension() {
                     offset += 1;
                 } else {
                     break;
@@ -660,5 +661,13 @@ mod tests {
         let data = [0xFF];
         let result = DataInformationBlock::try_from(data.as_slice());
         assert_eq!(result, Err(DataInformationError::DataTooShort));
+    }
+
+    #[test]
+    fn test_data_inforamtion1() {
+        let data = [178, 1];
+        let result = DataInformationBlock::try_from(data.as_slice());
+        assert!(result.is_ok());
+        assert!(result.unwrap().get_size() == 2);
     }
 }
