@@ -62,7 +62,7 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
 fn extract_plaintext_vife(data: &[u8]) -> ArrayVec<char, 9> {
     let ascii_length = data[0] as usize;
     let mut ascii = ArrayVec::<char, 9>::new();
-    for item in data[0..ascii_length].iter() {
+    for item in data[1..=ascii_length].iter() {
         ascii.push(*item as char);
     }
     ascii
@@ -2117,7 +2117,7 @@ mod tests {
         use crate::user_data::value_information::ValueInformationBlock;
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
-        // 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25,
+        // 0xFC, 0x74, 0x03, 0x52, 0x48, 0x25,
         // %RH
         // Combinable (orthogonal) VIFE-Code extension table
         // VIFE = 0x74 => E111 0nnn Multiplicative correction factor for value (not unit): 10nnn–6 => 10^-2
@@ -2125,7 +2125,7 @@ mod tests {
         // according to the Norm the LEN and ASCII is not part tof the VIB however this makes parsing
         // cumbersome so we include it in the VIB
 
-        let data = [0xFC, 0x74, 0x03, 0x48, 0x52, 0x25];
+        let data = [0xFC, 0x74, 0x03, 0x52, 0x48, 0x25];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information.data, 0xFC);
