@@ -2131,7 +2131,7 @@ mod tests {
 
         let data = [0xFC, 0x74, 0x03, 0x52, 0x48, 0x25];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-        assert_eq!(result.get_size(), 2);
+        assert_eq!(result.get_size(), 6);
         assert_eq!(result.value_information.data, 0xFC);
         assert_eq!(
             ValueInformation::try_from(&result).unwrap(),

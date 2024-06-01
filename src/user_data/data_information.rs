@@ -62,7 +62,7 @@ impl TryFrom<&[u8]> for DataInformationBlock {
             let mut offset = 1;
 
             while offset <= data.len() {
-                if offset > MAXIMUM_DATA_INFORMATION_SIZE {
+                if offset >= MAXIMUM_DATA_INFORMATION_SIZE {
                     return Err(DataInformationError::DataTooLong);
                 }
                 let next_byte = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
@@ -650,7 +650,7 @@ mod tests {
     #[test]
     fn test_longest_data_information_not_too_long() {
         let data = [
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01,
         ];
         let result = DataInformationBlock::try_from(data.as_slice());
         assert_ne!(result, Err(DataInformationError::DataTooLong));
