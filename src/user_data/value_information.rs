@@ -171,7 +171,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             exponent: 1,
                         });
                         units.push(Unit {
-                            name: UnitName::Watt,
+                            name: UnitName::Hour,
                             exponent: 1,
                         });
                         decimal_scale_exponent =
