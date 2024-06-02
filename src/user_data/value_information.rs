@@ -312,9 +312,13 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             (value_information_block.value_information.data & 0b11) as isize - 3;
                     }
                     0x6C..=0x6D => labels.push(ValueLabel::TimePoint),
+                    0x6E => labels.push(ValueLabel::Dimensionless),
                     0x72..=0x73 => labels.push(ValueLabel::AveragingDuration),
                     0x74..=0x77 => labels.push(ValueLabel::ActualityDuration),
                     0x78 => labels.push(ValueLabel::FabricationNumber),
+                    0x79 => labels.push(ValueLabel::EnhancedIdentification),
+                    0x7A => labels.push(ValueLabel::Address),
+
                     x => todo!("Implement the rest of the units: {:X?}", x),
                 };
                 /* consume orthogonal vife */
@@ -1674,6 +1678,8 @@ pub enum ValueLabel {
     AveragingDuration,
     TimePoint,
     FabricationNumber,
+    EnhancedIdentification,
+    Address,
     PlainText,
     RevolutionOrMeasurement,
     IncrementPerInputPulseOnChannelP,
