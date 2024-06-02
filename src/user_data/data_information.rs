@@ -221,7 +221,7 @@ impl std::fmt::Display for Data {
         match &self.value {
             Some(value) => match value {
                 DataType::Text(text) => {
-                    let text = String::from_utf8_lossy(&text);
+                    let text = String::from_utf8_lossy(text);
                     write!(f, "{}", text)
                 }
                 DataType::Number(value) => write!(f, "{}", value),
