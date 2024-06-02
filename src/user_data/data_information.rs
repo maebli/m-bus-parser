@@ -318,10 +318,10 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::SelectionForReadout => {
-                // Implementation depends on the specific format for this variant
-                todo!()
-            }
+            DataFieldCoding::SelectionForReadout => Ok(Data {
+                value: None,
+                size: 0,
+            }),
 
             DataFieldCoding::BCD2Digit => {
                 if input.is_empty() {
