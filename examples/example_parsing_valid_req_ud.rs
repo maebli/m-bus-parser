@@ -1,7 +1,4 @@
-use m_bus_parser::{
-    frames::Frame,
-    user_data::{DataRecords, UserDataBlock},
-};
+use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
 use std::fs;
 use walkdir::WalkDir;
 
@@ -29,8 +26,16 @@ fn main() {
         {
             if let Ok(parsed) = UserDataBlock::try_from(data) {
                 println!("user data: {:?}", parsed);
-                if let Ok(data) = DataRecords::try_from(data) {
-                    println!("user data: {:?}", data);
+                if let Ok(m_bus_parser::user_data::UserDataBlock::VariableDataStructure {
+                    fixed_data_header,
+                    variable_data_block,
+                }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
+                {
+                    println!("fixed_data_header: {:#?}", fixed_data_header);
+                    println!("variable_data_block: {:?}", variable_data_block);
+                    let data_records =
+                        m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
+                    println!("data_records: {:#?}", data_records.unwrap());
                 }
             }
         }
