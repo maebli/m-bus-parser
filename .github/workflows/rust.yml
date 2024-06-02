@@ -12,7 +12,7 @@ on:
 jobs:
   build-library:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (!startsWith(github.ref, 'refs/tags/cli-v'))
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/cli-v')
     steps:
       - uses: actions/checkout@v2
       - name: Set up Rust
