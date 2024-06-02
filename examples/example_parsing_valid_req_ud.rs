@@ -1,5 +1,8 @@
+#[cfg(feature = "plaintext-before-extension")]
 use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
+#[cfg(feature = "plaintext-before-extension")]
 use std::fs;
+#[cfg(feature = "plaintext-before-extension")]
 use walkdir::WalkDir;
 
 //  This is an example of how to use the library to parse a frame.
@@ -41,4 +44,9 @@ fn main() {
             }
         }
     }
+}
+
+#[cfg(not(feature = "plaintext-before-extension"))]
+fn main() {
+    println!("This example requires the `plaintext-before-extension` feature to be enabled.");
 }
