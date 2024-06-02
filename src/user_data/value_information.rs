@@ -1131,7 +1131,9 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
 
                 labels.push(ValueLabel::PlainText);
             }
-            x => todo!("Implement the rest of the units: {:?}", x),
+            ValueInformationCoding::ManufacturerSpecific => {
+                labels.push(ValueLabel::ManufacturerSpecific);
+            }
         }
 
         Ok(ValueInformation {
@@ -1798,6 +1800,7 @@ pub enum ValueLabel {
     ThermalCouplingRatingFactorHeatingSide,
     LowTemperatureRatingFactor,
     DisplayOutputScalingFacttor,
+    ManufacturerSpecific,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {

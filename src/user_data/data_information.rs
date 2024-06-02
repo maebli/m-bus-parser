@@ -390,7 +390,7 @@ impl DataFieldCoding {
                         })
                         .unwrap_or_else(|_| Err(DataRecordError::InsufficientData)),
                     0xC0..=0xD9 => {
-                        length = length - 0xC0;
+                        length -= 0xC0;
                         let is_negative = input[0] > 0xC9;
                         let sign = if is_negative { -1.0 } else { 1.0 };
                         if length as usize > input.len() {
@@ -431,11 +431,11 @@ impl DataFieldCoding {
                         }
                     }
                     0xE0..=0xE9 => {
-                        length = length - 0xE0;
+                        length -= 0xE0;
                         todo!("0xE0-0xE9 not implemented for length {}", length);
                     }
                     0xF0..=0xF4 => {
-                        length = length - 0xF0;
+                        length -= 0xF0;
                         todo!("0xF0-0xF4 not implemented for length {}", length);
                     }
                     0xF5 => {
