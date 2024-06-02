@@ -205,16 +205,27 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum DataType {
+    Text(ArrayVec<u8, 18>),
+    Number(f64),
+}
 #[derive(PartialEq, Debug)]
 pub struct Data {
-    value: Option<f64>,
+    value: Option<DataType>,
     size: usize,
 }
 #[cfg(feature = "std")]
 impl std::fmt::Display for Data {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.value {
-            Some(value) => write!(f, "({}", value),
+        match &self.value {
+            Some(value) => match value {
+                DataType::Text(text) => {
+                    let text = String::from_utf8_lossy(&text);
+                    write!(f, "{}", text)
+                }
+                DataType::Number(value) => write!(f, "{}", value),
+            },
             None => write!(f, "No Data"),
         }
     }
@@ -240,7 +251,7 @@ impl DataFieldCoding {
                 }
                 let value = input[0] as i8;
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 1,
                 })
             }
@@ -252,7 +263,7 @@ impl DataFieldCoding {
                 let value = i16::from_le_bytes(input[0..2].try_into().unwrap());
 
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 2,
                 })
             }
@@ -264,7 +275,7 @@ impl DataFieldCoding {
                 let value =
                     (input[0] as i32) | ((input[1] as i32) << 8) | ((input[2] as i32) << 16);
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 3,
                 })
             }
@@ -275,7 +286,7 @@ impl DataFieldCoding {
                 }
                 let value = i32::from_le_bytes(input[0..4].try_into().unwrap());
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 4,
                 })
             }
@@ -286,7 +297,7 @@ impl DataFieldCoding {
                 }
                 let value = f32::from_le_bytes(input[0..4].try_into().unwrap());
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 4,
                 })
             }
@@ -302,7 +313,7 @@ impl DataFieldCoding {
                     | ((input[4] as i64) << 32)
                     | ((input[5] as i64) << 40);
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 6,
                 })
             }
@@ -313,7 +324,7 @@ impl DataFieldCoding {
                 }
                 let value = i64::from_le_bytes(input[0..8].try_into().unwrap());
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 8,
                 })
             }
@@ -329,7 +340,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u8(input[0]);
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 1,
                 })
             }
@@ -340,7 +351,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u16(&input[0..2]);
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 2,
                 })
             }
@@ -351,7 +362,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u32(&input[0..3]);
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 3,
                 })
             }
@@ -362,14 +373,86 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u32(&input[0..4]);
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 4,
                 })
             }
 
             DataFieldCoding::VariableLength => {
-                // Variable length data parsing
-                todo!()
+                let mut length = input[0];
+                match input[0] {
+                    0x00..=0xBF => ArrayVec::<u8, 18>::try_from(&input[1..length as usize + 1])
+                        .map(|text| {
+                            Ok(Data {
+                                value: Some(DataType::Text(text)),
+                                size: length as usize + 1,
+                            })
+                        })
+                        .unwrap_or_else(|_| Err(DataRecordError::InsufficientData)),
+                    0xC0..=0xD9 => {
+                        length = length - 0xC0;
+                        let is_negative = input[0] > 0xC9;
+                        let sign = if is_negative { -1.0 } else { 1.0 };
+                        if length as usize > input.len() {
+                            return Err(DataRecordError::InsufficientData);
+                        }
+                        match length {
+                            2 => {
+                                let value = bcd_to_u8(input[1]);
+                                Ok(Data {
+                                    value: Some(DataType::Number(sign * value as f64)),
+                                    size: 2,
+                                })
+                            }
+                            4 => {
+                                let value = bcd_to_u16(&input[1..3]);
+                                Ok(Data {
+                                    value: Some(DataType::Number(sign * value as f64)),
+                                    size: 4,
+                                })
+                            }
+                            6 => {
+                                let value = bcd_to_u32(&input[1..5]);
+                                Ok(Data {
+                                    value: Some(DataType::Number(sign * value as f64)),
+                                    size: 6,
+                                })
+                            }
+                            8 => {
+                                let value = bcd_to_u32(&input[1..5]);
+                                Ok(Data {
+                                    value: Some(DataType::Number(sign * value as f64)),
+                                    size: 8,
+                                })
+                            }
+                            _ => {
+                                todo!("8-bit text string according to ISO/IEC 8859-1 of length greater than {}", length);
+                            }
+                        }
+                    }
+                    0xE0..=0xE9 => {
+                        length = length - 0xE0;
+                        todo!("0xE0-0xE9 not implemented for length {}", length);
+                    }
+                    0xF0..=0xF4 => {
+                        length = length - 0xF0;
+                        todo!("0xF0-0xF4 not implemented for length {}", length);
+                    }
+                    0xF5 => {
+                        length = 6;
+                        todo!("0xF5 not implemented for length {}", length);
+                    }
+                    0xF6 => {
+                        length = 8;
+                        todo!("0xF6 not implemented for length {}", length);
+                    }
+                    _ => {
+                        todo!(
+                            "Variable length parsing for length: {} is a resreved value",
+                            length
+                        );
+                    }
+                }
             }
 
             DataFieldCoding::BCDDigit12 => {
@@ -378,7 +461,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u48(&input[0..6]);
                 Ok(Data {
-                    value: Some(value as f64),
+                    value: Some(DataType::Number(value as f64)),
                     size: 6,
                 })
             }
