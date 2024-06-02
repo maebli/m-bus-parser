@@ -3,6 +3,7 @@ use std::fs;
 use walkdir::WalkDir;
 
 //  This is an example of how to use the library to parse a frame.
+#[cfg(feature = "plaintext-before-extension")]
 fn main() {
     for entry in WalkDir::new("./tests/rscada/test-frames")
         .into_iter()
