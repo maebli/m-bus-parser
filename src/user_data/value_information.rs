@@ -1124,7 +1124,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             exponent: 1,
                         });
                         decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::DisplayOutputScalingFacttor);
+                        labels.push(ValueLabel::DisplayOutputScalingFactor);
                     }
 
                     _ => todo!("Implement the rest of the units: {:X?}", vife[0].data),
@@ -1650,14 +1650,21 @@ impl fmt::Display for ValueInformation {
         )?;
         write!(f, "[")?;
         for unit in &self.units {
-            write!(f, "{} ", unit)?;
+            write!(f, "{}", unit)?;
         }
         write!(f, "]")?;
-        write!(f, "(")?;
-        for label in &self.labels {
-            write!(f, "{:?}, ", label)?;
+        if !self.labels.is_empty() {
+            write!(f, "(")?;
+            for (i, label) in self.labels.iter().enumerate() {
+                write!(f, "{:?}", label)?;
+                if i != self.labels.len() - 1 {
+                    write!(f, ", ")?;
+                }
+            }
+
+            return write!(f, ")");
         }
-        write!(f, ")")
+        Ok(())
     }
 }
 
@@ -1806,7 +1813,7 @@ pub enum ValueLabel {
     ThermalCouplingRatingRoomSide,
     ThermalCouplingRatingFactorHeatingSide,
     LowTemperatureRatingFactor,
-    DisplayOutputScalingFacttor,
+    DisplayOutputScalingFactor,
     ManufacturerSpecific,
 }
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -1818,10 +1825,26 @@ pub struct Unit {
 #[cfg(feature = "std")]
 impl fmt::Display for Unit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.exponent == 1 {
-            write!(f, "{}", self.name)
-        } else {
-            write!(f, "{}^{}", self.name, self.exponent)
+        let superscripts = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+        match self.exponent {
+            1 => {
+                write!(f, "{}", self.name)
+            }
+            0..=9 => {
+                write!(f, "{}{}", self.name, superscripts[self.exponent as usize])
+            }
+            10..=19 => {
+                write!(
+                    f,
+                    "{}{}{}",
+                    self.name,
+                    superscripts[1],
+                    superscripts[self.exponent as usize - 10]
+                )
+            }
+            _ => {
+                write!(f, "{}^{}", self.name, superscripts[self.exponent as usize])
+            }
         }
     }
 }

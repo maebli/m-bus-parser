@@ -119,7 +119,7 @@ fn parse_data(data: &[u8]) {
             for record in parsed_data.data_records.inner.iter() {
                 table.add_row(row![
                     format!(
-                        "{}{}",
+                        "({}{}",
                         record.data,
                         record
                             .data_record_header
