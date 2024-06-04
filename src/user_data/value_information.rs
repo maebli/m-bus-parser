@@ -1643,16 +1643,21 @@ pub struct ValueInformation {
 #[cfg(feature = "std")]
 impl fmt::Display for ValueInformation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "+{})e{}",
-            self.decimal_offset_exponent, self.decimal_scale_exponent
-        )?;
-        write!(f, "[")?;
-        for unit in &self.units {
-            write!(f, "{}", unit)?;
+        if self.decimal_offset_exponent != 0 {
+            write!(f, "+{})", self.decimal_offset_exponent)?;
+        } else {
+            write!(f, ")")?;
         }
-        write!(f, "]")?;
+        if self.decimal_scale_exponent != 0 {
+            write!(f, "e{}", self.decimal_scale_exponent)?;
+        }
+        if !self.units.is_empty() {
+            write!(f, "[")?;
+            for unit in &self.units {
+                write!(f, "{}", unit)?;
+            }
+            write!(f, "]")?;
+        }
         if !self.labels.is_empty() {
             write!(f, "(")?;
             for (i, label) in self.labels.iter().enumerate() {
@@ -1826,25 +1831,30 @@ pub struct Unit {
 impl fmt::Display for Unit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let superscripts = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+
         match self.exponent {
-            1 => {
-                write!(f, "{}", self.name)
+            1 => write!(f, "{}", self.name),
+            0 => write!(f, "{}{}", self.name, superscripts[0]),
+            0..=9 => write!(f, "{}{}", self.name, superscripts[self.exponent as usize]),
+            10..=19 => write!(
+                f,
+                "{}{}{}",
+                self.name,
+                superscripts[1],
+                superscripts[self.exponent as usize - 10]
+            ),
+            x if x < 0 && x >= -9 => {
+                write!(f, "{}{}{}", self.name, '⁻', superscripts[(-x) as usize])
             }
-            0..=9 => {
-                write!(f, "{}{}", self.name, superscripts[self.exponent as usize])
-            }
-            10..=19 => {
-                write!(
-                    f,
-                    "{}{}{}",
-                    self.name,
-                    superscripts[1],
-                    superscripts[self.exponent as usize - 10]
-                )
-            }
-            _ => {
-                write!(f, "{}^{}", self.name, superscripts[self.exponent as usize])
-            }
+            x if x < 0 && x >= -19 => write!(
+                f,
+                "{}{}{}{}",
+                self.name,
+                '⁻',
+                superscripts[1],
+                superscripts[(-x) as usize - 10]
+            ),
+            x => write!(f, "{}^{}", self.name, x),
         }
     }
 }
