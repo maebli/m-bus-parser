@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-parser-cli"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 description = "A cli to use the library for parsing M-Bus frames"
 license = "MIT"
