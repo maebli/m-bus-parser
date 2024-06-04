@@ -1834,7 +1834,6 @@ impl fmt::Display for Unit {
 
         match self.exponent {
             1 => write!(f, "{}", self.name),
-            0 => write!(f, "{}{}", self.name, superscripts[0]),
             0..=9 => write!(f, "{}{}", self.name, superscripts[self.exponent as usize]),
             10..=19 => write!(
                 f,
@@ -1843,14 +1842,13 @@ impl fmt::Display for Unit {
                 superscripts[1],
                 superscripts[self.exponent as usize - 10]
             ),
-            x if x < 0 && x >= -9 => {
-                write!(f, "{}{}{}", self.name, '⁻', superscripts[(-x) as usize])
+            x if (-9..0).contains(&x) => {
+                write!(f, "{}⁻{}", self.name, superscripts[(-x) as usize])
             }
-            x if x < 0 && x >= -19 => write!(
+            x if (-19..0).contains(&x) => write!(
                 f,
-                "{}{}{}{}",
+                "{}⁻{}{}",
                 self.name,
-                '⁻',
                 superscripts[1],
                 superscripts[(-x) as usize - 10]
             ),
