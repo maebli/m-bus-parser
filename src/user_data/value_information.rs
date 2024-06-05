@@ -14,8 +14,12 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
         let vif = ValueInformationField::from(data[0]);
         let mut plaintext_vife: Option<ArrayVec<char, 9>> = None;
 
+        #[cfg(not(feature = "plaintext-before-extension"))]
+        let standard_plaintex_vib = true;
         #[cfg(feature = "plaintext-before-extension")]
-        if vif.value_information_contans_ascii() {
+        let standard_plaintex_vib = false;
+
+        if !standard_plaintex_vib && vif.value_information_contains_ascii() {
             plaintext_vife = Some(extract_plaintext_vife(&data[1..]));
         }
 
@@ -45,8 +49,7 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                     return Err(DataInformationError::InvalidValueInformation);
                 }
             }
-            #[cfg(not(feature = "plaintext-before-extension"))]
-            if vif.value_information_contans_ascii() {
+            if standard_plaintex_vib && vif.value_information_contains_ascii() {
                 plaintext_vife = Some(extract_plaintext_vife(&data[offset..]));
             }
         }
@@ -82,7 +85,7 @@ pub struct ValueInformationField {
 }
 
 impl ValueInformationField {
-    fn value_information_contans_ascii(&self) -> bool {
+    fn value_information_contains_ascii(&self) -> bool {
         self.data == 0x7C || self.data == 0xFC
     }
 }
