@@ -30,15 +30,23 @@
 //!     0x1F, 0xB3, 0x16,
 //! ];
 //!
+//! // Parse the frame
 //! let frame = Frame::try_from(example.as_slice()).unwrap();
 //!
 //! if let Frame::LongFrame { function, address, data :_} = frame {
 //!     assert_eq!(function, Function::RspUd{acd: false, dfc:false});
 //!     assert_eq!(address, Address::Primary(1));
 //! }
+//!
+//! // Alternatively, parse the frame and user data in one go
+//! let mbus_data = m_bus_parser::MbusData::try_from(example.as_slice()).unwrap();
+//!
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+use frames::FrameError;
+use user_data::ApplicationLayerError;
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -48,3 +56,47 @@ extern crate core;
 
 pub mod frames;
 pub mod user_data;
+
+#[derive(Debug)]
+pub struct MbusData<'a> {
+    pub frame: frames::Frame<'a>,
+    pub user_data: Option<user_data::UserDataBlock<'a>>,
+}
+
+#[derive(Debug)]
+pub enum MbusError {
+    FrameError(FrameError),
+    ApplicationLayerError(ApplicationLayerError),
+}
+
+impl From<FrameError> for MbusError {
+    fn from(error: FrameError) -> MbusError {
+        MbusError::FrameError(error)
+    }
+}
+
+impl From<ApplicationLayerError> for MbusError {
+    fn from(error: ApplicationLayerError) -> MbusError {
+        match error {
+            _ => MbusError::ApplicationLayerError(error),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
+    type Error = MbusError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        let frame = frames::Frame::try_from(data)?;
+
+        let user_data = match &frame {
+            frames::Frame::LongFrame { data, .. } => {
+                Some(user_data::UserDataBlock::try_from(*data)?)
+            }
+            frames::Frame::SingleCharacter { .. } => None,
+            frames::Frame::ShortFrame { .. } | frames::Frame::ControlFrame { .. } => None,
+        };
+
+        Ok(MbusData { frame, user_data })
+    }
+}
