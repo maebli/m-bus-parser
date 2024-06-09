@@ -77,9 +77,7 @@ impl From<FrameError> for MbusError {
 
 impl From<ApplicationLayerError> for MbusError {
     fn from(error: ApplicationLayerError) -> MbusError {
-        match error {
-            _ => MbusError::ApplicationLayerError(error),
-        }
+        MbusError::ApplicationLayerError(error)
     }
 }
 
