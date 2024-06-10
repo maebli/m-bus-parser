@@ -1,12 +1,11 @@
 mod utils;
 use m_bus_parser;
 
-use wasm_bindgen::prelude::*;
+#[cfg(feature = "wee_alloc")]
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub fn parse(s: &str) -> String {
