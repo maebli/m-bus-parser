@@ -61,6 +61,7 @@ pub mod user_data;
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
+    pub data_records: Option<user_data::DataRecords>,
 }
 
 #[derive(Debug)]
@@ -86,15 +87,30 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
 
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
         let frame = frames::Frame::try_from(data)?;
-
-        let user_data = match &frame {
+        let mut user_data = None;
+        let mut data_records = None;
+        match &frame {
             frames::Frame::LongFrame { data, .. } => {
-                Some(user_data::UserDataBlock::try_from(*data)?)
+                if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
+                    user_data = Some(x);
+                    if let Ok(user_data::UserDataBlock::VariableDataStructure {
+                        fixed_data_header: _,
+                        variable_data_block,
+                    }) = user_data::UserDataBlock::try_from(*data)
+                    {
+                        data_records = user_data::DataRecords::try_from(variable_data_block).ok();
+                    }
+                }
             }
-            frames::Frame::SingleCharacter { .. } => None,
-            frames::Frame::ShortFrame { .. } | frames::Frame::ControlFrame { .. } => None,
+            frames::Frame::SingleCharacter { .. } => (),
+            frames::Frame::ShortFrame { .. } => (),
+            frames::Frame::ControlFrame { .. } => (),
         };
 
-        Ok(MbusData { frame, user_data })
+        Ok(MbusData {
+            frame,
+            user_data,
+            data_records,
+        })
     }
 }
