@@ -58,6 +58,12 @@ pub mod frames;
 pub mod user_data;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serde_support", derive(serde::Serialize))]
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Deserialize),
+    serde(bound(deserialize = "'de: 'a"))
+)]
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,

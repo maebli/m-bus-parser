@@ -70,7 +70,10 @@ fn extract_plaintext_vife(data: &[u8]) -> ArrayVec<char, 9> {
     }
     ascii
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct ValueInformationBlock {
     pub value_information: ValueInformationField,
@@ -78,7 +81,10 @@ pub struct ValueInformationBlock {
         Option<ArrayVec<ValueInformationFieldExtension, MAX_VIFE_RECORDS>>,
     pub plaintext_vife: Option<ArrayVec<char, 9>>,
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct ValueInformationField {
     pub data: u8,
@@ -89,7 +95,10 @@ impl ValueInformationField {
         self.data == 0x7C || self.data == 0xFC
     }
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct ValueInformationFieldExtension {
     pub data: u8,
@@ -132,7 +141,10 @@ pub enum ValueInformationCoding {
     AlternateVIFExtension,
     ManufacturerSpecific,
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub enum ValueInformationFieldExtensionCoding {
     MainVIFCodeExtension,
@@ -1635,6 +1647,10 @@ impl From<u8> for ValueInformationField {
 /// This is the most important type of the this file and represents
 /// the whole information inside the value information block
 /// value(x) = (multiplier * value + offset) * units
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct ValueInformation {
     pub decimal_offset_exponent: isize,
@@ -1675,7 +1691,10 @@ impl fmt::Display for ValueInformation {
         Ok(())
     }
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub enum ValueLabel {
     Instantaneous,
@@ -1824,6 +1843,10 @@ pub enum ValueLabel {
     DisplayOutputScalingFactor,
     ManufacturerSpecific,
 }
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Unit {
     pub name: UnitName,
@@ -1859,7 +1882,10 @@ impl fmt::Display for Unit {
         }
     }
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnitName {
     Watt,

@@ -31,7 +31,7 @@ fn clean_and_convert(input: &str) -> Vec<u8> {
 pub fn m_bus_parse(s: &str) -> String {
     let s = clean_and_convert(s);
     if let Ok(mbus_data) = MbusData::try_from(s.as_slice()) {
-        format!("{:?}", mbus_data)
+        serde_json::to_string_pretty(&mbus_data).unwrap()
     } else {
         format!("Failed to parse")
     }

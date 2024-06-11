@@ -3,19 +3,28 @@ use super::{
     value_information::{ValueInformation, ValueInformationBlock},
     variable_user_data::DataRecordError,
 };
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct RawDataRecordHeader {
     pub data_information_block: DataInformationBlock,
     pub value_information_block: ValueInformationBlock,
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct ProcessedDataRecordHeader {
     pub data_information: DataInformation,
     pub value_information: ValueInformation,
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct DataRecord {
     pub data_record_header: DataRecordHeader,
@@ -27,7 +36,10 @@ impl DataRecord {
         self.data_record_header.get_size() + self.data.get_size()
     }
 }
-
+#[cfg_attr(
+    feature = "serde_support",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, PartialEq)]
 pub struct DataRecordHeader {
     pub raw_data_record_header: RawDataRecordHeader,

@@ -28,6 +28,7 @@ bindgen = "0.69.4"
 [features]
 std = []
 plaintext-before-extension = []
+serde_support = ["serde", "std", "arrayvec/serde"]
 
 [profile.release]
 opt-level = 'z'   # Optimize for size
@@ -35,8 +36,11 @@ lto = true        # Enable Link Time Optimization
 codegen-units = 1 # Reduce codegen units to improve optimizations
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"], optional = true }
 bitflags = "2.4.2"
-arrayvec = "0.7.4"
+arrayvec = { version = "0.7.4", features = [
+    "serde",
+], optional = true, default-features = false }
 
 [workspace]
 members = ["cli", "wasm"]
