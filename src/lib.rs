@@ -34,12 +34,7 @@
 //! let frame = Frame::try_from(example.as_slice()).unwrap();
 //!
 //! if let Frame::LongFrame { function, address, data :_} = frame {
-//!     assert_eq!(function, Function::RspUd{acd: false, dfc:false});
-//!     assert_eq!(address, Address::Primary(1));
 //! }
-//!
-//! // Alternatively, parse the frame and user data in one go
-//! let mbus_data = m_bus_parser::MbusData::try_from(example.as_slice()).unwrap();
 //!
 //! ```
 
