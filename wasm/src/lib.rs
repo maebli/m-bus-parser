@@ -1,10 +1,6 @@
 mod utils;
 use m_bus_parser::{self, MbusData};
 
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
