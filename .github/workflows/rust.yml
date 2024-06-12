@@ -6,6 +6,7 @@ on:
     tags:
       - 'v*'
       - 'cli-v*'
+      - 'wasm-v*'
   pull_request:
     branches: [main]
 
