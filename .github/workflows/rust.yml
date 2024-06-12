@@ -108,7 +108,7 @@ jobs:
   publish-cli:
     needs: build-cli
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'cli-v')
+    if: startsWith(github.ref, 'refs/tags/cli-v')
     steps:
       - uses: actions/checkout@v2
       - name: Set up Rust
@@ -125,7 +125,7 @@ jobs:
   publish-wasm:
     needs: build-wasm
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'wasm-v')
+    if: startsWith(github.ref, 'refs/tags/wasm-v')
     steps:
       - uses: actions/checkout@v2
       - name: Set up Rust
