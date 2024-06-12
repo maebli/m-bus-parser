@@ -1,9 +1,6 @@
 //! is part of the MBUS data link layer
 //! It is used to encapsulate the application layer data
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
     SingleCharacter {
@@ -25,10 +22,7 @@ pub enum Frame<'a> {
     },
 }
 
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum Function {
     SndNk,
@@ -70,10 +64,7 @@ impl TryFrom<u8> for Function {
         }
     }
 }
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum Address {
     Uninitalized,
