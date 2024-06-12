@@ -1,7 +1,7 @@
 //! is part of the MBUS data link layer
 //! It is used to encapsulate the application layer data
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -26,7 +26,7 @@ pub enum Frame<'a> {
 }
 
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -71,7 +71,7 @@ impl TryFrom<u8> for Function {
     }
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]

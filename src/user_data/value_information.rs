@@ -71,7 +71,7 @@ fn extract_plaintext_vife(data: &[u8]) -> ArrayVec<char, 9> {
     ascii
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -82,7 +82,7 @@ pub struct ValueInformationBlock {
     pub plaintext_vife: Option<ArrayVec<char, 9>>,
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -96,7 +96,7 @@ impl ValueInformationField {
     }
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -142,7 +142,7 @@ pub enum ValueInformationCoding {
     ManufacturerSpecific,
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -1648,7 +1648,7 @@ impl From<u8> for ValueInformationField {
 /// the whole information inside the value information block
 /// value(x) = (multiplier * value + offset) * units
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -1692,7 +1692,7 @@ impl fmt::Display for ValueInformation {
     }
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq)]
@@ -1844,7 +1844,7 @@ pub enum ValueLabel {
     ManufacturerSpecific,
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -1883,7 +1883,7 @@ impl fmt::Display for Unit {
     }
 }
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, Clone, Copy, PartialEq)]

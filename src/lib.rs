@@ -58,9 +58,9 @@ pub mod frames;
 pub mod user_data;
 
 #[derive(Debug)]
-#[cfg_attr(feature = "serde_support", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(
-    feature = "serde_support",
+    feature = "serde",
     derive(serde::Deserialize),
     serde(bound(deserialize = "'de: 'a"))
 )]
