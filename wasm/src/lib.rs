@@ -1,4 +1,3 @@
-mod utils;
 use m_bus_parser::{self, MbusData};
 
 use wasm_bindgen::prelude::*;
@@ -29,6 +28,6 @@ pub fn m_bus_parse(s: &str) -> String {
     if let Ok(mbus_data) = MbusData::try_from(s.as_slice()) {
         serde_json::to_string_pretty(&mbus_data).unwrap()
     } else {
-        format!("Failed to parse")
+        "Failed to parse".to_string()
     }
 }
