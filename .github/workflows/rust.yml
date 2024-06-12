@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [feature/wasm-pack]
     tags:
       - 'v*'
       - 'cli-v*'
