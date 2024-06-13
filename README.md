@@ -20,6 +20,22 @@ Furthermore, the Open Metering System (OMS) Group has published a specification 
  such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in **c**, [jMbus](https://github.com/qvest-digital/jmbus) written in **java**,[Valley.Net.Protocols.MeterBus](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/) written in **C#**, [tmbus](https://dev-lab.github.io/tmbus/) written in javascript or [pyMeterBus](https://github.com/ganehag/pyMeterBus) written in python.
 
 
+## Dependants and Deployments
+
+### NPM Wasm Package
+![npm](https://img.shields.io/npm/dm/m-bus-parser-wasm-pack.svg) ![npm](https://img.shields.io/npm/v/m-bus-parser-wasm-pack.svg)
+
+The parser has been published as an npm package and can be used in the browser. An example of this can be seen under the url www.maebli.github.io/m-bus-parser/ [https://maebli.github.io/m-bus-parser/](https://maebli.github.io/m-bus-parser/).
+
+The source is in the wasm folder in this repos 
+
+
+### CLI rust crate
+[![Crates.io](https://img.shields.io/crates/v/m-bus-parser-cli.svg)](https://crates.io/crates/m-bus-parser-cli) [![Downloads](https://img.shields.io/crates/d/m-bus-parser-cli.svg)](https://crates.io/crates/m-bus-parser-cli)
+
+There is a cli, the source is in the sub folder "cli" and is published on crates.io [https://crates.io/crates/m-bus-parser-cli](https://crates.io/crates/m-bus-parser-cli).
+
+
 ### Visualization of Library Function
 
 Do not get confused about the different types of frame types. The most important one to understand at first is the `LongFrame` which is the most common frame type. The others are for example for searching for a slave or for setting the primary address of a slave. This is not of primary intrest for most users. Visualization was made with the help of the tool [excalidraw](https://excalidraw.com/).
