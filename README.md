@@ -25,7 +25,7 @@ Furthermore, the Open Metering System (OMS) Group has published a specification 
 ### NPM Wasm Package
 ![npm](https://img.shields.io/npm/dm/m-bus-parser-wasm-pack.svg) ![npm](https://img.shields.io/npm/v/m-bus-parser-wasm-pack.svg)
 
-The parser has been published as an npm package and can be used in the browser. An example of this can be seen under the url www.maebli.github.io/m-bus-parser/ [https://maebli.github.io/m-bus-parser/](https://maebli.github.io/m-bus-parser/).
+The parser has been published as an npm package and can be used in the browser. An example of this can be seen under the url [https://maebli.github.io/m-bus-parser/](https://maebli.github.io/m-bus-parser/).
 
 The source is in the wasm folder in this repos 
 
