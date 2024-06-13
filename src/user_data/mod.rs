@@ -15,6 +15,7 @@ pub mod variable_user_data;
 // therefore the maximum number of blocks is 117, see https://m-bus.com/documentation-wired/06-application-layer
 const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 117;
 // Define a new struct that wraps ArrayVec
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct DataRecords {
     pub inner: ArrayVec<data_record::DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>,
@@ -65,6 +66,7 @@ impl Default for DataRecords {
 bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct StatusField: u8 {
         const COUNTER_BINARY_SIGNED     = 0b00000001;
         const COUNTER_FIXED_DATE        = 0b00000010;
@@ -239,6 +241,7 @@ impl fmt::Display for ApplicationLayerError {
 #[cfg(feature = "std")]
 impl std::error::Error for ApplicationLayerError {}
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum ApplicationResetSubcode {
     All(u8),
@@ -297,12 +300,12 @@ fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> 
 
     Ok(number)
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct Counter {
     count: u32,
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct IdentificationNumber {
     pub number: u32,
@@ -338,7 +341,7 @@ pub struct FixedDataHeder {
     status: StatusField,
     signature: u16,
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum UserDataBlock<'a> {
@@ -358,7 +361,7 @@ pub enum UserDataBlock<'a> {
         variable_data_block: &'a [u8],
     },
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum Medium {
     Other,
@@ -450,7 +453,7 @@ impl fmt::Display for Medium {
         write!(f, "{}", medium)
     }
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct FixedDataHeader {
     pub identification_number: IdentificationNumber,
@@ -461,7 +464,7 @@ pub struct FixedDataHeader {
     pub status: StatusField,
     pub signature: u16,
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct ManufacturerCode {
     pub code: [char; 3],

@@ -3,6 +3,7 @@ use super::variable_user_data::DataRecordError;
 use arrayvec::ArrayVec;
 
 const MAX_DIFE_RECORDS: usize = 10;
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct DataInformationBlock {
     pub data_information_field: DataInformationField,
@@ -19,7 +20,7 @@ impl DataInformationBlock {
         size
     }
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct DataInformationField {
     pub data: u8,
@@ -42,7 +43,7 @@ impl From<u8> for DataInformationFieldExtension {
         DataInformationFieldExtension { data }
     }
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct DataInformationFieldExtension {
     pub data: u8,
@@ -94,7 +95,7 @@ impl DataInformationFieldExtension {
         self.data & 0x80 != 0
     }
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataInformation {
     pub storage_number: u64,
@@ -116,7 +117,7 @@ impl std::fmt::Display for DataInformation {
 }
 
 const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataInformationExtensionField {}
 
@@ -205,11 +206,13 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum DataType {
     Text(ArrayVec<u8, 18>),
     Number(f64),
 }
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(PartialEq, Debug)]
 pub struct Data {
     value: Option<DataType>,
@@ -509,7 +512,7 @@ impl DataInformation {
         self.size
     }
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FunctionField {
     InstantaneousValue,
@@ -529,7 +532,7 @@ impl std::fmt::Display for FunctionField {
         }
     }
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpecialFunctions {
     ManufacturerSpecific,
@@ -655,7 +658,7 @@ impl DataFieldCoding {
         }
     }
 }
-
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DataFieldCoding {
     NoData,

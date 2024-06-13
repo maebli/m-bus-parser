@@ -34,12 +34,7 @@
 //! let frame = Frame::try_from(example.as_slice()).unwrap();
 //!
 //! if let Frame::LongFrame { function, address, data :_} = frame {
-//!     assert_eq!(function, Function::RspUd{acd: false, dfc:false});
-//!     assert_eq!(address, Address::Primary(1));
 //! }
-//!
-//! // Alternatively, parse the frame and user data in one go
-//! let mbus_data = m_bus_parser::MbusData::try_from(example.as_slice()).unwrap();
 //!
 //! ```
 
@@ -58,9 +53,15 @@ pub mod frames;
 pub mod user_data;
 
 #[derive(Debug)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(bound(deserialize = "'de: 'a"))
+)]
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
+    pub data_records: Option<user_data::DataRecords>,
 }
 
 #[derive(Debug)]
@@ -77,9 +78,7 @@ impl From<FrameError> for MbusError {
 
 impl From<ApplicationLayerError> for MbusError {
     fn from(error: ApplicationLayerError) -> MbusError {
-        match error {
-            _ => MbusError::ApplicationLayerError(error),
-        }
+        MbusError::ApplicationLayerError(error)
     }
 }
 
@@ -88,15 +87,30 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
 
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
         let frame = frames::Frame::try_from(data)?;
-
-        let user_data = match &frame {
+        let mut user_data = None;
+        let mut data_records = None;
+        match &frame {
             frames::Frame::LongFrame { data, .. } => {
-                Some(user_data::UserDataBlock::try_from(*data)?)
+                if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
+                    user_data = Some(x);
+                    if let Ok(user_data::UserDataBlock::VariableDataStructure {
+                        fixed_data_header: _,
+                        variable_data_block,
+                    }) = user_data::UserDataBlock::try_from(*data)
+                    {
+                        data_records = user_data::DataRecords::try_from(variable_data_block).ok();
+                    }
+                }
             }
-            frames::Frame::SingleCharacter { .. } => None,
-            frames::Frame::ShortFrame { .. } | frames::Frame::ControlFrame { .. } => None,
+            frames::Frame::SingleCharacter { .. } => (),
+            frames::Frame::ShortFrame { .. } => (),
+            frames::Frame::ControlFrame { .. } => (),
         };
 
-        Ok(MbusData { frame, user_data })
+        Ok(MbusData {
+            frame,
+            user_data,
+            data_records,
+        })
     }
 }

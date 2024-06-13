@@ -1,0 +1,30 @@
+{
+  "name": "m-bus-parser-wasm-pack",
+  "collaborators": [
+    "Michael Aebli"
+  ],
+  "description": "A wasm-pack to use the library for parsing M-Bus frames",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maebli/m-bus-parser"
+  },
+  "files": [
+    "m_bus_parser_wasm_pack_bg.wasm",
+    "m_bus_parser_wasm_pack.js",
+    "m_bus_parser_wasm_pack.d.ts"
+  ],
+  "module": "m_bus_parser_wasm_pack.js",
+  "homepage": "https://maebli.github.io/",
+  "types": "m_bus_parser_wasm_pack.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ],
+  "keywords": [
+    "m-bus",
+    "parser",
+    "parse",
+    "wasm-pack"
+  ]
+}
