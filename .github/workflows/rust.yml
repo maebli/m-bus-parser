@@ -150,6 +150,7 @@ jobs:
       - name: Install npm dependencies
         run: |
           cd wasm/pkg
+          npm install
           npm ci
       - name: Publish to npm
         run: npm publish --provenance --access public
