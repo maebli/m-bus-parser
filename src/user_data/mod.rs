@@ -62,30 +62,31 @@ impl Default for DataRecords {
         DataRecords::new()
     }
 }
-#[cfg(feature = "serde")]
-impl serde::Serialize for StatusField {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_u8(self.bits())
-    }
-}
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for StatusField {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bits = u8::deserialize(deserializer)?;
-        StatusField::from_bits(bits)
-            .ok_or_else(|| serde::de::Error::custom("Invalid bits for StatusField"))
-    }
-}
+// #[cfg(feature = "serde")]
+// impl serde::Serialize for StatusField {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         serializer.serialize_u8(self.bits())
+//     }
+// }
+// #[cfg(feature = "serde")]
+// impl<'de> serde::Deserialize<'de> for StatusField {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//    where
+//        D: serde::Deserializer<'de>,
+//    {
+//        let bits = u8::deserialize(deserializer)?;
+//        StatusField::from_bits(bits)
+//            .ok_or_else(|| serde::de::Error::custom("Invalid bits for StatusField"))
+//    }
+// }
 
 bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct StatusField: u8 {
         const COUNTER_BINARY_SIGNED     = 0b00000001;
         const COUNTER_FIXED_DATE        = 0b00000010;

@@ -28,12 +28,15 @@ bindgen = "0.69.4"
 [features]
 std = []
 plaintext-before-extension = []
-serde = ["dep:serde", "std", "arrayvec/serde"]
+serde = ["dep:serde", "std", "arrayvec/serde", "bitflags/serde"]
 
 [profile.release]
 opt-level = 'z'   # Optimize for size
 lto = true        # Enable Link Time Optimization
 codegen-units = 1 # Reduce codegen units to improve optimizations
+
+[profile.release.package."m-bus-parser-wasm-pack"]
+opt-level = "s"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"], optional = true }
