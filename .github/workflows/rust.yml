@@ -128,7 +128,7 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/wasm-v')
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -137,19 +137,20 @@ jobs:
           override: true
       - name: Install wasm-pack
         run: cargo install wasm-pack
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
       - name: Build wasm package
         run: |
           cd wasm
           wasm-pack build --target bundler
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+          token: ${{ secrets.NPM_TOKEN }}
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd  wasm/pkg
           npm ci
-          npm publish --provenance --access public
+          npm publish
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
