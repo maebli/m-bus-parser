@@ -32,6 +32,19 @@ pub enum Function {
     RspUd { acd: bool, dfc: bool },
 }
 
+#[cfg(feature = "std")]
+impl std::fmt::Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Function::SndNk => write!(f, "SndNk"),
+            Function::SndUd { fcb } => write!(f, "SndUd (FCB: {})", fcb),
+            Function::ReqUd2 { fcb } => write!(f, "ReqUd2 (FCB: {})", fcb),
+            Function::ReqUd1 { fcb } => write!(f, "ReqUd1 (FCB: {})", fcb),
+            Function::RspUd { acd, dfc } => write!(f, "RspUd (ACD: {}, DFC: {})", acd, dfc),
+        }
+    }
+}
+
 impl TryFrom<u8> for Function {
     type Error = FrameError;
 
@@ -71,6 +84,20 @@ pub enum Address {
     Primary(u8),
     Secondary,
     Broadcast { reply_required: bool },
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Address::Uninitalized => write!(f, "Uninitalized"),
+            Address::Primary(byte) => write!(f, "Primary ({})", byte),
+            Address::Secondary => write!(f, "Secondary"),
+            Address::Broadcast { reply_required } => {
+                write!(f, "Broadcast (Reply Required: {})", reply_required)
+            }
+        }
+    }
 }
 
 impl Address {

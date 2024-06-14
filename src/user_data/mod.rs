@@ -262,6 +262,31 @@ pub enum ApplicationResetSubcode {
     Reserved2(u8),
 }
 
+#[cfg(feature = "std")]
+impl fmt::Display for ApplicationResetSubcode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let subcode = match self {
+            ApplicationResetSubcode::All(_) => "All",
+            ApplicationResetSubcode::UserData(_) => "User data",
+            ApplicationResetSubcode::SimpleBilling(_) => "Simple billing",
+            ApplicationResetSubcode::EnhancedBilling(_) => "Enhanced billing",
+            ApplicationResetSubcode::MultiTariffBilling(_) => "Multi-tariff billing",
+            ApplicationResetSubcode::InstantaneousValues(_) => "Instantaneous values",
+            ApplicationResetSubcode::LoadManagementValues(_) => "Load management values",
+            ApplicationResetSubcode::Reserved1(_) => "Reserved",
+            ApplicationResetSubcode::InstallationStartup(_) => "Installation startup",
+            ApplicationResetSubcode::Testing(_) => "Testing",
+            ApplicationResetSubcode::Calibration(_) => "Calibration",
+            ApplicationResetSubcode::ConfigurationUpdates(_) => "Configuration updates",
+            ApplicationResetSubcode::Manufacturing(_) => "Manufacturing",
+            ApplicationResetSubcode::Development(_) => "Development",
+            ApplicationResetSubcode::Selftest(_) => "Self-test",
+            ApplicationResetSubcode::Reserved2(_) => "Reserved",
+        };
+        write!(f, "{}", subcode)
+    }
+}
+
 impl ApplicationResetSubcode {
     pub fn from(value: u8) -> Self {
         match value & 0b1111 {
@@ -305,10 +330,24 @@ fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> 
 pub struct Counter {
     count: u32,
 }
+
+#[cfg(feature = "std")]
+impl fmt::Display for Counter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:08}", self.count)
+    }
+}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct IdentificationNumber {
     pub number: u32,
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for IdentificationNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:08}", self.number)
+    }
 }
 
 impl From<IdentificationNumber> for u32 {

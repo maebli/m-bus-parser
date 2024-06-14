@@ -49,6 +49,14 @@ extern crate std;
 #[cfg(not(feature = "std"))]
 extern crate core;
 
+#[cfg(feature = "std")]
+use prettytable::{format, row, Table};
+
+#[cfg(feature = "std")]
+use std::str;
+
+use user_data::UserDataBlock;
+
 pub mod frames;
 pub mod user_data;
 
@@ -113,4 +121,142 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
             data_records,
         })
     }
+}
+
+#[cfg(feature = "std")]
+pub fn clean_and_convert(input: &str) -> Vec<u8> {
+    let input = input.trim();
+    let cleaned_data: String = input.replace("0x", "").replace([' ', ',', 'x'], "");
+
+    // Convert pairs of characters into bytes
+    cleaned_data
+        .as_bytes()
+        .chunks(2)
+        .map(|chunk| {
+            let byte_str = str::from_utf8(chunk).expect("Invalid UTF-8 sequence");
+            u8::from_str_radix(byte_str, 16).expect("Invalid byte value")
+        })
+        .collect()
+}
+#[cfg(feature = "std")]
+pub fn parse_to_table(input: &str) -> std::string::String {
+    let data = clean_and_convert(input);
+
+    let mut table_output = String::new();
+    let parsed_data = MbusData::try_from(data.as_slice()).expect("Failed to parse frame");
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+
+    match parsed_data.frame {
+        frames::Frame::LongFrame {
+            function,
+            address,
+            data: _,
+        } => {
+            table_output.push_str("Long Frame \n");
+
+            table.set_titles(row!["Function", "Address"]);
+            table.add_row(row![function, address]);
+
+            table_output.push_str(&table.to_string());
+            table = Table::new();
+
+            match parsed_data.user_data {
+                Some(UserDataBlock::VariableDataStructure {
+                    fixed_data_header,
+                    variable_data_block: _,
+                }) => {
+                    table.add_row(row![
+                        fixed_data_header.identification_number,
+                        fixed_data_header.manufacturer,
+                        fixed_data_header.access_number,
+                        fixed_data_header.status,
+                        fixed_data_header.signature,
+                        fixed_data_header.version,
+                        fixed_data_header.medium,
+                    ]);
+
+                    table.set_titles(row![
+                        "Identification Number",
+                        "Manufacturer",
+                        "Access Number",
+                        "Status",
+                        "Signature",
+                        "Version",
+                        "Medium",
+                    ]);
+                }
+                Some(UserDataBlock::FixedDataStructure {
+                    identification_number,
+                    access_number,
+                    status,
+                    medium_ad_unit,
+                    counter1,
+                    counter2,
+                }) => {
+                    table.set_titles(row![
+                        "Identification Number",
+                        "Access Number",
+                        "Status",
+                        "Medium Ad Unit",
+                        "Counter 1",
+                        "Counter 2",
+                    ]);
+                    table.add_row(row![
+                        identification_number,
+                        access_number,
+                        status,
+                        medium_ad_unit,
+                        counter1,
+                        counter2,
+                    ]);
+                }
+                Some(UserDataBlock::ResetAtApplicationLevel { subcode }) => {
+                    table.set_titles(row!["Function", "Address", "Subcode"]);
+                    table.add_row(row![function, address, subcode]);
+                }
+                None => {
+                    table.set_titles(row!["Function", "Address"]);
+                    table.add_row(row![function, address]);
+                }
+            }
+
+            table_output.push_str(&table.to_string());
+            table = Table::new();
+
+            table.set_titles(row!["Value", "Data Information",]);
+
+            if let Some(data_records) = parsed_data.data_records {
+                for record in data_records.inner.iter() {
+                    table.add_row(row![
+                        format!(
+                            "({}{}",
+                            record.data,
+                            record
+                                .data_record_header
+                                .processed_data_record_header
+                                .value_information
+                        ),
+                        record
+                            .data_record_header
+                            .processed_data_record_header
+                            .data_information
+                    ]);
+                }
+            }
+        }
+        frames::Frame::ShortFrame { .. } => {
+            table_output.push_str("Short Frame\n");
+        }
+        frames::Frame::SingleCharacter { .. } => {
+            table_output.push_str("Single Character Frame\n");
+        }
+        frames::Frame::ControlFrame { .. } => {
+            table_output.push_str("Control Frame\n");
+        }
+    }
+
+    table_output.push_str(&table.to_string());
+    table_output
 }
