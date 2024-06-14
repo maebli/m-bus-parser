@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use m_bus_parser::parse_to_table;
+use m_bus_parser::{clean_and_convert, parse_to_table, MbusData};
 use std::fs;
 use std::path::PathBuf;
 use std::str;
@@ -24,6 +24,9 @@ enum Command {
         /// The raw M-Bus data as a string
         #[arg(short, long)]
         data: Option<String>,
+
+        #[arg(short, long)]
+        format: Option<String>,
     },
 }
 
@@ -31,12 +34,40 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Parse { file, data } => {
+        Command::Parse { file, data, format } => {
             if let Some(file_path) = file {
                 let file_content = fs::read_to_string(file_path).expect("Failed to read the file");
-                println!("{}", parse_to_table(&file_content));
+                if let Some(format) = format {
+                    if format == "json" {
+                        let cleaned_file_content = clean_and_convert(&file_content);
+                        let parsed_file_content =
+                            MbusData::try_from(cleaned_file_content.as_slice()).unwrap();
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&parsed_file_content).unwrap()
+                        );
+                    } else {
+                        println!("{}", parse_to_table(&file_content));
+                    }
+                } else {
+                    println!("{}", parse_to_table(&file_content));
+                }
             } else if let Some(data_string) = data {
-                println!("{}", parse_to_table(&data_string));
+                if let Some(format) = format {
+                    if format == "json" {
+                        let cleaned_data_string = clean_and_convert(&data_string);
+                        let parsed_data_string =
+                            MbusData::try_from(cleaned_data_string.as_slice()).unwrap();
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&parsed_data_string).unwrap()
+                        );
+                    } else {
+                        println!("{}", parse_to_table(&data_string));
+                    }
+                } else {
+                    println!("{}", parse_to_table(&data_string));
+                }
             } else {
                 eprintln!("Either --file or --data must be provided");
             }
