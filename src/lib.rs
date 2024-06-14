@@ -55,8 +55,6 @@ use prettytable::{format, row, Table};
 #[cfg(feature = "std")]
 use std::str;
 
-use user_data::UserDataBlock;
-
 pub mod frames;
 pub mod user_data;
 
