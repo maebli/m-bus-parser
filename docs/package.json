@@ -4,7 +4,7 @@
     "Michael Aebli"
   ],
   "description": "A wasm-pack to use the library for parsing M-Bus frames",
-  "version": "0.0.0",
+  "version": "0.0.2",
   "license": "MIT",
   "repository": {
     "type": "git",

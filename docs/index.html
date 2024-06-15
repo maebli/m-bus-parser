@@ -36,7 +36,7 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
+            max-width: 1100px;
             margin: 0 auto;
         }
 
@@ -63,6 +63,7 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            margin-right: 10px;
         }
 
         input[type="button"]:hover {
@@ -79,7 +80,7 @@
 
         #output {
             margin-top: 20px;
-            max-width: 600px;
+            max-width: 1100px;
             margin: 20px auto 0;
             padding: 20px;
             border-radius: 8px;
@@ -91,12 +92,15 @@
 <body>
     <div class="header">
         <img id="banner" src="meter.png" alt="Meter Banner">
-        <h1>Wired M-Bus Parser with WASM</h1>
+        <h1> Online M-Bus parser (wired) <i>https://maebli.github.io/m-bus-parser</i></h1>
     </div>
     <form>
         <label for="inputstring">Input String:</label>
-        <textarea rows="5" cols="80" id="inputstring"></textarea>
-        <input id="m_bus_parse" type="button" value="Parse JSON" />
+        <textarea rows="5" cols="80"
+            id="inputstring">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
+        <input id="parse_json" type="button" value="Parse to JSON" />
+        <input id="parse_yaml" type="button" value="Parse to YAML" />
+        <input id="parse_table" type="button" value="Parse to Table" />
     </form>
     <pre id="output"></pre>
     <script type="module">
@@ -105,14 +109,25 @@
         async function setup() {
             await init(); // Ensure the WASM module is initialized
 
-            document.getElementById('m_bus_parse').addEventListener('click', () => {
+            document.getElementById('parse_json').addEventListener('click', () => {
+                parseInput("json");
+            });
+
+            document.getElementById('parse_yaml').addEventListener('click', () => {
+                parseInput("yaml");
+            });
+
+            document.getElementById('parse_table').addEventListener('click', () => {
+                parseInput("table_format");
+            });
+
+            function parseInput(format) {
                 const inputString = document.getElementById('inputstring').value;
-                const result = m_bus_parse(inputString);
-                const formattedResult = JSON.stringify(JSON.parse(result), null, 2); // Pretty-print the JSON
+                const formattedResult = m_bus_parse(inputString, format);
                 const outputElement = document.getElementById("output");
                 outputElement.textContent = formattedResult;
-                hljs.highlightElement(outputElement); // Apply syntax highlighting
-            });
+                //hljs.highlightElement(outputElement); // Apply syntax highlighting
+            }
         }
 
         setup(); // Set up the event listeners after the page is loaded
