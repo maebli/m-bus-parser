@@ -138,6 +138,8 @@ pub fn clean_and_convert(input: &str) -> Vec<u8> {
 }
 #[cfg(feature = "std")]
 pub fn parse_to_table(input: &str) -> std::string::String {
+    use user_data::UserDataBlock;
+
     let data = clean_and_convert(input);
 
     let mut table_output = String::new();

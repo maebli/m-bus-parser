@@ -397,6 +397,7 @@ pub enum UserDataBlock<'a> {
     },
     VariableDataStructure {
         fixed_data_header: FixedDataHeader,
+        #[serde(skip_serializing)]
         variable_data_block: &'a [u8],
     },
 }

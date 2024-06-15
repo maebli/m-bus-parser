@@ -22,3 +22,5 @@ m-bus-parser = { path = "..", version = "0.0.9", features = ["std", "serde"] }
 clap = { version = "4.5.4", features = ["derive"] }
 prettytable-rs = "^0.10"
 serde_json = "1.0"
+serde_yaml = "0.9"
+serde_xml = "0.9"
