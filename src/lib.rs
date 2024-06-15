@@ -122,11 +122,10 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
 }
 
 #[cfg(feature = "std")]
-pub fn clean_and_convert(input: &str) -> Vec<u8> {
+fn clean_and_convert(input: &str) -> Vec<u8> {
     let input = input.trim();
     let cleaned_data: String = input.replace("0x", "").replace([' ', ',', 'x'], "");
 
-    // Convert pairs of characters into bytes
     cleaned_data
         .as_bytes()
         .chunks(2)
@@ -136,8 +135,23 @@ pub fn clean_and_convert(input: &str) -> Vec<u8> {
         })
         .collect()
 }
+
 #[cfg(feature = "std")]
-pub fn parse_to_table(input: &str) -> std::string::String {
+pub fn serialize_mbus_data(data: &str, format: &str) -> String {
+    let cleaned_data = clean_and_convert(data);
+    let parsed_data = MbusData::try_from(cleaned_data.as_slice()).unwrap();
+
+    match format {
+        "json" => serde_json::to_string_pretty(&parsed_data)
+            .unwrap()
+            .to_string(),
+        "yaml" => serde_yaml::to_string(&parsed_data).unwrap().to_string(),
+        _ => parse_to_table(data).to_string(),
+    }
+}
+
+#[cfg(feature = "std")]
+fn parse_to_table(input: &str) -> std::string::String {
     use user_data::UserDataBlock;
 
     let data = clean_and_convert(input);

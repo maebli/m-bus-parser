@@ -13,13 +13,13 @@ pub enum Frame<'a> {
     LongFrame {
         function: Function,
         address: Address,
-        #[serde(skip_serializing)]
+        #[cfg_attr(feature = "serde", serde(skip_serializing))]
         data: &'a [u8],
     },
     ControlFrame {
         function: Function,
         address: Address,
-        #[serde(skip_serializing)]
+        #[cfg_attr(feature = "serde", serde(skip_serializing))]
         data: &'a [u8],
     },
 }

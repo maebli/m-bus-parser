@@ -26,7 +26,7 @@ serde-xml-rs = "0.6.0"
 bindgen = "0.69.4"
 
 [features]
-std = ["prettytable-rs"]
+std = ["prettytable-rs", "serde_json", "serde_yaml", "serde"]
 plaintext-before-extension = []
 serde = ["dep:serde", "std", "arrayvec/serde", "bitflags/serde"]
 
@@ -40,6 +40,8 @@ opt-level = "s"
 
 [dependencies]
 prettytable-rs = { version = "^0.10", optional = true, default-features = true }
+serde_json = { version = "1.0", optional = true }
+serde_yaml = { version = "0.9", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 bitflags = "2.4.2"
 arrayvec = { version = "0.7.4", optional = false, default-features = true }
