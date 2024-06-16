@@ -12,7 +12,8 @@ pub struct DataInformationBlock {
 }
 
 impl DataInformationBlock {
-    #[must_use] pub fn get_size(&self) -> usize {
+    #[must_use]
+    pub fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.data_information_field_extension {
             size += vife.len();
@@ -235,7 +236,8 @@ impl std::fmt::Display for Data {
 }
 
 impl Data {
-    #[must_use] pub fn get_size(&self) -> usize {
+    #[must_use]
+    pub fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -508,7 +510,8 @@ fn bcd_to_u48(bcd: &[u8]) -> u64 {
 }
 
 impl DataInformation {
-    #[must_use] pub fn get_size(&self) -> usize {
+    #[must_use]
+    pub fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -548,7 +551,8 @@ pub struct Value {
 }
 
 impl DataFieldCoding {
-    #[must_use] pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
+    #[must_use]
+    pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
         match *self {
             DataFieldCoding::Real32Bit => Value {
                 data: f64::from(f32::from_le_bytes([data[0], data[1], data[2], data[3]])),
@@ -563,14 +567,18 @@ impl DataFieldCoding {
                 byte_size: 2,
             },
             DataFieldCoding::Integer24Bit => Value {
-                data: f64::from(u32::from(data[2]) << 16 | u32::from(data[1]) << 8 | u32::from(data[0])),
+                data: f64::from(
+                    u32::from(data[2]) << 16 | u32::from(data[1]) << 8 | u32::from(data[0]),
+                ),
                 byte_size: 3,
             },
             DataFieldCoding::Integer32Bit => Value {
-                data: f64::from(u32::from(data[3]) << 24
-                    | u32::from(data[2]) << 16
-                    | u32::from(data[1]) << 8
-                    | u32::from(data[0])),
+                data: f64::from(
+                    u32::from(data[3]) << 24
+                        | u32::from(data[2]) << 16
+                        | u32::from(data[1]) << 8
+                        | u32::from(data[0]),
+                ),
                 byte_size: 4,
             },
             DataFieldCoding::Integer48Bit => Value {

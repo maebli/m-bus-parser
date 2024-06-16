@@ -1,4 +1,3 @@
-
 use m_bus_parser::user_data::Medium;
 use serde::Deserialize;
 use serde_xml_rs::from_str;

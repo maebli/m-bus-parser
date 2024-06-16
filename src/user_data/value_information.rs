@@ -142,7 +142,8 @@ pub enum ValueInformationFieldExtensionCoding {
 }
 
 impl ValueInformationBlock {
-    #[must_use] pub fn get_size(&self) -> usize {
+    #[must_use]
+    pub fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
             size += vife.len();
@@ -1144,7 +1145,12 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
             }
         }
 
-        Ok(ValueInformation { decimal_offset_exponent, labels, decimal_scale_exponent, units })
+        Ok(ValueInformation {
+            decimal_offset_exponent,
+            labels,
+            decimal_scale_exponent,
+            units,
+        })
     }
 }
 
@@ -2179,10 +2185,7 @@ mod tests {
             ValueInformation {
                 decimal_offset_exponent: 0,
                 decimal_scale_exponent: 0,
-                units: {
-                    
-                    ArrayVec::<Unit, 10>::new()
-                },
+                units: { ArrayVec::<Unit, 10>::new() },
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();
                     x.push(ValueLabel::PlainText);

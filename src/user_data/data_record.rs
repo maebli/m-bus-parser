@@ -23,7 +23,8 @@ pub struct DataRecord {
 }
 
 impl DataRecord {
-    #[must_use] pub fn get_size(&self) -> usize {
+    #[must_use]
+    pub fn get_size(&self) -> usize {
         self.data_record_header.get_size() + self.data.get_size()
     }
 }
@@ -35,7 +36,8 @@ pub struct DataRecordHeader {
 }
 
 impl DataRecordHeader {
-    #[must_use] pub fn get_size(&self) -> usize {
+    #[must_use]
+    pub fn get_size(&self) -> usize {
         self.raw_data_record_header
             .data_information_block
             .get_size()
@@ -68,7 +70,10 @@ impl TryFrom<&RawDataRecordHeader> for ProcessedDataRecordHeader {
             ValueInformation::try_from(&raw_data_record_header.value_information_block)?;
         let data_information =
             DataInformation::try_from(&raw_data_record_header.data_information_block)?;
-        Ok(ProcessedDataRecordHeader { data_information, value_information })
+        Ok(ProcessedDataRecordHeader {
+            data_information,
+            value_information,
+        })
     }
 }
 

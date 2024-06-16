@@ -22,7 +22,8 @@ pub struct DataRecords {
 }
 
 impl DataRecords {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         DataRecords {
             inner: ArrayVec::new(),
         }
@@ -36,23 +37,28 @@ impl DataRecords {
         }
     }
 
-    #[must_use] pub fn len(&self) -> usize {
+    #[must_use]
+    pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    #[must_use] pub fn is_full(&self) -> bool {
+    #[must_use]
+    pub fn is_full(&self) -> bool {
         self.inner.len() == self.inner.capacity()
     }
 
-    #[must_use] pub fn last(&self) -> Option<&DataRecord> {
+    #[must_use]
+    pub fn last(&self) -> Option<&DataRecord> {
         self.inner.last()
     }
 
-    #[must_use] pub fn get(&self, index: usize) -> Option<&DataRecord> {
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<&DataRecord> {
         self.inner.get(index)
     }
 }
@@ -288,7 +294,8 @@ impl fmt::Display for ApplicationResetSubcode {
 }
 
 impl ApplicationResetSubcode {
-    #[must_use] pub fn from(value: u8) -> Self {
+    #[must_use]
+    pub fn from(value: u8) -> Self {
         match value & 0b1111 {
             // Extracting the lower 4 bits
             0b0000 => ApplicationResetSubcode::All(value),
@@ -428,7 +435,8 @@ pub enum Medium {
 }
 
 impl Medium {
-    #[must_use] pub fn from_byte(byte: u8) -> Self {
+    #[must_use]
+    pub fn from_byte(byte: u8) -> Self {
         match byte {
             0x00 => Medium::Other,
             0x01 => Medium::Oil,
@@ -542,7 +550,8 @@ pub struct MeasuredMedium {
 }
 
 impl MeasuredMedium {
-    #[must_use] pub fn new(byte: u8) -> Self {
+    #[must_use]
+    pub fn new(byte: u8) -> Self {
         MeasuredMedium {
             medium: Medium::from_byte(byte),
         }
