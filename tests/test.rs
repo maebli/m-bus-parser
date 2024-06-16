@@ -1,4 +1,4 @@
-use hex;
+
 use m_bus_parser::user_data::Medium;
 use serde::Deserialize;
 use serde_xml_rs::from_str;
@@ -115,7 +115,7 @@ mod tests {
             println!("{:?}", mbus_data);
             println!("Input:\n{}", contents);
 
-            let contents = contents.trim().replace(" ", "");
+            let contents = contents.trim().replace(' ', "");
             let bytes = hex::decode(contents).unwrap();
             let frame = Frame::try_from(bytes.as_slice()).unwrap();
             if let Frame::LongFrame {

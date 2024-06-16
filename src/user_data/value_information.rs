@@ -65,7 +65,7 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
 fn extract_plaintext_vife(data: &[u8]) -> ArrayVec<char, 9> {
     let ascii_length = data[0] as usize;
     let mut ascii = ArrayVec::<char, 9>::new();
-    for item in data[1..=ascii_length].iter() {
+    for item in &data[1..=ascii_length] {
         ascii.push(*item as char);
     }
     ascii
@@ -142,7 +142,7 @@ pub enum ValueInformationFieldExtensionCoding {
 }
 
 impl ValueInformationBlock {
-    pub fn get_size(&self) -> usize {
+    #[must_use] pub fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
             size += vife.len();
@@ -1144,12 +1144,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
             }
         }
 
-        Ok(ValueInformation {
-            decimal_offset_exponent,
-            decimal_scale_exponent,
-            units,
-            labels,
-        })
+        Ok(ValueInformation { decimal_offset_exponent, labels, decimal_scale_exponent, units })
     }
 }
 
@@ -1243,7 +1238,7 @@ fn consume_orthhogonal_vife(
                         units.push(Unit {
                             name: UnitName::InputPulseOnChannel0,
                             exponent: -1,
-                        })
+                        });
                     }
                     0x29 => {
                         units.push(Unit {
@@ -1253,7 +1248,7 @@ fn consume_orthhogonal_vife(
                         units.push(Unit {
                             name: UnitName::OutputPulseOnChannel0,
                             exponent: -1,
-                        })
+                        });
                     }
                     0x2A => {
                         units.push(Unit {
@@ -1263,7 +1258,7 @@ fn consume_orthhogonal_vife(
                         units.push(Unit {
                             name: UnitName::InputPulseOnChannel1,
                             exponent: -1,
-                        })
+                        });
                     }
                     0x2B => {
                         units.push(Unit {
@@ -1273,7 +1268,7 @@ fn consume_orthhogonal_vife(
                         units.push(Unit {
                             name: UnitName::OutputPulseOnChannel1,
                             exponent: -1,
-                        })
+                        });
                     }
                     0x2C => {
                         units.push(Unit {
@@ -2185,8 +2180,8 @@ mod tests {
                 decimal_offset_exponent: 0,
                 decimal_scale_exponent: 0,
                 units: {
-                    let x = ArrayVec::<Unit, 10>::new();
-                    x
+                    
+                    ArrayVec::<Unit, 10>::new()
                 },
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();

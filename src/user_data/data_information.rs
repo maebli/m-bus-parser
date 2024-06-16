@@ -12,7 +12,7 @@ pub struct DataInformationBlock {
 }
 
 impl DataInformationBlock {
-    pub fn get_size(&self) -> usize {
+    #[must_use] pub fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.data_information_field_extension {
             size += vife.len();
@@ -137,7 +137,7 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
     ) -> Result<Self, DataInformationError> {
         let dif = data_information_block.data_information_field.data;
         let possible_difes = &data_information_block.data_information_field_extension;
-        let mut storage_number = ((dif & 0b0100_0000) >> 6) as u64;
+        let mut storage_number = u64::from((dif & 0b0100_0000) >> 6);
 
         let mut extension_bit = dif & 0x80 != 0;
         let mut extension_index = 1;
@@ -152,9 +152,9 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
                     return Err(DataInformationError::DataTooLong);
                 }
                 let dife = dife.data;
-                storage_number += ((dife & 0x0f) as u64) << ((extension_index * 4) + 1);
-                _sub_unit += (((dife & 0x40) >> 6) as u32) << extension_index;
-                _tariff += (((dife & 0x30) >> 4) as u64) << (extension_index * 2);
+                storage_number += u64::from(dife & 0x0f) << ((extension_index * 4) + 1);
+                _sub_unit += u32::from((dife & 0x40) >> 6) << extension_index;
+                _tariff += u64::from((dife & 0x30) >> 4) << (extension_index * 2);
                 extension_bit = dife & 0x80 != 0;
                 extension_index += 1;
             }
@@ -235,7 +235,7 @@ impl std::fmt::Display for Data {
 }
 
 impl Data {
-    pub fn get_size(&self) -> usize {
+    #[must_use] pub fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -254,7 +254,7 @@ impl DataFieldCoding {
                 }
                 let value = input[0] as i8;
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 1,
                 })
             }
@@ -266,7 +266,7 @@ impl DataFieldCoding {
                 let value = i16::from_le_bytes(input[0..2].try_into().unwrap());
 
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 2,
                 })
             }
@@ -276,9 +276,9 @@ impl DataFieldCoding {
                     return Err(DataRecordError::InsufficientData);
                 }
                 let value =
-                    (input[0] as i32) | ((input[1] as i32) << 8) | ((input[2] as i32) << 16);
+                    i32::from(input[0]) | (i32::from(input[1]) << 8) | (i32::from(input[2]) << 16);
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 3,
                 })
             }
@@ -289,7 +289,7 @@ impl DataFieldCoding {
                 }
                 let value = i32::from_le_bytes(input[0..4].try_into().unwrap());
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 4,
                 })
             }
@@ -300,7 +300,7 @@ impl DataFieldCoding {
                 }
                 let value = f32::from_le_bytes(input[0..4].try_into().unwrap());
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 4,
                 })
             }
@@ -309,12 +309,12 @@ impl DataFieldCoding {
                 if input.len() < 6 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let value = (input[0] as i64)
-                    | ((input[1] as i64) << 8)
-                    | ((input[2] as i64) << 16)
-                    | ((input[3] as i64) << 24)
-                    | ((input[4] as i64) << 32)
-                    | ((input[5] as i64) << 40);
+                let value = i64::from(input[0])
+                    | (i64::from(input[1]) << 8)
+                    | (i64::from(input[2]) << 16)
+                    | (i64::from(input[3]) << 24)
+                    | (i64::from(input[4]) << 32)
+                    | (i64::from(input[5]) << 40);
                 Ok(Data {
                     value: Some(DataType::Number(value as f64)),
                     size: 6,
@@ -343,7 +343,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u8(input[0]);
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 1,
                 })
             }
@@ -354,7 +354,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u16(&input[0..2]);
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 2,
                 })
             }
@@ -365,7 +365,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u32(&input[0..3]);
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 3,
                 })
             }
@@ -376,7 +376,7 @@ impl DataFieldCoding {
                 }
                 let value = bcd_to_u32(&input[0..4]);
                 Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
+                    value: Some(DataType::Number(f64::from(value))),
                     size: 4,
                 })
             }
@@ -384,7 +384,7 @@ impl DataFieldCoding {
             DataFieldCoding::VariableLength => {
                 let mut length = input[0];
                 match input[0] {
-                    0x00..=0xBF => ArrayVec::<u8, 18>::try_from(&input[1..length as usize + 1])
+                    0x00..=0xBF => ArrayVec::<u8, 18>::try_from(&input[1..=(length as usize)])
                         .map(|text| {
                             Ok(Data {
                                 value: Some(DataType::Text(text)),
@@ -403,28 +403,28 @@ impl DataFieldCoding {
                             2 => {
                                 let value = bcd_to_u8(input[1]);
                                 Ok(Data {
-                                    value: Some(DataType::Number(sign * value as f64)),
+                                    value: Some(DataType::Number(sign * f64::from(value))),
                                     size: 2,
                                 })
                             }
                             4 => {
                                 let value = bcd_to_u16(&input[1..3]);
                                 Ok(Data {
-                                    value: Some(DataType::Number(sign * value as f64)),
+                                    value: Some(DataType::Number(sign * f64::from(value))),
                                     size: 4,
                                 })
                             }
                             6 => {
                                 let value = bcd_to_u32(&input[1..5]);
                                 Ok(Data {
-                                    value: Some(DataType::Number(sign * value as f64)),
+                                    value: Some(DataType::Number(sign * f64::from(value))),
                                     size: 6,
                                 })
                             }
                             8 => {
                                 let value = bcd_to_u32(&input[1..5]);
                                 Ok(Data {
-                                    value: Some(DataType::Number(sign * value as f64)),
+                                    value: Some(DataType::Number(sign * f64::from(value))),
                                     size: 8,
                                 })
                             }
@@ -483,8 +483,8 @@ fn bcd_to_u8(bcd: u8) -> u8 {
 
 fn bcd_to_u16(bcd: &[u8]) -> u16 {
     match bcd.len() {
-        1 => bcd_to_u8(bcd[0]) as u16,
-        2 => (bcd_to_u8(bcd[1]) as u16 * 100 + bcd_to_u8(bcd[0]) as u16) as u16,
+        1 => u16::from(bcd_to_u8(bcd[0])),
+        2 => (u16::from(bcd_to_u8(bcd[1])) * 100 + u16::from(bcd_to_u8(bcd[0]))) as u16,
         _ => panic!(
             "BCD input length must be either 1 or 2 but got {}",
             bcd.len()
@@ -494,8 +494,8 @@ fn bcd_to_u16(bcd: &[u8]) -> u16 {
 
 fn bcd_to_u32(bcd: &[u8]) -> u32 {
     match bcd.len() {
-        3 => (bcd_to_u8(bcd[2]) as u32 * 10000 + bcd_to_u16(&bcd[0..2]) as u32) as u32,
-        4 => (bcd_to_u16(&bcd[2..4]) as u32 * 10000 + bcd_to_u16(&bcd[0..2]) as u32) as u32,
+        3 => (u32::from(bcd_to_u8(bcd[2])) * 10000 + u32::from(bcd_to_u16(&bcd[0..2]))) as u32,
+        4 => (u32::from(bcd_to_u16(&bcd[2..4])) * 10000 + u32::from(bcd_to_u16(&bcd[0..2]))) as u32,
         _ => panic!(
             "BCD input length must be either 3 or 4 but got {}",
             bcd.len()
@@ -504,11 +504,11 @@ fn bcd_to_u32(bcd: &[u8]) -> u32 {
 }
 
 fn bcd_to_u48(bcd: &[u8]) -> u64 {
-    (bcd_to_u32(&bcd[2..6]) as u64 * 1000000 + bcd_to_u16(&bcd[0..2]) as u64) as u64
+    (u64::from(bcd_to_u32(&bcd[2..6])) * 1_000_000 + u64::from(bcd_to_u16(&bcd[0..2]))) as u64
 }
 
 impl DataInformation {
-    pub fn get_size(&self) -> usize {
+    #[must_use] pub fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -548,95 +548,95 @@ pub struct Value {
 }
 
 impl DataFieldCoding {
-    pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
+    #[must_use] pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
         match *self {
             DataFieldCoding::Real32Bit => Value {
-                data: f32::from_le_bytes([data[0], data[1], data[2], data[3]]) as f64,
+                data: f64::from(f32::from_le_bytes([data[0], data[1], data[2], data[3]])),
                 byte_size: 4,
             },
             DataFieldCoding::Integer8Bit => Value {
-                data: data[0] as f64,
+                data: f64::from(data[0]),
                 byte_size: 1,
             },
             DataFieldCoding::Integer16Bit => Value {
-                data: ((data[1] as u16) << 8 | data[0] as u16) as f64,
+                data: f64::from(u16::from(data[1]) << 8 | u16::from(data[0])),
                 byte_size: 2,
             },
             DataFieldCoding::Integer24Bit => Value {
-                data: ((data[2] as u32) << 16 | (data[1] as u32) << 8 | data[0] as u32) as f64,
+                data: f64::from(u32::from(data[2]) << 16 | u32::from(data[1]) << 8 | u32::from(data[0])),
                 byte_size: 3,
             },
             DataFieldCoding::Integer32Bit => Value {
-                data: ((data[3] as u32) << 24
-                    | (data[2] as u32) << 16
-                    | (data[1] as u32) << 8
-                    | data[0] as u32) as f64,
+                data: f64::from(u32::from(data[3]) << 24
+                    | u32::from(data[2]) << 16
+                    | u32::from(data[1]) << 8
+                    | u32::from(data[0])),
                 byte_size: 4,
             },
             DataFieldCoding::Integer48Bit => Value {
-                data: ((data[5] as u64) << 40
-                    | (data[4] as u64) << 32
-                    | (data[3] as u64) << 24
-                    | (data[2] as u64) << 16
-                    | (data[1] as u64) << 8
-                    | data[0] as u64) as f64,
+                data: (u64::from(data[5]) << 40
+                    | u64::from(data[4]) << 32
+                    | u64::from(data[3]) << 24
+                    | u64::from(data[2]) << 16
+                    | u64::from(data[1]) << 8
+                    | u64::from(data[0])) as f64,
                 byte_size: 6,
             },
             DataFieldCoding::Integer64Bit => Value {
-                data: ((data[7] as u64) << 56
-                    | (data[6] as u64) << 48
-                    | (data[5] as u64) << 40
-                    | (data[4] as u64) << 32
-                    | (data[3] as u64) << 24
-                    | (data[2] as u64) << 16
-                    | (data[1] as u64) << 8
-                    | data[0] as u64) as f64,
+                data: (u64::from(data[7]) << 56
+                    | u64::from(data[6]) << 48
+                    | u64::from(data[5]) << 40
+                    | u64::from(data[4]) << 32
+                    | u64::from(data[3]) << 24
+                    | u64::from(data[2]) << 16
+                    | u64::from(data[1]) << 8
+                    | u64::from(data[0])) as f64,
                 byte_size: 8,
             },
             DataFieldCoding::BCD2Digit => Value {
-                data: ((data[0] >> 4) as f64 * 10.0) + (data[0] & 0x0F) as f64,
+                data: (f64::from(data[0] >> 4) * 10.0) + f64::from(data[0] & 0x0F),
                 byte_size: 1,
             },
             DataFieldCoding::BCD4Digit => Value {
-                data: ((data[1] >> 4) as f64 * 1000.0)
-                    + ((data[1] & 0x0F) as f64 * 100.0)
-                    + ((data[0] >> 4) as f64 * 10.0)
-                    + (data[0] & 0x0F) as f64,
+                data: (f64::from(data[1] >> 4) * 1000.0)
+                    + (f64::from(data[1] & 0x0F) * 100.0)
+                    + (f64::from(data[0] >> 4) * 10.0)
+                    + f64::from(data[0] & 0x0F),
                 byte_size: 2,
             },
             DataFieldCoding::BCD6Digit => Value {
-                data: ((data[2] >> 4) as f64 * 100000.0)
-                    + ((data[2] & 0x0F) as f64 * 10000.0)
-                    + ((data[1] >> 4) as f64 * 1000.0)
-                    + ((data[1] & 0x0F) as f64 * 100.0)
-                    + ((data[0] >> 4) as f64 * 10.0)
-                    + (data[0] & 0x0F) as f64,
+                data: (f64::from(data[2] >> 4) * 100_000.0)
+                    + (f64::from(data[2] & 0x0F) * 10000.0)
+                    + (f64::from(data[1] >> 4) * 1000.0)
+                    + (f64::from(data[1] & 0x0F) * 100.0)
+                    + (f64::from(data[0] >> 4) * 10.0)
+                    + f64::from(data[0] & 0x0F),
                 byte_size: 3,
             },
             DataFieldCoding::BCD8Digit => Value {
-                data: ((data[3] >> 4) as f64 * 10000000.0)
-                    + ((data[3] & 0x0F) as f64 * 1000000.0)
-                    + ((data[2] >> 4) as f64 * 100000.0)
-                    + ((data[2] & 0x0F) as f64 * 10000.0)
-                    + ((data[1] >> 4) as f64 * 1000.0)
-                    + ((data[1] & 0x0F) as f64 * 100.0)
-                    + ((data[0] >> 4) as f64 * 10.0)
-                    + (data[0] & 0x0F) as f64,
+                data: (f64::from(data[3] >> 4) * 10_000_000.0)
+                    + (f64::from(data[3] & 0x0F) * 1_000_000.0)
+                    + (f64::from(data[2] >> 4) * 100_000.0)
+                    + (f64::from(data[2] & 0x0F) * 10000.0)
+                    + (f64::from(data[1] >> 4) * 1000.0)
+                    + (f64::from(data[1] & 0x0F) * 100.0)
+                    + (f64::from(data[0] >> 4) * 10.0)
+                    + f64::from(data[0] & 0x0F),
                 byte_size: 4,
             },
             DataFieldCoding::BCDDigit12 => Value {
-                data: ((data[5] >> 4) as f64 * 100000000000.0)
-                    + ((data[5] & 0x0F) as f64 * 10000000000.0)
-                    + ((data[4] >> 4) as f64 * 1000000000.0)
-                    + ((data[4] & 0x0F) as f64 * 100000000.0)
-                    + ((data[3] >> 4) as f64 * 10000000.0)
-                    + ((data[3] & 0x0F) as f64 * 1000000.0)
-                    + ((data[2] >> 4) as f64 * 100000.0)
-                    + ((data[2] & 0x0F) as f64 * 10000.0)
-                    + ((data[1] >> 4) as f64 * 1000.0)
-                    + ((data[1] & 0x0F) as f64 * 100.0)
-                    + ((data[0] >> 4) as f64 * 10.0)
-                    + (data[0] & 0x0F) as f64,
+                data: (f64::from(data[5] >> 4) * 100_000_000_000.0)
+                    + (f64::from(data[5] & 0x0F) * 10_000_000_000.0)
+                    + (f64::from(data[4] >> 4) * 1_000_000_000.0)
+                    + (f64::from(data[4] & 0x0F) * 100_000_000.0)
+                    + (f64::from(data[3] >> 4) * 10_000_000.0)
+                    + (f64::from(data[3] & 0x0F) * 1_000_000.0)
+                    + (f64::from(data[2] >> 4) * 100_000.0)
+                    + (f64::from(data[2] & 0x0F) * 10000.0)
+                    + (f64::from(data[1] >> 4) * 1000.0)
+                    + (f64::from(data[1] & 0x0F) * 100.0)
+                    + (f64::from(data[0] >> 4) * 10.0)
+                    + f64::from(data[0] & 0x0F),
                 byte_size: 6,
             },
             DataFieldCoding::NoData => Value {
@@ -709,7 +709,7 @@ mod tests {
     use super::*;
     #[test]
     fn test_data_information() {
-        let data = [0x13 as u8];
+        let data = [0x13_u8];
         let result = DataInformationBlock::try_from(data.as_slice());
         let result = DataInformation::try_from(&result.unwrap());
         assert_eq!(

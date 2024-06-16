@@ -22,7 +22,7 @@ pub struct DataRecords {
 }
 
 impl DataRecords {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         DataRecords {
             inner: ArrayVec::new(),
         }
@@ -36,23 +36,23 @@ impl DataRecords {
         }
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use] pub fn len(&self) -> usize {
         self.inner.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    pub fn is_full(&self) -> bool {
+    #[must_use] pub fn is_full(&self) -> bool {
         self.inner.len() == self.inner.capacity()
     }
 
-    pub fn last(&self) -> Option<&DataRecord> {
+    #[must_use] pub fn last(&self) -> Option<&DataRecord> {
         self.inner.last()
     }
 
-    pub fn get(&self, index: usize) -> Option<&DataRecord> {
+    #[must_use] pub fn get(&self, index: usize) -> Option<&DataRecord> {
         self.inner.get(index)
     }
 }
@@ -68,14 +68,14 @@ bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct StatusField: u8 {
-        const COUNTER_BINARY_SIGNED     = 0b00000001;
-        const COUNTER_FIXED_DATE        = 0b00000010;
-        const POWER_LOW                 = 0b00000100;
-        const PERMANENT_ERROR           = 0b00001000;
-        const TEMPORARY_ERROR           = 0b00010000;
-        const MANUFACTURER_SPECIFIC_1   = 0b00100000;
-        const MANUFACTURER_SPECIFIC_2   = 0b01000000;
-        const MANUFACTURER_SPECIFIC_3   = 0b10000000;
+        const COUNTER_BINARY_SIGNED     = 0b0000_0001;
+        const COUNTER_FIXED_DATE        = 0b0000_0010;
+        const POWER_LOW                 = 0b0000_0100;
+        const PERMANENT_ERROR           = 0b0000_1000;
+        const TEMPORARY_ERROR           = 0b0001_0000;
+        const MANUFACTURER_SPECIFIC_1   = 0b0010_0000;
+        const MANUFACTURER_SPECIFIC_2   = 0b0100_0000;
+        const MANUFACTURER_SPECIFIC_3   = 0b1000_0000;
     }
 }
 
@@ -288,7 +288,7 @@ impl fmt::Display for ApplicationResetSubcode {
 }
 
 impl ApplicationResetSubcode {
-    pub fn from(value: u8) -> Self {
+    #[must_use] pub fn from(value: u8) -> Self {
         match value & 0b1111 {
             // Extracting the lower 4 bits
             0b0000 => ApplicationResetSubcode::All(value),
@@ -320,7 +320,7 @@ fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> 
         if lower > 9 || upper > 9 {
             return Err(ApplicationLayerError::IdentificationNumberError { digits, number });
         }
-        number = number * 100 + (upper as u32 * 10) + lower as u32;
+        number = number * 100 + (u32::from(upper) * 10) + u32::from(lower);
     }
 
     Ok(number)
@@ -428,7 +428,7 @@ pub enum Medium {
 }
 
 impl Medium {
-    pub fn from_byte(byte: u8) -> Self {
+    #[must_use] pub fn from_byte(byte: u8) -> Self {
         match byte {
             0x00 => Medium::Other,
             0x01 => Medium::Oil,
@@ -542,7 +542,7 @@ pub struct MeasuredMedium {
 }
 
 impl MeasuredMedium {
-    pub fn new(byte: u8) -> Self {
+    #[must_use] pub fn new(byte: u8) -> Self {
         MeasuredMedium {
             medium: Medium::from_byte(byte),
         }
