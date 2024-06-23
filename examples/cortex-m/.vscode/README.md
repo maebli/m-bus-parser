@@ -1,11 +1,12 @@
 # VS Code Configuration
 
+- `LM3S6965EVB` on QEMU
+- `STM32F303x` via OpenOCD
 Example configurations for debugging programs in-editor with VS Code.  
 This directory contains configurations for two platforms:
 
- - `LM3S6965EVB` on QEMU
- - `STM32F303x` via OpenOCD
-
+Note, to debug you must install the debugger. I have set up the file so it works for MacOs on Qemu installed with brew. Other things are untested at the moment. 
+ 
 ## Required Extensions
 
 If you have the `code` command in your path, you can run the following commands to install the necessary extensions.
