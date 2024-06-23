@@ -13,7 +13,8 @@ pub mod variable_user_data;
 
 // Maximum 234 bytes for variable data blocks, each block consists of a minimum of 2 bytes
 // therefore the maximum number of blocks is 117, see https://m-bus.com/documentation-wired/06-application-layer
-const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 117;
+// In reality, 117 blocks is not at all common. In order to save stack space the maximum number of blocks is set to 16.
+const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 16;
 // Define a new struct that wraps ArrayVec
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
