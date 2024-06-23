@@ -5,6 +5,8 @@
      * https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug
      */
     "version": "0.2.0",
+    "cortex-debug.armToolchainPath": "/opt/homebrew/bin",
+    "cortex-debug.gdbPath": "/opt/homebrew/bin/arm-none-eabi-gdb",
     "configurations": [
         {
             "type": "cortex-debug",
@@ -52,5 +54,5 @@
                 ]
             }
         }
-    ]
+    ],
 }
