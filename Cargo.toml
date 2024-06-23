@@ -11,9 +11,6 @@ authors = ["Michael Aebli"]
 keywords = ["m-bus", "parser", "parse"]
 exclude = ["/resources", "/tests", "/benches", "examples"]
 
-[lib]
-crate-type = ["rlib", "staticlib", "cdylib"]
-
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 walkdir = "2.5.0"
@@ -26,9 +23,10 @@ serde-xml-rs = "0.6.0"
 bindgen = "0.69.4"
 
 [features]
+default = []
 std = ["prettytable-rs", "serde_json", "serde_yaml", "serde"]
 plaintext-before-extension = []
-serde = ["dep:serde", "std", "arrayvec/serde", "bitflags/serde"]
+serde = ["dep:serde", "arrayvec/serde", "bitflags/serde"]
 
 [profile.release]
 opt-level = 'z'   # Optimize for size
@@ -39,12 +37,12 @@ codegen-units = 1 # Reduce codegen units to improve optimizations
 opt-level = "s"
 
 [dependencies]
-prettytable-rs = { version = "^0.10", optional = true, default-features = true }
+prettytable-rs = { version = "^0.10", optional = true }
 serde_json = { version = "1.0", optional = true }
 serde_yaml = { version = "0.9", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 bitflags = "2.4.2"
-arrayvec = { version = "0.7.4", optional = false, default-features = true }
+arrayvec = { version = "0.7.4", default-features = false }
 [workspace]
 members = ["cli", "wasm"]
 exclude = ["examples/cortex-m"]

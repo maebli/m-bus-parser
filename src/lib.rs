@@ -44,12 +44,6 @@ use frames::FrameError;
 use user_data::ApplicationLayerError;
 
 #[cfg(feature = "std")]
-extern crate std;
-
-#[cfg(not(feature = "std"))]
-extern crate core;
-
-#[cfg(feature = "std")]
 use prettytable::{format, row, Table};
 
 #[cfg(feature = "std")]
