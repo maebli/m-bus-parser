@@ -6,14 +6,7 @@
 use core::panic::PanicInfo;
 
 use cortex_m_semihosting::{debug, hprintln};
-use m_bus_parser::{
-    frames::Frame,
-    user_data::{
-        data_record::{self, DataRecord},
-        DataRecords,
-    },
-    MbusData,
-};
+use m_bus_parser::{user_data::DataRecords, MbusData};
 
 use cortex_m_rt::entry;
 
