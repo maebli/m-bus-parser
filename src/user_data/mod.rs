@@ -2,7 +2,6 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
-use arrayvec::ArrayVec;
 use variable_user_data::DataRecordError;
 
 use self::data_record::DataRecord;
@@ -12,11 +11,6 @@ pub mod data_record;
 pub mod value_information;
 pub mod variable_user_data;
 
-// Maximum 234 bytes for variable data blocks, each block consists of a minimum of 2 bytes
-// therefore the maximum number of blocks is 117, see https://m-bus.com/documentation-wired/06-application-layer
-// In reality, 117 blocks is not at all common. In order to save stack space the maximum number of blocks is set to 16.
-const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 16;
-// Define a new struct that wraps ArrayVec
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(into = "Vec<DataRecord>"))]
 #[derive(Clone, Debug, PartialEq)]
@@ -25,7 +19,8 @@ pub struct DataRecords<'a> {
     data: &'a [u8],
 }
 
-impl<'a> From<DataRecords<'a>> for Vec<DataRecord> {
+#[cfg(feature = "serde")]
+impl<'a> From<DataRecords<'a>> for Vec<DataRecord<'a>> {
     fn from(value: DataRecords<'a>) -> Self {
         let value: Result<Vec<_>, _> = value.collect();
         value.unwrap_or_default()
@@ -33,7 +28,7 @@ impl<'a> From<DataRecords<'a>> for Vec<DataRecord> {
 }
 
 impl<'a> Iterator for DataRecords<'a> {
-    type Item = Result<DataRecord, DataRecordError>;
+    type Item = Result<DataRecord<'a>, DataRecordError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut _more_records_follow = false;

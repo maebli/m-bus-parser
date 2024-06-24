@@ -15,14 +15,14 @@ pub struct ProcessedDataRecordHeader {
     pub data_information: DataInformation,
     pub value_information: ValueInformation,
 }
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
-pub struct DataRecord {
+pub struct DataRecord<'a> {
     pub data_record_header: DataRecordHeader,
-    pub data: Data,
+    pub data: Data<'a>,
 }
 
-impl DataRecord {
+impl DataRecord<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         self.data_record_header.get_size() + self.data.get_size()
@@ -90,7 +90,7 @@ impl TryFrom<&[u8]> for DataRecordHeader {
     }
 }
 
-impl TryFrom<&[u8]> for DataRecord {
+impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
         let data_record_header = DataRecordHeader::try_from(data)?;

@@ -207,25 +207,48 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(into = "String"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextUnit<'a>(&'a [u8]);
+impl<'a> TextUnit<'a> {
+    pub fn new(input: &'a [u8]) -> Self {
+        Self(input)
+    }
+}
+
+impl PartialEq<str> for TextUnit<'_> {
+    fn eq(&self, other: &str) -> bool {
+        self.0.iter().eq(other.as_bytes().iter().rev())
+    }
+}
+#[cfg(any(feature = "serde", feature = "std"))]
+impl From<TextUnit<'_>> for String {
+    fn from(value: TextUnit<'_>) -> Self {
+        let value: Vec<u8> = value.0.iter().copied().rev().collect();
+        String::from_utf8(value).unwrap()
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
-pub enum DataType {
-    Text(ArrayVec<u8, 18>),
+pub enum DataType<'a> {
+    Text(TextUnit<'a>),
     Number(f64),
 }
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug)]
-pub struct Data {
-    value: Option<DataType>,
+pub struct Data<'a> {
+    value: Option<DataType<'a>>,
     size: usize,
 }
 #[cfg(feature = "std")]
-impl std::fmt::Display for Data {
+impl std::fmt::Display for Data<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value {
             Some(value) => match value {
-                DataType::Text(text) => {
-                    let text = String::from_utf8_lossy(text);
+                &DataType::Text(text) => {
+                    let text: String = text.into();
                     write!(f, "{}", text)
                 }
                 DataType::Number(value) => write!(f, "{}", value),
@@ -235,7 +258,7 @@ impl std::fmt::Display for Data {
     }
 }
 
-impl Data {
+impl Data<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         self.size
@@ -243,7 +266,7 @@ impl Data {
 }
 
 impl DataFieldCoding {
-    pub fn parse(&self, input: &[u8]) -> Result<Data, DataRecordError> {
+    pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
         match self {
             DataFieldCoding::NoData => Ok(Data {
                 value: None,
@@ -386,14 +409,10 @@ impl DataFieldCoding {
             DataFieldCoding::VariableLength => {
                 let mut length = input[0];
                 match input[0] {
-                    0x00..=0xBF => ArrayVec::<u8, 18>::try_from(&input[1..=(length as usize)])
-                        .map(|text| {
-                            Ok(Data {
-                                value: Some(DataType::Text(text)),
-                                size: length as usize + 1,
-                            })
-                        })
-                        .unwrap_or_else(|_| Err(DataRecordError::InsufficientData)),
+                    0x00..=0xBF => Ok(Data {
+                        value: Some(DataType::Text(TextUnit::new(&input[1..(length as usize)]))),
+                        size: length as usize + 1,
+                    }),
                     0xC0..=0xD9 => {
                         length -= 0xC0;
                         let is_negative = input[0] > 0xC9;
@@ -730,6 +749,13 @@ mod tests {
                 size: 1,
             })
         );
+    }
+
+    #[test]
+    fn reverse_text_unit() {
+        let original_value = [0x6c, 0x61, 0x67, 0x69];
+        let parsed = TextUnit::new(&original_value);
+        assert_eq!(&parsed, "igal");
     }
 
     #[test]
