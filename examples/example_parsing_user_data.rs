@@ -6,5 +6,5 @@ fn main() {
     let data = vec![0x03, 0x13, 0x15, 0x31, 0x00, 0x03, 0x13, 0x15, 0x31, 0x00];
     let result = DataRecords::try_from(data.as_slice());
     assert!(result.is_ok());
-    assert!(result.unwrap().len() == 2);
+    assert!(result.unwrap().count() == 2);
 }

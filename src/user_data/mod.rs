@@ -3,6 +3,7 @@
 use std::fmt;
 
 use arrayvec::ArrayVec;
+use variable_user_data::DataRecordError;
 
 use self::data_record::DataRecord;
 
@@ -18,55 +19,50 @@ const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 16;
 // Define a new struct that wraps ArrayVec
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
-pub struct DataRecords {
-    pub inner: ArrayVec<data_record::DataRecord, MAXIMUM_VARIABLE_DATA_BLOCKS>,
+pub struct DataRecords<'a> {
+    offset: usize,
+    data: &'a [u8],
 }
 
-impl DataRecords {
-    #[must_use]
-    pub fn new() -> Self {
-        DataRecords {
-            inner: ArrayVec::new(),
+impl<'a> Iterator for DataRecords<'a> {
+    type Item = Result<DataRecord, DataRecordError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut _more_records_follow = false;
+
+        while self.offset < self.data.len() {
+            match self.data[self.offset] {
+                0x0F => {
+                    /* TODO: parse manufacturer specific */
+                    self.offset = self.data.len();
+                }
+                0x1F => {
+                    /* TODO: parse manufacturer specific */
+                    _more_records_follow = true;
+                    self.offset = self.data.len();
+                }
+                0x2F => {
+                    self.offset += 1;
+                }
+                _ => {
+                    let record = DataRecord::try_from(&self.data[self.offset..]);
+                    if let Ok(record) = record {
+                        self.offset += record.get_size();
+                        return Some(Ok(record));
+                    } else {
+                        self.offset = self.data.len();
+                    }
+                }
+            }
         }
-    }
-
-    pub fn add_record(&mut self, record: data_record::DataRecord) -> Result<(), &'static str> {
-        if self.inner.try_push(record).is_err() {
-            Err("Maximum capacity reached")
-        } else {
-            Ok(())
-        }
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    #[must_use]
-    pub fn is_full(&self) -> bool {
-        self.inner.len() == self.inner.capacity()
-    }
-
-    #[must_use]
-    pub fn last(&self) -> Option<&DataRecord> {
-        self.inner.last()
-    }
-
-    #[must_use]
-    pub fn get(&self, index: usize) -> Option<&DataRecord> {
-        self.inner.get(index)
+        return None;
     }
 }
 
-impl Default for DataRecords {
-    fn default() -> Self {
-        DataRecords::new()
+impl<'a> DataRecords<'a> {
+    #[must_use]
+    pub fn new(data: &'a [u8]) -> Self {
+        DataRecords { offset: 0, data }
     }
 }
 

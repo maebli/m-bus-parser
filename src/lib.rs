@@ -61,7 +61,7 @@ pub mod user_data;
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
-    pub data_records: Option<user_data::DataRecords>,
+    pub data_records: Option<user_data::DataRecords<'a>>,
 }
 
 #[derive(Debug)]
@@ -98,7 +98,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
                         variable_data_block,
                     }) = user_data::UserDataBlock::try_from(*data)
                     {
-                        data_records = user_data::DataRecords::try_from(variable_data_block).ok();
+                        data_records = Some(variable_data_block.into());
                     }
                 }
             }
