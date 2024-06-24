@@ -242,7 +242,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     }
                     0x48..=0x4F => {
                         units.push(unit!(Meter ^ 3));
-                        units.push(unit!(Second));
+                        units.push(unit!(Second ^ -1));
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 9;
                     }
@@ -303,60 +303,24 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         labels.push(ValueLabel::Debit);
                         decimal_scale_exponent = (vife[0].data & 0b11) as isize - 3;
                     }
-                    0x08 => {
-                        labels.push(ValueLabel::UniqueMessageIdentificationOrAccessNumber);
-                    }
-                    0x09 => {
-                        labels.push(ValueLabel::DeviceType);
-                    }
-                    0x0A => {
-                        labels.push(ValueLabel::Manufacturer);
-                    }
-                    0x0B => {
-                        labels.push(ValueLabel::ParameterSetIdentification);
-                    }
-                    0x0C => {
-                        labels.push(ValueLabel::ModelOrVersion);
-                    }
-                    0x0D => {
-                        labels.push(ValueLabel::HardwareVersion);
-                    }
-                    0x0E => {
-                        labels.push(ValueLabel::MetrologyFirmwareVersion);
-                    }
-                    0x0F => {
-                        labels.push(ValueLabel::OtherSoftwareVersion);
-                    }
-                    0x10 => {
-                        labels.push(ValueLabel::CustomerLocation);
-                    }
-                    0x11 => {
-                        labels.push(ValueLabel::Customer);
-                    }
-                    0x12 => {
-                        labels.push(ValueLabel::AccessCodeUser);
-                    }
-                    0x13 => {
-                        labels.push(ValueLabel::AccessCodeOperator);
-                    }
-                    0x14 => {
-                        labels.push(ValueLabel::AccessCodeSystemOperator);
-                    }
-                    0x15 => {
-                        labels.push(ValueLabel::AccessCodeDeveloper);
-                    }
-                    0x16 => {
-                        labels.push(ValueLabel::Password);
-                    }
-                    0x17 => {
-                        labels.push(ValueLabel::ErrorFlags);
-                    }
-                    0x18 => {
-                        labels.push(ValueLabel::ErrorMask);
-                    }
-                    0x19 => {
-                        labels.push(ValueLabel::SecurityKey);
-                    }
+                    0x08 => labels.push(ValueLabel::UniqueMessageIdentificationOrAccessNumber),
+                    0x09 => labels.push(ValueLabel::DeviceType),
+                    0x0A => labels.push(ValueLabel::Manufacturer),
+                    0x0B => labels.push(ValueLabel::ParameterSetIdentification),
+                    0x0C => labels.push(ValueLabel::ModelOrVersion),
+                    0x0D => labels.push(ValueLabel::HardwareVersion),
+                    0x0E => labels.push(ValueLabel::MetrologyFirmwareVersion),
+                    0x0F => labels.push(ValueLabel::OtherSoftwareVersion),
+                    0x10 => labels.push(ValueLabel::CustomerLocation),
+                    0x11 => labels.push(ValueLabel::Customer),
+                    0x12 => labels.push(ValueLabel::AccessCodeUser),
+                    0x13 => labels.push(ValueLabel::AccessCodeOperator),
+                    0x14 => labels.push(ValueLabel::AccessCodeSystemOperator),
+                    0x15 => labels.push(ValueLabel::AccessCodeDeveloper),
+                    0x16 => labels.push(ValueLabel::Password),
+                    0x17 => labels.push(ValueLabel::ErrorFlags),
+                    0x18 => labels.push(ValueLabel::ErrorMask),
+                    0x19 => labels.push(ValueLabel::SecurityKey),
                     0x1A => {
                         labels.push(ValueLabel::DigitalOutput);
                         labels.push(ValueLabel::Binary);
