@@ -1,5 +1,6 @@
 # `cortex-m-quickstart`
 
+For Qemu please read https://docs.rust-embedded.org/book/start/qemu.html
 > A template for building applications for ARM Cortex-M microcontrollers
 
 This project is developed and maintained by the [Cortex-M team][team].
