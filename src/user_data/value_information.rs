@@ -675,464 +675,93 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                 }
             }
             ValueInformationCoding::AlternateVIFExtension => {
+                use UnitName::*;
+                use ValueLabel::*;
+                let mk_unit = |name, exponent| Unit { name, exponent };
+                macro_rules! unit {
+                    (@trd) => {};
+                    (@trd , $label:expr) => {{ labels.push($label); }};
+                    (@snd dec: $decimal:literal $($rem:tt)*) => {{
+                        decimal_scale_exponent = $decimal;
+                        unit!(@trd $($rem)*);
+                    }};
+                    ($name:ident / h, $exponent:expr, $($rem:tt)*) => {{
+                        units.push(mk_unit($name, $exponent));
+                        units.push(mk_unit(Hour, -1));
+                        unit!(@snd $($rem)*)
+                    }};
+                    ($name:ident * h, $exponent:expr, $($rem:tt)*) => {{
+                        units.push(mk_unit($name, $exponent));
+                        units.push(mk_unit(Hour, 1));
+                        unit!(@snd $($rem)*)
+                    }};
+                    ($name:ident, $exponent:expr, $($rem:tt)*) => {{
+                        units.push(mk_unit($name, $exponent));
+                        unit!(@snd $($rem)*)
+                    }};
+                }
                 let vife = value_information_block
                     .value_information_extension
                     .as_ref()
                     .ok_or(Self::Error::InvalidValueInformation)?;
                 match vife[0].data & 0x7F {
-                    0x00 => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 3,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 5;
-                    }
-                    0x01 => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 3,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 6;
-                    }
-                    0x02 => {
-                        units.push(Unit {
-                            name: UnitName::ReactiveWatt,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 3;
-                    }
-                    0x03 => {
-                        units.push(Unit {
-                            name: UnitName::ReactiveWatt,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 4;
-                    }
-                    0x08 => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 8;
-                    }
-                    0x09 => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 9;
-                    }
-                    0x0C => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 5;
-                    }
-                    0x0D => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 6;
-                    }
-                    0x0E => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 7;
-                    }
-                    0x0F => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent = 8;
-                    }
-                    0x10 => {
-                        units.push(Unit {
-                            name: UnitName::Meter,
-                            exponent: 3,
-                        });
-                        decimal_scale_exponent = 2;
-                    }
-                    0x11 => {
-                        units.push(Unit {
-                            name: UnitName::Meter,
-                            exponent: 3,
-                        });
-                        decimal_scale_exponent = 3;
-                    }
-                    0x14 => {
-                        units.push(Unit {
-                            name: UnitName::ReactiveWatt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -3;
-                    }
-                    0x15 => {
-                        units.push(Unit {
-                            name: UnitName::ReactiveWatt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -2;
-                    }
-                    0x16 => {
-                        units.push(Unit {
-                            name: UnitName::ReactiveWatt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -1;
-                    }
-                    0x17 => {
-                        units.push(Unit {
-                            name: UnitName::ReactiveWatt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                    }
-                    0x18 => {
-                        units.push(Unit {
-                            name: UnitName::Tonne,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 2;
-                    }
-                    0x19 => {
-                        units.push(Unit {
-                            name: UnitName::Tonne,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 3;
-                    }
-                    0x1A => {
-                        units.push(Unit {
-                            name: UnitName::Percent,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -1;
-                        labels.push(ValueLabel::RelativeHumidity);
-                    }
-                    0x20 => {
-                        units.push(Unit {
-                            name: UnitName::Feet,
-                            exponent: 3,
-                        });
-                        decimal_scale_exponent = 0;
-                    }
-                    0x21 => {
-                        units.push(Unit {
-                            name: UnitName::Feet,
-                            exponent: 3,
-                        });
-                        decimal_scale_exponent = 1;
-                    }
-                    0x28 => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 5;
-                    }
-                    0x29 => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 6;
-                    }
-                    0x2A => {
-                        units.push(Unit {
-                            name: UnitName::Degree,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -1;
-                        labels.push(ValueLabel::PhaseUtoU);
-                    }
-                    0x2B => {
-                        units.push(Unit {
-                            name: UnitName::Degree,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -1;
-                        labels.push(ValueLabel::PhaseUtoI);
-                    }
-                    0x2C => {
-                        units.push(Unit {
-                            name: UnitName::Hertz,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -3;
-                    }
-                    0x2D => {
-                        units.push(Unit {
-                            name: UnitName::Hertz,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -2;
-                    }
-                    0x2E => {
-                        units.push(Unit {
-                            name: UnitName::Hertz,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -1;
-                    }
-                    0x2F => {
-                        units.push(Unit {
-                            name: UnitName::Hertz,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                    }
-                    0x30 => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        decimal_scale_exponent = -8;
-                    }
-                    0x31 => {
-                        units.push(Unit {
-                            name: UnitName::Joul,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        decimal_scale_exponent = -7;
-                    }
-                    0x34 => {
-                        units.push(Unit {
-                            name: UnitName::ApparentWatt,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        decimal_scale_exponent = 0;
-                    }
-                    0x35 => {
-                        units.push(Unit {
-                            name: UnitName::ApparentWatt,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        decimal_scale_exponent = 1;
-                    }
-                    0x36 => {
-                        units.push(Unit {
-                            name: UnitName::ApparentWatt,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        decimal_scale_exponent = 2;
-                    }
-                    0x37 => {
-                        units.push(Unit {
-                            name: UnitName::ApparentWatt,
-                            exponent: 1,
-                        });
-                        units.push(Unit {
-                            name: UnitName::Hour,
-                            exponent: -1,
-                        });
-                        decimal_scale_exponent = 3;
-                    }
-                    0x74 => {
-                        units.push(Unit {
-                            name: UnitName::Celsius,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -3;
-                        labels.push(ValueLabel::ColdWarmTemperatureLimit);
-                    }
-                    0x75 => {
-                        units.push(Unit {
-                            name: UnitName::Celsius,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -2;
-                        labels.push(ValueLabel::ColdWarmTemperatureLimit);
-                    }
-                    0x76 => {
-                        units.push(Unit {
-                            name: UnitName::Celsius,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -1;
-                        labels.push(ValueLabel::ColdWarmTemperatureLimit);
-                    }
-                    0x77 => {
-                        units.push(Unit {
-                            name: UnitName::Celsius,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::ColdWarmTemperatureLimit);
-                    }
-                    0x78 => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -3;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x79 => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -2;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x7A => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = -1;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x7B => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x7C => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 1;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x7D => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 2;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x7E => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 3;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x7F => {
-                        units.push(Unit {
-                            name: UnitName::Watt,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 4;
-                        labels.push(ValueLabel::CumaltiveMaximumOfActivePower);
-                    }
-                    0x68 => {
-                        units.push(Unit {
-                            name: UnitName::HCAUnit,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::ResultingRatingFactor);
-                    }
-                    0x69 => {
-                        units.push(Unit {
-                            name: UnitName::HCAUnit,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::ThermalOutputRatingFactor);
-                    }
-                    0x6A => {
-                        units.push(Unit {
-                            name: UnitName::HCAUnit,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::ThermalCouplingRatingFactorOverall);
-                    }
-                    0x6B => {
-                        units.push(Unit {
-                            name: UnitName::HCAUnit,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::ThermalCouplingRatingRoomSide);
-                    }
-                    0x6C => {
-                        units.push(Unit {
-                            name: UnitName::HCAUnit,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::ThermalCouplingRatingFactorHeatingSide);
-                    }
-                    0x6D => {
-                        units.push(Unit {
-                            name: UnitName::HCAUnit,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::LowTemperatureRatingFactor);
-                    }
-                    0x6E => {
-                        units.push(Unit {
-                            name: UnitName::HCAUnit,
-                            exponent: 1,
-                        });
-                        decimal_scale_exponent = 0;
-                        labels.push(ValueLabel::DisplayOutputScalingFactor);
-                    }
+                    0b0 => unit!(Watt / h, 3, dec: 5, Energy),
+                    0b000_0001 => unit!(Watt / h, 3, dec: 6, Energy),
+                    0b000_0010 => unit!(ReactiveWatt * h, 1, dec: 3, Energy),
+                    0b000_0011 => unit!(ReactiveWatt * h, 1, dec: 4, Energy),
+                    0b000_1000 => unit!(Joul, 1, dec: 8, Energy),
+                    0b000_1001 => unit!(Joul, 1, dec: 9, Energy),
+                    0b000_1100 => unit!(Joul, 1, dec: 5, Energy),
+                    0b000_1101 => unit!(Joul, 1, dec: 6, Energy),
+                    0b000_1110 => unit!(Joul, 1, dec: 7, Energy),
+                    0b000_1111 => unit!(Joul, 1, dec: 8, Energy),
+                    0b001_0000 => unit!(Meter, 3, dec: 2),
+                    0b001_0001 => unit!(Meter, 3, dec: 3),
+                    0b001_0100 => unit!(ReactiveWatt, 1, dec: -3),
+                    0b001_0101 => unit!(ReactiveWatt, 1, dec: -2),
+                    0b001_0110 => unit!(ReactiveWatt, 1, dec: -1),
+                    0b001_0111 => unit!(ReactiveWatt, 1, dec: 0),
+                    0b001_1000 => unit!(Tonne, 1, dec: 2),
+                    0b001_1001 => unit!(Tonne, 1, dec: 3),
+                    0b001_1010 => unit!(Percent, 1, dec: -1, RelativeHumidity),
+                    0b010_0000 => unit!(Feet, 3, dec: 0),
+                    0b010_0001 => unit!(Feet, 3, dec: 1),
+                    0b010_1000 => unit!(Watt, 1, dec: 5),
+                    0b010_1001 => unit!(Watt, 1, dec: 6),
+                    0b010_1010 => unit!(Degree, 1, dec: -1, PhaseUtoU),
+                    0b010_1011 => unit!(Degree, 1, dec: -1, PhaseUtoI),
+                    0b010_1100 => unit!(Hertz, 1, dec: -3),
+                    0b010_1101 => unit!(Hertz, 1, dec: -2),
+                    0b010_1110 => unit!(Hertz, 1, dec: -1),
+                    0b010_1111 => unit!(Hertz, 1, dec: 0),
+                    0b011_0000 => unit!(Joul / h, 1, dec: -8),
+                    0b011_0001 => unit!(Joul / h, 1, dec: -7),
+                    0b011_0100 => unit!(ApparentWatt / h, 1, dec: 0),
+                    0b011_0101 => unit!(ApparentWatt / h, 1, dec: 1),
+                    0b011_0110 => unit!(ApparentWatt / h, 1, dec: 2),
+                    0b011_0111 => unit!(ApparentWatt / h, 1, dec: 3),
+                    0b111_0100 => unit!(Celsius, 1, dec: -3, ColdWarmTemperatureLimit),
+                    0b111_0101 => unit!(Celsius, 1, dec: -2, ColdWarmTemperatureLimit),
+                    0b111_0110 => unit!(Celsius, 1, dec: -1, ColdWarmTemperatureLimit),
+                    0b111_0111 => unit!(Celsius, 1, dec: 0, ColdWarmTemperatureLimit),
+                    0b111_1000 => unit!(Watt, 1, dec: -3, CumaltiveMaximumOfActivePower),
+                    0b111_1001 => unit!(Watt, 1, dec: -2, CumaltiveMaximumOfActivePower),
+                    0b111_1010 => unit!(Watt, 1, dec: -1, CumaltiveMaximumOfActivePower),
+                    0b111_1011 => unit!(Watt, 1, dec: 0, CumaltiveMaximumOfActivePower),
+                    0b111_1100 => unit!(Watt, 1, dec: 1, CumaltiveMaximumOfActivePower),
+                    0b111_1101 => unit!(Watt, 1, dec: 2, CumaltiveMaximumOfActivePower),
+                    0b111_1110 => unit!(Watt, 1, dec: 3, CumaltiveMaximumOfActivePower),
+                    0b111_1111 => unit!(Watt, 1, dec: 4, CumaltiveMaximumOfActivePower),
+                    0b110_1000 => unit!(HCAUnit, 1,dec: 0, ResultingRatingFactor),
+                    0b110_1001 => unit!(HCAUnit, 1,dec: 0, ThermalOutputRatingFactor),
+                    0b110_1010 => unit!(HCAUnit, 1,dec: 0, ThermalCouplingRatingFactorOverall),
+                    0b110_1011 => unit!(HCAUnit, 1,dec: 0, ThermalCouplingRatingRoomSide),
+                    0b110_1100 => unit!(HCAUnit, 1,dec: 0, ThermalCouplingRatingFactorHeatingSide),
+                    0b110_1101 => unit!(HCAUnit, 1,dec: 0, LowTemperatureRatingFactor),
+                    0b110_1110 => unit!(HCAUnit, 1,dec: 0, DisplayOutputScalingFactor),
 
                     _ => todo!("Implement the rest of the units: {:X?}", vife[0].data),
-                }
+                };
             }
             ValueInformationCoding::PlainText => {
                 // we need to check if the next byte is equivalent to the length of the rest of the
