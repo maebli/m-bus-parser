@@ -3,10 +3,10 @@ use super::{
     value_information::{ValueInformation, ValueInformationBlock},
     variable_user_data::DataRecordError,
 };
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
-pub struct RawDataRecordHeader {
-    pub data_information_block: DataInformationBlock,
+pub struct RawDataRecordHeader<'a> {
+    pub data_information_block: DataInformationBlock<'a>,
     pub value_information_block: ValueInformationBlock,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -18,7 +18,7 @@ pub struct ProcessedDataRecordHeader {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
 pub struct DataRecord<'a> {
-    pub data_record_header: DataRecordHeader,
+    pub data_record_header: DataRecordHeader<'a>,
     pub data: Data<'a>,
 }
 
@@ -28,14 +28,14 @@ impl DataRecord<'_> {
         self.data_record_header.get_size() + self.data.get_size()
     }
 }
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
-pub struct DataRecordHeader {
-    pub raw_data_record_header: RawDataRecordHeader,
+pub struct DataRecordHeader<'a> {
+    pub raw_data_record_header: RawDataRecordHeader<'a>,
     pub processed_data_record_header: ProcessedDataRecordHeader,
 }
 
-impl DataRecordHeader {
+impl DataRecordHeader<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         self.raw_data_record_header
@@ -48,7 +48,7 @@ impl DataRecordHeader {
     }
 }
 
-impl TryFrom<&[u8]> for RawDataRecordHeader {
+impl<'a> TryFrom<&'a [u8]> for RawDataRecordHeader<'a> {
     type Error = DataRecordError;
     fn try_from(data: &[u8]) -> Result<RawDataRecordHeader, DataRecordError> {
         let difb = DataInformationBlock::try_from(data)?;
@@ -61,7 +61,7 @@ impl TryFrom<&[u8]> for RawDataRecordHeader {
     }
 }
 
-impl TryFrom<&RawDataRecordHeader> for ProcessedDataRecordHeader {
+impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader {
     type Error = DataRecordError;
     fn try_from(
         raw_data_record_header: &RawDataRecordHeader,
@@ -77,9 +77,9 @@ impl TryFrom<&RawDataRecordHeader> for ProcessedDataRecordHeader {
     }
 }
 
-impl TryFrom<&[u8]> for DataRecordHeader {
+impl<'a> TryFrom<&'a [u8]> for DataRecordHeader<'a> {
     type Error = DataRecordError;
-    fn try_from(data: &[u8]) -> Result<DataRecordHeader, DataRecordError> {
+    fn try_from(data: &'a [u8]) -> Result<DataRecordHeader, DataRecordError> {
         let raw_data_record_header = RawDataRecordHeader::try_from(data)?;
         let processed_data_record_header =
             ProcessedDataRecordHeader::try_from(&raw_data_record_header)?;
