@@ -236,7 +236,8 @@ fn parse_to_table(input: &str) -> std::string::String {
             table.set_titles(row!["Value", "Data Information",]);
 
             if let Some(data_records) = parsed_data.data_records {
-                for record in data_records.inner.iter() {
+                for record in data_records {
+                    let record = record.unwrap();
                     table.add_row(row![
                         format!(
                             "({}{}",
