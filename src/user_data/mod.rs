@@ -17,11 +17,19 @@ pub mod variable_user_data;
 // In reality, 117 blocks is not at all common. In order to save stack space the maximum number of blocks is set to 16.
 const MAXIMUM_VARIABLE_DATA_BLOCKS: usize = 16;
 // Define a new struct that wraps ArrayVec
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(into = "Vec<DataRecord>"))]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DataRecords<'a> {
     offset: usize,
     data: &'a [u8],
+}
+
+impl<'a> From<DataRecords<'a>> for Vec<DataRecord> {
+    fn from(value: DataRecords<'a>) -> Self {
+        let value: Result<Vec<_>, _> = value.collect();
+        value.unwrap_or_default()
+    }
 }
 
 impl<'a> Iterator for DataRecords<'a> {

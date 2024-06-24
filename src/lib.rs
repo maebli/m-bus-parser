@@ -55,7 +55,7 @@ pub mod user_data;
 #[derive(Debug)]
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
+    derive(serde::Serialize),
     serde(bound(deserialize = "'de: 'a"))
 )]
 pub struct MbusData<'a> {
