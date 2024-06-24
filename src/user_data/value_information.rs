@@ -338,24 +338,12 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         units.push(unit!(BitTime));
                         labels.push(ValueLabel::ResponseDelayTime);
                     }
-                    0x1E => {
-                        labels.push(ValueLabel::Retry);
-                    }
-                    0x1F => {
-                        labels.push(ValueLabel::RemoteControl);
-                    }
-                    0x20 => {
-                        labels.push(ValueLabel::FirstStorageForCycleStorage);
-                    }
-                    0x21 => {
-                        labels.push(ValueLabel::LastStorageForCycleStorage);
-                    }
-                    0x22 => {
-                        labels.push(ValueLabel::SizeOfStorageBlock);
-                    }
-                    0x23 => {
-                        labels.push(ValueLabel::DescripitonOfTariffAndSubunit);
-                    }
+                    0x1E => labels.push(ValueLabel::Retry),
+                    0x1F => labels.push(ValueLabel::RemoteControl),
+                    0x20 => labels.push(ValueLabel::FirstStorageForCycleStorage),
+                    0x21 => labels.push(ValueLabel::LastStorageForCycleStorage),
+                    0x22 => labels.push(ValueLabel::SizeOfStorageBlock),
+                    0x23 => labels.push(ValueLabel::DescripitonOfTariffAndSubunit),
                     0x24 => {
                         units.push(unit!(Second));
                         labels.push(ValueLabel::StorageInterval);
@@ -380,12 +368,8 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         units.push(unit!(Year));
                         labels.push(ValueLabel::StorageInterval);
                     }
-                    0x30 => {
-                        labels.push(ValueLabel::DimensionlessHCA);
-                    }
-                    0x31 => {
-                        labels.push(ValueLabel::DataContainerForWmbusProtocol);
-                    }
+                    0x30 => labels.push(ValueLabel::DimensionlessHCA),
+                    0x31 => labels.push(ValueLabel::DataContainerForWmbusProtocol),
                     0x32 => {
                         units.push(unit!(Second));
                         labels.push(ValueLabel::PeriodOfNormalDataTransmition);
@@ -406,30 +390,14 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         units.push(unit!(Volt));
                         decimal_scale_exponent = (vife[0].data & 0b1111) as isize - 9;
                     }
-                    0x60 => {
-                        labels.push(ValueLabel::ResetCounter);
-                    }
-                    0x61 => {
-                        labels.push(ValueLabel::CumulationCounter);
-                    }
-                    0x62 => {
-                        labels.push(ValueLabel::ControlSignal);
-                    }
-                    0x63 => {
-                        labels.push(ValueLabel::DayOfWeek);
-                    }
-                    0x64 => {
-                        labels.push(ValueLabel::WeekNumber);
-                    }
-                    0x65 => {
-                        labels.push(ValueLabel::TimePointOfChangeOfTariff);
-                    }
-                    0x66 => {
-                        labels.push(ValueLabel::StateOfParameterActivation);
-                    }
-                    0x67 => {
-                        labels.push(ValueLabel::SpecialSupplierInformation);
-                    }
+                    0x60 => labels.push(ValueLabel::ResetCounter),
+                    0x61 => labels.push(ValueLabel::CumulationCounter),
+                    0x62 => labels.push(ValueLabel::ControlSignal),
+                    0x63 => labels.push(ValueLabel::DayOfWeek),
+                    0x64 => labels.push(ValueLabel::WeekNumber),
+                    0x65 => labels.push(ValueLabel::TimePointOfChangeOfTariff),
+                    0x66 => labels.push(ValueLabel::StateOfParameterActivation),
+                    0x67 => labels.push(ValueLabel::SpecialSupplierInformation),
                     0x68 => {
                         units.push(unit!(Hour));
                         labels.push(ValueLabel::DurationSinceLastCumulation);
@@ -470,25 +438,13 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         units.push(unit!(DecibelMilliWatt));
                         labels.push(ValueLabel::RFPowerLevel);
                     }
-                    0x72 => {
-                        labels.push(ValueLabel::DaylightSavingBeginningEndingDeviation);
-                    }
-                    0x73 => {
-                        labels.push(ValueLabel::ListeningWindowManagementData);
-                    }
-                    0x74 => {
-                        labels.push(ValueLabel::RemainingBatteryLifeTime);
-                    }
-                    0x75 => {
-                        labels.push(ValueLabel::NumberOfTimesTheMeterWasStopped);
-                    }
-                    0x76 => {
-                        labels.push(ValueLabel::DataContainerForManufacturerSpecificProtocol);
-                    }
+                    0x72 => labels.push(ValueLabel::DaylightSavingBeginningEndingDeviation),
+                    0x73 => labels.push(ValueLabel::ListeningWindowManagementData),
+                    0x74 => labels.push(ValueLabel::RemainingBatteryLifeTime),
+                    0x75 => labels.push(ValueLabel::NumberOfTimesTheMeterWasStopped),
+                    0x76 => labels.push(ValueLabel::DataContainerForManufacturerSpecificProtocol),
                     0x7D => match vife[1].data & 0x7F {
-                        0x00 => {
-                            labels.push(ValueLabel::CurrentlySelectedApplication);
-                        }
+                        0x00 => labels.push(ValueLabel::CurrentlySelectedApplication),
                         0x02 => {
                             units.push(unit!(Month));
                             labels.push(ValueLabel::RemainingBatteryLifeTime);
@@ -497,13 +453,9 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             units.push(unit!(Year));
                             labels.push(ValueLabel::RemainingBatteryLifeTime);
                         }
-                        _ => {
-                            labels.push(ValueLabel::Reserved);
-                        }
+                        _ => labels.push(ValueLabel::Reserved),
                     },
-                    _ => {
-                        labels.push(ValueLabel::Reserved);
-                    }
+                    _ => labels.push(ValueLabel::Reserved),
                 }
             }
             ValueInformationCoding::AlternateVIFExtension => {
@@ -597,14 +549,11 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     _ => todo!("Implement the rest of the units: {:X?}", vife[0].data),
                 };
             }
-            ValueInformationCoding::PlainText => {
-                // we need to check if the next byte is equivalent to the length of the rest of the
-                // the data. In this case it is very likely that, this is how the payload is built up.
-
-                labels.push(ValueLabel::PlainText);
-            }
+            // we need to check if the next byte is equivalent to the length of the rest of the
+            // the data. In this case it is very likely that, this is how the payload is built up.
+            ValueInformationCoding::PlainText => labels.push(ValueLabel::PlainText),
             ValueInformationCoding::ManufacturerSpecific => {
-                labels.push(ValueLabel::ManufacturerSpecific);
+                labels.push(ValueLabel::ManufacturerSpecific)
             }
         }
 
