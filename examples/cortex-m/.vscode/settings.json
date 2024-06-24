@@ -1,0 +1,5 @@
+{
+    "cortex-debug.gdbPath.linux": "gdb-multiarch",
+    "cortex-debug.gdbPath.osx": "/opt/homebrew/bin/arm-none-eabi-gdb",
+    "cortex-debug.armToolchainPath.osx": "/opt/homebrew/bin",
+}
