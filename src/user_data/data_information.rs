@@ -519,6 +519,21 @@ impl DataFieldCoding {
                 // Special functions parsing based on the code
                 todo!()
             }
+
+            DataFieldCoding::DateTypeG => {
+                todo!();
+            }
+            DataFieldCoding::DateTimeTypeF => {
+                todo!()
+            }
+
+            DataFieldCoding::DateTimeTypeJ => {
+                todo!()
+            }
+
+            DataFieldCoding::DateTimeTypeI => {
+                todo!()
+            }
         }
     }
 }
@@ -707,6 +722,22 @@ impl DataFieldCoding {
                 data: 0.0,
                 byte_size: 0,
             },
+            DataFieldCoding::DateTypeG => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::DateTimeTypeF => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::DateTimeTypeJ => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::DateTimeTypeI => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
         }
     }
 }
@@ -729,6 +760,10 @@ pub enum DataFieldCoding {
     VariableLength,
     BCDDigit12,
     SpecialFunctions(SpecialFunctions),
+    DateTypeG,
+    DateTimeTypeF,
+    DateTimeTypeJ,
+    DateTimeTypeI,
 }
 
 #[cfg(feature = "std")]
@@ -750,6 +785,10 @@ impl std::fmt::Display for DataFieldCoding {
             DataFieldCoding::BCD8Digit => write!(f, "BCD 8-digit"),
             DataFieldCoding::VariableLength => write!(f, "Variable Length"),
             DataFieldCoding::BCDDigit12 => write!(f, "BCD 12-digit"),
+            DataFieldCoding::DateTypeG => write!(f, "Date Type G"),
+            DataFieldCoding::DateTimeTypeF => write!(f, "Date Time Type F"),
+            DataFieldCoding::DateTimeTypeJ => write!(f, "Date Time Type J"),
+            DataFieldCoding::DateTimeTypeI => write!(f, "Date Time Type I"),
             DataFieldCoding::SpecialFunctions(code) => write!(f, "Special Functions ({:?})", code),
         }
     }
