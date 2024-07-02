@@ -1,6 +1,6 @@
 use super::{
-    data_information::{Data, DataInformation, DataInformationBlock},
-    value_information::{ValueInformation, ValueInformationBlock},
+    data_information::{Data, DataFieldCoding, DataInformation, DataInformationBlock},
+    value_information::{ValueInformation, ValueInformationBlock, ValueLabel},
     variable_user_data::DataRecordError,
 };
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -68,8 +68,24 @@ impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader {
     ) -> Result<ProcessedDataRecordHeader, DataRecordError> {
         let value_information =
             ValueInformation::try_from(&raw_data_record_header.value_information_block)?;
-        let data_information =
+        let mut data_information =
             DataInformation::try_from(&raw_data_record_header.data_information_block)?;
+
+        // unfortunately, the data field coding is not always set in the data information block
+        // so we must do some additional checks to determine the correct data field coding
+
+        if value_information.labels.contains(&ValueLabel::Date) {
+            data_information.data_field_coding = DataFieldCoding::DateTypeG;
+        } else if value_information.labels.contains(&ValueLabel::DateTime) {
+            data_information.data_field_coding = DataFieldCoding::DateTimeTypeF;
+        } else if value_information.labels.contains(&ValueLabel::Time) {
+            data_information.data_field_coding = DataFieldCoding::DateTimeTypeJ;
+        } else if value_information
+            .labels
+            .contains(&ValueLabel::DateTimeWithSeconds)
+        {
+            data_information.data_field_coding = DataFieldCoding::DateTimeTypeI;
+        }
         Ok(ProcessedDataRecordHeader {
             data_information,
             value_information,

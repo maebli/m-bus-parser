@@ -255,11 +255,74 @@ impl From<TextUnit<'_>> for String {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, PartialEq)]
+pub enum Month {
+    January,
+    February,
+    March,
+    April,
+    May,
+    June,
+    July,
+    August,
+    September,
+    October,
+    November,
+    December,
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for Month {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Month::January => write!(f, "Jan"),
+            Month::February => write!(f, "Feb"),
+            Month::March => write!(f, "Mar"),
+            Month::April => write!(f, "Apr"),
+            Month::May => write!(f, "May"),
+            Month::June => write!(f, "Jun"),
+            Month::July => write!(f, "Jul"),
+            Month::August => write!(f, "Aug"),
+            Month::September => write!(f, "Sep"),
+            Month::October => write!(f, "Oct"),
+            Month::November => write!(f, "Nov"),
+            Month::December => write!(f, "Dec"),
+        }
+    }
+}
+
+pub type Year = u16;
+pub type DayOfMonth = u8;
+pub type Hour = u8;
+pub type Minute = u8;
+pub type Second = u8;
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, PartialEq)]
+pub enum SingleOrEvery<T> {
+    Single(T),
+    Every(),
+}
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
     Number(f64),
+        Date(
+        SingleOrEvery<DayOfMonth>,
+        SingleOrEvery<Month>,
+        SingleOrEvery<Year>,
+    ),
+    DateTime(
+        SingleOrEvery<DayOfMonth>,
+        SingleOrEvery<Month>,
+        SingleOrEvery<Year>,
+        SingleOrEvery<Hour>,
+        SingleOrEvery<Minute>,
+        SingleOrEvery<Second>,
+    ),
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug)]
@@ -267,6 +330,17 @@ pub struct Data<'a> {
     value: Option<DataType<'a>>,
     size: usize,
 }
+
+#[cfg(feature = "std")]
+impl<T: std::fmt::Display> std::fmt::Display for SingleOrEvery<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SingleOrEvery::Single(value) => write!(f, "{}", value),
+            SingleOrEvery::Every() => write!(f, "Every"),
+        }
+    }
+}
+
 #[cfg(feature = "std")]
 impl std::fmt::Display for Data<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -277,6 +351,14 @@ impl std::fmt::Display for Data<'_> {
                     write!(f, "{}", text)
                 }
                 DataType::Number(value) => write!(f, "{}", value),
+                DataType::Date(day, month, year) => write!(f, "{}/{}/{}", day, month, year),
+                DataType::DateTime(day, month, year, hour, minute, second) => {
+                    write!(
+                        f,
+                        "{}/{}/{} {}:{}:{}",
+                        day, month, year, hour, minute, second
+                    )
+                }
             },
             None => write!(f, "No Data"),
         }
@@ -521,18 +603,80 @@ impl DataFieldCoding {
             }
 
             DataFieldCoding::DateTypeG => {
-                todo!();
+                if input.len() < 2 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                // lowest five bits of first byte is day, 0 means every day
+                let day = if input[0] & 0x1F == 0 {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[0] & 0x1F)
+                };
+
+                // the first four bits of the second byte is month, 15 means every month
+                let month = if input[1] & 0xF0 == 0xF0 {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(match input[1] & 0xF {
+                        0x0 => Month::January,
+                        0x1 => Month::February,
+                        0x2 => Month::March,
+                        0x3 => Month::April,
+                        0x4 => Month::May,
+                        0x5 => Month::June,
+                        0x6 => Month::July,
+                        0x7 => Month::August,
+                        0x8 => Month::September,
+                        0x9 => Month::October,
+                        0xA => Month::November,
+                        0xB => Month::December,
+                        _ => return { Err(DataRecordError::InvalidData) },
+                    })
+                };
+                let year = u16::from(input[1] & 0x0F) | (u16::from(input[0] & 0xE0) << 1);
+                let year = if year == 127 {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(year)
+                };
+
+                Ok(Data {
+                    value: Some(DataType::Date(day, month, year)),
+                    size: 2,
+                })
             }
             DataFieldCoding::DateTimeTypeF => {
-                todo!()
+                todo!();
+                Ok(Data {
+                    value: Some(DataType::Date(
+                        SingleOrEvery::Every(),
+                        SingleOrEvery::Every(),
+                        SingleOrEvery::Every(),
+                    )),
+                    size: 4,
+                })
             }
-
             DataFieldCoding::DateTimeTypeJ => {
-                todo!()
+                todo!();
+                Ok(Data {
+                    value: Some(DataType::Date(
+                        SingleOrEvery::Every(),
+                        SingleOrEvery::Every(),
+                        SingleOrEvery::Every(),
+                    )),
+                    size: 4,
+                })
             }
-
             DataFieldCoding::DateTimeTypeI => {
-                todo!()
+                todo!();
+                Ok(Data {
+                    value: Some(DataType::Date(
+                        SingleOrEvery::Every(),
+                        SingleOrEvery::Every(),
+                        SingleOrEvery::Every(),
+                    )),
+                    size: 4,
+                })
             }
         }
     }
