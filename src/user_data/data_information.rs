@@ -321,6 +321,13 @@ pub enum DataType<'a> {
         SingleOrEvery<Year>,
         SingleOrEvery<Hour>,
         SingleOrEvery<Minute>,
+    ),
+    DateTimeWithSeconds(
+        SingleOrEvery<DayOfMonth>,
+        SingleOrEvery<Month>,
+        SingleOrEvery<Year>,
+        SingleOrEvery<Hour>,
+        SingleOrEvery<Minute>,
         SingleOrEvery<Second>,
     ),
 }
@@ -352,7 +359,10 @@ impl std::fmt::Display for Data<'_> {
                 }
                 DataType::Number(value) => write!(f, "{}", value),
                 DataType::Date(day, month, year) => write!(f, "{}/{}/{}", day, month, year),
-                DataType::DateTime(day, month, year, hour, minute, second) => {
+                DataType::DateTime(day, month, year, hour, minute) => {
+                    write!(f, "{}/{}/{} {}:{}:00", day, month, year, hour, minute)
+                }
+                DataType::DateTimeWithSeconds(day, month, year, hour, minute, second) => {
                     write!(
                         f,
                         "{}/{}/{} {}:{}:{}",
@@ -630,11 +640,11 @@ impl DataFieldCoding {
                         0x9 => Month::October,
                         0xA => Month::November,
                         0xB => Month::December,
-                        _ => return { Err(DataRecordError::InvalidData) },
+                        _ => return Err(DataRecordError::InvalidData),
                     })
                 };
-                let year = u16::from(input[1] & 0x0F) | (u16::from(input[0] & 0xE0) << 1);
-                let year = if year == 127 {
+                let year = u16::from(input[1] & 0xF0) | (u16::from(input[0] & 0xE0) << 1);
+                let year = if year == 0x7F {
                     SingleOrEvery::Every()
                 } else {
                     SingleOrEvery::Single(year)
@@ -646,13 +656,56 @@ impl DataFieldCoding {
                 })
             }
             DataFieldCoding::DateTimeTypeF => {
-                todo!();
+                if input.len() < 4 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let minutes = if input[0] == 0x3F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[0] & 0x3F)
+                };
+
+                let hour = if input[1] == 0x1F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[1] & 0x1F)
+                };
+
+                let day = if input[2] == 0x1F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[2] & 0x1F)
+                };
+
+                let month = if input[3] == 0x0F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(match input[3] & 0x0F {
+                        0x0 => Month::January,
+                        0x1 => Month::February,
+                        0x2 => Month::March,
+                        0x3 => Month::April,
+                        0x4 => Month::May,
+                        0x5 => Month::June,
+                        0x6 => Month::July,
+                        0x7 => Month::August,
+                        0x8 => Month::September,
+                        0x9 => Month::October,
+                        0xA => Month::November,
+                        0xB => Month::December,
+                        _ => return Err(DataRecordError::InvalidData),
+                    })
+                };
+
+                // year [21 to 23; 28 to 31]
+                let year = u16::from(input[3] & 0xF0) | (u16::from(input[2] & 0xE0) << 1);
+                let year = if year == 0x7F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(year)
+                };
                 Ok(Data {
-                    value: Some(DataType::Date(
-                        SingleOrEvery::Every(),
-                        SingleOrEvery::Every(),
-                        SingleOrEvery::Every(),
-                    )),
+                    value: Some(DataType::DateTime(day, month, year, hour, minutes)),
                     size: 4,
                 })
             }
