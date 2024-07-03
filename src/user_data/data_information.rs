@@ -628,22 +628,24 @@ impl DataFieldCoding {
                     SingleOrEvery::Every()
                 } else {
                     SingleOrEvery::Single(match input[1] & 0xF {
-                        0x0 => Month::January,
-                        0x1 => Month::February,
-                        0x2 => Month::March,
-                        0x3 => Month::April,
-                        0x4 => Month::May,
-                        0x5 => Month::June,
-                        0x6 => Month::July,
-                        0x7 => Month::August,
-                        0x8 => Month::September,
-                        0x9 => Month::October,
-                        0xA => Month::November,
-                        0xB => Month::December,
+                        // warning: 0 is actually invalid, but used, to prevent an invalid data
+                        // this is a work around needs to be improved
+                        0 | 0x1 => Month::January,
+                        0x2 => Month::February,
+                        0x3 => Month::March,
+                        0x4 => Month::April,
+                        0x5 => Month::May,
+                        0x6 => Month::June,
+                        0x7 => Month::July,
+                        0x8 => Month::August,
+                        0x9 => Month::September,
+                        0xA => Month::October,
+                        0xB => Month::November,
+                        0xC => Month::December,
                         _ => return Err(DataRecordError::InvalidData),
                     })
                 };
-                let year = u16::from(input[1] & 0xF0) | (u16::from(input[0] & 0xE0) << 1);
+                let year = (u16::from(input[1] & 0xF0) >> 1) | (u16::from(input[0] & 0xE0) >> 5);
                 let year = if year == 0x7F {
                     SingleOrEvery::Every()
                 } else {
@@ -681,24 +683,26 @@ impl DataFieldCoding {
                     SingleOrEvery::Every()
                 } else {
                     SingleOrEvery::Single(match input[3] & 0x0F {
-                        0x0 => Month::January,
-                        0x1 => Month::February,
-                        0x2 => Month::March,
-                        0x3 => Month::April,
-                        0x4 => Month::May,
-                        0x5 => Month::June,
-                        0x6 => Month::July,
-                        0x7 => Month::August,
-                        0x8 => Month::September,
-                        0x9 => Month::October,
-                        0xA => Month::November,
-                        0xB => Month::December,
+                        // warning: 0 is actually invalid, but used, to prevent an invalid data
+                        // this is a work around needs to be improved
+                        0 | 0x1 => Month::January,
+                        0x2 => Month::February,
+                        0x3 => Month::March,
+                        0x4 => Month::April,
+                        0x5 => Month::May,
+                        0x6 => Month::June,
+                        0x7 => Month::July,
+                        0x8 => Month::August,
+                        0x9 => Month::September,
+                        0xA => Month::October,
+                        0xB => Month::November,
+                        0xC => Month::December,
                         _ => return Err(DataRecordError::InvalidData),
                     })
                 };
 
                 // year [21 to 23; 28 to 31]
-                let year = u16::from(input[3] & 0xF0) | (u16::from(input[2] & 0xE0) << 1);
+                let year = (u16::from(input[3] & 0xF0) >> 1) | (u16::from(input[2] & 0xE0) >> 5);
                 let year = if year == 0x7F {
                     SingleOrEvery::Every()
                 } else {
