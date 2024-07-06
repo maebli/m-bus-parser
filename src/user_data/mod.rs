@@ -58,7 +58,7 @@ impl<'a> Iterator for DataRecords<'a> {
                 }
             }
         }
-        return None;
+        None
     }
 }
 
@@ -378,6 +378,7 @@ impl Counter {
 }
 
 #[derive(Debug, PartialEq)]
+#[allow(dead_code)]
 pub struct FixedDataHeder {
     identification_number: IdentificationNumber,
     manufacturer_code: ManufacturerCode,
