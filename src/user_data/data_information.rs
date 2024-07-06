@@ -310,10 +310,15 @@ pub enum SingleOrEvery<T> {
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
     Number(f64),
-        Date(
+    Date(
         SingleOrEvery<DayOfMonth>,
         SingleOrEvery<Month>,
         SingleOrEvery<Year>,
+    ),
+    Time(
+        SingleOrEvery<Second>,
+        SingleOrEvery<Minute>,
+        SingleOrEvery<Hour>,
     ),
     DateTime(
         SingleOrEvery<DayOfMonth>,
@@ -714,13 +719,24 @@ impl DataFieldCoding {
                 })
             }
             DataFieldCoding::DateTimeTypeJ => {
-                todo!();
+                let seconds = if input[0] == 0x3F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[0] & 0x3F)
+                };
+                let minutes = if input[1] == 0x3F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[1] & 0x3F)
+                };
+                let hours = if input[2] == 0x1F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[2] & 0x1F)
+                };
+
                 Ok(Data {
-                    value: Some(DataType::Date(
-                        SingleOrEvery::Every(),
-                        SingleOrEvery::Every(),
-                        SingleOrEvery::Every(),
-                    )),
+                    value: Some(DataType::Time(seconds, minutes, hours)),
                     size: 4,
                 })
             }
