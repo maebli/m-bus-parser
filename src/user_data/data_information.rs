@@ -1,17 +1,14 @@
 use super::data_information::{self};
 use super::variable_user_data::DataRecordError;
-use arrayvec::ArrayVec;
 
-const MAX_DIFE_RECORDS: usize = 10;
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
-pub struct DataInformationBlock {
+pub struct DataInformationBlock<'a> {
     pub data_information_field: DataInformationField,
-    pub data_information_field_extension:
-        Option<ArrayVec<DataInformationFieldExtension, MAX_DIFE_RECORDS>>,
+    pub data_information_field_extension: Option<DataInformationFieldExtensions<'a>>,
 }
 
-impl DataInformationBlock {
+impl DataInformationBlock<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         let mut size = 1;
@@ -44,44 +41,72 @@ impl From<u8> for DataInformationFieldExtension {
         DataInformationFieldExtension { data }
     }
 }
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[repr(transparent)]
 pub struct DataInformationFieldExtension {
     pub data: u8,
 }
 
-impl TryFrom<&[u8]> for DataInformationBlock {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct DataInformationFieldExtensions<'a>(&'a [u8]);
+impl<'a> DataInformationFieldExtensions<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        Self(data)
+    }
+}
+
+impl<'a> Iterator for DataInformationFieldExtensions<'a> {
+    type Item = DataInformationFieldExtension;
+    fn next(&mut self) -> Option<Self::Item> {
+        let (head, tail) = self.0.split_first()?;
+        self.0 = tail;
+        Some(DataInformationFieldExtension { data: *head })
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.0.len(), Some(self.0.len()))
+    }
+}
+impl<'a> ExactSizeIterator for DataInformationFieldExtensions<'a> {}
+impl<'a> DoubleEndedIterator for DataInformationFieldExtensions<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let (end, start) = self.0.split_last()?;
+        self.0 = start;
+        Some(DataInformationFieldExtension { data: *end })
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for DataInformationBlock<'a> {
     type Error = DataInformationError;
 
-    fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
-        if data.is_empty() {
+    fn try_from(data: &'a [u8]) -> Result<Self, DataInformationError> {
+        let Some((dif_byte, data)) = data.split_first() else {
             return Err(DataInformationError::NoData);
-        }
-        let mut dife = ArrayVec::<DataInformationFieldExtension, MAX_DIFE_RECORDS>::new();
-        let dif = DataInformationField::from(data[0]);
-
-        if dif.has_extension() {
-            let mut offset = 1;
-
-            while offset <= data.len() {
-                if offset >= MAXIMUM_DATA_INFORMATION_SIZE {
-                    return Err(DataInformationError::DataTooLong);
-                }
-                let next_byte = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
-                let next_dife = DataInformationFieldExtension::from(next_byte);
-                dife.push(next_dife);
-                if dife.last().unwrap().has_extension() {
-                    offset += 1;
-                } else {
-                    break;
-                }
-            }
         };
+        let dif = DataInformationField::from(*dif_byte);
 
-        Ok(DataInformationBlock {
-            data_information_field: dif,
-            data_information_field_extension: if dife.is_empty() { None } else { Some(dife) },
-        })
+        let length = data.iter().take_while(|&&u8| u8 & 0x80 != 0).count();
+        let offset = length + 1;
+        match () {
+            () if dif.has_extension() && offset > MAXIMUM_DATA_INFORMATION_SIZE => {
+                Err(DataInformationError::DataTooLong)
+            }
+            () if dif.has_extension() && offset > data.len() => {
+                Err(DataInformationError::DataTooShort)
+            }
+            () if dif.has_extension() => Ok(DataInformationBlock {
+                data_information_field: dif,
+                data_information_field_extension: Some(DataInformationFieldExtensions::new(
+                    &data[..offset],
+                )),
+            }),
+            () => Ok(DataInformationBlock {
+                data_information_field: dif,
+                data_information_field_extension: None,
+            }),
+        }
     }
 }
 
@@ -92,8 +117,14 @@ impl DataInformationField {
 }
 
 impl DataInformationFieldExtension {
-    fn has_extension(&self) -> bool {
-        self.data & 0x80 != 0
+    fn special_function(&self) -> SpecialFunctions {
+        match self.data {
+            0x0F => SpecialFunctions::ManufacturerSpecific,
+            0x1F => SpecialFunctions::MoreRecordsFollow,
+            0x2F => SpecialFunctions::IdleFiller,
+            0x7F => SpecialFunctions::GlobalReadoutRequest,
+            _ => SpecialFunctions::Reserved,
+        }
     }
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -130,7 +161,7 @@ pub enum DataInformationError {
     InvalidValueInformation,
 }
 
-impl TryFrom<&DataInformationBlock> for DataInformation {
+impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
     type Error = DataInformationError;
 
     fn try_from(
@@ -147,8 +178,8 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
         let mut first_dife = None;
 
         if let Some(difes) = possible_difes {
-            first_dife = Some(difes[0].data);
-            for dife in difes {
+            first_dife = difes.clone().next();
+            for dife in difes.clone() {
                 if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
                     return Err(DataInformationError::DataTooLong);
                 }
@@ -183,13 +214,7 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
             0b1100 => DataFieldCoding::BCD8Digit,
             0b1101 => DataFieldCoding::VariableLength,
             0b1110 => DataFieldCoding::BCDDigit12,
-            0b1111 => DataFieldCoding::SpecialFunctions(match first_dife.unwrap() {
-                0x0F => SpecialFunctions::ManufacturerSpecific,
-                0x1F => SpecialFunctions::MoreRecordsFollow,
-                0x2F => SpecialFunctions::IdleFiller,
-                0x7F => SpecialFunctions::GlobalReadoutRequest,
-                _ => SpecialFunctions::Reserved,
-            }),
+            0b1111 => DataFieldCoding::SpecialFunctions(first_dife.unwrap().special_function()),
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
@@ -207,25 +232,48 @@ impl TryFrom<&DataInformationBlock> for DataInformation {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(into = "String"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextUnit<'a>(&'a [u8]);
+impl<'a> TextUnit<'a> {
+    pub fn new(input: &'a [u8]) -> Self {
+        Self(input)
+    }
+}
+
+impl PartialEq<str> for TextUnit<'_> {
+    fn eq(&self, other: &str) -> bool {
+        self.0.iter().eq(other.as_bytes().iter().rev())
+    }
+}
+#[cfg(any(feature = "serde", feature = "std"))]
+impl From<TextUnit<'_>> for String {
+    fn from(value: TextUnit<'_>) -> Self {
+        let value: Vec<u8> = value.0.iter().copied().rev().collect();
+        String::from_utf8(value).unwrap()
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
-pub enum DataType {
-    Text(ArrayVec<u8, 18>),
+pub enum DataType<'a> {
+    Text(TextUnit<'a>),
     Number(f64),
 }
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug)]
-pub struct Data {
-    value: Option<DataType>,
+pub struct Data<'a> {
+    value: Option<DataType<'a>>,
     size: usize,
 }
 #[cfg(feature = "std")]
-impl std::fmt::Display for Data {
+impl std::fmt::Display for Data<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value {
             Some(value) => match value {
-                DataType::Text(text) => {
-                    let text = String::from_utf8_lossy(text);
+                &DataType::Text(text) => {
+                    let text: String = text.into();
                     write!(f, "{}", text)
                 }
                 DataType::Number(value) => write!(f, "{}", value),
@@ -235,7 +283,7 @@ impl std::fmt::Display for Data {
     }
 }
 
-impl Data {
+impl Data<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         self.size
@@ -243,7 +291,7 @@ impl Data {
 }
 
 impl DataFieldCoding {
-    pub fn parse(&self, input: &[u8]) -> Result<Data, DataRecordError> {
+    pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
         match self {
             DataFieldCoding::NoData => Ok(Data {
                 value: None,
@@ -386,14 +434,10 @@ impl DataFieldCoding {
             DataFieldCoding::VariableLength => {
                 let mut length = input[0];
                 match input[0] {
-                    0x00..=0xBF => ArrayVec::<u8, 18>::try_from(&input[1..=(length as usize)])
-                        .map(|text| {
-                            Ok(Data {
-                                value: Some(DataType::Text(text)),
-                                size: length as usize + 1,
-                            })
-                        })
-                        .unwrap_or_else(|_| Err(DataRecordError::InsufficientData)),
+                    0x00..=0xBF => Ok(Data {
+                        value: Some(DataType::Text(TextUnit::new(&input[1..(length as usize)]))),
+                        size: length as usize + 1,
+                    }),
                     0xC0..=0xD9 => {
                         length -= 0xC0;
                         let is_negative = input[0] > 0xC9;
@@ -733,6 +777,13 @@ mod tests {
     }
 
     #[test]
+    fn reverse_text_unit() {
+        let original_value = [0x6c, 0x61, 0x67, 0x69];
+        let parsed = TextUnit::new(&original_value);
+        assert_eq!(&parsed, "igal");
+    }
+
+    #[test]
     fn test_invalid_data_information() {
         let data = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -762,6 +813,6 @@ mod tests {
         let data = [178, 1];
         let result = DataInformationBlock::try_from(data.as_slice());
         assert!(result.is_ok());
-        assert!(result.unwrap().get_size() == 2);
+        assert_eq!(result.unwrap().get_size(), 2);
     }
 }

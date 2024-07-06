@@ -19,36 +19,9 @@ impl From<DataRecordError> for VariableUserDataError {
     }
 }
 
-impl TryFrom<&[u8]> for DataRecords {
-    type Error = VariableUserDataError;
-    fn try_from(data: &[u8]) -> Result<DataRecords, VariableUserDataError> {
-        let mut records = DataRecords::new();
-        let mut offset = 0;
-        let mut _more_records_follow = false;
-
-        while offset < data.len() {
-            match data[offset] {
-                0x0F => {
-                    /* TODO: parse manufacturer specific */
-                    offset = data.len();
-                }
-                0x1F => {
-                    /* TODO: parse manufacturer specific */
-                    _more_records_follow = true;
-                    offset = data.len();
-                }
-                0x2F => {
-                    offset += 1;
-                }
-                _ => {
-                    let record = DataRecord::try_from(&data[offset..])?;
-                    offset += record.get_size();
-                    let _res = records.add_record(record);
-                }
-            }
-        }
-
-        Ok(records)
+impl<'a> From<&'a [u8]> for DataRecords<'a> {
+    fn from(data: &'a [u8]) -> Self {
+        DataRecords::new(data)
     }
 }
 

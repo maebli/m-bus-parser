@@ -44,12 +44,6 @@ use frames::FrameError;
 use user_data::ApplicationLayerError;
 
 #[cfg(feature = "std")]
-extern crate std;
-
-#[cfg(not(feature = "std"))]
-extern crate core;
-
-#[cfg(feature = "std")]
 use prettytable::{format, row, Table};
 
 #[cfg(feature = "std")]
@@ -61,13 +55,13 @@ pub mod user_data;
 #[derive(Debug)]
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
+    derive(serde::Serialize),
     serde(bound(deserialize = "'de: 'a"))
 )]
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
-    pub data_records: Option<user_data::DataRecords>,
+    pub data_records: Option<user_data::DataRecords<'a>>,
 }
 
 #[derive(Debug)]
@@ -104,7 +98,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
                         variable_data_block,
                     }) = user_data::UserDataBlock::try_from(*data)
                     {
-                        data_records = user_data::DataRecords::try_from(variable_data_block).ok();
+                        data_records = Some(variable_data_block.into());
                     }
                 }
             }
@@ -242,7 +236,8 @@ fn parse_to_table(input: &str) -> std::string::String {
             table.set_titles(row!["Value", "Data Information",]);
 
             if let Some(data_records) = parsed_data.data_records {
-                for record in data_records.inner.iter() {
+                for record in data_records {
+                    let record = record.unwrap();
                     table.add_row(row![
                         format!(
                             "({}{}",
