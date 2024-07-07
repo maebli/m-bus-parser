@@ -75,7 +75,7 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
             }
         }
 
-        Ok(ValueInformationBlock {
+        Ok(Self {
             value_information: vif,
             value_information_extension: if vife.is_empty() { None } else { Some(vife) },
             plaintext_vife,
@@ -106,7 +106,7 @@ pub struct ValueInformationField {
 }
 
 impl ValueInformationField {
-    fn value_information_contains_ascii(&self) -> bool {
+    const fn value_information_contains_ascii(&self) -> bool {
         self.data == 0x7C || self.data == 0xFC
     }
 }
@@ -120,27 +120,27 @@ pub struct ValueInformationFieldExtension {
 impl From<&ValueInformationField> for ValueInformationCoding {
     fn from(value_information: &ValueInformationField) -> Self {
         match value_information.data {
-            0x00..=0x7B | 0x80..=0xFA => ValueInformationCoding::Primary,
-            0x7C | 0xFC => ValueInformationCoding::PlainText,
-            0xFD => ValueInformationCoding::MainVIFExtension,
-            0xFB => ValueInformationCoding::AlternateVIFExtension,
-            0x7E => ValueInformationCoding::ManufacturerSpecific,
-            0xFE => ValueInformationCoding::ManufacturerSpecific,
-            0x7F => ValueInformationCoding::ManufacturerSpecific,
-            0xFF => ValueInformationCoding::ManufacturerSpecific,
+            0x00..=0x7B | 0x80..=0xFA => Self::Primary,
+            0x7C | 0xFC => Self::PlainText,
+            0xFD => Self::MainVIFExtension,
+            0xFB => Self::AlternateVIFExtension,
+            0x7E => Self::ManufacturerSpecific,
+            0xFE => Self::ManufacturerSpecific,
+            0x7F => Self::ManufacturerSpecific,
+            0xFF => Self::ManufacturerSpecific,
             _ => unreachable!("Invalid value information: {:X}", value_information.data),
         }
     }
 }
 
 impl ValueInformationField {
-    fn has_extension(&self) -> bool {
+    const fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
 }
 
 impl ValueInformationFieldExtension {
-    fn has_extension(&self) -> bool {
+    const fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
 }
@@ -164,7 +164,7 @@ pub enum ValueInformationFieldExtensionCoding {
 
 impl ValueInformationBlock {
     #[must_use]
-    pub fn get_size(&self) -> usize {
+    pub const fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
             size += vife.len();
@@ -558,7 +558,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
             }
         }
 
-        Ok(ValueInformation {
+        Ok(Self {
             decimal_offset_exponent,
             labels,
             decimal_scale_exponent,
@@ -817,7 +817,7 @@ pub enum ValueInformationError {
 
 impl From<u8> for ValueInformationField {
     fn from(data: u8) -> Self {
-        ValueInformationField { data }
+        Self { data }
     }
 }
 /// This is the most important type of the this file and represents

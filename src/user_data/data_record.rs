@@ -63,9 +63,7 @@ impl<'a> TryFrom<&'a [u8]> for RawDataRecordHeader<'a> {
 
 impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader {
     type Error = DataRecordError;
-    fn try_from(
-        raw_data_record_header: &RawDataRecordHeader,
-    ) -> Result<ProcessedDataRecordHeader, DataRecordError> {
+    fn try_from(raw_data_record_header: &RawDataRecordHeader) -> Result<Self, DataRecordError> {
         let value_information =
             ValueInformation::try_from(&raw_data_record_header.value_information_block)?;
         let mut data_information =
@@ -86,7 +84,7 @@ impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader {
         {
             data_information.data_field_coding = DataFieldCoding::DateTimeTypeI;
         }
-        Ok(ProcessedDataRecordHeader {
+        Ok(Self {
             data_information,
             value_information,
         })
@@ -95,11 +93,11 @@ impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader {
 
 impl<'a> TryFrom<&'a [u8]> for DataRecordHeader<'a> {
     type Error = DataRecordError;
-    fn try_from(data: &'a [u8]) -> Result<DataRecordHeader, DataRecordError> {
+    fn try_from(data: &'a [u8]) -> Result<Self, DataRecordError> {
         let raw_data_record_header = RawDataRecordHeader::try_from(data)?;
         let processed_data_record_header =
             ProcessedDataRecordHeader::try_from(&raw_data_record_header)?;
-        Ok(DataRecordHeader {
+        Ok(Self {
             raw_data_record_header,
             processed_data_record_header,
         })

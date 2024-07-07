@@ -26,19 +26,19 @@ pub struct DataInformationField {
 
 impl From<data_information::DataInformationError> for DataRecordError {
     fn from(error: data_information::DataInformationError) -> Self {
-        DataRecordError::DataInformationError(error)
+        Self::DataInformationError(error)
     }
 }
 
 impl From<u8> for DataInformationField {
     fn from(data: u8) -> Self {
-        DataInformationField { data }
+        Self { data }
     }
 }
 
 impl From<u8> for DataInformationFieldExtension {
     fn from(data: u8) -> Self {
-        DataInformationFieldExtension { data }
+        Self { data }
     }
 }
 
@@ -53,7 +53,7 @@ pub struct DataInformationFieldExtension {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataInformationFieldExtensions<'a>(&'a [u8]);
 impl<'a> DataInformationFieldExtensions<'a> {
-    fn new(data: &'a [u8]) -> Self {
+    const fn new(data: &'a [u8]) -> Self {
         Self(data)
     }
 }
@@ -111,13 +111,13 @@ impl<'a> TryFrom<&'a [u8]> for DataInformationBlock<'a> {
 }
 
 impl DataInformationField {
-    fn has_extension(&self) -> bool {
+    const fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
 }
 
 impl DataInformationFieldExtension {
-    fn special_function(&self) -> SpecialFunctions {
+    const fn special_function(&self) -> SpecialFunctions {
         match self.data {
             0x0F => SpecialFunctions::ManufacturerSpecific,
             0x1F => SpecialFunctions::MoreRecordsFollow,
@@ -218,7 +218,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
-        Ok(DataInformation {
+        Ok(Self {
             storage_number,
             function_field,
             data_field_coding,
@@ -237,7 +237,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextUnit<'a>(&'a [u8]);
 impl<'a> TextUnit<'a> {
-    pub fn new(input: &'a [u8]) -> Self {
+    pub const fn new(input: &'a [u8]) -> Self {
         Self(input)
     }
 }
@@ -387,7 +387,7 @@ impl std::fmt::Display for Data<'_> {
 
 impl Data<'_> {
     #[must_use]
-    pub fn get_size(&self) -> usize {
+    pub const fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -437,12 +437,12 @@ macro_rules! parse_year {
 impl DataFieldCoding {
     pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
         match self {
-            DataFieldCoding::NoData => Ok(Data {
+            Self::NoData => Ok(Data {
                 value: None,
                 size: 0,
             }),
 
-            DataFieldCoding::Integer8Bit => {
+            Self::Integer8Bit => {
                 if input.is_empty() {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -453,7 +453,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::Integer16Bit => {
+            Self::Integer16Bit => {
                 if input.len() < 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -465,7 +465,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::Integer24Bit => {
+            Self::Integer24Bit => {
                 if input.len() < 3 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -477,7 +477,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::Integer32Bit => {
+            Self::Integer32Bit => {
                 if input.len() < 4 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -488,7 +488,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::Real32Bit => {
+            Self::Real32Bit => {
                 if input.len() < 4 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -499,7 +499,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::Integer48Bit => {
+            Self::Integer48Bit => {
                 if input.len() < 6 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -515,7 +515,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::Integer64Bit => {
+            Self::Integer64Bit => {
                 if input.len() < 8 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -526,12 +526,12 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::SelectionForReadout => Ok(Data {
+            Self::SelectionForReadout => Ok(Data {
                 value: None,
                 size: 0,
             }),
 
-            DataFieldCoding::BCD2Digit => {
+            Self::BCD2Digit => {
                 if input.is_empty() {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -542,7 +542,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::BCD4Digit => {
+            Self::BCD4Digit => {
                 if input.len() < 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -553,7 +553,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::BCD6Digit => {
+            Self::BCD6Digit => {
                 if input.len() < 3 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -564,7 +564,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::BCD8Digit => {
+            Self::BCD8Digit => {
                 if input.len() < 4 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -575,7 +575,7 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::VariableLength => {
+            Self::VariableLength => {
                 let mut length = input[0];
                 match input[0] {
                     0x00..=0xBF => Ok(Data {
@@ -648,7 +648,7 @@ impl DataFieldCoding {
                 }
             }
 
-            DataFieldCoding::BCDDigit12 => {
+            Self::BCDDigit12 => {
                 if input.len() < 6 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -659,12 +659,12 @@ impl DataFieldCoding {
                 })
             }
 
-            DataFieldCoding::SpecialFunctions(_code) => {
+            Self::SpecialFunctions(_code) => {
                 // Special functions parsing based on the code
                 todo!()
             }
 
-            DataFieldCoding::DateTypeG => {
+            Self::DateTypeG => {
                 if input.len() < 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -677,7 +677,7 @@ impl DataFieldCoding {
                     size: 2,
                 })
             }
-            DataFieldCoding::DateTimeTypeF => {
+            Self::DateTimeTypeF => {
                 if input.len() < 4 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -692,7 +692,7 @@ impl DataFieldCoding {
                     size: 4,
                 })
             }
-            DataFieldCoding::DateTimeTypeJ => {
+            Self::DateTimeTypeJ => {
                 if input.len() < 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
@@ -705,7 +705,7 @@ impl DataFieldCoding {
                     size: 4,
                 })
             }
-            DataFieldCoding::DateTimeTypeI => {
+            Self::DateTimeTypeI => {
                 // note: more information can be extracted from the data,
                 // however, because this data can be derived from the other data that is
                 // that is extracted, it is not necessary to extract it.
@@ -731,7 +731,7 @@ impl DataFieldCoding {
     }
 }
 
-fn bcd_to_u8(bcd: u8) -> u8 {
+const fn bcd_to_u8(bcd: u8) -> u8 {
     (bcd >> 4) * 10 + (bcd & 0x0F)
 }
 
@@ -763,7 +763,7 @@ fn bcd_to_u48(bcd: &[u8]) -> u64 {
 
 impl DataInformation {
     #[must_use]
-    pub fn get_size(&self) -> usize {
+    pub const fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -806,25 +806,25 @@ impl DataFieldCoding {
     #[must_use]
     pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
         match *self {
-            DataFieldCoding::Real32Bit => Value {
+            Self::Real32Bit => Value {
                 data: f64::from(f32::from_le_bytes([data[0], data[1], data[2], data[3]])),
                 byte_size: 4,
             },
-            DataFieldCoding::Integer8Bit => Value {
+            Self::Integer8Bit => Value {
                 data: f64::from(data[0]),
                 byte_size: 1,
             },
-            DataFieldCoding::Integer16Bit => Value {
+            Self::Integer16Bit => Value {
                 data: f64::from(u16::from(data[1]) << 8 | u16::from(data[0])),
                 byte_size: 2,
             },
-            DataFieldCoding::Integer24Bit => Value {
+            Self::Integer24Bit => Value {
                 data: f64::from(
                     u32::from(data[2]) << 16 | u32::from(data[1]) << 8 | u32::from(data[0]),
                 ),
                 byte_size: 3,
             },
-            DataFieldCoding::Integer32Bit => Value {
+            Self::Integer32Bit => Value {
                 data: f64::from(
                     u32::from(data[3]) << 24
                         | u32::from(data[2]) << 16
@@ -833,7 +833,7 @@ impl DataFieldCoding {
                 ),
                 byte_size: 4,
             },
-            DataFieldCoding::Integer48Bit => Value {
+            Self::Integer48Bit => Value {
                 data: (u64::from(data[5]) << 40
                     | u64::from(data[4]) << 32
                     | u64::from(data[3]) << 24
@@ -842,7 +842,7 @@ impl DataFieldCoding {
                     | u64::from(data[0])) as f64,
                 byte_size: 6,
             },
-            DataFieldCoding::Integer64Bit => Value {
+            Self::Integer64Bit => Value {
                 data: (u64::from(data[7]) << 56
                     | u64::from(data[6]) << 48
                     | u64::from(data[5]) << 40
@@ -853,18 +853,18 @@ impl DataFieldCoding {
                     | u64::from(data[0])) as f64,
                 byte_size: 8,
             },
-            DataFieldCoding::BCD2Digit => Value {
+            Self::BCD2Digit => Value {
                 data: (f64::from(data[0] >> 4) * 10.0) + f64::from(data[0] & 0x0F),
                 byte_size: 1,
             },
-            DataFieldCoding::BCD4Digit => Value {
+            Self::BCD4Digit => Value {
                 data: (f64::from(data[1] >> 4) * 1000.0)
                     + (f64::from(data[1] & 0x0F) * 100.0)
                     + (f64::from(data[0] >> 4) * 10.0)
                     + f64::from(data[0] & 0x0F),
                 byte_size: 2,
             },
-            DataFieldCoding::BCD6Digit => Value {
+            Self::BCD6Digit => Value {
                 data: (f64::from(data[2] >> 4) * 100_000.0)
                     + (f64::from(data[2] & 0x0F) * 10000.0)
                     + (f64::from(data[1] >> 4) * 1000.0)
@@ -873,7 +873,7 @@ impl DataFieldCoding {
                     + f64::from(data[0] & 0x0F),
                 byte_size: 3,
             },
-            DataFieldCoding::BCD8Digit => Value {
+            Self::BCD8Digit => Value {
                 data: (f64::from(data[3] >> 4) * 10_000_000.0)
                     + (f64::from(data[3] & 0x0F) * 1_000_000.0)
                     + (f64::from(data[2] >> 4) * 100_000.0)
@@ -884,7 +884,7 @@ impl DataFieldCoding {
                     + f64::from(data[0] & 0x0F),
                 byte_size: 4,
             },
-            DataFieldCoding::BCDDigit12 => Value {
+            Self::BCDDigit12 => Value {
                 data: (f64::from(data[5] >> 4) * 100_000_000_000.0)
                     + (f64::from(data[5] & 0x0F) * 10_000_000_000.0)
                     + (f64::from(data[4] >> 4) * 1_000_000_000.0)
@@ -899,35 +899,35 @@ impl DataFieldCoding {
                     + f64::from(data[0] & 0x0F),
                 byte_size: 6,
             },
-            DataFieldCoding::NoData => Value {
+            Self::NoData => Value {
                 data: 0.0,
                 byte_size: 0,
             },
-            DataFieldCoding::SelectionForReadout => Value {
+            Self::SelectionForReadout => Value {
                 data: 0.0,
                 byte_size: 0,
             },
-            DataFieldCoding::SpecialFunctions(_) => Value {
+            Self::SpecialFunctions(_) => Value {
                 data: 0.0,
                 byte_size: 0,
             },
-            DataFieldCoding::VariableLength => Value {
+            Self::VariableLength => Value {
                 data: 0.0,
                 byte_size: 0,
             },
-            DataFieldCoding::DateTypeG => Value {
+            Self::DateTypeG => Value {
                 data: 0.0,
                 byte_size: 0,
             },
-            DataFieldCoding::DateTimeTypeF => Value {
+            Self::DateTimeTypeF => Value {
                 data: 0.0,
                 byte_size: 0,
             },
-            DataFieldCoding::DateTimeTypeJ => Value {
+            Self::DateTimeTypeJ => Value {
                 data: 0.0,
                 byte_size: 0,
             },
-            DataFieldCoding::DateTimeTypeI => Value {
+            Self::DateTimeTypeI => Value {
                 data: 0.0,
                 byte_size: 0,
             },

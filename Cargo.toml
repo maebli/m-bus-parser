@@ -50,3 +50,15 @@ exclude = ["examples/cortex-m"]
 [[bench]]
 name = "bench"
 harness = false
+
+
+[lints.clippy]
+unwrap_used = "warn"
+unwrap_in_result = "warn"
+panic = "warn"
+expect_used = "warn"
+unimplemented = "warn"
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }

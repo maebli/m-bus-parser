@@ -52,26 +52,26 @@ impl TryFrom<u8> for Function {
 
     fn try_from(byte: u8) -> Result<Self, Self::Error> {
         match byte {
-            0x40 => Ok(Function::SndNk),
-            0x53 => Ok(Function::SndUd { fcb: false }),
-            0x73 => Ok(Function::SndUd { fcb: true }),
-            0x5B => Ok(Function::ReqUd2 { fcb: false }),
-            0x7B => Ok(Function::ReqUd2 { fcb: true }),
-            0x5A => Ok(Function::ReqUd1 { fcb: false }),
-            0x7A => Ok(Function::ReqUd1 { fcb: true }),
-            0x08 => Ok(Function::RspUd {
+            0x40 => Ok(Self::SndNk),
+            0x53 => Ok(Self::SndUd { fcb: false }),
+            0x73 => Ok(Self::SndUd { fcb: true }),
+            0x5B => Ok(Self::ReqUd2 { fcb: false }),
+            0x7B => Ok(Self::ReqUd2 { fcb: true }),
+            0x5A => Ok(Self::ReqUd1 { fcb: false }),
+            0x7A => Ok(Self::ReqUd1 { fcb: true }),
+            0x08 => Ok(Self::RspUd {
                 acd: false,
                 dfc: false,
             }),
-            0x18 => Ok(Function::RspUd {
+            0x18 => Ok(Self::RspUd {
                 acd: false,
                 dfc: true,
             }),
-            0x28 => Ok(Function::RspUd {
+            0x28 => Ok(Self::RspUd {
                 acd: true,
                 dfc: false,
             }),
-            0x38 => Ok(Function::RspUd {
+            0x38 => Ok(Self::RspUd {
                 acd: true,
                 dfc: true,
             }),
@@ -103,22 +103,22 @@ impl std::fmt::Display for Address {
 }
 
 impl Address {
-    fn from(byte: u8) -> Address {
+    const fn from(byte: u8) -> Self {
         match byte {
-            0 => Address::Uninitalized,
-            253 => Address::Secondary,
-            254 => Address::Broadcast {
+            0 => Self::Uninitalized,
+            253 => Self::Secondary,
+            254 => Self::Broadcast {
                 reply_required: true,
             },
-            255 => Address::Broadcast {
+            255 => Self::Broadcast {
                 reply_required: false,
             },
-            _ => Address::Primary(byte),
+            _ => Self::Primary(byte),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq,Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FrameError {
     EmptyData,
