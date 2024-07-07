@@ -546,7 +546,7 @@ impl DataFieldCoding {
                 if input.len() < 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let value = bcd_to_u16(&input[0..2]);
+                let value = bcd_to_u16(input[0], input[1]);
                 Ok(Data {
                     value: Some(DataType::Number(f64::from(value))),
                     size: 2,
@@ -598,7 +598,7 @@ impl DataFieldCoding {
                                 })
                             }
                             4 => {
-                                let value = bcd_to_u16(&input[1..3]);
+                                let value = bcd_to_u16(input[2], input[1]);
                                 Ok(Data {
                                     value: Some(DataType::Number(sign * f64::from(value))),
                                     size: 4,
@@ -735,21 +735,17 @@ const fn bcd_to_u8(bcd: u8) -> u8 {
     (bcd >> 4) * 10 + (bcd & 0x0F)
 }
 
-fn bcd_to_u16(bcd: &[u8]) -> u16 {
-    match bcd.len() {
-        1 => u16::from(bcd_to_u8(bcd[0])),
-        2 => (u16::from(bcd_to_u8(bcd[1])) * 100 + u16::from(bcd_to_u8(bcd[0]))) as u16,
-        _ => panic!(
-            "BCD input length must be either 1 or 2 but got {}",
-            bcd.len()
-        ),
-    }
+fn bcd_to_u16(byte0: u8, byte1: u8) -> u16 {
+    u16::from(bcd_to_u8(byte1)) * 100 + u16::from(bcd_to_u8(byte0))
 }
 
 fn bcd_to_u32(bcd: &[u8]) -> u32 {
     match bcd.len() {
-        3 => (u32::from(bcd_to_u8(bcd[2])) * 10000 + u32::from(bcd_to_u16(&bcd[0..2]))) as u32,
-        4 => (u32::from(bcd_to_u16(&bcd[2..4])) * 10000 + u32::from(bcd_to_u16(&bcd[0..2]))) as u32,
+        3 => (u32::from(bcd_to_u8(bcd[2])) * 10000 + u32::from(bcd_to_u16(bcd[0], bcd[1]))) as u32,
+        4 => {
+            (u32::from(bcd_to_u16(bcd[0], bcd[1]))) * 10000
+                + u32::from(bcd_to_u16(bcd[0], bcd[1])) as u32
+        }
         _ => panic!(
             "BCD input length must be either 3 or 4 but got {}",
             bcd.len()
@@ -758,7 +754,7 @@ fn bcd_to_u32(bcd: &[u8]) -> u32 {
 }
 
 fn bcd_to_u48(bcd: &[u8]) -> u64 {
-    (u64::from(bcd_to_u32(&bcd[2..6])) * 1_000_000 + u64::from(bcd_to_u16(&bcd[0..2]))) as u64
+    (u64::from(bcd_to_u32(&bcd[2..6])) * 1_000_000 + u64::from(bcd_to_u16(bcd[0], bcd[1]))) as u64
 }
 
 impl DataInformation {

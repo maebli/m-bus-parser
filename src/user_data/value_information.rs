@@ -61,9 +61,10 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                         _ => ValueInformationFieldExtensionCoding::ComninableOrthogonalVIFECodeExtension,
                     },
                 };
+                let has_extension = current_vife.has_extension();
                 vife.push(current_vife);
                 offset += 1;
-                if !vife.last().unwrap().has_extension() {
+                if !has_extension {
                     break;
                 }
                 if vife.len() > MAX_VIFE_RECORDS {
