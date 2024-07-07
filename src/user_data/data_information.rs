@@ -392,7 +392,6 @@ impl Data<'_> {
     }
 }
 
-#[macro_use]
 macro_rules! parse_single_or_every {
     ($input:expr, $mask:expr, $all_value:expr, $shift:expr) => {
         if $input & $mask == $all_value {
@@ -403,7 +402,6 @@ macro_rules! parse_single_or_every {
     };
 }
 
-#[macro_use]
 macro_rules! parse_month {
     ($input:expr) => {
         match $input & 0xF {
@@ -424,7 +422,6 @@ macro_rules! parse_month {
     };
 }
 
-#[macro_use]
 macro_rules! parse_year {
     ($input:expr, $mask_byte1:expr, $mask_byte2:expr, $all_value:expr) => {{
         let year = ((u16::from($input[1] & $mask_byte1) >> 1)
