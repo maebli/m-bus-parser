@@ -719,6 +719,9 @@ impl DataFieldCoding {
                 })
             }
             DataFieldCoding::DateTimeTypeJ => {
+                if input.len() < 2 {
+                    return Err(DataRecordError::InsufficientData);
+                }
                 let seconds = if input[0] == 0x3F {
                     SingleOrEvery::Every()
                 } else {
@@ -741,14 +744,67 @@ impl DataFieldCoding {
                 })
             }
             DataFieldCoding::DateTimeTypeI => {
-                todo!();
+                // note: more information can be extracted from the data,
+                // however, because this data can be derived from the other data that is
+                // that is extracted, it is not necessary to extract it.
+
+                if input.len() < 6 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let seconds = if input[0] == 0x3F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[0] & 0x3F)
+                };
+                let minutes = if input[1] == 0x3F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[1] & 0x3F)
+                };
+                let hours = if input[2] == 0x1F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[2] & 0x1F)
+                };
+                let days = if input[3] == 0x1F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(input[3] & 0x1F)
+                };
+                let months = if input[4] == 0x0F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(match input[4] & 0x0F {
+                        // warning: 0 is actually invalid, but used, to prevent an invalid data
+                        // this is a work around needs to be improved
+                        0 | 0x1 => Month::January,
+                        0x2 => Month::February,
+                        0x3 => Month::March,
+                        0x4 => Month::April,
+                        0x5 => Month::May,
+                        0x6 => Month::June,
+                        0x7 => Month::July,
+                        0x8 => Month::August,
+                        0x9 => Month::September,
+                        0xA => Month::October,
+                        0xB => Month::November,
+                        0xC => Month::December,
+                        _ => return Err(DataRecordError::InvalidData),
+                    })
+                };
+                let year = if input[5] == 0x7F {
+                    SingleOrEvery::Every()
+                } else {
+                    SingleOrEvery::Single(
+                        (u16::from(input[5] & 0xF0) >> 1) | (u16::from(input[4] & 0xE0) >> 5),
+                    )
+                };
+
                 Ok(Data {
-                    value: Some(DataType::Date(
-                        SingleOrEvery::Every(),
-                        SingleOrEvery::Every(),
-                        SingleOrEvery::Every(),
+                    value: Some(DataType::DateTimeWithSeconds(
+                        days, months, year, hours, minutes, seconds,
                     )),
-                    size: 4,
+                    size: 6,
                 })
             }
         }
