@@ -392,6 +392,51 @@ impl Data<'_> {
     }
 }
 
+#[macro_use]
+macro_rules! parse_single_or_every {
+    ($input:expr, $mask:expr, $all_value:expr, $shift:expr) => {
+        if $input & $mask == $all_value {
+            SingleEveryOrInvalid::Every()
+        } else {
+            SingleEveryOrInvalid::Single(($input & $mask) >> $shift)
+        }
+    };
+}
+
+#[macro_use]
+macro_rules! parse_month {
+    ($input:expr) => {
+        match $input & 0xF {
+            0x1 => SingleEveryOrInvalid::Single(Month::January),
+            0x2 => SingleEveryOrInvalid::Single(Month::February),
+            0x3 => SingleEveryOrInvalid::Single(Month::March),
+            0x4 => SingleEveryOrInvalid::Single(Month::April),
+            0x5 => SingleEveryOrInvalid::Single(Month::May),
+            0x6 => SingleEveryOrInvalid::Single(Month::June),
+            0x7 => SingleEveryOrInvalid::Single(Month::July),
+            0x8 => SingleEveryOrInvalid::Single(Month::August),
+            0x9 => SingleEveryOrInvalid::Single(Month::September),
+            0xA => SingleEveryOrInvalid::Single(Month::October),
+            0xB => SingleEveryOrInvalid::Single(Month::November),
+            0xC => SingleEveryOrInvalid::Single(Month::December),
+            _ => SingleEveryOrInvalid::Invalid(),
+        }
+    };
+}
+
+#[macro_use]
+macro_rules! parse_year {
+    ($input:expr, $mask_byte1:expr, $mask_byte2:expr, $all_value:expr) => {{
+        let year = ((u16::from($input[1] & $mask_byte1) >> 1)
+            | (u16::from($input[0] & $mask_byte2) >> 5)) as u16;
+        if year == $all_value {
+            SingleEveryOrInvalid::Every()
+        } else {
+            SingleEveryOrInvalid::Single(year)
+        }
+    }};
+}
+
 impl DataFieldCoding {
     pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
         match self {
@@ -626,39 +671,9 @@ impl DataFieldCoding {
                 if input.len() < 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                // lowest five bits of first byte is day, 0 means every day
-                let day = if input[0] & 0x1F == 0 {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[0] & 0x1F)
-                };
-
-                // the first four bits of the second byte is month, 15 means every month
-                let month = if input[1] & 0xF0 == 0xF0 {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    match input[1] & 0xF {
-                        0x1 => SingleEveryOrInvalid::Single(Month::January),
-                        0x2 => SingleEveryOrInvalid::Single(Month::February),
-                        0x3 => SingleEveryOrInvalid::Single(Month::March),
-                        0x4 => SingleEveryOrInvalid::Single(Month::April),
-                        0x5 => SingleEveryOrInvalid::Single(Month::May),
-                        0x6 => SingleEveryOrInvalid::Single(Month::June),
-                        0x7 => SingleEveryOrInvalid::Single(Month::July),
-                        0x8 => SingleEveryOrInvalid::Single(Month::August),
-                        0x9 => SingleEveryOrInvalid::Single(Month::September),
-                        0xA => SingleEveryOrInvalid::Single(Month::October),
-                        0xB => SingleEveryOrInvalid::Single(Month::November),
-                        0xC => SingleEveryOrInvalid::Single(Month::December),
-                        _ => SingleEveryOrInvalid::Invalid(),
-                    }
-                };
-                let year = (u16::from(input[1] & 0xF0) >> 1) | (u16::from(input[0] & 0xE0) >> 5);
-                let year = if year == 0x7F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(year)
-                };
+                let day = parse_single_or_every!(input[0], 0x1F, 0, 0);
+                let month = parse_month!(input[1]);
+                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
                     value: Some(DataType::Date(day, month, year)),
@@ -669,51 +684,12 @@ impl DataFieldCoding {
                 if input.len() < 4 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let minutes = if input[0] == 0x3F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[0] & 0x3F)
-                };
+                let minutes = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
+                let hour = parse_single_or_every!(input[1], 0x1F, 0x1F, 0);
+                let day = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
+                let month = parse_month!(input[3]);
+                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
-                let hour = if input[1] == 0x1F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[1] & 0x1F)
-                };
-
-                let day = if input[2] == 0x1F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[2] & 0x1F)
-                };
-
-                let month = if input[3] == 0x0F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    match input[1] & 0xF {
-                        0x1 => SingleEveryOrInvalid::Single(Month::January),
-                        0x2 => SingleEveryOrInvalid::Single(Month::February),
-                        0x3 => SingleEveryOrInvalid::Single(Month::March),
-                        0x4 => SingleEveryOrInvalid::Single(Month::April),
-                        0x5 => SingleEveryOrInvalid::Single(Month::May),
-                        0x6 => SingleEveryOrInvalid::Single(Month::June),
-                        0x7 => SingleEveryOrInvalid::Single(Month::July),
-                        0x8 => SingleEveryOrInvalid::Single(Month::August),
-                        0x9 => SingleEveryOrInvalid::Single(Month::September),
-                        0xA => SingleEveryOrInvalid::Single(Month::October),
-                        0xB => SingleEveryOrInvalid::Single(Month::November),
-                        0xC => SingleEveryOrInvalid::Single(Month::December),
-                        _ => SingleEveryOrInvalid::Invalid(),
-                    }
-                };
-
-                // year [21 to 23; 28 to 31]
-                let year = (u16::from(input[3] & 0xF0) >> 1) | (u16::from(input[2] & 0xE0) >> 5);
-                let year = if year == 0x7F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(year)
-                };
                 Ok(Data {
                     value: Some(DataType::DateTime(day, month, year, hour, minutes)),
                     size: 4,
@@ -723,21 +699,9 @@ impl DataFieldCoding {
                 if input.len() < 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let seconds = if input[0] == 0x3F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[0] & 0x3F)
-                };
-                let minutes = if input[1] == 0x3F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[1] & 0x3F)
-                };
-                let hours = if input[2] == 0x1F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[2] & 0x1F)
-                };
+                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
+                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
+                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
 
                 Ok(Data {
                     value: Some(DataType::Time(seconds, minutes, hours)),
@@ -752,52 +716,12 @@ impl DataFieldCoding {
                 if input.len() < 6 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let seconds = if input[0] == 0x3F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[0] & 0x3F)
-                };
-                let minutes = if input[1] == 0x3F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[1] & 0x3F)
-                };
-                let hours = if input[2] == 0x1F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[2] & 0x1F)
-                };
-                let days = if input[3] == 0x1F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(input[3] & 0x1F)
-                };
-                let months = if input[4] == 0x0F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    match input[1] & 0xF {
-                        0x1 => SingleEveryOrInvalid::Single(Month::January),
-                        0x2 => SingleEveryOrInvalid::Single(Month::February),
-                        0x3 => SingleEveryOrInvalid::Single(Month::March),
-                        0x4 => SingleEveryOrInvalid::Single(Month::April),
-                        0x5 => SingleEveryOrInvalid::Single(Month::May),
-                        0x6 => SingleEveryOrInvalid::Single(Month::June),
-                        0x7 => SingleEveryOrInvalid::Single(Month::July),
-                        0x8 => SingleEveryOrInvalid::Single(Month::August),
-                        0x9 => SingleEveryOrInvalid::Single(Month::September),
-                        0xA => SingleEveryOrInvalid::Single(Month::October),
-                        0xB => SingleEveryOrInvalid::Single(Month::November),
-                        0xC => SingleEveryOrInvalid::Single(Month::December),
-                        _ => SingleEveryOrInvalid::Invalid(),
-                    }
-                };
-                let year = if input[5] == 0x7F {
-                    SingleEveryOrInvalid::Every()
-                } else {
-                    SingleEveryOrInvalid::Single(
-                        (u16::from(input[5] & 0xF0) >> 1) | (u16::from(input[4] & 0xE0) >> 5),
-                    )
-                };
+                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
+                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
+                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
+                let days = parse_single_or_every!(input[3], 0x1F, 0x1F, 0);
+                let months = parse_month!(input[4]);
+                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
                     value: Some(DataType::DateTimeWithSeconds(
