@@ -255,11 +255,87 @@ impl From<TextUnit<'_>> for String {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, PartialEq)]
+pub enum Month {
+    January,
+    February,
+    March,
+    April,
+    May,
+    June,
+    July,
+    August,
+    September,
+    October,
+    November,
+    December,
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for Month {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Month::January => write!(f, "Jan"),
+            Month::February => write!(f, "Feb"),
+            Month::March => write!(f, "Mar"),
+            Month::April => write!(f, "Apr"),
+            Month::May => write!(f, "May"),
+            Month::June => write!(f, "Jun"),
+            Month::July => write!(f, "Jul"),
+            Month::August => write!(f, "Aug"),
+            Month::September => write!(f, "Sep"),
+            Month::October => write!(f, "Oct"),
+            Month::November => write!(f, "Nov"),
+            Month::December => write!(f, "Dec"),
+        }
+    }
+}
+
+pub type Year = u16;
+pub type DayOfMonth = u8;
+pub type Hour = u8;
+pub type Minute = u8;
+pub type Second = u8;
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, PartialEq)]
+pub enum SingleEveryOrInvalid<T> {
+    Single(T),
+    Every(),
+    Invalid(),
+}
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
     Number(f64),
+    Date(
+        SingleEveryOrInvalid<DayOfMonth>,
+        SingleEveryOrInvalid<Month>,
+        SingleEveryOrInvalid<Year>,
+    ),
+    Time(
+        SingleEveryOrInvalid<Second>,
+        SingleEveryOrInvalid<Minute>,
+        SingleEveryOrInvalid<Hour>,
+    ),
+    DateTime(
+        SingleEveryOrInvalid<DayOfMonth>,
+        SingleEveryOrInvalid<Month>,
+        SingleEveryOrInvalid<Year>,
+        SingleEveryOrInvalid<Hour>,
+        SingleEveryOrInvalid<Minute>,
+    ),
+    DateTimeWithSeconds(
+        SingleEveryOrInvalid<DayOfMonth>,
+        SingleEveryOrInvalid<Month>,
+        SingleEveryOrInvalid<Year>,
+        SingleEveryOrInvalid<Hour>,
+        SingleEveryOrInvalid<Minute>,
+        SingleEveryOrInvalid<Second>,
+    ),
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug)]
@@ -267,6 +343,18 @@ pub struct Data<'a> {
     value: Option<DataType<'a>>,
     size: usize,
 }
+
+#[cfg(feature = "std")]
+impl<T: std::fmt::Display> std::fmt::Display for SingleEveryOrInvalid<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SingleEveryOrInvalid::Single(value) => write!(f, "{}", value),
+            SingleEveryOrInvalid::Every() => write!(f, "Every"),
+            SingleEveryOrInvalid::Invalid() => write!(f, "Invalid"),
+        }
+    }
+}
+
 #[cfg(feature = "std")]
 impl std::fmt::Display for Data<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -277,6 +365,20 @@ impl std::fmt::Display for Data<'_> {
                     write!(f, "{}", text)
                 }
                 DataType::Number(value) => write!(f, "{}", value),
+                DataType::Date(day, month, year) => write!(f, "{}/{}/{}", day, month, year),
+                DataType::DateTime(day, month, year, hour, minute) => {
+                    write!(f, "{}/{}/{} {}:{}:00", day, month, year, hour, minute)
+                }
+                DataType::DateTimeWithSeconds(day, month, year, hour, minute, second) => {
+                    write!(
+                        f,
+                        "{}/{}/{} {}:{}:{}",
+                        day, month, year, hour, minute, second
+                    )
+                }
+                DataType::Time(seconds, minutes, hours) => {
+                    write!(f, "{}:{}:{}", hours, minutes, seconds)
+                }
             },
             None => write!(f, "No Data"),
         }
@@ -288,6 +390,48 @@ impl Data<'_> {
     pub fn get_size(&self) -> usize {
         self.size
     }
+}
+
+macro_rules! parse_single_or_every {
+    ($input:expr, $mask:expr, $all_value:expr, $shift:expr) => {
+        if $input & $mask == $all_value {
+            SingleEveryOrInvalid::Every()
+        } else {
+            SingleEveryOrInvalid::Single(($input & $mask) >> $shift)
+        }
+    };
+}
+
+macro_rules! parse_month {
+    ($input:expr) => {
+        match $input & 0xF {
+            0x1 => SingleEveryOrInvalid::Single(Month::January),
+            0x2 => SingleEveryOrInvalid::Single(Month::February),
+            0x3 => SingleEveryOrInvalid::Single(Month::March),
+            0x4 => SingleEveryOrInvalid::Single(Month::April),
+            0x5 => SingleEveryOrInvalid::Single(Month::May),
+            0x6 => SingleEveryOrInvalid::Single(Month::June),
+            0x7 => SingleEveryOrInvalid::Single(Month::July),
+            0x8 => SingleEveryOrInvalid::Single(Month::August),
+            0x9 => SingleEveryOrInvalid::Single(Month::September),
+            0xA => SingleEveryOrInvalid::Single(Month::October),
+            0xB => SingleEveryOrInvalid::Single(Month::November),
+            0xC => SingleEveryOrInvalid::Single(Month::December),
+            _ => SingleEveryOrInvalid::Invalid(),
+        }
+    };
+}
+
+macro_rules! parse_year {
+    ($input:expr, $mask_byte1:expr, $mask_byte2:expr, $all_value:expr) => {{
+        let year = ((u16::from($input[1] & $mask_byte1) >> 1)
+            | (u16::from($input[0] & $mask_byte2) >> 5)) as u16;
+        if year == $all_value {
+            SingleEveryOrInvalid::Every()
+        } else {
+            SingleEveryOrInvalid::Single(year)
+        }
+    }};
 }
 
 impl DataFieldCoding {
@@ -519,6 +663,70 @@ impl DataFieldCoding {
                 // Special functions parsing based on the code
                 todo!()
             }
+
+            DataFieldCoding::DateTypeG => {
+                if input.len() < 2 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let day = parse_single_or_every!(input[0], 0x1F, 0, 0);
+                let month = parse_month!(input[1]);
+                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
+
+                Ok(Data {
+                    value: Some(DataType::Date(day, month, year)),
+                    size: 2,
+                })
+            }
+            DataFieldCoding::DateTimeTypeF => {
+                if input.len() < 4 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let minutes = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
+                let hour = parse_single_or_every!(input[1], 0x1F, 0x1F, 0);
+                let day = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
+                let month = parse_month!(input[3]);
+                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
+
+                Ok(Data {
+                    value: Some(DataType::DateTime(day, month, year, hour, minutes)),
+                    size: 4,
+                })
+            }
+            DataFieldCoding::DateTimeTypeJ => {
+                if input.len() < 2 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
+                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
+                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
+
+                Ok(Data {
+                    value: Some(DataType::Time(seconds, minutes, hours)),
+                    size: 4,
+                })
+            }
+            DataFieldCoding::DateTimeTypeI => {
+                // note: more information can be extracted from the data,
+                // however, because this data can be derived from the other data that is
+                // that is extracted, it is not necessary to extract it.
+
+                if input.len() < 6 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
+                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
+                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
+                let days = parse_single_or_every!(input[3], 0x1F, 0x1F, 0);
+                let months = parse_month!(input[4]);
+                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
+
+                Ok(Data {
+                    value: Some(DataType::DateTimeWithSeconds(
+                        days, months, year, hours, minutes, seconds,
+                    )),
+                    size: 6,
+                })
+            }
         }
     }
 }
@@ -707,6 +915,22 @@ impl DataFieldCoding {
                 data: 0.0,
                 byte_size: 0,
             },
+            DataFieldCoding::DateTypeG => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::DateTimeTypeF => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::DateTimeTypeJ => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
+            DataFieldCoding::DateTimeTypeI => Value {
+                data: 0.0,
+                byte_size: 0,
+            },
         }
     }
 }
@@ -729,6 +953,10 @@ pub enum DataFieldCoding {
     VariableLength,
     BCDDigit12,
     SpecialFunctions(SpecialFunctions),
+    DateTypeG,
+    DateTimeTypeF,
+    DateTimeTypeJ,
+    DateTimeTypeI,
 }
 
 #[cfg(feature = "std")]
@@ -750,6 +978,10 @@ impl std::fmt::Display for DataFieldCoding {
             DataFieldCoding::BCD8Digit => write!(f, "BCD 8-digit"),
             DataFieldCoding::VariableLength => write!(f, "Variable Length"),
             DataFieldCoding::BCDDigit12 => write!(f, "BCD 12-digit"),
+            DataFieldCoding::DateTypeG => write!(f, "Date Type G"),
+            DataFieldCoding::DateTimeTypeF => write!(f, "Date Time Type F"),
+            DataFieldCoding::DateTimeTypeJ => write!(f, "Date Time Type J"),
+            DataFieldCoding::DateTimeTypeI => write!(f, "Date Time Type I"),
             DataFieldCoding::SpecialFunctions(code) => write!(f, "Special Functions ({:?})", code),
         }
     }

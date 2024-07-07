@@ -5,6 +5,7 @@ use super::DataRecords;
 pub enum DataRecordError {
     DataInformationError(data_information::DataInformationError),
     InsufficientData,
+    InvalidData,
 }
 
 #[derive(Debug, PartialEq)]

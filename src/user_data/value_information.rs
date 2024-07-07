@@ -267,7 +267,8 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b11) as isize - 3;
                     }
-                    0x6C..=0x6D => labels.push(ValueLabel::TimePoint),
+                    0x6C => labels.push(ValueLabel::Date),
+                    0x6D => labels.push(ValueLabel::DateTime),
                     0x6E => labels.push(ValueLabel::DimensionlessHCA),
                     0x70..=0x73 => labels.push(ValueLabel::AveragingDuration),
                     0x74..=0x77 => labels.push(ValueLabel::ActualityDuration),
@@ -880,7 +881,10 @@ pub enum ValueLabel {
     CompactProfile,
     ActualityDuration,
     AveragingDuration,
-    TimePoint,
+    Date,
+    Time,
+    DateTime,
+    DateTimeWithSeconds,
     FabricationNumber,
     EnhancedIdentification,
     Address,
