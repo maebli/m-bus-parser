@@ -219,6 +219,7 @@ pub enum ApplicationLayerError {
     InvalidControlInformation { byte: u8 },
     IdentificationNumberError { digits: [u8; 4], number: u32 },
     InvalidManufacturerCode { code: u16 },
+    InsufficientData,
 }
 
 #[cfg(feature = "std")]
@@ -240,6 +241,9 @@ impl fmt::Display for ApplicationLayerError {
                     "Invalid identification number: {:?}, number: {}",
                     digits, number
                 )
+            }
+            ApplicationLayerError::InsufficientData => {
+                write!(f, "Insufficient data")
             }
         }
     }
@@ -568,11 +572,14 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
 
-        let control_information = ControlInformation::from(data[0])?;
+        let control_information =
+            ControlInformation::from(*data.get(0).ok_or(ApplicationLayerError::InsufficientData)?)?;
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
-                let subcode = ApplicationResetSubcode::from(data[1]);
+                let subcode = ApplicationResetSubcode::from(
+                    *data.get(1).ok_or(ApplicationLayerError::InsufficientData)?,
+                );
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
             ControlInformation::SendData => todo!(),
@@ -595,34 +602,68 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             ControlInformation::SendErrorStatus => todo!(),
             ControlInformation::SendAlarmStatus => todo!(),
             ControlInformation::ResponseWithVariableDataStructure => {
+                let mut iter = data.iter().skip(1);
                 Ok(UserDataBlock::VariableDataStructure {
                     fixed_data_header: FixedDataHeader {
                         identification_number: IdentificationNumber::from_bcd_hex_digits([
-                            data[1], data[2], data[3], data[4],
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ])?,
-                        manufacturer: ManufacturerCode::from_id(u16::from_be_bytes([
-                            data[6], data[5],
+                        manufacturer: ManufacturerCode::from_id(u16::from_le_bytes([
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ]))?,
-                        version: data[7],
-                        medium: MeasuredMedium::new(data[8]).medium,
-                        access_number: data[9],
-                        status: StatusField::from_bits_truncate(data[10]),
-                        signature: u16::from_be_bytes([data[12], data[11]]),
+                        version: *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                        medium: MeasuredMedium::new(
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                        )
+                        .medium,
+                        access_number: *iter
+                            .next()
+                            .ok_or(ApplicationLayerError::InsufficientData)?,
+                        status: StatusField::from_bits_truncate(
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                        ),
+                        signature: u16::from_le_bytes([
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                        ]),
                     },
                     variable_data_block: &data[13..data.len()],
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
+                let mut iter = data.iter().skip(1);
                 let identification_number = IdentificationNumber::from_bcd_hex_digits([
-                    data[1], data[2], data[3], data[4],
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                 ])?;
-                let access_number = data[5];
-                let status = StatusField::from_bits_truncate(data[6]);
-                let medium_and_unit = u16::from_be_bytes([data[7], data[8]]);
-                let counter1 =
-                    Counter::from_bcd_hex_digits([data[9], data[10], data[11], data[12]])?;
-                let counter2 =
-                    Counter::from_bcd_hex_digits([data[13], data[14], data[15], data[16]])?;
+
+                let access_number = *iter.next().ok_or(ApplicationLayerError::InsufficientData)?;
+
+                let status = StatusField::from_bits_truncate(
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                );
+                let medium_and_unit = u16::from_be_bytes([
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                ]);
+                let counter1 = Counter::from_bcd_hex_digits([
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                ])?;
+                let counter2 = Counter::from_bcd_hex_digits([
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                ])?;
                 Ok(UserDataBlock::FixedDataStructure {
                     identification_number,
                     access_number,
