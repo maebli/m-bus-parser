@@ -65,6 +65,7 @@ pub struct MbusData<'a> {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum MbusError {
     FrameError(FrameError),
     ApplicationLayerError(ApplicationLayerError),
@@ -133,7 +134,7 @@ fn clean_and_convert(input: &str) -> Vec<u8> {
 #[cfg(feature = "std")]
 pub fn serialize_mbus_data(data: &str, format: &str) -> String {
     let cleaned_data = clean_and_convert(data);
-    let parsed_data = MbusData::try_from(cleaned_data.as_slice()).unwrap();
+    let parsed_data = MbusData::try_from(cleaned_data.as_slice());
 
     match format {
         "json" => serde_json::to_string_pretty(&parsed_data)

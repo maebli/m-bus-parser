@@ -213,6 +213,7 @@ impl ControlInformation {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ApplicationLayerError {
     MissingControlInformation,
     InvalidControlInformation { byte: u8 },
