@@ -896,11 +896,19 @@ impl DataFieldCoding {
                         10.0,
                         1.0,
                     ];
-                    data.iter().rev().enumerate().fold(0.0, |acc, (i, &byte)| {
-                        let high = f64::from(byte >> 4) * weights[i * 2];
-                        let low = f64::from(byte & 0x0F) * weights[i * 2 + 1];
-                        acc + high + low
-                    })
+
+                    let mut weight_iter = weights.iter();
+
+                    data.iter()
+                        .rev()
+                        .map(|&byte| {
+                            let high_weight = weight_iter.next().unwrap_or(&0.0);
+                            let low_weight = weight_iter.next().unwrap_or(&0.0);
+                            let high = f64::from(byte >> 4) * high_weight;
+                            let low = f64::from(byte & 0x0F) * low_weight;
+                            high + low
+                        })
+                        .sum()
                 },
                 byte_size: 6,
             },
