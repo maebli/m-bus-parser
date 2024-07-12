@@ -147,10 +147,6 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
 
         match first_byte {
             0x68 => {
-                if *data.last().ok_or(FrameError::LengthShort)? != 0x16 {
-                    return Err(FrameError::InvalidStopByte);
-                }
-
                 validate_checksum(data.get(4..).ok_or(FrameError::LengthShort)?)?;
 
                 let length = *data.get(1).ok_or(FrameError::LengthShort)? as usize;
@@ -159,7 +155,12 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
                     return Err(FrameError::WrongLengthIndication);
                 }
 
+                if *data.last().ok_or(FrameError::LengthShort)? != 0x16 {
+                    return Err(FrameError::InvalidStopByte);
+                }
+
                 let control_field = *data.get(4).ok_or(FrameError::LengthShort)?;
+
                 let address_field = *data.get(5).ok_or(FrameError::LengthShort)?;
                 match control_field {
                     0x53 => Ok(Frame::ControlFrame {
