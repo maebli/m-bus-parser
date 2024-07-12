@@ -451,7 +451,7 @@ impl DataFieldCoding {
                         current_weight *= 10.0;
                     }
 
-                    let byte = $data[i / 2];
+                    let byte = $data.get(i / 2).ok_or(DataRecordError::InsufficientData)?;
                     if i % 2 == 0 {
                         let high = f64::from(byte >> 4) * current_weight;
                         data_value += high;
@@ -463,6 +463,36 @@ impl DataFieldCoding {
 
                 Ok(Data {
                     value: Some(DataType::Number(data_value as f64)),
+                    size: ($num_digits + 1) / 2,
+                })
+            }};
+
+            ($data:expr, $num_digits:expr, $sign:expr) => {{
+                if $data.len() < $num_digits {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let mut data_value = 0.0;
+                let mut current_weight = 1.0;
+
+                for i in 0..$num_digits {
+                    if i % 2 == 0 {
+                        current_weight *= 10.0;
+                    }
+
+                    let byte = $data[i / 2];
+                    if i % 2 == 0 {
+                        let high = f64::from(byte >> 4) * current_weight;
+                        data_value += high;
+                    } else {
+                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
+                        data_value += low;
+                    }
+                }
+
+                let signed_value = data_value * $sign as f64;
+
+                Ok(Data {
+                    value: Some(DataType::Number(signed_value)),
                     size: ($num_digits + 1) / 2,
                 })
             }};
@@ -529,42 +559,7 @@ impl DataFieldCoding {
                         length -= 0xC0;
                         let is_negative = input[0] > 0xC9;
                         let sign = if is_negative { -1.0 } else { 1.0 };
-                        if length as usize > input.len() {
-                            return Err(DataRecordError::InsufficientData);
-                        }
-                        match length {
-                            2 => {
-                                let value = bcd_to_u8(input[1]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 2,
-                                })
-                            }
-                            4 => {
-                                let value = bcd_to_u16(input[2], input[1]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 4,
-                                })
-                            }
-                            6 => {
-                                let value = bcd_to_u32(&input[1..5]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 6,
-                                })
-                            }
-                            8 => {
-                                let value = bcd_to_u32(&input[1..5]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 8,
-                                })
-                            }
-                            _ => {
-                                todo!("8-bit text string according to ISO/IEC 8859-1 of length greater than {}", length);
-                            }
-                        }
+                        bcd_to_value!(input, length as usize, sign)
                     }
                     0xE0..=0xE9 => {
                         length -= 0xE0;
@@ -705,28 +700,6 @@ impl DataFieldCoding {
                 })
             }
         }
-    }
-}
-
-const fn bcd_to_u8(bcd: u8) -> u8 {
-    (bcd >> 4) * 10 + (bcd & 0x0F)
-}
-
-fn bcd_to_u16(byte0: u8, byte1: u8) -> u16 {
-    u16::from(bcd_to_u8(byte1)) * 100 + u16::from(bcd_to_u8(byte0))
-}
-
-fn bcd_to_u32(bcd: &[u8]) -> u32 {
-    match bcd.len() {
-        3 => (u32::from(bcd_to_u8(bcd[2])) * 10000 + u32::from(bcd_to_u16(bcd[0], bcd[1]))) as u32,
-        4 => {
-            (u32::from(bcd_to_u16(bcd[0], bcd[1]))) * 10000
-                + u32::from(bcd_to_u16(bcd[0], bcd[1])) as u32
-        }
-        _ => panic!(
-            "BCD input length must be either 3 or 4 but got {}",
-            bcd.len()
-        ),
     }
 }
 
