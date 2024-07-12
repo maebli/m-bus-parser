@@ -827,54 +827,35 @@ impl DataFieldCoding {
                 }
             }};
         }
+        macro_rules! integer_to_value {
+            ($data:expr, $byte_size:expr) => {{
+                let mut data_value = 0u32;
+                let mut shift = 0;
+                for &byte in $data.iter() {
+                    data_value |= (byte as u32) << shift;
+                    shift += 8;
+                }
+                Value {
+                    data: f64::from(data_value),
+                    byte_size: $byte_size,
+                }
+            }};
+        }
         match *self {
             Self::Real32Bit => Value {
-                data: f64::from(f32::from_le_bytes([data[0], data[1], data[2], data[3]])),
+                data: data
+                    .get(0..4)
+                    .and_then(|slice| slice.try_into().ok())
+                    .map(|arr: [u8; 4]| f32::from_le_bytes(arr) as f64)
+                    .unwrap_or(0.0),
                 byte_size: 4,
             },
-            Self::Integer8Bit => Value {
-                data: f64::from(data[0]),
-                byte_size: 1,
-            },
-            Self::Integer16Bit => Value {
-                data: f64::from(u16::from(data[1]) << 8 | u16::from(data[0])),
-                byte_size: 2,
-            },
-            Self::Integer24Bit => Value {
-                data: f64::from(
-                    u32::from(data[2]) << 16 | u32::from(data[1]) << 8 | u32::from(data[0]),
-                ),
-                byte_size: 3,
-            },
-            Self::Integer32Bit => Value {
-                data: f64::from(
-                    u32::from(data[3]) << 24
-                        | u32::from(data[2]) << 16
-                        | u32::from(data[1]) << 8
-                        | u32::from(data[0]),
-                ),
-                byte_size: 4,
-            },
-            Self::Integer48Bit => Value {
-                data: (u64::from(data[5]) << 40
-                    | u64::from(data[4]) << 32
-                    | u64::from(data[3]) << 24
-                    | u64::from(data[2]) << 16
-                    | u64::from(data[1]) << 8
-                    | u64::from(data[0])) as f64,
-                byte_size: 6,
-            },
-            Self::Integer64Bit => Value {
-                data: (u64::from(data[7]) << 56
-                    | u64::from(data[6]) << 48
-                    | u64::from(data[5]) << 40
-                    | u64::from(data[4]) << 32
-                    | u64::from(data[3]) << 24
-                    | u64::from(data[2]) << 16
-                    | u64::from(data[1]) << 8
-                    | u64::from(data[0])) as f64,
-                byte_size: 8,
-            },
+            Self::Integer8Bit => integer_to_value!(data, 1),
+            Self::Integer16Bit => integer_to_value!(data, 2),
+            Self::Integer24Bit => integer_to_value!(data, 3),
+            Self::Integer32Bit => integer_to_value!(data, 4),
+            Self::Integer48Bit => integer_to_value!(data, 6),
+            Self::Integer64Bit => integer_to_value!(data, 8),
             Self::BCD2Digit => bcd_to_value!(data, 2),
             Self::BCD4Digit => bcd_to_value!(data, 4),
             Self::BCD6Digit => bcd_to_value!(data, 6),
