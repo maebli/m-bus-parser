@@ -1,3 +1,5 @@
+use crate::user_data::data_record::DataRecord;
+
 use super::data_information::{self};
 use super::variable_user_data::DataRecordError;
 
@@ -595,11 +597,13 @@ impl DataFieldCoding {
             }
 
             Self::DateTypeG => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let day = parse_single_or_every!(input[0], 0x1F, 0, 0);
-                let month = parse_month!(input[1]);
+                let day = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0,
+                    0
+                );
+                let month = parse_month!(input.get(1).ok_or(DataRecordError::InsufficientData)?);
                 let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
@@ -608,13 +612,25 @@ impl DataFieldCoding {
                 })
             }
             Self::DateTimeTypeF => {
-                if input.len() < 4 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let minutes = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
-                let hour = parse_single_or_every!(input[1], 0x1F, 0x1F, 0);
-                let day = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
-                let month = parse_month!(input[3]);
+                let minutes = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+                let hour = parse_single_or_every!(
+                    input.get(1).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let day = parse_single_or_every!(
+                    input.get(2).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let month = parse_month!(input.get(3).ok_or(DataRecordError::InsufficientData)?);
                 let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
@@ -623,12 +639,24 @@ impl DataFieldCoding {
                 })
             }
             Self::DateTimeTypeJ => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
-                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
-                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
+                let seconds = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+                let minutes = parse_single_or_every!(
+                    input.get(1).ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+                let hours = parse_single_or_every!(
+                    input.get(2).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
 
                 Ok(Data {
                     value: Some(DataType::Time(seconds, minutes, hours)),
@@ -640,14 +668,33 @@ impl DataFieldCoding {
                 // however, because this data can be derived from the other data that is
                 // that is extracted, it is not necessary to extract it.
 
-                if input.len() < 6 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
-                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
-                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
-                let days = parse_single_or_every!(input[3], 0x1F, 0x1F, 0);
-                let months = parse_month!(input[4]);
+                let seconds = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+
+                let minutes = parse_single_or_every!(
+                    input.get(1).ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+
+                let hours = parse_single_or_every!(
+                    input.get(2).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let days = parse_single_or_every!(
+                    input.get(3).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let months = parse_month!(input.get(4).ok_or(DataRecordError::InsufficientData)?);
                 let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
@@ -681,10 +728,6 @@ fn bcd_to_u32(bcd: &[u8]) -> u32 {
             bcd.len()
         ),
     }
-}
-
-fn bcd_to_u48(bcd: &[u8]) -> u64 {
-    (u64::from(bcd_to_u32(&bcd[2..6])) * 1_000_000 + u64::from(bcd_to_u16(bcd[0], bcd[1]))) as u64
 }
 
 impl DataInformation {
