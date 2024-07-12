@@ -436,6 +436,35 @@ macro_rules! parse_year {
 
 impl DataFieldCoding {
     pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
+        macro_rules! bcd_to_value {
+            ($data:expr, $num_digits:expr) => {{
+                if $data.len() < $num_digits {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let mut data_value = 0.0;
+                let mut current_weight = 1.0;
+
+                for i in 0..$num_digits {
+                    if i % 2 == 0 {
+                        current_weight *= 10.0;
+                    }
+
+                    let byte = $data[i / 2];
+                    if i % 2 == 0 {
+                        let high = f64::from(byte >> 4) * current_weight;
+                        data_value += high;
+                    } else {
+                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
+                        data_value += low;
+                    }
+                }
+
+                Ok(Data {
+                    value: Some(DataType::Number(data_value as f64)),
+                    size: ($num_digits + 1) / 2,
+                })
+            }};
+        }
         macro_rules! integer_to_value {
             ($data:expr, $byte_size:expr) => {{
                 if $data.len() < $byte_size {
@@ -462,6 +491,8 @@ impl DataFieldCoding {
             Self::Integer16Bit => integer_to_value!(input, 2),
             Self::Integer24Bit => integer_to_value!(input, 3),
             Self::Integer32Bit => integer_to_value!(input, 4),
+            Self::Integer48Bit => integer_to_value!(input, 6),
+            Self::Integer64Bit => integer_to_value!(input, 8),
 
             Self::Real32Bit => {
                 if input.len() < 4 {
@@ -474,81 +505,16 @@ impl DataFieldCoding {
                 })
             }
 
-            Self::Integer48Bit => {
-                if input.len() < 6 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i64::from(input[0])
-                    | (i64::from(input[1]) << 8)
-                    | (i64::from(input[2]) << 16)
-                    | (i64::from(input[3]) << 24)
-                    | (i64::from(input[4]) << 32)
-                    | (i64::from(input[5]) << 40);
-                Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
-                    size: 6,
-                })
-            }
-
-            Self::Integer64Bit => {
-                if input.len() < 8 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i64::from_le_bytes(input[0..8].try_into().unwrap());
-                Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
-                    size: 8,
-                })
-            }
-
             Self::SelectionForReadout => Ok(Data {
                 value: None,
                 size: 0,
             }),
 
-            Self::BCD2Digit => {
-                if input.is_empty() {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u8(input[0]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 1,
-                })
-            }
-
-            Self::BCD4Digit => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u16(input[0], input[1]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 2,
-                })
-            }
-
-            Self::BCD6Digit => {
-                if input.len() < 3 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u32(&input[0..3]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 3,
-                })
-            }
-
-            Self::BCD8Digit => {
-                if input.len() < 4 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u32(&input[0..4]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 4,
-                })
-            }
+            Self::BCD2Digit => bcd_to_value!(input, 2),
+            Self::BCD4Digit => bcd_to_value!(input, 4),
+            Self::BCD6Digit => bcd_to_value!(input, 6),
+            Self::BCD8Digit => bcd_to_value!(input, 8),
+            Self::BCDDigit12 => bcd_to_value!(input, 12),
 
             Self::VariableLength => {
                 let mut length = input[0];
@@ -621,17 +587,6 @@ impl DataFieldCoding {
                         );
                     }
                 }
-            }
-
-            Self::BCDDigit12 => {
-                if input.len() < 6 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u48(&input[0..6]);
-                Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
-                    size: 6,
-                })
             }
 
             Self::SpecialFunctions(_code) => {
