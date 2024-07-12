@@ -881,18 +881,27 @@ impl DataFieldCoding {
                 byte_size: 4,
             },
             Self::BCDDigit12 => Value {
-                data: (f64::from(data[5] >> 4) * 100_000_000_000.0)
-                    + (f64::from(data[5] & 0x0F) * 10_000_000_000.0)
-                    + (f64::from(data[4] >> 4) * 1_000_000_000.0)
-                    + (f64::from(data[4] & 0x0F) * 100_000_000.0)
-                    + (f64::from(data[3] >> 4) * 10_000_000.0)
-                    + (f64::from(data[3] & 0x0F) * 1_000_000.0)
-                    + (f64::from(data[2] >> 4) * 100_000.0)
-                    + (f64::from(data[2] & 0x0F) * 10000.0)
-                    + (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
+                data: {
+                    let weights = [
+                        100_000_000_000.0,
+                        10_000_000_000.0,
+                        1_000_000_000.0,
+                        100_000_000.0,
+                        10_000_000.0,
+                        1_000_000.0,
+                        100_000.0,
+                        10_000.0,
+                        1000.0,
+                        100.0,
+                        10.0,
+                        1.0,
+                    ];
+                    data.iter().rev().enumerate().fold(0.0, |acc, (i, &byte)| {
+                        let high = f64::from(byte >> 4) * weights[i * 2];
+                        let low = f64::from(byte & 0x0F) * weights[i * 2 + 1];
+                        acc + high + low
+                    })
+                },
                 byte_size: 6,
             },
             Self::NoData => Value {

@@ -34,7 +34,7 @@ impl<'a> Iterator for DataRecords<'a> {
         let mut _more_records_follow = false;
 
         while self.offset < self.data.len() {
-            match self.data[self.offset] {
+            match self.data.get(self.offset)? {
                 0x0F => {
                     /* TODO: parse manufacturer specific */
                     self.offset = self.data.len();
@@ -48,7 +48,7 @@ impl<'a> Iterator for DataRecords<'a> {
                     self.offset += 1;
                 }
                 _ => {
-                    let record = DataRecord::try_from(&self.data[self.offset..]);
+                    let record = DataRecord::try_from(self.data.get(self.offset..)?);
                     if let Ok(record) = record {
                         self.offset += record.get_size();
                         return Some(Ok(record));
@@ -572,8 +572,11 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
 
-        let control_information =
-            ControlInformation::from(*data.get(0).ok_or(ApplicationLayerError::InsufficientData)?)?;
+        let control_information = ControlInformation::from(
+            *data
+                .first()
+                .ok_or(ApplicationLayerError::InsufficientData)?,
+        )?;
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
@@ -631,7 +634,9 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ]),
                     },
-                    variable_data_block: &data[13..data.len()],
+                    variable_data_block: data
+                        .get(13..data.len())
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {

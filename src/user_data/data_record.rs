@@ -53,7 +53,10 @@ impl<'a> TryFrom<&'a [u8]> for RawDataRecordHeader<'a> {
     fn try_from(data: &[u8]) -> Result<RawDataRecordHeader, DataRecordError> {
         let difb = DataInformationBlock::try_from(data)?;
         let offset = difb.get_size();
-        let vifb = ValueInformationBlock::try_from(&data[offset..])?;
+        let vifb = ValueInformationBlock::try_from(
+            data.get(offset..)
+                .ok_or(DataRecordError::InsufficientData)?,
+        )?;
         Ok(RawDataRecordHeader {
             data_information_block: difb,
             value_information_block: vifb,
@@ -120,7 +123,10 @@ impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
             .processed_data_record_header
             .data_information
             .data_field_coding
-            .parse(&data[offset..])?;
+            .parse(
+                data.get(offset..)
+                    .ok_or(DataRecordError::InsufficientData)?,
+            )?;
         Ok(DataRecord {
             data_record_header,
             data,
