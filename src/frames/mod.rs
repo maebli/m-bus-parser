@@ -124,7 +124,8 @@ pub enum FrameError {
     EmptyData,
     InvalidStartByte,
     InvalidStopByte,
-    LengthMismatch,
+    WrongLengthIndication,
+    LengthShort,
     LengthShorterThanSix { length: usize },
     WrongChecksum { expected: u8, actual: u8 },
     InvalidControlInformation { byte: u8 },
@@ -135,55 +136,53 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
-        if data.is_empty() {
-            return Err(FrameError::EmptyData);
-        }
+        let first_byte = *data.first().ok_or(FrameError::EmptyData)?;
 
-        if data.len() == 1 && data[0] == 0xE5 {
+        if first_byte == 0xE5 {
             return Ok(Frame::SingleCharacter { character: 0xE5 });
         }
 
-        match data[0] {
+        let second_byte = *data.get(1).ok_or(FrameError::LengthShort)?;
+        let third_byte = *data.get(2).ok_or(FrameError::LengthShort)?;
+
+        match first_byte {
             0x68 => {
-                if data[data.len() - 1] != 0x16 {
+                if *data.last().ok_or(FrameError::LengthShort)? != 0x16 {
                     return Err(FrameError::InvalidStopByte);
                 }
 
-                if data.len() < 6 {
-                    return Err(FrameError::LengthShorterThanSix { length: data.len() });
+                validate_checksum(data.get(4..).ok_or(FrameError::LengthShort)?)?;
+
+                let length = *data.get(1).ok_or(FrameError::LengthShort)? as usize;
+
+                if second_byte != third_byte || data.len() != length + 6 {
+                    return Err(FrameError::WrongLengthIndication);
                 }
 
-                validate_checksum(data.get(4..).ok_or(FrameError::LengthMismatch)?)?;
-
-                let length = data[1] as usize;
-
-                if data[1] != data[2] || data.len() != length + 6 {
-                    return Err(FrameError::LengthMismatch);
-                }
-
-                let control_field = data[4];
+                let control_field = *data.get(4).ok_or(FrameError::LengthShort)?;
+                let address_field = *data.get(5).ok_or(FrameError::LengthShort)?;
                 match control_field {
                     0x53 => Ok(Frame::ControlFrame {
-                        function: Function::try_from(data[4])?,
-                        address: Address::from(data[5]),
-                        data: &data[6..data.len() - 2],
+                        function: Function::try_from(control_field)?,
+                        address: Address::from(address_field),
+                        data: data.get(6..data.len() - 2).ok_or(FrameError::LengthShort)?,
                     }),
                     _ => Ok(Frame::LongFrame {
-                        function: Function::try_from(data[4])?,
-                        address: Address::from(data[5]),
-                        data: &data[6..data.len() - 2],
+                        function: Function::try_from(control_field)?,
+                        address: Address::from(address_field),
+                        data: data.get(6..data.len() - 2).ok_or(FrameError::LengthShort)?,
                     }),
                 }
             }
             0x10 => {
-                validate_checksum(&data[1..])?;
-                if data.len() == 5 && data[4] == 0x16 {
+                validate_checksum(data.get(1..).ok_or(FrameError::LengthShort)?)?;
+                if data.len() == 5 && *data.last().ok_or(FrameError::InvalidStopByte)? == 0x16 {
                     Ok(Frame::ShortFrame {
-                        function: Function::try_from(data[1])?,
-                        address: Address::from(*data.get(2).ok_or(FrameError::LengthMismatch)?),
+                        function: Function::try_from(second_byte)?,
+                        address: Address::from(third_byte),
                     })
                 } else {
-                    Err(FrameError::LengthMismatch)
+                    Err(FrameError::LengthShort)
                 }
             }
             _ => Err(FrameError::InvalidStartByte),
@@ -196,11 +195,11 @@ fn validate_checksum(data: &[u8]) -> Result<(), FrameError> {
     let checksum_byte_index = data.len() - 2;
     let checksum_byte = *data
         .get(checksum_byte_index)
-        .ok_or(FrameError::LengthMismatch)?;
+        .ok_or(FrameError::LengthShort)?;
 
     let calculated_checksum = data
         .get(..checksum_byte_index)
-        .ok_or(FrameError::LengthMismatch)?
+        .ok_or(FrameError::LengthShort)?
         .iter()
         .fold(0, |acc: u8, &x| acc.wrapping_add(x));
 
@@ -224,7 +223,7 @@ impl std::fmt::Display for FrameError {
             FrameError::EmptyData => write!(f, "Data is empty"),
             FrameError::InvalidStartByte => write!(f, "Invalid start byte"),
             FrameError::InvalidStopByte => write!(f, "Invalid stop byte"),
-            FrameError::LengthMismatch => write!(f, "Length mismatch"),
+            FrameError::LengthShort => write!(f, "Length mismatch"),
             FrameError::LengthShorterThanSix { length } => {
                 write!(f, "Length is shorter than six: {}", length)
             }
@@ -237,6 +236,7 @@ impl std::fmt::Display for FrameError {
                 write!(f, "Invalid control information: {}", byte)
             }
             FrameError::InvalidFunction { byte } => write!(f, "Invalid function: {}", byte),
+            FrameError::WrongLengthIndication => write!(f, "Wrong length indication"),
         }
     }
 }

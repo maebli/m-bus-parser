@@ -1,8 +1,6 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
-use crate::user_data::ApplicationLayerError;
-
 use super::data_information::DataInformationError;
 use arrayvec::ArrayVec;
 

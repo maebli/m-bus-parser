@@ -1,5 +1,3 @@
-use crate::user_data::data_record::DataRecord;
-
 use super::data_information::{self};
 use super::variable_user_data::DataRecordError;
 
