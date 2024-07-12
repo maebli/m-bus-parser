@@ -101,7 +101,8 @@ impl<'a> TryFrom<&'a [u8]> for DataInformationBlock<'a> {
             () if dif.has_extension() => Ok(DataInformationBlock {
                 data_information_field: dif,
                 data_information_field_extension: Some(DataInformationFieldExtensions::new(
-                    &data[..offset],
+                    data.get(..offset)
+                        .ok_or(DataInformationError::DataTooShort)?,
                 )),
             }),
             () => Ok(DataInformationBlock {
@@ -216,7 +217,11 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
             0b1100 => DataFieldCoding::BCD8Digit,
             0b1101 => DataFieldCoding::VariableLength,
             0b1110 => DataFieldCoding::BCDDigit12,
-            0b1111 => DataFieldCoding::SpecialFunctions(first_dife.unwrap().special_function()),
+            0b1111 => DataFieldCoding::SpecialFunctions(
+                first_dife
+                    .ok_or(DataInformationError::DataTooShort)?
+                    .special_function(),
+            ),
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
@@ -530,11 +535,19 @@ impl DataFieldCoding {
                 if input.len() < 4 {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let value = f32::from_le_bytes(input[0..4].try_into().unwrap());
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 4,
-                })
+                if let Ok(x) = input
+                    .get(0..4)
+                    .ok_or(DataRecordError::InsufficientData)?
+                    .try_into()
+                {
+                    let x: [u8; 4] = x;
+                    Ok(Data {
+                        value: Some(DataType::Number(f64::from(f32::from_be_bytes(x)))),
+                        size: 4,
+                    })
+                } else {
+                    Err(DataRecordError::InsufficientData)
+                }
             }
 
             Self::SelectionForReadout => Ok(Data {
@@ -549,15 +562,20 @@ impl DataFieldCoding {
             Self::BCDDigit12 => bcd_to_value!(input, 12),
 
             Self::VariableLength => {
-                let mut length = input[0];
-                match input[0] {
+                let mut length = *input.first().ok_or(DataRecordError::InsufficientData)?;
+                match length {
                     0x00..=0xBF => Ok(Data {
-                        value: Some(DataType::Text(TextUnit::new(&input[1..(length as usize)]))),
+                        value: Some(DataType::Text(TextUnit::new(
+                            input
+                                .get(1..(length as usize))
+                                .ok_or(DataRecordError::InsufficientData)?,
+                        ))),
                         size: length as usize + 1,
                     }),
                     0xC0..=0xD9 => {
                         length -= 0xC0;
-                        let is_negative = input[0] > 0xC9;
+                        let is_negative =
+                            *input.first().ok_or(DataRecordError::InsufficientData)? > 0xC9;
                         let sign = if is_negative { -1.0 } else { 1.0 };
                         bcd_to_value!(input, length as usize, sign)
                     }

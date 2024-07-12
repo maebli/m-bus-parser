@@ -118,7 +118,7 @@ impl Address {
     }
 }
 
-#[derive(Debug, PartialEq,Eq)]
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FrameError {
     EmptyData,
@@ -153,7 +153,7 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
                     return Err(FrameError::LengthShorterThanSix { length: data.len() });
                 }
 
-                validate_checksum(&data[4..])?;
+                validate_checksum(data.get(4..).ok_or(FrameError::LengthMismatch)?)?;
 
                 let length = data[1] as usize;
 
@@ -180,7 +180,7 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
                 if data.len() == 5 && data[4] == 0x16 {
                     Ok(Frame::ShortFrame {
                         function: Function::try_from(data[1])?,
-                        address: Address::from(data[2]),
+                        address: Address::from(*data.get(2).ok_or(FrameError::LengthMismatch)?),
                     })
                 } else {
                     Err(FrameError::LengthMismatch)
@@ -194,9 +194,13 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
 fn validate_checksum(data: &[u8]) -> Result<(), FrameError> {
     // Assuming the checksum is the second to last byte in the data array.
     let checksum_byte_index = data.len() - 2;
-    let checksum_byte = data[checksum_byte_index];
+    let checksum_byte = *data
+        .get(checksum_byte_index)
+        .ok_or(FrameError::LengthMismatch)?;
 
-    let calculated_checksum = data[..checksum_byte_index]
+    let calculated_checksum = data
+        .get(..checksum_byte_index)
+        .ok_or(FrameError::LengthMismatch)?
         .iter()
         .fold(0, |acc: u8, &x| acc.wrapping_add(x));
 
