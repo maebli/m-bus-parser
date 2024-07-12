@@ -436,57 +436,32 @@ macro_rules! parse_year {
 
 impl DataFieldCoding {
     pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
+        macro_rules! integer_to_value {
+            ($data:expr, $byte_size:expr) => {{
+                if $data.len() < $byte_size {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let mut data_value = 0u32;
+                let mut shift = 0;
+                for byte in $data.iter().take($byte_size) {
+                    data_value |= (*byte as u32) << shift;
+                    shift += 8;
+                }
+                Ok(Data {
+                    value: Some(DataType::Number(f64::from(data_value))),
+                    size: $byte_size,
+                })
+            }};
+        }
         match self {
             Self::NoData => Ok(Data {
                 value: None,
                 size: 0,
             }),
-
-            Self::Integer8Bit => {
-                if input.is_empty() {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = input[0] as i8;
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 1,
-                })
-            }
-
-            Self::Integer16Bit => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i16::from_le_bytes(input[0..2].try_into().unwrap());
-
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 2,
-                })
-            }
-
-            Self::Integer24Bit => {
-                if input.len() < 3 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value =
-                    i32::from(input[0]) | (i32::from(input[1]) << 8) | (i32::from(input[2]) << 16);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 3,
-                })
-            }
-
-            Self::Integer32Bit => {
-                if input.len() < 4 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i32::from_le_bytes(input[0..4].try_into().unwrap());
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 4,
-                })
-            }
+            Self::Integer8Bit => integer_to_value!(input, 1),
+            Self::Integer16Bit => integer_to_value!(input, 2),
+            Self::Integer24Bit => integer_to_value!(input, 3),
+            Self::Integer32Bit => integer_to_value!(input, 4),
 
             Self::Real32Bit => {
                 if input.len() < 4 {
@@ -798,104 +773,6 @@ pub struct Value {
     pub byte_size: usize,
 }
 
-impl DataFieldCoding {
-    #[must_use]
-    pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
-        macro_rules! bcd_to_value {
-            ($data:expr, $num_digits:expr) => {{
-                let mut data_value = 0.0;
-                let mut current_weight = 1.0;
-
-                for i in 0..$num_digits {
-                    if i % 2 == 0 {
-                        current_weight *= 10.0;
-                    }
-
-                    let byte = $data[i / 2];
-                    if i % 2 == 0 {
-                        let high = f64::from(byte >> 4) * current_weight;
-                        data_value += high;
-                    } else {
-                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
-                        data_value += low;
-                    }
-                }
-
-                Value {
-                    data: data_value,
-                    byte_size: ($num_digits + 1) / 2, // Each byte contains 2 BCD digits
-                }
-            }};
-        }
-        macro_rules! integer_to_value {
-            ($data:expr, $byte_size:expr) => {{
-                let mut data_value = 0u32;
-                let mut shift = 0;
-                for &byte in $data.iter() {
-                    data_value |= (byte as u32) << shift;
-                    shift += 8;
-                }
-                Value {
-                    data: f64::from(data_value),
-                    byte_size: $byte_size,
-                }
-            }};
-        }
-        match *self {
-            Self::Real32Bit => Value {
-                data: data
-                    .get(0..4)
-                    .and_then(|slice| slice.try_into().ok())
-                    .map(|arr: [u8; 4]| f32::from_le_bytes(arr) as f64)
-                    .unwrap_or(0.0),
-                byte_size: 4,
-            },
-            Self::Integer8Bit => integer_to_value!(data, 1),
-            Self::Integer16Bit => integer_to_value!(data, 2),
-            Self::Integer24Bit => integer_to_value!(data, 3),
-            Self::Integer32Bit => integer_to_value!(data, 4),
-            Self::Integer48Bit => integer_to_value!(data, 6),
-            Self::Integer64Bit => integer_to_value!(data, 8),
-            Self::BCD2Digit => bcd_to_value!(data, 2),
-            Self::BCD4Digit => bcd_to_value!(data, 4),
-            Self::BCD6Digit => bcd_to_value!(data, 6),
-            Self::BCD8Digit => bcd_to_value!(data, 8),
-            Self::BCDDigit12 => bcd_to_value!(data, 12),
-            Self::NoData => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            Self::SelectionForReadout => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            Self::SpecialFunctions(_) => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            Self::VariableLength => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            Self::DateTypeG => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            Self::DateTimeTypeF => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            Self::DateTimeTypeJ => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            Self::DateTimeTypeI => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-        }
-    }
-}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DataFieldCoding {
