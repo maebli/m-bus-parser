@@ -801,6 +801,32 @@ pub struct Value {
 impl DataFieldCoding {
     #[must_use]
     pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
+        macro_rules! bcd_to_value {
+            ($data:expr, $num_digits:expr) => {{
+                let mut data_value = 0.0;
+                let mut current_weight = 1.0;
+
+                for i in 0..$num_digits {
+                    if i % 2 == 0 {
+                        current_weight *= 10.0;
+                    }
+
+                    let byte = $data[i / 2];
+                    if i % 2 == 0 {
+                        let high = f64::from(byte >> 4) * current_weight;
+                        data_value += high;
+                    } else {
+                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
+                        data_value += low;
+                    }
+                }
+
+                Value {
+                    data: data_value,
+                    byte_size: ($num_digits + 1) / 2, // Each byte contains 2 BCD digits
+                }
+            }};
+        }
         match *self {
             Self::Real32Bit => Value {
                 data: f64::from(f32::from_le_bytes([data[0], data[1], data[2], data[3]])),
@@ -849,69 +875,11 @@ impl DataFieldCoding {
                     | u64::from(data[0])) as f64,
                 byte_size: 8,
             },
-            Self::BCD2Digit => Value {
-                data: (f64::from(data[0] >> 4) * 10.0) + f64::from(data[0] & 0x0F),
-                byte_size: 1,
-            },
-            Self::BCD4Digit => Value {
-                data: (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
-                byte_size: 2,
-            },
-            Self::BCD6Digit => Value {
-                data: (f64::from(data[2] >> 4) * 100_000.0)
-                    + (f64::from(data[2] & 0x0F) * 10000.0)
-                    + (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
-                byte_size: 3,
-            },
-            Self::BCD8Digit => Value {
-                data: (f64::from(data[3] >> 4) * 10_000_000.0)
-                    + (f64::from(data[3] & 0x0F) * 1_000_000.0)
-                    + (f64::from(data[2] >> 4) * 100_000.0)
-                    + (f64::from(data[2] & 0x0F) * 10000.0)
-                    + (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
-                byte_size: 4,
-            },
-            Self::BCDDigit12 => Value {
-                data: {
-                    let weights = [
-                        100_000_000_000.0,
-                        10_000_000_000.0,
-                        1_000_000_000.0,
-                        100_000_000.0,
-                        10_000_000.0,
-                        1_000_000.0,
-                        100_000.0,
-                        10_000.0,
-                        1000.0,
-                        100.0,
-                        10.0,
-                        1.0,
-                    ];
-
-                    let mut weight_iter = weights.iter();
-
-                    data.iter()
-                        .rev()
-                        .map(|&byte| {
-                            let high_weight = weight_iter.next().unwrap_or(&0.0);
-                            let low_weight = weight_iter.next().unwrap_or(&0.0);
-                            let high = f64::from(byte >> 4) * high_weight;
-                            let low = f64::from(byte & 0x0F) * low_weight;
-                            high + low
-                        })
-                        .sum()
-                },
-                byte_size: 6,
-            },
+            Self::BCD2Digit => bcd_to_value!(data, 2),
+            Self::BCD4Digit => bcd_to_value!(data, 4),
+            Self::BCD6Digit => bcd_to_value!(data, 6),
+            Self::BCD8Digit => bcd_to_value!(data, 8),
+            Self::BCDDigit12 => bcd_to_value!(data, 12),
             Self::NoData => Value {
                 data: 0.0,
                 byte_size: 0,
