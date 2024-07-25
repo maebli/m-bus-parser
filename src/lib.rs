@@ -72,14 +72,14 @@ pub enum MbusError {
 }
 
 impl From<FrameError> for MbusError {
-    fn from(error: FrameError) -> MbusError {
-        MbusError::FrameError(error)
+    fn from(error: FrameError) -> Self {
+        Self::FrameError(error)
     }
 }
 
 impl From<ApplicationLayerError> for MbusError {
-    fn from(error: ApplicationLayerError) -> MbusError {
-        MbusError::ApplicationLayerError(error)
+    fn from(error: ApplicationLayerError) -> Self {
+        Self::ApplicationLayerError(error)
     }
 }
 

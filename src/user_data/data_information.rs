@@ -26,19 +26,19 @@ pub struct DataInformationField {
 
 impl From<data_information::DataInformationError> for DataRecordError {
     fn from(error: data_information::DataInformationError) -> Self {
-        DataRecordError::DataInformationError(error)
+        Self::DataInformationError(error)
     }
 }
 
 impl From<u8> for DataInformationField {
     fn from(data: u8) -> Self {
-        DataInformationField { data }
+        Self { data }
     }
 }
 
 impl From<u8> for DataInformationFieldExtension {
     fn from(data: u8) -> Self {
-        DataInformationFieldExtension { data }
+        Self { data }
     }
 }
 
@@ -53,7 +53,7 @@ pub struct DataInformationFieldExtension {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataInformationFieldExtensions<'a>(&'a [u8]);
 impl<'a> DataInformationFieldExtensions<'a> {
-    fn new(data: &'a [u8]) -> Self {
+    const fn new(data: &'a [u8]) -> Self {
         Self(data)
     }
 }
@@ -99,7 +99,8 @@ impl<'a> TryFrom<&'a [u8]> for DataInformationBlock<'a> {
             () if dif.has_extension() => Ok(DataInformationBlock {
                 data_information_field: dif,
                 data_information_field_extension: Some(DataInformationFieldExtensions::new(
-                    &data[..offset],
+                    data.get(..offset)
+                        .ok_or(DataInformationError::DataTooShort)?,
                 )),
             }),
             () => Ok(DataInformationBlock {
@@ -111,13 +112,13 @@ impl<'a> TryFrom<&'a [u8]> for DataInformationBlock<'a> {
 }
 
 impl DataInformationField {
-    fn has_extension(&self) -> bool {
+    const fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
 }
 
 impl DataInformationFieldExtension {
-    fn special_function(&self) -> SpecialFunctions {
+    const fn special_function(&self) -> SpecialFunctions {
         match self.data {
             0x0F => SpecialFunctions::ManufacturerSpecific,
             0x1F => SpecialFunctions::MoreRecordsFollow,
@@ -214,11 +215,15 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
             0b1100 => DataFieldCoding::BCD8Digit,
             0b1101 => DataFieldCoding::VariableLength,
             0b1110 => DataFieldCoding::BCDDigit12,
-            0b1111 => DataFieldCoding::SpecialFunctions(first_dife.unwrap().special_function()),
+            0b1111 => DataFieldCoding::SpecialFunctions(
+                first_dife
+                    .ok_or(DataInformationError::DataTooShort)?
+                    .special_function(),
+            ),
             _ => unreachable!(), // This case should never occur due to the 4-bit width
         };
 
-        Ok(DataInformation {
+        Ok(Self {
             storage_number,
             function_field,
             data_field_coding,
@@ -237,7 +242,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextUnit<'a>(&'a [u8]);
 impl<'a> TextUnit<'a> {
-    pub fn new(input: &'a [u8]) -> Self {
+    pub const fn new(input: &'a [u8]) -> Self {
         Self(input)
     }
 }
@@ -387,7 +392,7 @@ impl std::fmt::Display for Data<'_> {
 
 impl Data<'_> {
     #[must_use]
-    pub fn get_size(&self) -> usize {
+    pub const fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -436,192 +441,141 @@ macro_rules! parse_year {
 
 impl DataFieldCoding {
     pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
+        macro_rules! bcd_to_value {
+            ($data:expr, $num_digits:expr) => {{
+                if $data.len() < $num_digits {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let mut data_value = 0.0;
+                let mut current_weight = 1.0;
+
+                for i in 0..$num_digits {
+                    if i % 2 == 0 {
+                        current_weight *= 10.0;
+                    }
+
+                    let byte = $data.get(i / 2).ok_or(DataRecordError::InsufficientData)?;
+                    if i % 2 == 0 {
+                        let high = f64::from(byte >> 4) * current_weight;
+                        data_value += high;
+                    } else {
+                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
+                        data_value += low;
+                    }
+                }
+
+                Ok(Data {
+                    value: Some(DataType::Number(data_value as f64)),
+                    size: ($num_digits + 1) / 2,
+                })
+            }};
+
+            ($data:expr, $num_digits:expr, $sign:expr) => {{
+                if $data.len() < $num_digits {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let mut data_value = 0.0;
+                let mut current_weight = 1.0;
+
+                for i in 0..$num_digits {
+                    if i % 2 == 0 {
+                        current_weight *= 10.0;
+                    }
+
+                    let byte = $data[i / 2];
+                    if i % 2 == 0 {
+                        let high = f64::from(byte >> 4) * current_weight;
+                        data_value += high;
+                    } else {
+                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
+                        data_value += low;
+                    }
+                }
+
+                let signed_value = data_value * $sign as f64;
+
+                Ok(Data {
+                    value: Some(DataType::Number(signed_value)),
+                    size: ($num_digits + 1) / 2,
+                })
+            }};
+        }
+        macro_rules! integer_to_value {
+            ($data:expr, $byte_size:expr) => {{
+                if $data.len() < $byte_size {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                let mut data_value = 0u32;
+                let mut shift = 0;
+                for byte in $data.iter().take($byte_size) {
+                    data_value |= (*byte as u32) << shift;
+                    shift += 8;
+                }
+                Ok(Data {
+                    value: Some(DataType::Number(f64::from(data_value))),
+                    size: $byte_size,
+                })
+            }};
+        }
         match self {
-            DataFieldCoding::NoData => Ok(Data {
+            Self::NoData => Ok(Data {
+                value: None,
+                size: 0,
+            }),
+            Self::Integer8Bit => integer_to_value!(input, 1),
+            Self::Integer16Bit => integer_to_value!(input, 2),
+            Self::Integer24Bit => integer_to_value!(input, 3),
+            Self::Integer32Bit => integer_to_value!(input, 4),
+            Self::Integer48Bit => integer_to_value!(input, 6),
+            Self::Integer64Bit => integer_to_value!(input, 8),
+
+            Self::Real32Bit => {
+                if input.len() < 4 {
+                    return Err(DataRecordError::InsufficientData);
+                }
+                if let Ok(x) = input
+                    .get(0..4)
+                    .ok_or(DataRecordError::InsufficientData)?
+                    .try_into()
+                {
+                    let x: [u8; 4] = x;
+                    Ok(Data {
+                        value: Some(DataType::Number(f64::from(f32::from_be_bytes(x)))),
+                        size: 4,
+                    })
+                } else {
+                    Err(DataRecordError::InsufficientData)
+                }
+            }
+
+            Self::SelectionForReadout => Ok(Data {
                 value: None,
                 size: 0,
             }),
 
-            DataFieldCoding::Integer8Bit => {
-                if input.is_empty() {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = input[0] as i8;
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 1,
-                })
-            }
+            Self::BCD2Digit => bcd_to_value!(input, 2),
+            Self::BCD4Digit => bcd_to_value!(input, 4),
+            Self::BCD6Digit => bcd_to_value!(input, 6),
+            Self::BCD8Digit => bcd_to_value!(input, 8),
+            Self::BCDDigit12 => bcd_to_value!(input, 12),
 
-            DataFieldCoding::Integer16Bit => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i16::from_le_bytes(input[0..2].try_into().unwrap());
-
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 2,
-                })
-            }
-
-            DataFieldCoding::Integer24Bit => {
-                if input.len() < 3 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value =
-                    i32::from(input[0]) | (i32::from(input[1]) << 8) | (i32::from(input[2]) << 16);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 3,
-                })
-            }
-
-            DataFieldCoding::Integer32Bit => {
-                if input.len() < 4 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i32::from_le_bytes(input[0..4].try_into().unwrap());
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 4,
-                })
-            }
-
-            DataFieldCoding::Real32Bit => {
-                if input.len() < 4 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = f32::from_le_bytes(input[0..4].try_into().unwrap());
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 4,
-                })
-            }
-
-            DataFieldCoding::Integer48Bit => {
-                if input.len() < 6 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i64::from(input[0])
-                    | (i64::from(input[1]) << 8)
-                    | (i64::from(input[2]) << 16)
-                    | (i64::from(input[3]) << 24)
-                    | (i64::from(input[4]) << 32)
-                    | (i64::from(input[5]) << 40);
-                Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
-                    size: 6,
-                })
-            }
-
-            DataFieldCoding::Integer64Bit => {
-                if input.len() < 8 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = i64::from_le_bytes(input[0..8].try_into().unwrap());
-                Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
-                    size: 8,
-                })
-            }
-
-            DataFieldCoding::SelectionForReadout => Ok(Data {
-                value: None,
-                size: 0,
-            }),
-
-            DataFieldCoding::BCD2Digit => {
-                if input.is_empty() {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u8(input[0]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 1,
-                })
-            }
-
-            DataFieldCoding::BCD4Digit => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u16(&input[0..2]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 2,
-                })
-            }
-
-            DataFieldCoding::BCD6Digit => {
-                if input.len() < 3 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u32(&input[0..3]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 3,
-                })
-            }
-
-            DataFieldCoding::BCD8Digit => {
-                if input.len() < 4 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u32(&input[0..4]);
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(value))),
-                    size: 4,
-                })
-            }
-
-            DataFieldCoding::VariableLength => {
-                let mut length = input[0];
-                match input[0] {
+            Self::VariableLength => {
+                let mut length = *input.first().ok_or(DataRecordError::InsufficientData)?;
+                match length {
                     0x00..=0xBF => Ok(Data {
-                        value: Some(DataType::Text(TextUnit::new(&input[1..(length as usize)]))),
+                        value: Some(DataType::Text(TextUnit::new(
+                            input
+                                .get(1..(length as usize))
+                                .ok_or(DataRecordError::InsufficientData)?,
+                        ))),
                         size: length as usize + 1,
                     }),
                     0xC0..=0xD9 => {
                         length -= 0xC0;
-                        let is_negative = input[0] > 0xC9;
+                        let is_negative =
+                            *input.first().ok_or(DataRecordError::InsufficientData)? > 0xC9;
                         let sign = if is_negative { -1.0 } else { 1.0 };
-                        if length as usize > input.len() {
-                            return Err(DataRecordError::InsufficientData);
-                        }
-                        match length {
-                            2 => {
-                                let value = bcd_to_u8(input[1]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 2,
-                                })
-                            }
-                            4 => {
-                                let value = bcd_to_u16(&input[1..3]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 4,
-                                })
-                            }
-                            6 => {
-                                let value = bcd_to_u32(&input[1..5]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 6,
-                                })
-                            }
-                            8 => {
-                                let value = bcd_to_u32(&input[1..5]);
-                                Ok(Data {
-                                    value: Some(DataType::Number(sign * f64::from(value))),
-                                    size: 8,
-                                })
-                            }
-                            _ => {
-                                todo!("8-bit text string according to ISO/IEC 8859-1 of length greater than {}", length);
-                            }
-                        }
+                        bcd_to_value!(input, length as usize, sign)
                     }
                     0xE0..=0xE9 => {
                         length -= 0xE0;
@@ -648,28 +602,19 @@ impl DataFieldCoding {
                 }
             }
 
-            DataFieldCoding::BCDDigit12 => {
-                if input.len() < 6 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let value = bcd_to_u48(&input[0..6]);
-                Ok(Data {
-                    value: Some(DataType::Number(value as f64)),
-                    size: 6,
-                })
-            }
-
-            DataFieldCoding::SpecialFunctions(_code) => {
+            Self::SpecialFunctions(_code) => {
                 // Special functions parsing based on the code
                 todo!()
             }
 
-            DataFieldCoding::DateTypeG => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let day = parse_single_or_every!(input[0], 0x1F, 0, 0);
-                let month = parse_month!(input[1]);
+            Self::DateTypeG => {
+                let day = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0,
+                    0
+                );
+                let month = parse_month!(input.get(1).ok_or(DataRecordError::InsufficientData)?);
                 let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
@@ -677,14 +622,26 @@ impl DataFieldCoding {
                     size: 2,
                 })
             }
-            DataFieldCoding::DateTimeTypeF => {
-                if input.len() < 4 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let minutes = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
-                let hour = parse_single_or_every!(input[1], 0x1F, 0x1F, 0);
-                let day = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
-                let month = parse_month!(input[3]);
+            Self::DateTimeTypeF => {
+                let minutes = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+                let hour = parse_single_or_every!(
+                    input.get(1).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let day = parse_single_or_every!(
+                    input.get(2).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let month = parse_month!(input.get(3).ok_or(DataRecordError::InsufficientData)?);
                 let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
@@ -692,32 +649,63 @@ impl DataFieldCoding {
                     size: 4,
                 })
             }
-            DataFieldCoding::DateTimeTypeJ => {
-                if input.len() < 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
-                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
-                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
+            Self::DateTimeTypeJ => {
+                let seconds = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+                let minutes = parse_single_or_every!(
+                    input.get(1).ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+                let hours = parse_single_or_every!(
+                    input.get(2).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
 
                 Ok(Data {
                     value: Some(DataType::Time(seconds, minutes, hours)),
                     size: 4,
                 })
             }
-            DataFieldCoding::DateTimeTypeI => {
+            Self::DateTimeTypeI => {
                 // note: more information can be extracted from the data,
                 // however, because this data can be derived from the other data that is
                 // that is extracted, it is not necessary to extract it.
 
-                if input.len() < 6 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let seconds = parse_single_or_every!(input[0], 0x3F, 0x3F, 0);
-                let minutes = parse_single_or_every!(input[1], 0x3F, 0x3F, 0);
-                let hours = parse_single_or_every!(input[2], 0x1F, 0x1F, 0);
-                let days = parse_single_or_every!(input[3], 0x1F, 0x1F, 0);
-                let months = parse_month!(input[4]);
+                let seconds = parse_single_or_every!(
+                    input.first().ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+
+                let minutes = parse_single_or_every!(
+                    input.get(1).ok_or(DataRecordError::InsufficientData)?,
+                    0x3F,
+                    0x3F,
+                    0
+                );
+
+                let hours = parse_single_or_every!(
+                    input.get(2).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let days = parse_single_or_every!(
+                    input.get(3).ok_or(DataRecordError::InsufficientData)?,
+                    0x1F,
+                    0x1F,
+                    0
+                );
+                let months = parse_month!(input.get(4).ok_or(DataRecordError::InsufficientData)?);
                 let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
 
                 Ok(Data {
@@ -731,39 +719,9 @@ impl DataFieldCoding {
     }
 }
 
-fn bcd_to_u8(bcd: u8) -> u8 {
-    (bcd >> 4) * 10 + (bcd & 0x0F)
-}
-
-fn bcd_to_u16(bcd: &[u8]) -> u16 {
-    match bcd.len() {
-        1 => u16::from(bcd_to_u8(bcd[0])),
-        2 => (u16::from(bcd_to_u8(bcd[1])) * 100 + u16::from(bcd_to_u8(bcd[0]))) as u16,
-        _ => panic!(
-            "BCD input length must be either 1 or 2 but got {}",
-            bcd.len()
-        ),
-    }
-}
-
-fn bcd_to_u32(bcd: &[u8]) -> u32 {
-    match bcd.len() {
-        3 => (u32::from(bcd_to_u8(bcd[2])) * 10000 + u32::from(bcd_to_u16(&bcd[0..2]))) as u32,
-        4 => (u32::from(bcd_to_u16(&bcd[2..4])) * 10000 + u32::from(bcd_to_u16(&bcd[0..2]))) as u32,
-        _ => panic!(
-            "BCD input length must be either 3 or 4 but got {}",
-            bcd.len()
-        ),
-    }
-}
-
-fn bcd_to_u48(bcd: &[u8]) -> u64 {
-    (u64::from(bcd_to_u32(&bcd[2..6])) * 1_000_000 + u64::from(bcd_to_u16(&bcd[0..2]))) as u64
-}
-
 impl DataInformation {
     #[must_use]
-    pub fn get_size(&self) -> usize {
+    pub const fn get_size(&self) -> usize {
         self.size
     }
 }
@@ -802,138 +760,6 @@ pub struct Value {
     pub byte_size: usize,
 }
 
-impl DataFieldCoding {
-    #[must_use]
-    pub fn extract_from_bytes(&self, data: &[u8]) -> Value {
-        match *self {
-            DataFieldCoding::Real32Bit => Value {
-                data: f64::from(f32::from_le_bytes([data[0], data[1], data[2], data[3]])),
-                byte_size: 4,
-            },
-            DataFieldCoding::Integer8Bit => Value {
-                data: f64::from(data[0]),
-                byte_size: 1,
-            },
-            DataFieldCoding::Integer16Bit => Value {
-                data: f64::from(u16::from(data[1]) << 8 | u16::from(data[0])),
-                byte_size: 2,
-            },
-            DataFieldCoding::Integer24Bit => Value {
-                data: f64::from(
-                    u32::from(data[2]) << 16 | u32::from(data[1]) << 8 | u32::from(data[0]),
-                ),
-                byte_size: 3,
-            },
-            DataFieldCoding::Integer32Bit => Value {
-                data: f64::from(
-                    u32::from(data[3]) << 24
-                        | u32::from(data[2]) << 16
-                        | u32::from(data[1]) << 8
-                        | u32::from(data[0]),
-                ),
-                byte_size: 4,
-            },
-            DataFieldCoding::Integer48Bit => Value {
-                data: (u64::from(data[5]) << 40
-                    | u64::from(data[4]) << 32
-                    | u64::from(data[3]) << 24
-                    | u64::from(data[2]) << 16
-                    | u64::from(data[1]) << 8
-                    | u64::from(data[0])) as f64,
-                byte_size: 6,
-            },
-            DataFieldCoding::Integer64Bit => Value {
-                data: (u64::from(data[7]) << 56
-                    | u64::from(data[6]) << 48
-                    | u64::from(data[5]) << 40
-                    | u64::from(data[4]) << 32
-                    | u64::from(data[3]) << 24
-                    | u64::from(data[2]) << 16
-                    | u64::from(data[1]) << 8
-                    | u64::from(data[0])) as f64,
-                byte_size: 8,
-            },
-            DataFieldCoding::BCD2Digit => Value {
-                data: (f64::from(data[0] >> 4) * 10.0) + f64::from(data[0] & 0x0F),
-                byte_size: 1,
-            },
-            DataFieldCoding::BCD4Digit => Value {
-                data: (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
-                byte_size: 2,
-            },
-            DataFieldCoding::BCD6Digit => Value {
-                data: (f64::from(data[2] >> 4) * 100_000.0)
-                    + (f64::from(data[2] & 0x0F) * 10000.0)
-                    + (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
-                byte_size: 3,
-            },
-            DataFieldCoding::BCD8Digit => Value {
-                data: (f64::from(data[3] >> 4) * 10_000_000.0)
-                    + (f64::from(data[3] & 0x0F) * 1_000_000.0)
-                    + (f64::from(data[2] >> 4) * 100_000.0)
-                    + (f64::from(data[2] & 0x0F) * 10000.0)
-                    + (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
-                byte_size: 4,
-            },
-            DataFieldCoding::BCDDigit12 => Value {
-                data: (f64::from(data[5] >> 4) * 100_000_000_000.0)
-                    + (f64::from(data[5] & 0x0F) * 10_000_000_000.0)
-                    + (f64::from(data[4] >> 4) * 1_000_000_000.0)
-                    + (f64::from(data[4] & 0x0F) * 100_000_000.0)
-                    + (f64::from(data[3] >> 4) * 10_000_000.0)
-                    + (f64::from(data[3] & 0x0F) * 1_000_000.0)
-                    + (f64::from(data[2] >> 4) * 100_000.0)
-                    + (f64::from(data[2] & 0x0F) * 10000.0)
-                    + (f64::from(data[1] >> 4) * 1000.0)
-                    + (f64::from(data[1] & 0x0F) * 100.0)
-                    + (f64::from(data[0] >> 4) * 10.0)
-                    + f64::from(data[0] & 0x0F),
-                byte_size: 6,
-            },
-            DataFieldCoding::NoData => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            DataFieldCoding::SelectionForReadout => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            DataFieldCoding::SpecialFunctions(_) => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            DataFieldCoding::VariableLength => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            DataFieldCoding::DateTypeG => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            DataFieldCoding::DateTimeTypeF => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            DataFieldCoding::DateTimeTypeJ => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-            DataFieldCoding::DateTimeTypeI => Value {
-                data: 0.0,
-                byte_size: 0,
-            },
-        }
-    }
-}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DataFieldCoding {

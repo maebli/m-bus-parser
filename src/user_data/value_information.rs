@@ -32,7 +32,8 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
 
     fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
         let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
-        let vif = ValueInformationField::from(data[0]);
+        let vif =
+            ValueInformationField::from(*data.first().ok_or(DataInformationError::DataTooShort)?);
         let mut plaintext_vife: Option<ArrayVec<char, 9>> = None;
 
         #[cfg(not(feature = "plaintext-before-extension"))]
@@ -41,13 +42,15 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
         let standard_plaintex_vib = false;
 
         if !standard_plaintex_vib && vif.value_information_contains_ascii() {
-            plaintext_vife = Some(extract_plaintext_vife(&data[1..]));
+            plaintext_vife = Some(extract_plaintext_vife(
+                data.get(1..).ok_or(DataInformationError::DataTooShort)?,
+            )?);
         }
 
         if vif.has_extension() {
             let mut offset = 1;
             while offset < data.len() {
-                let vife_data = data[offset];
+                let vife_data = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
                 let current_vife = ValueInformationFieldExtension {
                     data: vife_data,
                     coding: match (offset, vife_data) {
@@ -61,9 +64,10 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                         _ => ValueInformationFieldExtensionCoding::ComninableOrthogonalVIFECodeExtension,
                     },
                 };
+                let has_extension = current_vife.has_extension();
                 vife.push(current_vife);
                 offset += 1;
-                if !vife.last().unwrap().has_extension() {
+                if !has_extension {
                     break;
                 }
                 if vife.len() > MAX_VIFE_RECORDS {
@@ -71,11 +75,14 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                 }
             }
             if standard_plaintex_vib && vif.value_information_contains_ascii() {
-                plaintext_vife = Some(extract_plaintext_vife(&data[offset..]));
+                plaintext_vife = Some(extract_plaintext_vife(
+                    data.get(offset..)
+                        .ok_or(DataInformationError::DataTooShort)?,
+                )?);
             }
         }
 
-        Ok(ValueInformationBlock {
+        Ok(Self {
             value_information: vif,
             value_information_extension: if vife.is_empty() { None } else { Some(vife) },
             plaintext_vife,
@@ -83,14 +90,18 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     }
 }
 
-fn extract_plaintext_vife(data: &[u8]) -> ArrayVec<char, 9> {
-    let ascii_length = data[0] as usize;
+fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, DataInformationError> {
+    let ascii_length = *data.first().ok_or(DataInformationError::DataTooShort)? as usize;
     let mut ascii = ArrayVec::<char, 9>::new();
-    for item in &data[1..=ascii_length] {
+    for item in data
+        .get(1..=ascii_length)
+        .ok_or(DataInformationError::DataTooShort)?
+    {
         ascii.push(*item as char);
     }
-    ascii
+    Ok(ascii)
 }
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct ValueInformationBlock {
@@ -106,7 +117,7 @@ pub struct ValueInformationField {
 }
 
 impl ValueInformationField {
-    fn value_information_contains_ascii(&self) -> bool {
+    const fn value_information_contains_ascii(&self) -> bool {
         self.data == 0x7C || self.data == 0xFC
     }
 }
@@ -120,27 +131,27 @@ pub struct ValueInformationFieldExtension {
 impl From<&ValueInformationField> for ValueInformationCoding {
     fn from(value_information: &ValueInformationField) -> Self {
         match value_information.data {
-            0x00..=0x7B | 0x80..=0xFA => ValueInformationCoding::Primary,
-            0x7C | 0xFC => ValueInformationCoding::PlainText,
-            0xFD => ValueInformationCoding::MainVIFExtension,
-            0xFB => ValueInformationCoding::AlternateVIFExtension,
-            0x7E => ValueInformationCoding::ManufacturerSpecific,
-            0xFE => ValueInformationCoding::ManufacturerSpecific,
-            0x7F => ValueInformationCoding::ManufacturerSpecific,
-            0xFF => ValueInformationCoding::ManufacturerSpecific,
+            0x00..=0x7B | 0x80..=0xFA => Self::Primary,
+            0x7C | 0xFC => Self::PlainText,
+            0xFD => Self::MainVIFExtension,
+            0xFB => Self::AlternateVIFExtension,
+            0x7E => Self::ManufacturerSpecific,
+            0xFE => Self::ManufacturerSpecific,
+            0x7F => Self::ManufacturerSpecific,
+            0xFF => Self::ManufacturerSpecific,
             _ => unreachable!("Invalid value information: {:X}", value_information.data),
         }
     }
 }
 
 impl ValueInformationField {
-    fn has_extension(&self) -> bool {
+    const fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
 }
 
 impl ValueInformationFieldExtension {
-    fn has_extension(&self) -> bool {
+    const fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
 }
@@ -164,7 +175,7 @@ pub enum ValueInformationFieldExtensionCoding {
 
 impl ValueInformationBlock {
     #[must_use]
-    pub fn get_size(&self) -> usize {
+    pub const fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
             size += vife.len();
@@ -293,16 +304,19 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     .value_information_extension
                     .as_ref()
                     .ok_or(Self::Error::InvalidValueInformation)?;
-                match vife[0].data & 0x7F {
+
+                let first_vife_data = vife.first().ok_or(DataInformationError::DataTooShort)?.data;
+                let second_vife_data = vife.get(1).ok_or(DataInformationError::DataTooShort)?.data;
+                match first_vife_data & 0x7F {
                     0x00..=0x03 => {
                         units.push(unit!(LocalMoneyCurrency));
                         labels.push(ValueLabel::Credit);
-                        decimal_scale_exponent = (vife[0].data & 0b11) as isize - 3;
+                        decimal_scale_exponent = (first_vife_data & 0b11) as isize - 3;
                     }
                     0x04..=0x07 => {
                         units.push(unit!(LocalMoneyCurrency));
                         labels.push(ValueLabel::Debit);
-                        decimal_scale_exponent = (vife[0].data & 0b11) as isize - 3;
+                        decimal_scale_exponent = (first_vife_data & 0b11) as isize - 3;
                     }
                     0x08 => labels.push(ValueLabel::UniqueMessageIdentificationOrAccessNumber),
                     0x09 => labels.push(ValueLabel::DeviceType),
@@ -389,7 +403,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     }
                     0x50..=0x5F => {
                         units.push(unit!(Volt));
-                        decimal_scale_exponent = (vife[0].data & 0b1111) as isize - 9;
+                        decimal_scale_exponent = (first_vife_data & 0b1111) as isize - 9;
                     }
                     0x60 => labels.push(ValueLabel::ResetCounter),
                     0x61 => labels.push(ValueLabel::CumulationCounter),
@@ -444,7 +458,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x74 => labels.push(ValueLabel::RemainingBatteryLifeTime),
                     0x75 => labels.push(ValueLabel::NumberOfTimesTheMeterWasStopped),
                     0x76 => labels.push(ValueLabel::DataContainerForManufacturerSpecificProtocol),
-                    0x7D => match vife[1].data & 0x7F {
+                    0x7D => match second_vife_data & 0x7F {
                         0x00 => labels.push(ValueLabel::CurrentlySelectedApplication),
                         0x02 => {
                             units.push(unit!(Month));
@@ -489,7 +503,8 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     .value_information_extension
                     .as_ref()
                     .ok_or(Self::Error::InvalidValueInformation)?;
-                match vife[0].data & 0x7F {
+                let first_vife_data = vife.first().ok_or(DataInformationError::DataTooShort)?.data;
+                match first_vife_data & 0x7F {
                     0b0 => populate!(Watt / h, 3, dec: 5, Energy),
                     0b000_0001 => populate!(Watt / h, 3, dec: 6, Energy),
                     0b000_0010 => populate!(ReactiveWatt * h, 1, dec: 3, Energy),
@@ -547,7 +562,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b110_1101 => populate!(HCAUnit, 1,dec: 0, LowTemperatureRatingFactor),
                     0b110_1110 => populate!(HCAUnit, 1,dec: 0, DisplayOutputScalingFactor),
 
-                    _ => todo!("Implement the rest of the units: {:X?}", vife[0].data),
+                    _ => todo!("Implement the rest of the units: {:X?}", first_vife_data),
                 };
             }
             // we need to check if the next byte is equivalent to the length of the rest of the
@@ -558,7 +573,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
             }
         }
 
-        Ok(ValueInformation {
+        Ok(Self {
             decimal_offset_exponent,
             labels,
             decimal_scale_exponent,
@@ -817,7 +832,7 @@ pub enum ValueInformationError {
 
 impl From<u8> for ValueInformationField {
     fn from(data: u8) -> Self {
-        ValueInformationField { data }
+        Self { data }
     }
 }
 /// This is the most important type of the this file and represents

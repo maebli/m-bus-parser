@@ -5,7 +5,6 @@ use super::DataRecords;
 pub enum DataRecordError {
     DataInformationError(data_information::DataInformationError),
     InsufficientData,
-    InvalidData,
 }
 
 #[derive(Debug, PartialEq)]
@@ -15,7 +14,7 @@ pub enum VariableUserDataError {
 
 impl From<DataRecordError> for VariableUserDataError {
     fn from(error: DataRecordError) -> Self {
-        VariableUserDataError::DataInformationError(error)
+        Self::DataInformationError(error)
     }
 }
 
@@ -66,12 +65,12 @@ mod tests {
         let _data = DataRecords::try_from(data.as_slice());
     }
 
-    fn _test_parse_variable_data2() {
+    const fn _test_parse_variable_data2() {
         /* Data block 2: unit 0, storage No 5, no tariff, maximum volume flow, 113 l/h (4 digit BCD) */
         let _data = &[0xDA, 0x02, 0x3B, 0x13, 0x01];
     }
 
-    fn _test_parse_variable_data3() {
+    const fn _test_parse_variable_data3() {
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let _data = &[0x8B, 0x60, 0x04, 0x37, 0x18, 0x02];
     }
