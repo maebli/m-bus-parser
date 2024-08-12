@@ -1039,23 +1039,28 @@ impl fmt::Display for Unit {
 
         match self.exponent {
             1 => write!(f, "{}", self.name),
-            0..=9 => write!(f, "{}{}", self.name, superscripts[self.exponent as usize]),
+            0..=9 => write!(
+                f,
+                "{}{:?}",
+                self.name,
+                superscripts.get(self.exponent as usize)
+            ),
             10..=19 => write!(
                 f,
-                "{}{}{}",
+                "{}{:?}{:?}",
                 self.name,
-                superscripts[1],
-                superscripts[self.exponent as usize - 10]
+                superscripts.get(1),
+                superscripts.get(self.exponent as usize - 10)
             ),
             x if (-9..0).contains(&x) => {
-                write!(f, "{}⁻{}", self.name, superscripts[(-x) as usize])
+                write!(f, "{}⁻{:?}", self.name, superscripts.get((-x) as usize))
             }
             x if (-19..0).contains(&x) => write!(
                 f,
-                "{}⁻{}{}",
+                "{}⁻{:?}{:?}",
                 self.name,
-                superscripts[1],
-                superscripts[(-x) as usize - 10]
+                superscripts.get(1),
+                superscripts.get((-x) as usize - 10)
             ),
             x => write!(f, "{}^{}", self.name, x),
         }
