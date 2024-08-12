@@ -256,7 +256,7 @@ impl PartialEq<str> for TextUnit<'_> {
 impl From<TextUnit<'_>> for String {
     fn from(value: TextUnit<'_>) -> Self {
         let value: Vec<u8> = value.0.iter().copied().rev().collect();
-        String::from_utf8(value).unwrap()
+        String::from_utf8(value).unwrap_or_default()
     }
 }
 

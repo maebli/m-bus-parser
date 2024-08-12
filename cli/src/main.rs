@@ -4,8 +4,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::str;
 
-#[cfg(feature = "std")]
-use prettytable::{format, row, Table};
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
