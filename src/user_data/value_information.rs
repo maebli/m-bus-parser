@@ -1036,31 +1036,44 @@ pub enum ValueLabel {
 impl fmt::Display for Unit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let superscripts = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
-
+        let invalid_superscript = '⁻';
         match self.exponent {
             1 => write!(f, "{}", self.name),
             0..=9 => write!(
                 f,
-                "{}{:?}",
+                "{}{}",
                 self.name,
-                superscripts.get(self.exponent as usize)
+                superscripts
+                    .get(self.exponent as usize)
+                    .unwrap_or(&invalid_superscript)
             ),
             10..=19 => write!(
                 f,
-                "{}{:?}{:?}",
+                "{}{}{}",
                 self.name,
-                superscripts.get(1),
-                superscripts.get(self.exponent as usize - 10)
+                superscripts.get(1).unwrap_or(&invalid_superscript),
+                superscripts
+                    .get(self.exponent as usize - 10)
+                    .unwrap_or(&invalid_superscript)
             ),
             x if (-9..0).contains(&x) => {
-                write!(f, "{}⁻{:?}", self.name, superscripts.get((-x) as usize))
+                write!(
+                    f,
+                    "{}⁻{}",
+                    self.name,
+                    superscripts
+                        .get((-x) as usize)
+                        .unwrap_or(&invalid_superscript)
+                )
             }
             x if (-19..0).contains(&x) => write!(
                 f,
-                "{}⁻{:?}{:?}",
+                "{}⁻{}{}",
                 self.name,
-                superscripts.get(1),
-                superscripts.get((-x) as usize - 10)
+                superscripts.get(1).unwrap_or(&invalid_superscript),
+                superscripts
+                    .get((-x) as usize - 10)
+                    .unwrap_or(&invalid_superscript)
             ),
             x => write!(f, "{}^{}", self.name, x),
         }
