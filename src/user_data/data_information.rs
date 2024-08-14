@@ -429,8 +429,9 @@ macro_rules! parse_month {
 
 macro_rules! parse_year {
     ($input:expr, $mask_byte1:expr, $mask_byte2:expr, $all_value:expr) => {{
-        let year = ((u16::from($input[1] & $mask_byte1) >> 1)
-            | (u16::from($input[0] & $mask_byte2) >> 5)) as u16;
+        let byte1 = u16::from($input.get(1).copied().unwrap_or(0) & $mask_byte1);
+        let byte2 = u16::from($input.get(0).copied().unwrap_or(0) & $mask_byte2);
+        let year = byte1.wrapping_shr(1) | byte2.wrapping_shr(5);
         if year == $all_value {
             SingleEveryOrInvalid::Every()
         } else {
@@ -443,7 +444,7 @@ impl DataFieldCoding {
     pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
         macro_rules! bcd_to_value {
             ($data:expr, $num_digits:expr) => {{
-                if $data.len() < $num_digits {
+                if $data.len() < ($num_digits + 1) / 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
                 let mut data_value = 0.0;
@@ -471,7 +472,7 @@ impl DataFieldCoding {
             }};
 
             ($data:expr, $num_digits:expr, $sign:expr) => {{
-                if $data.len() < $num_digits {
+                if $data.len() < ($num_digits + 1) / 2 {
                     return Err(DataRecordError::InsufficientData);
                 }
                 let mut data_value = 0.0;
@@ -482,7 +483,7 @@ impl DataFieldCoding {
                         current_weight *= 10.0;
                     }
 
-                    let byte = $data[i / 2];
+                    let byte = $data.get(i / 2).ok_or(DataRecordError::InsufficientData)?;
                     if i % 2 == 0 {
                         let high = f64::from(byte >> 4) * current_weight;
                         data_value += high;
