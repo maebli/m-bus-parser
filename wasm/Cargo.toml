@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-parser-wasm-pack"
-version = "0.0.6"
+version = "0.0.5"
 edition = "2021"
 description = "A wasm-pack to use the library for parsing M-Bus frames"
 license = "MIT"
