@@ -439,68 +439,51 @@ macro_rules! parse_year {
         }
     }};
 }
+fn bcd_to_value_internal(
+    data: &[u8],
+    num_digits: usize,
+    sign: i32,
+) -> Result<Data, DataRecordError> {
+    if data.len() < (num_digits + 1) / 2 {
+        return Err(DataRecordError::InsufficientData);
+    }
+
+    let mut data_value = 0.0;
+    let mut current_weight = 1.0;
+
+    for i in 0..num_digits {
+        let byte = data.get(i / 2).ok_or(DataRecordError::InsufficientData)?;
+
+        let digit = if i % 2 == 0 {
+            byte & 0x0F
+        } else {
+            (byte >> 4) & 0x0F
+        };
+
+        data_value += f64::from(digit) * current_weight;
+        current_weight *= 10.0;
+    }
+
+    let signed_value = data_value * sign as f64;
+
+    Ok(Data {
+        value: Some(DataType::Number(signed_value)),
+        size: (num_digits + 1) / 2,
+    })
+}
 
 impl DataFieldCoding {
     pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
         macro_rules! bcd_to_value {
             ($data:expr, $num_digits:expr) => {{
-                if $data.len() < ($num_digits + 1) / 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let mut data_value = 0.0;
-                let mut current_weight = 1.0;
-
-                for i in 0..$num_digits {
-                    if i % 2 == 0 {
-                        current_weight *= 10.0;
-                    }
-
-                    let byte = $data.get(i / 2).ok_or(DataRecordError::InsufficientData)?;
-                    if i % 2 == 0 {
-                        let high = f64::from(byte >> 4) * current_weight;
-                        data_value += high;
-                    } else {
-                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
-                        data_value += low;
-                    }
-                }
-
-                Ok(Data {
-                    value: Some(DataType::Number(data_value as f64)),
-                    size: ($num_digits + 1) / 2,
-                })
+                bcd_to_value_internal($data, $num_digits, 1)
             }};
 
             ($data:expr, $num_digits:expr, $sign:expr) => {{
-                if $data.len() < ($num_digits + 1) / 2 {
-                    return Err(DataRecordError::InsufficientData);
-                }
-                let mut data_value = 0.0;
-                let mut current_weight = 1.0;
-
-                for i in 0..$num_digits {
-                    if i % 2 == 0 {
-                        current_weight *= 10.0;
-                    }
-
-                    let byte = $data.get(i / 2).ok_or(DataRecordError::InsufficientData)?;
-                    if i % 2 == 0 {
-                        let high = f64::from(byte >> 4) * current_weight;
-                        data_value += high;
-                    } else {
-                        let low = f64::from(byte & 0x0F) * (current_weight / 10.0);
-                        data_value += low;
-                    }
-                }
-
-                let signed_value = data_value * $sign as f64;
-
-                Ok(Data {
-                    value: Some(DataType::Number(signed_value)),
-                    size: ($num_digits + 1) / 2,
-                })
+                bcd_to_value_internal($data, $num_digits, $sign)
             }};
         }
+
         macro_rules! integer_to_value {
             ($data:expr, $byte_size:expr) => {{
                 if $data.len() < $byte_size {
@@ -575,7 +558,7 @@ impl DataFieldCoding {
                         length -= 0xC0;
                         let is_negative =
                             *input.first().ok_or(DataRecordError::InsufficientData)? > 0xC9;
-                        let sign = if is_negative { -1.0 } else { 1.0 };
+                        let sign = if is_negative { -1 } else { 1 };
                         bcd_to_value!(input, length as usize, sign)
                     }
                     0xE0..=0xE9 => {
@@ -873,5 +856,18 @@ mod tests {
         let result = DataInformationBlock::try_from(data.as_slice());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().get_size(), 2);
+    }
+
+    #[test]
+    fn test_bcd_to_value_unsigned() {
+        let data = [0x54, 0x76, 0x98];
+        let result = bcd_to_value_internal(&data, 6, 1);
+        assert_eq!(
+            result.unwrap(),
+            Data {
+                value: Some(DataType::Number(987654.0)),
+                size: 3
+            }
+        );
     }
 }
