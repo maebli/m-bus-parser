@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-parser"
-version = "0.0.12"
+version = "0.0.13"
 edition = "2021"
 description = "A library for parsing M-Bus frames"
 license = "MIT"
