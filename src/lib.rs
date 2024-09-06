@@ -47,7 +47,7 @@ use frames::FrameError;
 use user_data::ApplicationLayerError;
 
 #[cfg(feature = "std")]
-use prettytable::{format, row, Table};
+use prettytable::{csv::Writer, format, row, Table};
 
 #[cfg(feature = "std")]
 use std::str;
@@ -141,12 +141,13 @@ pub fn serialize_mbus_data(data: &str, format: &str) -> String {
     match format {
         "json" => parse_to_json(data),
         "yaml" => parse_to_yaml(data),
+        "csv" => parse_to_csv(data).to_string(),
         _ => parse_to_table(data).to_string(),
     }
 }
 
 #[cfg(feature = "std")]
-fn parse_to_json(input: &str) -> std::string::String {
+pub fn parse_to_json(input: &str) -> String {
     let data = clean_and_convert(input);
     let parsed_data = MbusData::try_from(data.as_slice());
 
@@ -156,7 +157,7 @@ fn parse_to_json(input: &str) -> std::string::String {
 }
 
 #[cfg(feature = "std")]
-fn parse_to_yaml(input: &str) -> std::string::String {
+fn parse_to_yaml(input: &str) -> String {
     let data = clean_and_convert(input);
     let parsed_data = MbusData::try_from(data.as_slice());
 
@@ -166,13 +167,14 @@ fn parse_to_yaml(input: &str) -> std::string::String {
 }
 
 #[cfg(feature = "std")]
-fn parse_to_table(input: &str) -> std::string::String {
+fn parse_to_table(input: &str) -> String {
     use user_data::UserDataBlock;
 
     let data = clean_and_convert(input);
 
     let mut table_output = String::new();
-    if let Ok(parsed_data) = MbusData::try_from(data.as_slice()) {
+    let parsed_data_result = MbusData::try_from(data.as_slice());
+    if let Ok(parsed_data) = parsed_data_result {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
 
@@ -299,6 +301,51 @@ fn parse_to_table(input: &str) -> std::string::String {
         table_output.push_str(&table.to_string());
         table_output
     } else {
-        "Error parsing data".to_string()
+        format!("Error {:?} parsing data", parsed_data_result)
+    }
+}
+
+#[cfg(feature = "std")]
+pub fn parse_to_csv(input: &str) -> String {
+    let data = clean_and_convert(input);
+    let _parsed_data = MbusData::try_from(data.as_slice());
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+    table.set_titles(row![
+        "FrameType",
+        "Function",
+        "Address",
+        "IdentificationNumber",
+        "Manufacturer",
+        "AccessNumber",
+        "Status",
+        "Signature",
+        "Version",
+        "Medium",
+        "MediumAdUnit",
+        "Counter1",
+        "Counter2",
+        "Subcode",
+        "Value",
+        "DataInformation"
+    ]);
+
+    let writer = Writer::from_writer(vec![]);
+    let x = table.to_csv_writer(writer).unwrap();
+    String::from_utf8(x.into_inner().unwrap()).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_csv_converter() {
+        use super::parse_to_csv;
+        let x = "0000";
+        let y = parse_to_csv(x);
+        println!("{}", y);
     }
 }
