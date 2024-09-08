@@ -6,6 +6,7 @@
 //! ```rust
 //! use m_bus_parser::frames::{ Address, Frame, Function };
 //! use m_bus_parser::user_data::{ DataRecords, UserDataBlock };
+//! use m_bus_parser::MbusData;
 //! use std::io;
 //!
 //!     let example = vec![
@@ -41,36 +42,17 @@
 //!
 //! ```
 
-#![cfg_attr(feature = "defmt", feature(trivial_bounds))]
 #![cfg_attr(not(feature = "std"), no_std)]
+
 use frames::FrameError;
 use user_data::ApplicationLayerError;
 
-#[cfg(feature = "std")]
-use prettytable::{csv::Writer, format, row, Table};
-
-#[cfg(feature = "std")]
-use std::str;
-
 pub mod frames;
+pub mod mbus_data;
 pub mod user_data;
 
 #[derive(Debug)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize),
-    serde(bound(deserialize = "'de: 'a"))
-)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct MbusData<'a> {
-    pub frame: frames::Frame<'a>,
-    pub user_data: Option<user_data::UserDataBlock<'a>>,
-    pub data_records: Option<user_data::DataRecords<'a>>,
-}
-
-#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum MbusError {
     FrameError(FrameError),
     ApplicationLayerError(ApplicationLayerError),
@@ -199,10 +181,7 @@ fn parse_to_table(input: &str) -> String {
                     }) => {
                         table.add_row(row![
                             fixed_data_header.identification_number,
-                            fixed_data_header
-                                .manufacturer
-                                .map(|i| i.to_string())
-                                .unwrap_or_else(|_| "invalid".to_string()),
+                            fixed_data_header.manufacturer,
                             fixed_data_header.access_number,
                             fixed_data_header.status,
                             fixed_data_header.signature,
