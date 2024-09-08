@@ -4,8 +4,13 @@ use prettytable::{csv::Writer, format, row, Table};
 use crate::frames;
 use crate::user_data;
 use crate::MbusError;
-use serde::Deserialize;
-#[derive(Debug)]
+
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(bound(deserialize = "'de: 'a")),
+    derive(Debug)
+)]
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
@@ -221,32 +226,149 @@ fn parse_to_table(input: &str) -> String {
 
 #[cfg(feature = "std")]
 pub fn parse_to_csv(input: &str) -> String {
-    let data = clean_and_convert(input);
-    let _parsed_data = MbusData::try_from(data.as_slice());
-    let mut table = Table::new();
-    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-    table.set_titles(row![
-        "FrameType",
-        "Function",
-        "Address",
-        "IdentificationNumber",
-        "Manufacturer",
-        "AccessNumber",
-        "Status",
-        "Signature",
-        "Version",
-        "Medium",
-        "MediumAdUnit",
-        "Counter1",
-        "Counter2",
-        "Subcode",
-        "Value",
-        "DataInformation"
-    ]);
+    use prettytable::csv;
 
-    let writer = Writer::from_writer(vec![]);
-    let x = table.to_csv_writer(writer).unwrap();
-    String::from_utf8(x.into_inner().unwrap()).unwrap()
+    use crate::user_data::UserDataBlock;
+
+    let data = clean_and_convert(input);
+    let parsed_data = MbusData::try_from(data.as_slice());
+
+    // CSV writer using a vector as an intermediate buffer
+    let mut writer = csv::Writer::from_writer(vec![]);
+
+    // Write the CSV headers
+    writer
+        .write_record(&[
+            "FrameType",
+            "Function",
+            "Address",
+            "IdentificationNumber",
+            "Manufacturer",
+            "AccessNumber",
+            "Status",
+            "Signature",
+            "Version",
+            "Medium",
+            "MediumAdUnit",
+            "Counter1",
+            "Counter2",
+            "Subcode",
+            "Value",
+            "DataInformation",
+        ])
+        .unwrap();
+
+    if let Ok(parsed_data) = parsed_data {
+        match parsed_data.frame {
+            frames::Frame::LongFrame {
+                function, address, ..
+            } => {
+                let mut row = vec![
+                    "LongFrame".to_string(),
+                    function.to_string(),
+                    address.to_string(),
+                ];
+
+                if let Some(user_data) = parsed_data.user_data {
+                    match user_data {
+                        UserDataBlock::VariableDataStructure {
+                            fixed_data_header, ..
+                        } => {
+                            row.extend_from_slice(&[
+                                fixed_data_header.identification_number.to_string(),
+                                fixed_data_header.manufacturer.to_string(),
+                                fixed_data_header.access_number.to_string(),
+                                fixed_data_header.status.to_string(),
+                                fixed_data_header.signature.to_string(),
+                                fixed_data_header.version.to_string(),
+                                fixed_data_header.medium.to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                            ]);
+                        }
+                        UserDataBlock::FixedDataStructure {
+                            identification_number,
+                            access_number,
+                            status,
+                            medium_ad_unit,
+                            counter1,
+                            counter2,
+                        } => {
+                            row.extend_from_slice(&[
+                                identification_number.to_string(),
+                                "".to_string(),
+                                access_number.to_string(),
+                                status.to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                medium_ad_unit.to_string(),
+                                counter1.to_string(),
+                                counter2.to_string(),
+                                "".to_string(),
+                            ]);
+                        }
+                        UserDataBlock::ResetAtApplicationLevel { subcode } => {
+                            row.extend_from_slice(&[
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                "".to_string(),
+                                subcode.to_string(),
+                            ]);
+                        }
+                    }
+                }
+
+                if let Some(data_records) = parsed_data.data_records {
+                    for record in data_records.flatten() {
+                        let mut data_row = row.clone();
+                        data_row.extend_from_slice(&[
+                            format!(
+                                "{} ({})",
+                                record.data,
+                                record
+                                    .data_record_header
+                                    .processed_data_record_header
+                                    .value_information
+                            ),
+                            record
+                                .data_record_header
+                                .processed_data_record_header
+                                .data_information
+                                .to_string(),
+                        ]);
+                        writer.write_record(&data_row).unwrap();
+                    }
+                } else {
+                    writer.write_record(&row).unwrap();
+                }
+            }
+            frames::Frame::ShortFrame { .. } => {
+                writer.write_record(&["ShortFrame"; 16]).unwrap();
+            }
+            frames::Frame::SingleCharacter { .. } => {
+                writer.write_record(&["SingleCharacter"; 16]).unwrap();
+            }
+            frames::Frame::ControlFrame { .. } => {
+                writer.write_record(&["ControlFrame"; 16]).unwrap();
+            }
+        }
+    } else {
+        writer.write_record(&["Error parsing data"; 16]).unwrap();
+    }
+
+    // Convert CSV to a string and return it
+    let csv_data = writer.into_inner().unwrap();
+    String::from_utf8(csv_data).unwrap()
 }
 
 #[cfg(test)]
