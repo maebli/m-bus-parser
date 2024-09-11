@@ -1,4 +1,5 @@
 use hex;
+use m_bus_parser::serialize_mbus_data;
 use m_bus_parser::user_data::DataRecords;
 use pyo3::prelude::*;
 use serde_json;
@@ -32,8 +33,14 @@ fn parse_application_layer(data_record: &str) -> PyResult<String> {
     }
 }
 
+#[pyfunction]
+pub fn m_bus_parse(data: &str, format: &str) -> String {
+    serialize_mbus_data(data, format)
+}
+
 #[pymodule]
-fn py_m_bus_parser(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn pymbusparser(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_application_layer, m)?)?;
+    m.add_function(wrap_pyfunction!(m_bus_parse, m)?)?;
     Ok(())
 }

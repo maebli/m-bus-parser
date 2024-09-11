@@ -1,5 +1,5 @@
 [package]
-name = "py-m-bus-parser"
+name = "pymbusparser"
 version = "0.1.1"
 edition = "2021"
 homepage = "https://maebli.github.io/"
@@ -12,4 +12,4 @@ pyo3 = { version = "0.22.2", features = ["extension-module"] }
 hex = "0.4.2"
 
 [lib]
-name = "m_bus_parser"
+name = "pymbusparser"
