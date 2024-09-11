@@ -1,6 +1,6 @@
 [project]
 name = "pymbusparser"
-version = "0.1.0"
+version = "0.0.0"
 description = "Python bindings for m-bus-parser written in Rust"
 readme = "README.md"
 # name and email
