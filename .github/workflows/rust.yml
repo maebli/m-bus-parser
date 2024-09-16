@@ -123,7 +123,17 @@ jobs:
           cd cli/src
           cargo publish --token ${{ secrets.CRATESTOKEN }}
 
-
+  publish-python-bindings:
+    needs: build-library
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/python-v')
+    steps:
+        - name: Install maturin
+          run: python -m pip install maturin
+        - name: Build Python bindings
+          run: maturin build
+        - name: Publish Python bindings to PyPI
+          run: maturin publish 
   publish-wasm:
     needs: build-wasm
     runs-on: ubuntu-latest
