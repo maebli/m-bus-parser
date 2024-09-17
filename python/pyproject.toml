@@ -1,10 +1,11 @@
 [project]
 name = "pymbusparser"
-version = "0.0.0"
+version = "0.0.1"
 description = "Python bindings for m-bus-parser written in Rust"
 homepage = "https://maebli.github.io/"
 authors = [{name = "Michael Aebli", email = ""}] 
 license = "MIT"
+readme = "README_python.md"
 
 
 [build-system]
