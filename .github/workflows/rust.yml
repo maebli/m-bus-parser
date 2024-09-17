@@ -9,6 +9,7 @@ on:
       - 'wasm-v*'
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-library:
@@ -122,8 +123,6 @@ jobs:
         run: |
           cd cli/src
           cargo publish --token ${{ secrets.CRATESTOKEN }}
-
-
   publish-wasm:
     needs: build-wasm
     runs-on: ubuntu-latest

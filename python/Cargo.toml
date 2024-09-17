@@ -1,0 +1,15 @@
+[package]
+name = "pymbusparser"
+version = "0.0.1"
+edition = "2021"
+homepage = "https://maebli.github.io/"
+repository = "https://github.com/maebli/m-bus-parser"
+
+[dependencies]
+m-bus-parser = { path = "..", version = "0.0.13", features = ["std", "serde"] }
+serde_json = "1.0"
+pyo3 = { version = "0.22.2", features = ["extension-module","generate-import-lib"] }
+hex = "0.4.2"
+
+[lib]
+name = "pymbusparser"

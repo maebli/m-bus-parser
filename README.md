@@ -4,6 +4,7 @@
 [![Discord](https://img.shields.io/badge/Discord-Join%20Now-blue?style=flat&logo=Discord)](https://discord.gg/FfmecQ4wua)
 [![Crates.io](https://img.shields.io/crates/v/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![Downloads](https://img.shields.io/crates/d/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![License](https://img.shields.io/crates/l/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![Documentation](https://docs.rs/m-bus-parser/badge.svg)](https://docs.rs/m-bus-parser) [![Build Status](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml/badge.svg)](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml)
 
+
 ### Introduction 
 
 *For contributing see [CONTRIBUTING.md](./CONTRIBUTING.md)*
@@ -35,6 +36,10 @@ The source is in the wasm folder in this repos
 
 There is a cli, the source is in the sub folder "cli" and is published on crates.io [https://crates.io/crates/m-bus-parser-cli](https://crates.io/crates/m-bus-parser-cli).
 
+### Python bindings
+[![PyPI version](https://badge.fury.io/py/pymbusparser.png)](https://badge.fury.io/py/pymbusparser)
+
+The are some python bindings, the source is in the sub folder "python" and is published on pypi [https://pypi.org/project/pymbusparser/](https://pypi.org/project/pymbusparser/).
 
 ### Visualization of Library Function
 
