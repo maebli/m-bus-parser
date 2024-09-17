@@ -9,6 +9,7 @@ on:
       - 'wasm-v*'
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-library:
