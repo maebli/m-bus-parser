@@ -155,8 +155,7 @@ jobs:
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
-          name: whee
-          ls-sdist
+          name: wheels-sdist
           path: dist
         working-directory: ./python
 
