@@ -2,9 +2,8 @@ name: Python Bindings CI
 
 on:
   push:
-    branches:
-      - '*' 
-  pull_request:
+    tags:
+      - 'python-v*'
   workflow_dispatch:
 
 permissions:
