@@ -341,12 +341,13 @@ pub enum DataType<'a> {
         SingleEveryOrInvalid<Minute>,
         SingleEveryOrInvalid<Second>,
     ),
+    ManufacturerSpecific(&'a [u8]),
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug)]
 pub struct Data<'a> {
-    value: Option<DataType<'a>>,
-    size: usize,
+    pub value: Option<DataType<'a>>,
+    pub size: usize,
 }
 
 #[cfg(feature = "std")]
@@ -383,6 +384,10 @@ impl std::fmt::Display for Data<'_> {
                 }
                 DataType::Time(seconds, minutes, hours) => {
                     write!(f, "{}:{}:{}", hours, minutes, seconds)
+                }
+                DataType::Text(text_unit) => todo!(),
+                DataType::ManufacturerSpecific(data) => {
+                    write!(f, "Manufacturer Specific: {:?}", data)
                 }
             },
             None => write!(f, "No Data"),

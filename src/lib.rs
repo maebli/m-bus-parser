@@ -257,17 +257,20 @@ fn parse_to_table(input: &str) -> std::string::String {
                     for record in data_records.flatten() {
                         table.add_row(row![
                             format!(
-                                "({}{}",
+                                "({:?}{:?}",
                                 record.data,
                                 record
                                     .data_record_header
                                     .processed_data_record_header
                                     .value_information
                             ),
-                            record
-                                .data_record_header
-                                .processed_data_record_header
-                                .data_information
+                            format!(
+                                "{:?}",
+                                record
+                                    .data_record_header
+                                    .processed_data_record_header
+                                    .data_information
+                            )
                         ]);
                     }
                 }

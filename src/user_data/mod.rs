@@ -35,10 +35,6 @@ impl<'a> Iterator for DataRecords<'a> {
 
         while self.offset < self.data.len() {
             match self.data.get(self.offset)? {
-                0x0F => {
-                    /* TODO: parse manufacturer specific */
-                    self.offset = self.data.len();
-                }
                 0x1F => {
                     /* TODO: parse manufacturer specific */
                     _more_records_follow = true;
@@ -126,7 +122,7 @@ pub enum Direction {
     MasterToSlave,
 }
 
-// implement from trait for diirection
+// implement from trait for direction
 impl From<ControlInformation> for Direction {
     fn from(single_byte: ControlInformation) -> Self {
         match single_byte {
