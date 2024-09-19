@@ -153,7 +153,7 @@ impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
         }
 
         Ok(DataRecord {
-            data_record_header: data_record_header,
+            data_record_header,
             data: data_out,
         })
     }
