@@ -123,13 +123,12 @@ impl<'a> TryFrom<&'a [u8]> for DataRecordHeader<'a> {
 
 impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
     type Error = DataRecordError;
-    fn try_from(data: &[u8]) -> Result<DataRecord, DataRecordError> {
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
         let data_record_header = DataRecordHeader::try_from(data)?;
         let mut offset = data_record_header
             .raw_data_record_header
             .data_information_block
             .get_size();
-
         let mut data_out = Data {
             value: Some(DataType::ManufacturerSpecific(data)),
             size: data.len(),
@@ -139,19 +138,16 @@ impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
             .value_information_block
         {
             offset += x.get_size();
-
-            data_out = data_record_header
+            if let Some(data_info) = &data_record_header
                 .processed_data_record_header
                 .data_information
-                .clone()
-                .unwrap()
-                .data_field_coding
-                .parse(
+            {
+                data_out = data_info.data_field_coding.parse(
                     data.get(offset..)
                         .ok_or(DataRecordError::InsufficientData)?,
                 )?;
+            }
         }
-
         Ok(DataRecord {
             data_record_header,
             data: data_out,
