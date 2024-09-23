@@ -255,19 +255,27 @@ fn parse_to_table(input: &str) -> std::string::String {
 
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
+                        let value_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .value_information
+                        {
+                            Some(x) => format!("{}", x),
+                            None => "None".to_string(),
+                        };
+
+                        let data_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .data_information
+                        {
+                            Some(x) => format!("{}", x),
+                            None => "None".to_string(),
+                        };
+
                         table.add_row(row![
-                            format!(
-                                "({}{}",
-                                record.data,
-                                record
-                                    .data_record_header
-                                    .processed_data_record_header
-                                    .value_information
-                            ),
-                            record
-                                .data_record_header
-                                .processed_data_record_header
-                                .data_information
+                            format!("({}{:}", record.data, value_information),
+                            format!("{}", data_information)
                         ]);
                     }
                 }
