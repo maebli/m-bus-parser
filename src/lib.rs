@@ -274,7 +274,7 @@ fn parse_to_table(input: &str) -> std::string::String {
                         };
 
                         table.add_row(row![
-                            format!("({}{:}", record.data, value_information),
+                            format!("({}{}", record.data, value_information),
                             format!("{}", data_information)
                         ]);
                     }

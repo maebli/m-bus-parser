@@ -252,6 +252,16 @@ impl PartialEq<str> for TextUnit<'_> {
         self.0.iter().eq(other.as_bytes().iter().rev())
     }
 }
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for TextUnit<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value: Vec<u8> = self.0.iter().copied().rev().collect();
+        let value = String::from_utf8(value).unwrap_or_default();
+        write!(f, "{}", value)
+    }
+}
+
 #[cfg(any(feature = "serde", feature = "std"))]
 impl From<TextUnit<'_>> for String {
     fn from(value: TextUnit<'_>) -> Self {
@@ -366,10 +376,6 @@ impl std::fmt::Display for Data<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value {
             Some(value) => match value {
-                &DataType::Text(text) => {
-                    let text: String = text.into();
-                    write!(f, "{}", text)
-                }
                 DataType::Number(value) => write!(f, "{}", value),
                 DataType::Date(day, month, year) => write!(f, "{}/{}/{}", day, month, year),
                 DataType::DateTime(day, month, year, hour, minute) => {
@@ -385,7 +391,10 @@ impl std::fmt::Display for Data<'_> {
                 DataType::Time(seconds, minutes, hours) => {
                     write!(f, "{}:{}:{}", hours, minutes, seconds)
                 }
-                DataType::Text(text_unit) => todo!(),
+                DataType::Text(text_unit) => {
+                    let text: String = (*text_unit).into();
+                    write!(f, "{}", text)
+                }
                 DataType::ManufacturerSpecific(data) => {
                     write!(f, "Manufacturer Specific: {:?}", data)
                 }
