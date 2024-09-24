@@ -1,6 +1,7 @@
-# Python bindings [WIP]  
+# Python bindings 
 
 Rust lib aims to be accessible from a Python module. This is done by using the `PyO3` crate.
+See the rust project for more documentation on the Rust side of things [on github](https://github.com/maebli/m-bus-parser).
 
 ## Development
 
