@@ -44,3 +44,15 @@ fn pymbusparser(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(m_bus_parse, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_application_layer() {
+        let data_record = "2F2F03740100000413FCE0F5054413FCE0F505426C11390F0100F02F2F2F2F2F";
+        let result = parse_application_layer(data_record).unwrap();
+        print!("{}", result);
+    }
+}
