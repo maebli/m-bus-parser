@@ -214,6 +214,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     }
                     0x10..=0x17 => {
                         units.push(unit!(Meter ^ 3));
+                        labels.push(ValueLabel::Volume);
                         decimal_scale_exponent =
                             (value_information_block.value_information.data & 0b111) as isize - 6;
                     }
@@ -1030,6 +1031,7 @@ pub enum ValueLabel {
     LowTemperatureRatingFactor,
     DisplayOutputScalingFactor,
     ManufacturerSpecific,
+    Volume,
 }
 
 #[cfg(feature = "std")]
