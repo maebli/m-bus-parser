@@ -1202,7 +1202,11 @@ mod tests {
                     x.push(unit!(Meter ^ 3));
                     x
                 },
-                labels: ArrayVec::<ValueLabel, 10>::new()
+                labels: {
+                    let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Volume);
+                    x
+                }
             }
         );
 
@@ -1228,7 +1232,12 @@ mod tests {
                     x.push(unit!(Meter ^ 3));
                     x
                 },
-                labels: ArrayVec::<ValueLabel, 10>::new()
+
+                labels: {
+                    let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Volume);
+                    x
+                }
             }
         );
 
@@ -1254,7 +1263,11 @@ mod tests {
                     x.push(unit!(Meter ^ 3));
                     x
                 },
-                labels: ArrayVec::<ValueLabel, 10>::new()
+                labels: {
+                    let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Volume);
+                    x
+                }
             }
         );
 
@@ -1290,6 +1303,7 @@ mod tests {
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
         assert_eq!(ValueInformation::try_from(&result).unwrap().labels, {
             let mut x = ArrayVec::<ValueLabel, 10>::new();
+            x.push(ValueLabel::Volume);
             x.push(ValueLabel::Averaged);
             x
         });
@@ -1308,6 +1322,7 @@ mod tests {
             ValueInformation {
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Volume);
                     x.push(ValueLabel::Averaged);
                     x
                 },
@@ -1337,6 +1352,7 @@ mod tests {
             ValueInformation {
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();
+                    x.push(ValueLabel::Volume);
                     x.push(ValueLabel::Averaged);
                     x
                 },
