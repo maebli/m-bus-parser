@@ -189,19 +189,27 @@ fn parse_to_table(input: &str) -> String {
 
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
+                        let value_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .value_information
+                        {
+                            Some(x) => format!("{}", x),
+                            None => "None".to_string(),
+                        };
+
+                        let data_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .data_information
+                        {
+                            Some(x) => format!("{}", x),
+                            None => "None".to_string(),
+                        };
+
                         table.add_row(row![
-                            format!(
-                                "({}{}",
-                                record.data,
-                                record
-                                    .data_record_header
-                                    .processed_data_record_header
-                                    .value_information
-                            ),
-                            record
-                                .data_record_header
-                                .processed_data_record_header
-                                .data_information
+                            format!("({}{}", record.data, value_information),
+                            format!("{}", data_information)
                         ]);
                     }
                 }
@@ -330,23 +338,24 @@ pub fn parse_to_csv(input: &str) -> String {
 
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
-                        let mut data_row = row.clone();
-                        data_row.extend_from_slice(&[
-                            format!(
-                                "{} ({})",
-                                record.data,
-                                record
-                                    .data_record_header
-                                    .processed_data_record_header
-                                    .value_information
-                            ),
-                            record
-                                .data_record_header
-                                .processed_data_record_header
-                                .data_information
-                                .to_string(),
-                        ]);
-                        writer.write_record(&data_row).unwrap();
+                        let value_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .value_information
+                        {
+                            Some(x) => format!("{}", x),
+                            None => "None".to_string(),
+                        };
+
+                        let data_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .data_information
+                        {
+                            Some(x) => format!("{}", x),
+                            None => "None".to_string(),
+                        };
+
                     }
                 } else {
                     writer.write_record(&row).unwrap();
