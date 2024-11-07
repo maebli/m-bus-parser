@@ -17,6 +17,7 @@ pub mod variable_user_data;
 pub struct DataRecords<'a> {
     offset: usize,
     data: &'a [u8],
+    fixed_data_header: Option<&'a FixedDataHeader>,
 }
 
 #[cfg(feature = "serde")]
@@ -44,7 +45,11 @@ impl<'a> Iterator for DataRecords<'a> {
                     self.offset += 1;
                 }
                 _ => {
-                    let record = DataRecord::try_from(self.data.get(self.offset..)?);
+                    let record = if let Some(fixed_data_header) = self.fixed_data_header {
+                        DataRecord::try_from((self.data.get(self.offset..)?, fixed_data_header))
+                    } else {
+                        DataRecord::try_from(self.data.get(self.offset..)?)
+                    };
                     if let Ok(record) = record {
                         self.offset += record.get_size();
                         return Some(Ok(record));
@@ -60,8 +65,12 @@ impl<'a> Iterator for DataRecords<'a> {
 
 impl<'a> DataRecords<'a> {
     #[must_use]
-    pub const fn new(data: &'a [u8]) -> Self {
-        DataRecords { offset: 0, data }
+    pub const fn new(data: &'a [u8], fixed_data_header: Option<&'a FixedDataHeader>) -> Self {
+        DataRecords {
+            offset: 0,
+            data,
+            fixed_data_header,
+        }
     }
 }
 
@@ -517,6 +526,7 @@ pub struct FixedDataHeader {
     pub access_number: u8,
     pub status: StatusField,
     pub signature: u16,
+    pub lsb_order: bool,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -644,6 +654,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ]),
+                        lsb_order,
                     },
                     variable_data_block: data
                         .get(13..data.len())
@@ -888,6 +899,12 @@ mod tests {
                         fixed_data_header.identification_number.number,
                         expected_iden_nr
                     );
+
+                    let data_records =
+                        DataRecords::try_from((variable_data_block, &fixed_data_header)).unwrap();
+                    for record in data_records.flatten() {
+                        println!("record: {:?}", record);
+                    }
                 }
             }
         }
