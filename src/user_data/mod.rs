@@ -146,7 +146,9 @@ impl From<ControlInformation> for Direction {
             ControlInformation::HashProcedure(_) => Self::MasterToSlave,
             ControlInformation::SendErrorStatus => Self::SlaveToMaster,
             ControlInformation::SendAlarmStatus => Self::SlaveToMaster,
-            ControlInformation::ResponseWithVariableDataStructure => Self::SlaveToMaster,
+            ControlInformation::ResponseWithVariableDataStructure { lsb_order: _ } => {
+                Self::SlaveToMaster
+            }
             ControlInformation::ResponseWithFixedDataStructure => Self::SlaveToMaster,
         }
     }
@@ -174,7 +176,7 @@ pub enum ControlInformation {
     HashProcedure(u8),
     SendErrorStatus,
     SendAlarmStatus,
-    ResponseWithVariableDataStructure,
+    ResponseWithVariableDataStructure { lsb_order: bool },
     ResponseWithFixedDataStructure,
 }
 
@@ -201,7 +203,9 @@ impl ControlInformation {
             0x90..=0x97 => Ok(Self::HashProcedure(byte - 0x90)),
             0x70 => Ok(Self::SendErrorStatus),
             0x71 => Ok(Self::SendAlarmStatus),
-            0x72 | 0x76 => Ok(Self::ResponseWithVariableDataStructure),
+            0x72 | 0x76 => Ok(Self::ResponseWithVariableDataStructure {
+                lsb_order: byte & 0x04 != 0,
+            }),
             0x73 | 0x77 => Ok(Self::ResponseWithFixedDataStructure),
             _ => Err(ApplicationLayerError::InvalidControlInformation { byte }),
         }
@@ -568,11 +572,15 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
 
+        println!("Control Information: {:x?}", data);
+
         let control_information = ControlInformation::from(
             *data
                 .first()
                 .ok_or(ApplicationLayerError::InsufficientData)?,
         )?;
+
+        println!("Control Information: {:?}", control_information);
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
@@ -600,16 +608,23 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             ControlInformation::HashProcedure(_) => todo!(),
             ControlInformation::SendErrorStatus => todo!(),
             ControlInformation::SendAlarmStatus => todo!(),
-            ControlInformation::ResponseWithVariableDataStructure => {
+            ControlInformation::ResponseWithVariableDataStructure { lsb_order } => {
                 let mut iter = data.iter().skip(1);
+                let mut identification_number_bytes = [
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                ];
+                if lsb_order {
+                    identification_number_bytes.reverse();
+                }
+
                 Ok(UserDataBlock::VariableDataStructure {
                     fixed_data_header: FixedDataHeader {
-                        identification_number: IdentificationNumber::from_bcd_hex_digits([
-                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                        ])?,
+                        identification_number: IdentificationNumber::from_bcd_hex_digits(
+                            identification_number_bytes,
+                        )?,
                         manufacturer: ManufacturerCode::from_id(u16::from_le_bytes([
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
@@ -816,5 +831,65 @@ mod tests {
             }
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_lsb_frame() {
+        use crate::frames::Frame;
+
+        let lsb_frame: &[u8] = &[
+            0x68, 0x64, 0x64, 0x68, 0x8, 0x7f, 0x76, 0x9, 0x67, 0x1, 0x6, 0x0, 0x0, 0x51, 0x4,
+            0x50, 0x0, 0x0, 0x0, 0x2, 0x6c, 0x38, 0x1c, 0xc, 0xf, 0x0, 0x80, 0x87, 0x32, 0x8c,
+            0x20, 0xf, 0x0, 0x0, 0x0, 0x0, 0xc, 0x14, 0x13, 0x32, 0x82, 0x58, 0xbc, 0x10, 0x15,
+            0x0, 0x25, 0x81, 0x25, 0x8c, 0x20, 0x13, 0x0, 0x0, 0x0, 0x0, 0x8c, 0x30, 0x13, 0x0,
+            0x0, 0x1, 0x61, 0x8c, 0x40, 0x13, 0x0, 0x0, 0x16, 0x88, 0xa, 0x3c, 0x1, 0x10, 0xa,
+            0x2d, 0x0, 0x80, 0xa, 0x5a, 0x7, 0x18, 0xa, 0x5e, 0x6, 0x53, 0xc, 0x22, 0x0, 0x16, 0x7,
+            0x26, 0x3c, 0x22, 0x0, 0x0, 0x33, 0x81, 0x4, 0x7e, 0x0, 0x0, 0x67, 0xc, 0xc, 0x16,
+        ];
+        let non_lsb_frame: &[u8] = &[
+            0x68, 0xc7, 0xc7, 0x68, 0x8, 0x38, 0x72, 0x56, 0x73, 0x23, 0x72, 0x2d, 0x2c, 0x34, 0x4,
+            0x87, 0x0, 0x0, 0x0, 0x4, 0xf, 0x7f, 0x1c, 0x1, 0x0, 0x4, 0xff, 0x7, 0x8a, 0xad, 0x8,
+            0x0, 0x4, 0xff, 0x8, 0x6, 0xfe, 0x5, 0x0, 0x4, 0x14, 0x4e, 0x55, 0xb, 0x0, 0x84, 0x40,
+            0x14, 0x0, 0x0, 0x0, 0x0, 0x84, 0x80, 0x40, 0x14, 0x0, 0x0, 0x0, 0x0, 0x4, 0x22, 0x76,
+            0x7f, 0x0, 0x0, 0x34, 0x22, 0x8b, 0x2c, 0x0, 0x0, 0x2, 0x59, 0x61, 0x1b, 0x2, 0x5d,
+            0x5f, 0x10, 0x2, 0x61, 0x2, 0xb, 0x4, 0x2d, 0x55, 0x0, 0x0, 0x0, 0x14, 0x2d, 0x83, 0x0,
+            0x0, 0x0, 0x4, 0x3b, 0x6, 0x1, 0x0, 0x0, 0x14, 0x3b, 0xaa, 0x1, 0x0, 0x0, 0x4, 0xff,
+            0x22, 0x0, 0x0, 0x0, 0x0, 0x4, 0x6d, 0x6, 0x2c, 0x1f, 0x3a, 0x44, 0xf, 0xcf, 0x11, 0x1,
+            0x0, 0x44, 0xff, 0x7, 0xb, 0x69, 0x8, 0x0, 0x44, 0xff, 0x8, 0x54, 0xd3, 0x5, 0x0, 0x44,
+            0x14, 0x11, 0xf3, 0xa, 0x0, 0xc4, 0x40, 0x14, 0x0, 0x0, 0x0, 0x0, 0xc4, 0x80, 0x40,
+            0x14, 0x0, 0x0, 0x0, 0x0, 0x54, 0x2d, 0x3a, 0x0, 0x0, 0x0, 0x54, 0x3b, 0x28, 0x1, 0x0,
+            0x0, 0x42, 0x6c, 0x1, 0x3a, 0x2, 0xff, 0x1a, 0x1, 0x1a, 0xc, 0x78, 0x56, 0x73, 0x23,
+            0x72, 0x4, 0xff, 0x16, 0xe6, 0x84, 0x1e, 0x0, 0x4, 0xff, 0x17, 0xc1, 0xd5, 0xb4, 0x0,
+            0x12, 0x16,
+        ];
+        //println!("lsb_frame: {:x?}", non_lsb_frame);
+        let frames = [(lsb_frame, 9670106), (non_lsb_frame, 72237356)];
+
+        for (frame, expected_iden_nr) in frames {
+            let frame = Frame::try_from(frame).unwrap();
+            println!("frame: {:?}", frame);
+
+            if let Frame::LongFrame {
+                function,
+                address,
+                data,
+            } = frame
+            {
+                println!("data: {:x?}", data);
+                let user_data_block = UserDataBlock::try_from(data).unwrap();
+                if let UserDataBlock::VariableDataStructure {
+                    fixed_data_header,
+                    variable_data_block,
+                } = user_data_block
+                {
+                    println!("fixed_data_header: {:?}", fixed_data_header);
+                    println!("variable_data_block: {:x?}", variable_data_block);
+                    assert_eq!(
+                        fixed_data_header.identification_number.number,
+                        expected_iden_nr
+                    );
+                }
+            }
+        }
     }
 }
