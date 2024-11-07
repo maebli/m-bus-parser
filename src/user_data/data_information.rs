@@ -499,8 +499,6 @@ impl DataFieldCoding {
         input: &'a [u8],
         fixed_data_header: Option<&'a FixedDataHeader>,
     ) -> Result<Data<'a>, DataRecordError> {
-        println!("DataFieldCoding: {:?}", self);
-        println!("Input: {:x?}", input);
         let lsb_order = fixed_data_header.map(|x| x.lsb_order).unwrap_or(false);
 
         macro_rules! bcd_to_value {

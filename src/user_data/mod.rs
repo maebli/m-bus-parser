@@ -582,15 +582,11 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
 
-        println!("Control Information: {:x?}", data);
-
         let control_information = ControlInformation::from(
             *data
                 .first()
                 .ok_or(ApplicationLayerError::InsufficientData)?,
         )?;
-
-        println!("Control Information: {:?}", control_information);
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
@@ -847,6 +843,7 @@ mod tests {
     #[test]
     fn test_lsb_frame() {
         use crate::frames::Frame;
+        use crate::user_data::data_information::DataType;
 
         let lsb_frame: &[u8] = &[
             0x68, 0x64, 0x64, 0x68, 0x8, 0x7f, 0x76, 0x9, 0x67, 0x1, 0x6, 0x0, 0x0, 0x51, 0x4,
@@ -873,39 +870,43 @@ mod tests {
             0x72, 0x4, 0xff, 0x16, 0xe6, 0x84, 0x1e, 0x0, 0x4, 0xff, 0x17, 0xc1, 0xd5, 0xb4, 0x0,
             0x12, 0x16,
         ];
-        //println!("lsb_frame: {:x?}", non_lsb_frame);
-        let frames = [(lsb_frame, 9670106), (non_lsb_frame, 72237356)];
 
-        for (frame, expected_iden_nr) in frames {
+        let frames = [
+            (lsb_frame, 9670106, Some(DataType::Number(808732.0))),
+            (non_lsb_frame, 72237356, Some(DataType::Number(568714.0))),
+        ];
+
+        for (frame, expected_iden_nr, data_record_value) in frames {
             let frame = Frame::try_from(frame).unwrap();
-            println!("frame: {:?}", frame);
 
             if let Frame::LongFrame {
-                function,
-                address,
+                function: _,
+                address: _,
                 data,
             } = frame
             {
-                println!("data: {:x?}", data);
                 let user_data_block = UserDataBlock::try_from(data).unwrap();
                 if let UserDataBlock::VariableDataStructure {
                     fixed_data_header,
                     variable_data_block,
                 } = user_data_block
                 {
-                    println!("fixed_data_header: {:?}", fixed_data_header);
-                    println!("variable_data_block: {:x?}", variable_data_block);
                     assert_eq!(
                         fixed_data_header.identification_number.number,
                         expected_iden_nr
                     );
 
-                    let data_records =
-                        DataRecords::try_from((variable_data_block, &fixed_data_header)).unwrap();
-                    for record in data_records.flatten() {
-                        println!("record: {:?}", record);
-                    }
+                    let mut data_records =
+                        DataRecords::try_from((variable_data_block, &fixed_data_header))
+                            .unwrap()
+                            .flatten();
+                    data_records.next().unwrap();
+                    assert_eq!(data_records.next().unwrap().data.value, data_record_value);
+                } else {
+                    panic!("UserDataBlock is not a variable data structure");
                 }
+            } else {
+                panic!("Frame is not a long frame");
             }
         }
     }

@@ -60,7 +60,7 @@ impl<'a> DataRecord<'a> {
                 )?;
             }
         }
-        println!("{:?}", data_out);
+
         Ok(DataRecord {
             data_record_header,
             data: data_out,

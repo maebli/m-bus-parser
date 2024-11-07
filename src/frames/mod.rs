@@ -160,10 +160,8 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
                 }
 
                 let control_field = *data.get(4).ok_or(FrameError::LengthShort)?;
-                println!("control_field: {:x?}", control_field);
 
                 let address_field = *data.get(5).ok_or(FrameError::LengthShort)?;
-                println!("address_field: {:x?}", address_field);
 
                 match control_field {
                     0x53 => Ok(Frame::ControlFrame {
