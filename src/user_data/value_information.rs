@@ -881,7 +881,7 @@ impl fmt::Display for ValueInformation {
     }
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValueLabel {
     Instantaneous,
     ReservedForObjectActions,
