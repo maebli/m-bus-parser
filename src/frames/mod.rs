@@ -158,11 +158,8 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
                 if *data.last().ok_or(FrameError::LengthShort)? != 0x16 {
                     return Err(FrameError::InvalidStopByte);
                 }
-
                 let control_field = *data.get(4).ok_or(FrameError::LengthShort)?;
-
                 let address_field = *data.get(5).ok_or(FrameError::LengthShort)?;
-
                 match control_field {
                     0x53 => Ok(Frame::ControlFrame {
                         function: Function::try_from(control_field)?,
