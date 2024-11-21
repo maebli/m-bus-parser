@@ -507,7 +507,7 @@ impl fmt::Display for Medium {
 #[derive(Debug, PartialEq)]
 pub struct FixedDataHeader {
     pub identification_number: IdentificationNumber,
-    pub manufacturer: ManufacturerCode,
+    pub manufacturer: Result<ManufacturerCode, ApplicationLayerError>,
     pub version: u8,
     pub medium: Medium,
     pub access_number: u8,
@@ -613,7 +613,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         manufacturer: ManufacturerCode::from_id(u16::from_le_bytes([
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                        ]))?,
+                        ])),
                         version: *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         medium: MeasuredMedium::new(
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,

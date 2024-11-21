@@ -195,7 +195,10 @@ fn parse_to_table(input: &str) -> std::string::String {
                     }) => {
                         table.add_row(row![
                             fixed_data_header.identification_number,
-                            fixed_data_header.manufacturer,
+                            fixed_data_header
+                                .manufacturer
+                                .map(|i| i.to_string())
+                                .unwrap_or_else(|_| "invalid".to_string()),
                             fixed_data_header.access_number,
                             fixed_data_header.status,
                             fixed_data_header.signature,

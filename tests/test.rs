@@ -138,18 +138,10 @@ mod tests {
                         .manufacturer
                         .unwrap()
                         .into_bytes();
-                    assert_eq!(
-                        fixed_data_header.manufacturer.code[0],
-                        expected_manufacturer[0] as char
-                    );
-                    assert_eq!(
-                        fixed_data_header.manufacturer.code[1],
-                        expected_manufacturer[1] as char
-                    );
-                    assert_eq!(
-                        fixed_data_header.manufacturer.code[2],
-                        expected_manufacturer[2] as char
-                    );
+                    let manufacturer = fixed_data_header.manufacturer.unwrap();
+                    assert_eq!(manufacturer.code[0], expected_manufacturer[0] as char);
+                    assert_eq!(manufacturer.code[1], expected_manufacturer[1] as char);
+                    assert_eq!(manufacturer.code[2], expected_manufacturer[2] as char);
                     assert_eq!(
                         fixed_data_header.access_number,
                         mbus_data.slave_information.access_number as u8

@@ -58,7 +58,7 @@ impl<'a> DataInformationFieldExtensions<'a> {
     }
 }
 
-impl<'a> Iterator for DataInformationFieldExtensions<'a> {
+impl Iterator for DataInformationFieldExtensions<'_> {
     type Item = DataInformationFieldExtension;
     fn next(&mut self) -> Option<Self::Item> {
         let (head, tail) = self.0.split_first()?;
@@ -69,8 +69,8 @@ impl<'a> Iterator for DataInformationFieldExtensions<'a> {
         (self.0.len(), Some(self.0.len()))
     }
 }
-impl<'a> ExactSizeIterator for DataInformationFieldExtensions<'a> {}
-impl<'a> DoubleEndedIterator for DataInformationFieldExtensions<'a> {
+impl ExactSizeIterator for DataInformationFieldExtensions<'_> {}
+impl DoubleEndedIterator for DataInformationFieldExtensions<'_> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let (end, start) = self.0.split_last()?;
         self.0 = start;
