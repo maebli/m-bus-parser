@@ -73,7 +73,7 @@ impl<'a> TryFrom<&'a [u8]> for RawDataRecordHeader<'a> {
     }
 }
 
-impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader {
+impl TryFrom<&RawDataRecordHeader<'_>> for ProcessedDataRecordHeader {
     type Error = DataRecordError;
     fn try_from(raw_data_record_header: &RawDataRecordHeader) -> Result<Self, DataRecordError> {
         let mut value_information = None;
