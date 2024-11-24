@@ -1,5 +1,5 @@
 use super::data_information::{self};
-use super::DataRecords;
+use super::{DataRecords, FixedDataHeader};
 
 #[derive(Debug, PartialEq)]
 pub enum DataRecordError {
@@ -20,7 +20,13 @@ impl From<DataRecordError> for VariableUserDataError {
 
 impl<'a> From<&'a [u8]> for DataRecords<'a> {
     fn from(data: &'a [u8]) -> Self {
-        DataRecords::new(data)
+        DataRecords::new(data, None)
+    }
+}
+
+impl<'a> From<(&'a [u8], &'a FixedDataHeader)> for DataRecords<'a> {
+    fn from((data, fixed_data_header): (&'a [u8], &'a FixedDataHeader)) -> Self {
+        DataRecords::new(data, Some(fixed_data_header))
     }
 }
 

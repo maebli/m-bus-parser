@@ -1,5 +1,6 @@
 use super::data_information::{self};
 use super::variable_user_data::DataRecordError;
+use super::FixedDataHeader;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
@@ -457,6 +458,7 @@ fn bcd_to_value_internal(
     data: &[u8],
     num_digits: usize,
     sign: i32,
+    lsb_order: bool,
 ) -> Result<Data, DataRecordError> {
     if data.len() < (num_digits + 1) / 2 {
         return Err(DataRecordError::InsufficientData);
@@ -466,7 +468,12 @@ fn bcd_to_value_internal(
     let mut current_weight = 1.0;
 
     for i in 0..num_digits {
-        let byte = data.get(i / 2).ok_or(DataRecordError::InsufficientData)?;
+        let index = if lsb_order {
+            (num_digits - i - 1) / 2
+        } else {
+            i / 2
+        };
+        let byte = data.get(index).ok_or(DataRecordError::InsufficientData)?;
 
         let digit = if i % 2 == 0 {
             byte & 0x0F
@@ -487,14 +494,20 @@ fn bcd_to_value_internal(
 }
 
 impl DataFieldCoding {
-    pub fn parse<'a>(&self, input: &'a [u8]) -> Result<Data<'a>, DataRecordError> {
+    pub fn parse<'a>(
+        &self,
+        input: &'a [u8],
+        fixed_data_header: Option<&'a FixedDataHeader>,
+    ) -> Result<Data<'a>, DataRecordError> {
+        let lsb_order = fixed_data_header.map(|x| x.lsb_order).unwrap_or(false);
+
         macro_rules! bcd_to_value {
             ($data:expr, $num_digits:expr) => {{
-                bcd_to_value_internal($data, $num_digits, 1)
+                bcd_to_value_internal($data, $num_digits, 1, lsb_order)
             }};
 
             ($data:expr, $num_digits:expr, $sign:expr) => {{
-                bcd_to_value_internal($data, $num_digits, $sign)
+                bcd_to_value_internal($data, $num_digits, $sign, lsb_order)
             }};
         }
 
@@ -875,7 +888,7 @@ mod tests {
     #[test]
     fn test_bcd_to_value_unsigned() {
         let data = [0x54, 0x76, 0x98];
-        let result = bcd_to_value_internal(&data, 6, 1);
+        let result = bcd_to_value_internal(&data, 6, 1, false);
         assert_eq!(
             result.unwrap(),
             Data {

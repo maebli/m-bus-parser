@@ -2,6 +2,7 @@ use super::{
     data_information::{Data, DataFieldCoding, DataInformation, DataInformationBlock, DataType},
     value_information::{ValueInformation, ValueInformationBlock, ValueLabel},
     variable_user_data::DataRecordError,
+    FixedDataHeader,
 };
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
@@ -26,6 +27,44 @@ impl DataRecord<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         self.data_record_header.get_size() + self.data.get_size()
+    }
+}
+
+impl<'a> DataRecord<'a> {
+    fn parse(
+        data: &'a [u8],
+        fixed_data_header: Option<&'a FixedDataHeader>,
+    ) -> Result<Self, DataRecordError> {
+        let data_record_header = DataRecordHeader::try_from(data)?;
+        let mut offset = data_record_header
+            .raw_data_record_header
+            .data_information_block
+            .get_size();
+        let mut data_out = Data {
+            value: Some(DataType::ManufacturerSpecific(data)),
+            size: data.len(),
+        };
+        if let Some(x) = &data_record_header
+            .raw_data_record_header
+            .value_information_block
+        {
+            offset += x.get_size();
+            if let Some(data_info) = &data_record_header
+                .processed_data_record_header
+                .data_information
+            {
+                data_out = data_info.data_field_coding.parse(
+                    data.get(offset..)
+                        .ok_or(DataRecordError::InsufficientData)?,
+                    fixed_data_header,
+                )?;
+            }
+        }
+
+        Ok(DataRecord {
+            data_record_header,
+            data: data_out,
+        })
     }
 }
 
@@ -121,37 +160,19 @@ impl<'a> TryFrom<&'a [u8]> for DataRecordHeader<'a> {
     }
 }
 
+impl<'a> TryFrom<(&'a [u8], &'a FixedDataHeader)> for DataRecord<'a> {
+    type Error = DataRecordError;
+    fn try_from(
+        (data, fixed_data_header): (&'a [u8], &'a FixedDataHeader),
+    ) -> Result<Self, Self::Error> {
+        Self::parse(data, Some(fixed_data_header))
+    }
+}
+
 impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
     type Error = DataRecordError;
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
-        let data_record_header = DataRecordHeader::try_from(data)?;
-        let mut offset = data_record_header
-            .raw_data_record_header
-            .data_information_block
-            .get_size();
-        let mut data_out = Data {
-            value: Some(DataType::ManufacturerSpecific(data)),
-            size: data.len(),
-        };
-        if let Some(x) = &data_record_header
-            .raw_data_record_header
-            .value_information_block
-        {
-            offset += x.get_size();
-            if let Some(data_info) = &data_record_header
-                .processed_data_record_header
-                .data_information
-            {
-                data_out = data_info.data_field_coding.parse(
-                    data.get(offset..)
-                        .ok_or(DataRecordError::InsufficientData)?,
-                )?;
-            }
-        }
-        Ok(DataRecord {
-            data_record_header,
-            data: data_out,
-        })
+        Self::parse(data, None)
     }
 }
 
