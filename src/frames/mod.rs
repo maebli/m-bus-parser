@@ -80,7 +80,7 @@ impl TryFrom<u8> for Function {
     }
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Address {
     Uninitalized,
     Primary(u8),
