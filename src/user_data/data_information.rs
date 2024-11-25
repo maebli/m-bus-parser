@@ -155,7 +155,7 @@ const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataInformationExtensionField {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataInformationError {
     NoData,
     DataTooLong,

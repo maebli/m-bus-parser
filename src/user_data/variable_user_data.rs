@@ -1,7 +1,7 @@
 use super::data_information::{self};
 use super::{DataRecords, FixedDataHeader};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataRecordError {
     DataInformationError(data_information::DataInformationError),
     InsufficientData,
