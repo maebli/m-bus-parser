@@ -910,4 +910,52 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_manufacturer_specific_data() {
+        use crate::frames::Frame;
+        use crate::user_data::data_information::DataType;
+
+        let manufacturer_specific_data_frame: &[u8] = &[
+            0x68, 0x55, 0x55, 0x68, 0x8, 0x1e, 0x72, 0x34, 0x35, 0x58, 0x12, 0x92, 0x26, 0x18, 0x4,
+            0x14, 0x0, 0x0, 0x0, 0xc, 0x78, 0x34, 0x35, 0x58, 0x12, 0x4, 0xe, 0x57, 0x64, 0x3, 0x0,
+            0xc, 0x14, 0x73, 0x58, 0x44, 0x0, 0xb, 0x2d, 0x6, 0x0, 0x0, 0xb, 0x3b, 0x55, 0x0, 0x0,
+            0xa, 0x5a, 0x87, 0x6, 0xa, 0x5e, 0x77, 0x5, 0xb, 0x61, 0x1, 0x11, 0x0, 0x4, 0x6d, 0x10,
+            0x2, 0x4, 0x3c, 0x2, 0x27, 0x79, 0x11, 0x9, 0xfd, 0xe, 0x6, 0x9, 0xfd, 0xf, 0x6, 0x8c,
+            0xc0, 0x0, 0x15, 0x71, 0x25, 0x0, 0x0, 0xf, 0x0, 0x0, 0x86, 0x16,
+        ];
+
+        let frame = Frame::try_from(manufacturer_specific_data_frame).unwrap();
+
+        if let Frame::LongFrame {
+            function: _,
+            address: _,
+            data,
+        } = frame
+        {
+            let user_data_block = UserDataBlock::try_from(data).unwrap();
+            if let UserDataBlock::VariableDataStructure {
+                fixed_data_header,
+                variable_data_block,
+            } = user_data_block
+            {
+                let mut data_records: Vec<DataRecord> =
+                    DataRecords::try_from((variable_data_block, &fixed_data_header))
+                        .unwrap()
+                        .flatten()
+                        .collect();
+
+                assert_eq!(data_records.len(), 14);
+
+                assert_eq!(
+                    data_records.pop().unwrap().data.value,
+                    Some(DataType::ManufacturerSpecific(&[15, 0, 0]))
+                );
+                assert_eq!(
+                    data_records.pop().unwrap().data.value,
+                    Some(DataType::Number(2571.0))
+                );
+            }
+        }
+    }
 }
