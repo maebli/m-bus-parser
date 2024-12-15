@@ -20,7 +20,7 @@ serde_derive = "1.0"
 serde-xml-rs = "0.6.0"
 
 [build-dependencies]
-bindgen = "0.70.0"
+bindgen = "0.71.1"
 
 [features]
 default = []
