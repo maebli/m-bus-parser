@@ -184,8 +184,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
         if let Some(difes) = possible_difes {
             first_dife = difes.clone().next();
             let mut tariff_index = 0;
-            let mut device_index = 0;
-            for dife in difes.clone() {
+            for (device_index,dife) in difes.clone().enumerate() {
                 if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
                     return Err(DataInformationError::DataTooLong);
                 }
@@ -194,7 +193,6 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
                 tariff |= u64::from((dife & 0x30) >> 4) << (tariff_index);
                 tariff_index += 2;
                 device |= u64::from((dife & 0x40) >> 6) << device_index;
-                device_index += 1;
                 extension_bit = dife & 0x80 != 0;
                 extension_index += 1;
             }
