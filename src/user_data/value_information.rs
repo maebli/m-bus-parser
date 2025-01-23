@@ -307,7 +307,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     .ok_or(Self::Error::InvalidValueInformation)?;
 
                 let first_vife_data = vife.first().ok_or(DataInformationError::DataTooShort)?.data;
-                let second_vife_data = vife.get(1).ok_or(DataInformationError::DataTooShort)?.data;
+                let second_vife_data = vife.get(1).map(|s| s.data);
                 match first_vife_data & 0x7F {
                     0x00..=0x03 => {
                         units.push(unit!(LocalMoneyCurrency));
@@ -459,13 +459,13 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x74 => labels.push(ValueLabel::RemainingBatteryLifeTime),
                     0x75 => labels.push(ValueLabel::NumberOfTimesTheMeterWasStopped),
                     0x76 => labels.push(ValueLabel::DataContainerForManufacturerSpecificProtocol),
-                    0x7D => match second_vife_data & 0x7F {
-                        0x00 => labels.push(ValueLabel::CurrentlySelectedApplication),
-                        0x02 => {
+                    0x7D => match second_vife_data.map(|s| s & 0x7F) {
+                        Some(0x00) => labels.push(ValueLabel::CurrentlySelectedApplication),
+                        Some(0x02) => {
                             units.push(unit!(Month));
                             labels.push(ValueLabel::RemainingBatteryLifeTime);
                         }
-                        0x03 => {
+                        Some(0x03) => {
                             units.push(unit!(Year));
                             labels.push(ValueLabel::RemainingBatteryLifeTime);
                         }
