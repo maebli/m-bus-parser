@@ -700,7 +700,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
 
     use super::*;
@@ -939,7 +939,7 @@ mod tests {
                 variable_data_block,
             } = user_data_block
             {
-                let mut data_records: Vec<DataRecord> =
+                let mut data_records: Vec<_> =
                     DataRecords::try_from((variable_data_block, &fixed_data_header))
                         .unwrap()
                         .flatten()
