@@ -2,8 +2,7 @@
 name = "pymbusparser"
 version = "0.0.3"
 description = "Python bindings for m-bus-parser written in Rust"
-homepage = "https://maebli.github.io/"
-authors = [{name = "Michael Aebli", email = ""}] 
+authors = [{name = "Michael Aebli"}] 
 license = { text = "MIT" }
 readme = "README_python.md"
 
