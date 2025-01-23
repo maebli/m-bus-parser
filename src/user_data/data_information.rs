@@ -133,6 +133,8 @@ impl DataInformationFieldExtension {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataInformation {
     pub storage_number: u64,
+    pub tariff: u64,
+    pub device: u64,
     pub function_field: FunctionField,
     pub data_field_coding: DataFieldCoding,
     pub data_information_extension: Option<DataInformationExtensionField>,
@@ -175,20 +177,24 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
 
         let mut extension_bit = dif & 0x80 != 0;
         let mut extension_index = 1;
-        let mut _tariff = 0;
-        let mut _sub_unit = 0;
+        let mut tariff = 0;
+        let mut device = 0;
         let mut first_dife = None;
 
         if let Some(difes) = possible_difes {
             first_dife = difes.clone().next();
+            let mut tariff_index = 0;
+            let mut device_index = 0;
             for dife in difes.clone() {
                 if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
                     return Err(DataInformationError::DataTooLong);
                 }
                 let dife = dife.data;
                 storage_number += u64::from(dife & 0x0f) << ((extension_index * 4) + 1);
-                _sub_unit += u32::from((dife & 0x40) >> 6) << extension_index;
-                _tariff += u64::from((dife & 0x30) >> 4) << (extension_index * 2);
+                tariff |= u64::from((dife & 0x30) >> 4) << (tariff_index);
+                tariff_index += 2;
+                device |= u64::from((dife & 0x40) >> 6) << device_index;
+                device_index += 1;
                 extension_bit = dife & 0x80 != 0;
                 extension_index += 1;
             }
@@ -226,6 +232,8 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
 
         Ok(Self {
             storage_number,
+            tariff,
+            device,
             function_field,
             data_field_coding,
             data_information_extension: if extension_bit {
@@ -837,10 +845,31 @@ mod tests {
             result,
             Ok(DataInformation {
                 storage_number: 0,
+                device: 0,
+                tariff: 0,
                 function_field: FunctionField::MaximumValue,
                 data_field_coding: DataFieldCoding::Integer24Bit,
                 data_information_extension: None,
                 size: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn test_complex_data_information() {
+        let data = [0xc4, 0x80, 0x40];
+        let result = DataInformationBlock::try_from(data.as_slice());
+        let result = DataInformation::try_from(&result.unwrap());
+        assert_eq!(
+            result,
+            Ok(DataInformation {
+                storage_number: 1,
+                device: 2,
+                tariff: 0,
+                function_field: FunctionField::InstantaneousValue,
+                data_field_coding: DataFieldCoding::Integer32Bit,
+                data_information_extension: None,
+                size: 3,
             })
         );
     }
