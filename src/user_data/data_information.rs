@@ -184,7 +184,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
         if let Some(difes) = possible_difes {
             first_dife = difes.clone().next();
             let mut tariff_index = 0;
-            for (device_index,dife) in difes.clone().enumerate() {
+            for (device_index, dife) in difes.clone().enumerate() {
                 if extension_index > MAXIMUM_DATA_INFORMATION_SIZE {
                     return Err(DataInformationError::DataTooLong);
                 }
