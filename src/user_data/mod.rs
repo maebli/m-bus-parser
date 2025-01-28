@@ -22,7 +22,6 @@ pub struct DataRecords<'a> {
 }
 
 #[cfg(feature = "serde")]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 impl<'a> From<DataRecords<'a>> for Vec<DataRecord<'a>> {
     fn from(value: DataRecords<'a>) -> Self {
         let value: Result<Vec<_>, _> = value.collect();
@@ -94,7 +93,6 @@ bitflags::bitflags! {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 impl fmt::Display for StatusField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut status = String::new();
@@ -403,6 +401,7 @@ impl Counter {
 
 #[derive(Debug, PartialEq)]
 #[allow(dead_code)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct FixedDataHeder {
     identification_number: IdentificationNumber,
     manufacturer_code: ManufacturerCode,
@@ -436,6 +435,7 @@ pub enum UserDataBlock<'a> {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Medium {
     Other,
     Oil,
@@ -542,6 +542,7 @@ pub struct FixedDataHeader {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ManufacturerCode {
     pub code: [char; 3],
 }
@@ -573,6 +574,7 @@ impl fmt::Display for ManufacturerCode {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MeasuredMedium {
     pub medium: Medium,
 }

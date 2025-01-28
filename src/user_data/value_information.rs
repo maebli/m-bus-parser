@@ -161,6 +161,7 @@ impl ValueInformationFieldExtension {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ValueInformationCoding {
     Primary,
     PlainText,
@@ -832,6 +833,7 @@ fn consume_orthhogonal_vife(
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ValueInformationError {
     InvalidValueInformation,
 }
@@ -888,6 +890,7 @@ impl fmt::Display for ValueInformation {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ValueLabel {
     Instantaneous,
     ReservedForObjectActions,

@@ -73,6 +73,7 @@ impl<'a> DataRecord<'a> {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataRecordHeader<'a> {
     pub raw_data_record_header: RawDataRecordHeader<'a>,
     pub processed_data_record_header: ProcessedDataRecordHeader,

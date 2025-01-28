@@ -322,10 +322,15 @@ impl std::fmt::Display for Month {
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub type Year = u16;
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub type DayOfMonth = u8;
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub type Hour = u8;
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub type Minute = u8;
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub type Second = u8;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -372,6 +377,7 @@ pub enum DataType<'a> {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Data<'a> {
     pub value: Option<DataType<'a>>,
     pub size: usize,
