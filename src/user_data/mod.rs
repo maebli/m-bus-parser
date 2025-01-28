@@ -80,6 +80,7 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     pub struct StatusField: u8 {
         const COUNTER_BINARY_SIGNED     = 0b0000_0001;
         const COUNTER_FIXED_DATE        = 0b0000_0010;
@@ -269,6 +270,7 @@ impl std::error::Error for ApplicationLayerError {}
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ApplicationResetSubcode {
     All(u8),
     UserData(u8),
@@ -354,6 +356,7 @@ fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> 
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Counter {
     count: u32,
 }
@@ -366,6 +369,7 @@ impl fmt::Display for Counter {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct IdentificationNumber {
     pub number: u32,
 }
@@ -525,6 +529,7 @@ impl fmt::Display for Medium {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct FixedDataHeader {
     pub identification_number: IdentificationNumber,
     pub manufacturer: Result<ManufacturerCode, ApplicationLayerError>,
