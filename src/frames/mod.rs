@@ -2,6 +2,7 @@
 //! It is used to encapsulate the application layer data
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Frame<'a> {
     SingleCharacter {
         character: u8,
@@ -26,6 +27,7 @@ pub enum Frame<'a> {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Function {
     SndNk,
     SndUd { fcb: bool },
@@ -81,6 +83,7 @@ impl TryFrom<u8> for Function {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Address {
     Uninitalized,
     Primary(u8),
@@ -120,6 +123,7 @@ impl Address {
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FrameError {
     EmptyData,
     InvalidStartByte,

@@ -4,6 +4,7 @@ use super::FixedDataHeader;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformationBlock<'a> {
     pub data_information_field: DataInformationField,
     pub data_information_field_extension: Option<DataInformationFieldExtensions<'a>>,
@@ -21,6 +22,7 @@ impl DataInformationBlock<'_> {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformationField {
     pub data: u8,
 }
@@ -52,6 +54,7 @@ pub struct DataInformationFieldExtension {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformationFieldExtensions<'a>(&'a [u8]);
 impl<'a> DataInformationFieldExtensions<'a> {
     const fn new(data: &'a [u8]) -> Self {
@@ -131,6 +134,7 @@ impl DataInformationFieldExtension {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformation {
     pub storage_number: u64,
     pub tariff: u64,
@@ -155,9 +159,11 @@ impl std::fmt::Display for DataInformation {
 const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformationExtensionField {}
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum DataInformationError {
     NoData,
     DataTooLong,
@@ -247,6 +253,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(into = "String"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TextUnit<'a>(&'a [u8]);
 impl<'a> TextUnit<'a> {
     pub const fn new(input: &'a [u8]) -> Self {
@@ -279,6 +286,7 @@ impl From<TextUnit<'_>> for String {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Month {
     January,
     February,
@@ -322,6 +330,7 @@ pub type Second = u8;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SingleEveryOrInvalid<T> {
     Single(T),
     Every(),
@@ -330,6 +339,7 @@ pub enum SingleEveryOrInvalid<T> {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
     Number(f64),
@@ -744,6 +754,7 @@ impl DataInformation {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FunctionField {
     InstantaneousValue,
     MaximumValue,
@@ -764,6 +775,7 @@ impl std::fmt::Display for FunctionField {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SpecialFunctions {
     ManufacturerSpecific,
     MoreRecordsFollow,
@@ -772,6 +784,7 @@ pub enum SpecialFunctions {
     GlobalReadoutRequest,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Value {
     pub data: f64,
     pub byte_size: usize,
@@ -779,6 +792,7 @@ pub struct Value {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum DataFieldCoding {
     NoData,
     Integer8Bit,

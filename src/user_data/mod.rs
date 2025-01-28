@@ -21,6 +21,7 @@ pub struct DataRecords<'a> {
 }
 
 #[cfg(feature = "serde")]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 impl<'a> From<DataRecords<'a>> for Vec<DataRecord<'a>> {
     fn from(value: DataRecords<'a>) -> Self {
         let value: Result<Vec<_>, _> = value.collect();
@@ -91,6 +92,7 @@ bitflags::bitflags! {
 }
 
 #[cfg(feature = "std")]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 impl fmt::Display for StatusField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut status = String::new();
@@ -126,6 +128,7 @@ impl fmt::Display for StatusField {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     SlaveToMaster,
     MasterToSlave,
@@ -164,6 +167,7 @@ impl From<ControlInformation> for Direction {
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ControlInformation {
     SendData,
     SelectSlave,
@@ -223,6 +227,7 @@ impl ControlInformation {
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ApplicationLayerError {
     MissingControlInformation,
     InvalidControlInformation { byte: u8 },

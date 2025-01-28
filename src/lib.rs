@@ -41,8 +41,8 @@
 //!
 //! ```
 
+#![cfg_attr(feature = "defmt", feature(trivial_bounds))]
 #![cfg_attr(not(feature = "std"), no_std)]
-
 use frames::FrameError;
 use user_data::ApplicationLayerError;
 
@@ -61,6 +61,7 @@ pub mod user_data;
     derive(serde::Serialize),
     serde(bound(deserialize = "'de: 'a"))
 )]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
@@ -69,6 +70,7 @@ pub struct MbusData<'a> {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum MbusError {
     FrameError(FrameError),
     ApplicationLayerError(ApplicationLayerError),

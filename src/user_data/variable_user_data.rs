@@ -2,12 +2,14 @@ use super::data_information::{self};
 use super::{DataRecords, FixedDataHeader};
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum DataRecordError {
     DataInformationError(data_information::DataInformationError),
     InsufficientData,
 }
 
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum VariableUserDataError {
     DataInformationError(DataRecordError),
 }
