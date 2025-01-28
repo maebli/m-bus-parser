@@ -6,18 +6,21 @@ use super::{
 };
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RawDataRecordHeader<'a> {
     pub data_information_block: DataInformationBlock<'a>,
     pub value_information_block: Option<ValueInformationBlock>,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ProcessedDataRecordHeader {
     pub data_information: Option<DataInformation>,
     pub value_information: Option<ValueInformation>,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataRecord<'a> {
     pub data_record_header: DataRecordHeader<'a>,
     pub data: Data<'a>,

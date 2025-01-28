@@ -8,6 +8,7 @@ const MAX_VIFE_RECORDS: usize = 10;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Unit {
     pub name: UnitName,
     pub exponent: i32,
@@ -104,6 +105,7 @@ fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, DataInformat
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationBlock {
     pub value_information: ValueInformationField,
     pub value_information_extension:
@@ -112,6 +114,7 @@ pub struct ValueInformationBlock {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationField {
     pub data: u8,
 }
@@ -123,6 +126,7 @@ impl ValueInformationField {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationFieldExtension {
     pub data: u8,
     pub coding: ValueInformationFieldExtensionCoding,
@@ -166,6 +170,7 @@ pub enum ValueInformationCoding {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ValueInformationFieldExtensionCoding {
     MainVIFCodeExtension,
     AlternateVIFCodeExtension,
@@ -841,6 +846,7 @@ impl From<u8> for ValueInformationField {
 /// value(x) = (multiplier * value + offset) * units
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformation {
     pub decimal_offset_exponent: isize,
     pub labels: ArrayVec<ValueLabel, 10>,
@@ -1083,6 +1089,7 @@ impl fmt::Display for Unit {
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum UnitName {
     Watt,
     ReactiveWatt,
