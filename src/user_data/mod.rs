@@ -13,6 +13,7 @@ pub mod variable_user_data;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(into = "Vec<DataRecord>"))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataRecords<'a> {
     offset: usize,
@@ -410,6 +411,7 @@ pub struct FixedDataHeder {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum UserDataBlock<'a> {
     ResetAtApplicationLevel {
         subcode: ApplicationResetSubcode,
