@@ -79,7 +79,6 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     pub struct StatusField: u8 {
         const COUNTER_BINARY_SIGNED     = 0b0000_0001;
         const COUNTER_FIXED_DATE        = 0b0000_0010;
@@ -91,6 +90,14 @@ bitflags::bitflags! {
         const MANUFACTURER_SPECIFIC_3   = 0b1000_0000;
     }
 }
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for StatusField {
+    fn format(&self, f: defmt::Formatter) {
+        defmt::write!(f, "{:?}", self);
+    }
+}
+
 
 #[cfg(feature = "std")]
 impl fmt::Display for StatusField {
