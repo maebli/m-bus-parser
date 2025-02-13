@@ -98,7 +98,6 @@ impl defmt::Format for StatusField {
     }
 }
 
-
 #[cfg(feature = "std")]
 impl fmt::Display for StatusField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
