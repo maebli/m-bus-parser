@@ -510,6 +510,27 @@ fn bcd_to_value_internal(
     })
 }
 
+fn integer_to_value_internal(data: &[u8], byte_size: usize) -> Data<'_> {
+    let mut data_value = 0i64;
+    let mut shift = 0;
+    for byte in data.iter().take(byte_size) {
+        data_value |= (*byte as i64) << shift;
+        shift += 8;
+    }
+
+    let msb = (data_value >> (shift - 1)) & 1;
+    let data_value = if byte_size != 8 && msb == 1 {
+        -((data_value ^ (2i64.pow(shift) - 1)) + 1)
+    } else {
+        data_value
+    };
+
+    Data {
+        value: Some(DataType::Number(data_value as f64)),
+        size: byte_size,
+    }
+}
+
 impl DataFieldCoding {
     pub fn parse<'a>(
         &self,
@@ -533,16 +554,7 @@ impl DataFieldCoding {
                 if $data.len() < $byte_size {
                     return Err(DataRecordError::InsufficientData);
                 }
-                let mut data_value = 0u32;
-                let mut shift = 0;
-                for byte in $data.iter().take($byte_size) {
-                    data_value |= (*byte as u32) << shift;
-                    shift += 8;
-                }
-                Ok(Data {
-                    value: Some(DataType::Number(f64::from(data_value))),
-                    size: $byte_size,
-                })
+                Ok(integer_to_value_internal($data, $byte_size))
             }};
         }
         match self {
@@ -936,6 +948,58 @@ mod tests {
             Data {
                 value: Some(DataType::Number(987654.0)),
                 size: 3
+            }
+        );
+    }
+
+    #[test]
+    fn test_integer_to_value_8_bit_positive() {
+        let data = [0x7F];
+        let result = integer_to_value_internal(&data, 1);
+        assert_eq!(
+            result,
+            Data {
+                value: Some(DataType::Number(127.0)),
+                size: 1
+            }
+        );
+    }
+
+    #[test]
+    fn test_integer_to_value_8_bit_negative() {
+        let data = [0xFF];
+        let result = integer_to_value_internal(&data, 1);
+        assert_eq!(
+            result,
+            Data {
+                value: Some(DataType::Number(-1.0)),
+                size: 1
+            }
+        );
+    }
+
+    #[test]
+    fn test_integer_to_value_64_bit_positive() {
+        let data = [0xFA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let result = integer_to_value_internal(&data, 8);
+        assert_eq!(
+            result,
+            Data {
+                value: Some(DataType::Number(250.0)),
+                size: 8
+            }
+        );
+    }
+
+    #[test]
+    fn test_integer_to_value_64_bit_negative() {
+        let data = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let result = integer_to_value_internal(&data, 8);
+        assert_eq!(
+            result,
+            Data {
+                value: Some(DataType::Number(-1.0)),
+                size: 8
             }
         );
     }
