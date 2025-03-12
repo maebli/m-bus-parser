@@ -3,7 +3,7 @@ use super::variable_user_data::DataRecordError;
 use super::FixedDataHeader;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformationBlock<'a> {
     pub data_information_field: DataInformationField,
@@ -21,7 +21,7 @@ impl DataInformationBlock<'_> {
     }
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformationField {
     pub data: u8,
@@ -285,7 +285,7 @@ impl From<TextUnit<'_>> for String {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Month {
     January,
@@ -329,7 +329,7 @@ pub type Minute = u8;
 pub type Second = u8;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SingleEveryOrInvalid<T> {
     Single(T),
@@ -338,7 +338,7 @@ pub enum SingleEveryOrInvalid<T> {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
@@ -371,7 +371,7 @@ pub enum DataType<'a> {
     ManufacturerSpecific(&'a [u8]),
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Data<'a> {
     pub value: Option<DataType<'a>>,
