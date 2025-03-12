@@ -104,7 +104,7 @@ fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, DataInformat
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationBlock {
     pub value_information: ValueInformationField,
@@ -113,7 +113,7 @@ pub struct ValueInformationBlock {
     pub plaintext_vife: Option<ArrayVec<char, 9>>,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationField {
     pub data: u8,
@@ -125,7 +125,7 @@ impl ValueInformationField {
     }
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationFieldExtension {
     pub data: u8,
@@ -170,7 +170,7 @@ pub enum ValueInformationCoding {
     ManufacturerSpecific,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ValueInformationFieldExtensionCoding {
     MainVIFCodeExtension,
@@ -847,7 +847,7 @@ impl From<u8> for ValueInformationField {
 /// the whole information inside the value information block
 /// value(x) = (multiplier * value + offset) * units
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformation {
     pub decimal_offset_exponent: isize,
