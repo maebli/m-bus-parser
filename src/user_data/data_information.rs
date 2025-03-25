@@ -14,8 +14,8 @@ impl DataInformationBlock<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         let mut size = 1;
-        if let Some(vife) = &self.data_information_field_extension {
-            size += vife.len();
+        if let Some(dife) = &self.data_information_field_extension {
+            size += dife.len();
         }
         size
     }
@@ -605,37 +605,66 @@ impl DataFieldCoding {
                     0x00..=0xBF => Ok(Data {
                         value: Some(DataType::Text(TextUnit::new(
                             input
-                                .get(1..(length as usize))
+                                .get(1..(1 + length as usize))
                                 .ok_or(DataRecordError::InsufficientData)?,
                         ))),
                         size: length as usize + 1,
                     }),
-                    0xC0..=0xD9 => {
+                    0xC0..=0xC9 => {
                         length -= 0xC0;
-                        let is_negative =
-                            *input.first().ok_or(DataRecordError::InsufficientData)? > 0xC9;
-                        let sign = if is_negative { -1 } else { 1 };
-                        bcd_to_value!(input, length as usize, sign)
+                        let bytes = input
+                            .get(1..(1 + length as usize))
+                            .ok_or(DataRecordError::InsufficientData)?;
+                        match bcd_to_value!(bytes, 2 * length as usize) {
+                            Ok(data) => Ok(Data {
+                                value: data.value,
+                                size: data.size + 1,
+                            }),
+                            Err(err) => Err(err),
+                        }
                     }
-                    0xE0..=0xE9 => {
+                    0xD0..=0xD9 => {
+                        length -= 0xD0;
+                        let bytes = input
+                            .get(1..(1 + length as usize))
+                            .ok_or(DataRecordError::InsufficientData)?;
+                        match bcd_to_value!(bytes, 2 * length as usize, -1) {
+                            Ok(data) => Ok(Data {
+                                value: data.value,
+                                size: data.size + 1,
+                            }),
+                            Err(err) => Err(err),
+                        }
+                    }
+                    0xE0..=0xEF => {
                         length -= 0xE0;
-                        todo!("0xE0-0xE9 not implemented for length {}", length);
+                        let bytes = input
+                            .get(1..(1 + length as usize))
+                            .ok_or(DataRecordError::InsufficientData)?;
+                        match integer_to_value!(bytes, length as usize) {
+                            Ok(data) => Ok(Data {
+                                value: data.value,
+                                size: data.size + 1,
+                            }),
+                            Err(err) => Err(err),
+                        }
                     }
                     0xF0..=0xF4 => {
-                        length -= 0xF0;
-                        todo!("0xF0-0xF4 not implemented for length {}", length);
+                        length -= 0xEC;
+                        // integer_to_value!(input, 4 * length as usize)
+                        todo!("Variable length handle 64 -> 128 bit numbers: {}", length);
                     }
                     0xF5 => {
-                        length = 6;
-                        todo!("0xF5 not implemented for length {}", length);
+                        // integer_to_value!(input, 48)
+                        todo!("Variable length handle 192 bit number: {}", length);
                     }
                     0xF6 => {
-                        length = 8;
-                        todo!("0xF6 not implemented for length {}", length);
+                        // integer_to_value!(input, 64)
+                        todo!("Variable length handle 256 bit number: {}", length);
                     }
                     _ => {
                         todo!(
-                            "Variable length parsing for length: {} is a resreved value",
+                            "Variable length parsing for length: {} is a reserved value",
                             length
                         );
                     }
