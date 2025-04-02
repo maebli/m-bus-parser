@@ -89,6 +89,106 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_variable_lossy_data_length() {
+        use crate::user_data::data_information::DataFieldCoding;
+        use crate::user_data::data_information::DataType;
+        use crate::user_data::data_information::TextUnit;
+        use crate::user_data::DataRecords;
+
+        let data: &[u8] = &[
+            0x0D, 0x06, 0xE9, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0D, 0x06,
+            0x00, 0x0D, 0x06, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0D, 0x06, 0x00, 0x0D, 0x06, 0xF4, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0x0D, 0x06, 0x00, 0x0D, 0x06, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0D,
+            0x06, 0x00, 0x0D, 0x06, 0xF6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0D,
+            0x06, 0x00,
+        ];
+
+        let records: Vec<DataRecord<'_>> = DataRecords::from(data).flatten().collect();
+
+        assert_eq!(records.len(), 10);
+        {
+            let record = records.get(0).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::LossyNumber(-1.0))
+        }
+        {
+            let record = records.get(1).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::Text(TextUnit::new(&[])))
+        }
+        {
+            let record = records.get(2).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::LossyNumber(-1.0))
+        }
+        {
+            let record = records.get(3).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::Text(TextUnit::new(&[])))
+        }
+        {
+            let record = records.get(4).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::LossyNumber(-1.0))
+        }
+        {
+            let record = records.get(5).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::Text(TextUnit::new(&[])))
+        }
+        {
+            let record = records.get(6).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::LossyNumber(-1.0))
+        }
+        {
+            let record = records.get(7).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::Text(TextUnit::new(&[])))
+        }
+        {
+            let record = records.get(8).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::LossyNumber(-1.0))
+        }
+        {
+            let record = records.get(9).unwrap();
+            let code = get_data_field_coding(record);
+            assert_eq!(code, DataFieldCoding::VariableLength);
+            let value = record.data.value.clone().unwrap();
+            assert_eq!(value, DataType::Text(TextUnit::new(&[])))
+        }
+    }
+
+    #[test]
     fn test_parse_variable_data() {
         use crate::user_data::DataRecords;
 
