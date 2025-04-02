@@ -515,28 +515,6 @@ fn bcd_to_value_internal(
 fn integer_to_value_internal(data: &[u8], byte_size: usize) -> Data<'_> {
     let mut data_value = 0i64;
     let mut shift = 0;
-    for byte in data.iter().take(byte_size) {
-        data_value |= (*byte as i64) << shift;
-        shift += 8;
-    }
-
-    let msb = (data_value >> (shift - 1)) & 1;
-    let data_value = if byte_size != 8 && msb == 1 {
-        -((data_value ^ (2i64.pow(shift) - 1)) + 1)
-    } else {
-        data_value
-    };
-
-    Data {
-        value: Some(DataType::Number(data_value as f64)),
-        size: byte_size,
-    }
-}
-
-fn integer_to_value_lossy_internal(data: &[u8], byte_size: usize) -> Data<'_> {
-    let mut data_value = 0i64;
-    let mut shift = 0;
-
     for byte in data.iter().take(if byte_size > 8 { 8 } else { byte_size }) {
         data_value |= (*byte as i64) << shift;
         shift += 8;
@@ -548,8 +526,14 @@ fn integer_to_value_lossy_internal(data: &[u8], byte_size: usize) -> Data<'_> {
     } else {
         data_value
     };
+
+    let output = if byte_size > 8 {
+        DataType::LossyNumber(data_value as f64)
+    } else {
+        DataType::Number(data_value as f64)
+    };
     Data {
-        value: Some(DataType::LossyNumber(data_value as f64)),
+        value: Some(output),
         size: byte_size,
     }
 }
@@ -577,11 +561,7 @@ impl DataFieldCoding {
                 if $data.len() < $byte_size {
                     return Err(DataRecordError::InsufficientData);
                 }
-                if $byte_size > 8 {
-                    Ok(integer_to_value_lossy_internal($data, $byte_size))
-                } else {
-                    Ok(integer_to_value_internal($data, $byte_size))
-                }
+                Ok(integer_to_value_internal($data, $byte_size))
             }};
         }
         match self {
