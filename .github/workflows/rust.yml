@@ -14,7 +14,7 @@ on:
 jobs:
   build-library:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/cli-v')
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/cli-v') || github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v2
       - name: Set up Rust
@@ -42,6 +42,7 @@ jobs:
 
   build-cli:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     needs: build-library
     steps:
       - uses: actions/checkout@v2
@@ -64,9 +65,14 @@ jobs:
           rustup component add clippy
           cd cli/src
           cargo clippy -- -D warnings
+      - name: Check CLI Formatting
+        run: |
+          cd cli/src
+          cargo fmt -- --check
 
   build-wasm:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     needs: build-library
     steps:
       - uses: actions/checkout@v2
@@ -80,15 +86,19 @@ jobs:
         run: |
           cd wasm
           cargo build --verbose
-      - name: Run CLI Tests
+      - name: Run WASM Tests
         run: |
           cd wasm
           cargo test --verbose
-      - name: Lint CLI with Clippy
+      - name: Lint WASM with Clippy
         run: |
           rustup component add clippy
           cd wasm
           cargo clippy -- -D warnings
+      - name: Check WASM Formatting
+        run: |
+          cd wasm
+          cargo fmt -- --check
 
   
   publish-library:
@@ -125,6 +135,7 @@ jobs:
         run: |
           cd cli/src
           cargo publish --token ${{ secrets.CRATESTOKEN }}
+
   publish-wasm:
     needs: build-wasm
     runs-on: ubuntu-latest
