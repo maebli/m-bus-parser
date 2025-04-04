@@ -343,6 +343,7 @@ pub enum SingleEveryOrInvalid<T> {
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
     Number(f64),
+    LossyNumber(f64),
     Date(
         SingleEveryOrInvalid<DayOfMonth>,
         SingleEveryOrInvalid<Month>,
@@ -395,6 +396,7 @@ impl std::fmt::Display for Data<'_> {
         match &self.value {
             Some(value) => match value {
                 DataType::Number(value) => write!(f, "{}", value),
+                DataType::LossyNumber(value) => write!(f, "{}", value),
                 DataType::Date(day, month, year) => write!(f, "{}/{}/{}", day, month, year),
                 DataType::DateTime(day, month, year, hour, minute) => {
                     write!(f, "{}/{}/{} {}:{}:00", day, month, year, hour, minute)
@@ -513,20 +515,25 @@ fn bcd_to_value_internal(
 fn integer_to_value_internal(data: &[u8], byte_size: usize) -> Data<'_> {
     let mut data_value = 0i64;
     let mut shift = 0;
-    for byte in data.iter().take(byte_size) {
+    for byte in data.iter().take(if byte_size > 8 { 8 } else { byte_size }) {
         data_value |= (*byte as i64) << shift;
         shift += 8;
     }
 
     let msb = (data_value >> (shift - 1)) & 1;
-    let data_value = if byte_size != 8 && msb == 1 {
+    let data_value = if byte_size < 8 && msb == 1 {
         -((data_value ^ (2i64.pow(shift) - 1)) + 1)
     } else {
         data_value
     };
 
+    let output = if byte_size > 8 {
+        DataType::LossyNumber(data_value as f64)
+    } else {
+        DataType::Number(data_value as f64)
+    };
     Data {
-        value: Some(DataType::Number(data_value as f64)),
+        value: Some(output),
         size: byte_size,
     }
 }
@@ -651,16 +658,40 @@ impl DataFieldCoding {
                     }
                     0xF0..=0xF4 => {
                         length -= 0xEC;
-                        // integer_to_value!(input, 4 * length as usize)
-                        todo!("Variable length handle 64 -> 128 bit numbers: {}", length);
+                        let bytes = input
+                            .get(1..(1 + 4 * length as usize))
+                            .ok_or(DataRecordError::InsufficientData)?;
+                        match integer_to_value!(bytes, 4 * length as usize) {
+                            Ok(data) => Ok(Data {
+                                value: data.value,
+                                size: data.size + 1,
+                            }),
+                            Err(err) => Err(err),
+                        }
                     }
                     0xF5 => {
-                        // integer_to_value!(input, 48)
-                        todo!("Variable length handle 192 bit number: {}", length);
+                        let bytes = input
+                            .get(1..(1 + 48_usize))
+                            .ok_or(DataRecordError::InsufficientData)?;
+                        match integer_to_value!(bytes, 48_usize) {
+                            Ok(data) => Ok(Data {
+                                value: data.value,
+                                size: data.size + 1,
+                            }),
+                            Err(err) => Err(err),
+                        }
                     }
                     0xF6 => {
-                        // integer_to_value!(input, 64)
-                        todo!("Variable length handle 256 bit number: {}", length);
+                        let bytes = input
+                            .get(1..(1 + 64_usize))
+                            .ok_or(DataRecordError::InsufficientData)?;
+                        match integer_to_value!(bytes, 64_usize) {
+                            Ok(data) => Ok(Data {
+                                value: data.value,
+                                size: data.size + 1,
+                            }),
+                            Err(err) => Err(err),
+                        }
                     }
                     _ => {
                         todo!(
