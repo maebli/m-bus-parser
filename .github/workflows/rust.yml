@@ -52,6 +52,10 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Check CLI Formatting
+        run: |
+          cd cli
+          cargo fmt -- --check
       - name: Build CLI
         run: |
           cd cli/src
@@ -65,10 +69,6 @@ jobs:
           rustup component add clippy
           cd cli/src
           cargo clippy -- -D warnings
-      - name: Check CLI Formatting
-        run: |
-          cd cli/src
-          cargo fmt -- --check
 
   build-wasm:
     runs-on: ubuntu-latest
@@ -82,6 +82,10 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Check WASM Formatting
+        run: |
+          cd wasm
+          cargo fmt -- --check
       - name: Build WASM
         run: |
           cd wasm
@@ -95,12 +99,7 @@ jobs:
           rustup component add clippy
           cd wasm
           cargo clippy -- -D warnings
-      - name: Check WASM Formatting
-        run: |
-          cd wasm
-          cargo fmt -- --check
 
-  
   publish-library:
     needs: build-library
     runs-on: ubuntu-latest
