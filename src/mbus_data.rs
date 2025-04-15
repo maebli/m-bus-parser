@@ -260,9 +260,9 @@ pub fn parse_to_csv(input: &str) -> String {
                     "FrameType".to_string(),
                     "Function".to_string(),
                     "Address".to_string(),
-                    "IdentificationNumber".to_string(),
+                    "Identification Number".to_string(),
                     "Manufacturer".to_string(),
-                    "AccessNumber".to_string(),
+                    "Access Number".to_string(),
                     "Status".to_string(),
                     "Signature".to_string(),
                     "Version".to_string(),
@@ -275,10 +275,7 @@ pub fn parse_to_csv(input: &str) -> String {
                 }
 
                 let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
-                writer
-                    .write_record(header_refs)
-                    .map_err(|_| ())
-                    .unwrap_or_default();
+                writer.write_record(header_refs).map_err(|_| ()).unwrap_or_default();
 
                 let mut row = vec![
                     "LongFrame".to_string(),
@@ -329,7 +326,21 @@ pub fn parse_to_csv(input: &str) -> String {
 
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
+                        // Format the value with units to match the table output
                         let parsed_value = format!("{}", record.data);
+                        
+                        // Get value information including units
+                        let value_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .value_information
+                        {
+                            Some(x) => format!("{}", x),
+                            None => "None".to_string(),
+                        };
+                        
+                        // Format the value similar to the table output with units
+                        let formatted_value = format!("({}){}", parsed_value, value_information);
 
                         let data_information = match record
                             .data_record_header
@@ -340,33 +351,24 @@ pub fn parse_to_csv(input: &str) -> String {
                             None => "None".to_string(),
                         };
 
-                        row.push(parsed_value);
+                        row.push(formatted_value);
                         row.push(data_information);
                     }
                 }
 
                 let row_refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-                writer
-                    .write_record(row_refs)
-                    .map_err(|_| ())
-                    .unwrap_or_default();
+                writer.write_record(row_refs).map_err(|_| ()).unwrap_or_default();
             }
             _ => {
-                writer
-                    .write_record(["FrameType"])
-                    .map_err(|_| ())
-                    .unwrap_or_default();
+                writer.write_record(["FrameType"]).map_err(|_| ()).unwrap_or_default();
                 writer
                     .write_record([format!("{:?}", parsed_data.frame).as_str()])
-                    .map_err(|_| ())
-                    .unwrap_or_default();
+                    .map_err(|_| ()).unwrap_or_default();
             }
         }
     } else {
-        writer.write_record(["Error"]).unwrap_or_default();
-        writer
-            .write_record(["Error parsing data"])
-            .unwrap_or_default();
+        writer.write_record(["Error"]).map_err(|_| ()).unwrap_or_default();
+        writer.write_record(["Error parsing data"]).map_err(|_| ()).unwrap_or_default();
     }
 
     let csv_data = writer.into_inner().unwrap_or_default();
