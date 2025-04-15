@@ -34,7 +34,7 @@ jobs:
       - name: Run Library Tests
         run: | 
           cargo test --verbose
-          cargo test --verbose --F std
+          cargo test --verbose -F std
       - name: Run Library Tests with plaintext before with enabled
         run: cargo test --verbose -F plaintext-before-extension
       - name: Lint with Clippy
@@ -66,7 +66,7 @@ jobs:
         run: |
           cd cli/src
           cargo test --verbose
-          cargo test --verbose --F std
+          cargo test --verbose -F std
       - name: Lint CLI with Clippy
         run: |
           rustup component add clippy
@@ -97,7 +97,7 @@ jobs:
         run: |
           cd wasm
           cargo test --verbose
-          cargo test --verbose --F std
+          cargo test --verbose -F std
       - name: Lint WASM with Clippy
         run: |
           rustup component add clippy
