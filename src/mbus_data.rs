@@ -393,4 +393,78 @@ mod tests {
         let table_output: String = super::parse_to_table(input);
         println!("{}", table_output);
     }
+    
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_csv_expected_output() {
+        use super::parse_to_csv;
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let csv_output = parse_to_csv(input);
+        
+        let expected = "FrameType,Function,Address,Identification Number,Manufacturer,Access Number,Status,Signature,Version,Medium,DataPoint1_Value,DataPoint1_Info,DataPoint2_Value,DataPoint2_Info,DataPoint3_Value,DataPoint3_Info,DataPoint4_Value,DataPoint4_Info,DataPoint5_Value,DataPoint5_Info,DataPoint6_Value,DataPoint6_Info,DataPoint7_Value,DataPoint7_Info,DataPoint8_Value,DataPoint8_Info,DataPoint9_Value,DataPoint9_Info,DataPoint10_Value,DataPoint10_Info\nLongFrame,\"RspUd (ACD: false, DFC: false)\",Primary (1),02205100,\"ManufacturerCode { code: ['S', 'L', 'B'] }\",0,\"Permanent error, Manufacturer specific 3\",0,2,Heat,(0))e4[Wh],\"0,Inst,32-bit Integer\",(3))e-1[m³](Volume),\"0,Inst,BCD 8-digit\",(0))e3[W],\"0,Inst,BCD 6-digit\",(0))e-3[m³h⁻¹],\"0,Inst,BCD 6-digit\",(1288))e-1[°C],\"0,Inst,BCD 4-digit\",(516))e-1[°C],\"0,Inst,BCD 4-digit\",(7723))e-2[°K],\"0,Inst,BCD 6-digit\",(12/Jan/12))(Date),\"0,Inst,Date Type G\",(3383))[day],\"0,Inst,16-bit Integer\",\"(Manufacturer Specific: [15, 96, 0])None\",None\n";
+        
+        assert_eq!(csv_output, expected);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_yaml_expected_output() {
+        use super::parse_to_yaml;
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let yaml_output = parse_to_yaml(input);
+        
+        // First line of YAML output to test against - we'll test just the beginning to avoid a massive string
+        let expected_start = "!Ok\nframe: !LongFrame\n  function: !RspUd\n    acd: false\n    dfc: false\n  address: !Primary 1\nuser_data: !VariableDataStructure\n";
+        
+        assert!(yaml_output.starts_with(expected_start));
+        // Additional checks for specific content in the YAML
+        assert!(yaml_output.contains("medium: Heat"));
+        assert!(yaml_output.contains("identification_number:"));
+        assert!(yaml_output.contains("status: PERMANENT_ERROR | MANUFACTURER_SPECIFIC_3"));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_json_expected_output() {
+        use super::parse_to_json;
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let json_output = parse_to_json(input);
+        
+        // Testing specific content in JSON
+        assert!(json_output.contains("\"Ok\""));
+        assert!(json_output.contains("\"LongFrame\""));
+        assert!(json_output.contains("\"RspUd\""));
+        assert!(json_output.contains("\"number\": 2205100"));
+        assert!(json_output.contains("\"medium\": \"Heat\""));
+        assert!(json_output.contains("\"status\": \"PERMANENT_ERROR | MANUFACTURER_SPECIFIC_3\""));
+        
+        // Verify JSON structure is valid
+        let json_parsed = serde_json::from_str::<serde_json::Value>(&json_output);
+        assert!(json_parsed.is_ok());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_table_expected_output() {
+        use super::parse_to_table;
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let table_output = parse_to_table(input);
+        
+        // First section of the table output
+        assert!(table_output.starts_with("Long Frame"));
+        
+        // Key content pieces to verify
+        assert!(table_output.contains("RspUd (ACD: false, DFC: false)"));
+        assert!(table_output.contains("Primary (1)"));
+        assert!(table_output.contains("Identification Number"));
+        assert!(table_output.contains("02205100"));
+        assert!(table_output.contains("ManufacturerCode { code: ['S', 'L', 'B'] }"));
+        
+        // Data point verifications
+        assert!(table_output.contains("(0)e4[Wh]"));
+        assert!(table_output.contains("(3)e-1[m³](Volume)"));
+        assert!(table_output.contains("(1288)e-1[°C]"));
+        assert!(table_output.contains("(12/Jan/12)(Date)"));
+        assert!(table_output.contains("(3383)[day]"));
+    }
 }
