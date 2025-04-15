@@ -368,7 +368,6 @@ pub fn parse_to_csv(input: &str) -> String {
 #[cfg(test)]
 mod tests {
 
-    use super::*;
 
     #[cfg(feature = "std")]
     #[test]
