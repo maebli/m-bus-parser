@@ -8,7 +8,7 @@ use crate::MbusError;
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize),
-    serde(bound(deserialize = "'de: 'a")),
+    serde(bound(deserialize = "'de: 'a"))
 )]
 #[derive(Debug)]
 pub struct MbusData<'a> {
@@ -129,10 +129,10 @@ fn parse_to_table(input: &str) -> String {
                     }) => {
                         table.add_row(row![
                             fixed_data_header.identification_number,
-                            fixed_data_header.manufacturer.as_ref().map_or_else(
-                                |e| format!("Err({:?})", e),
-                                |m| format!("{:?}", m)
-                            ),
+                            fixed_data_header
+                                .manufacturer
+                                .as_ref()
+                                .map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m)),
                             fixed_data_header.access_number,
                             fixed_data_header.status,
                             fixed_data_header.signature,
@@ -237,70 +237,76 @@ fn parse_to_table(input: &str) -> String {
 
 #[cfg(feature = "std")]
 pub fn parse_to_csv(input: &str) -> String {
-    use prettytable::csv;
     use crate::user_data::UserDataBlock;
+    use prettytable::csv;
 
     let data = clean_and_convert(input);
     let parsed_data = MbusData::try_from(data.as_slice());
 
     // CSV writer using a vector as an intermediate buffer
     let mut writer = csv::Writer::from_writer(vec![]);
-    
+
     if let Ok(parsed_data) = parsed_data {
         match parsed_data.frame {
-            frames::Frame::LongFrame {function, address, ..} => {
+            frames::Frame::LongFrame {
+                function, address, ..
+            } => {
                 // Count how many data points we have
-                let data_point_count = parsed_data.data_records.as_ref()
+                let data_point_count = parsed_data
+                    .data_records
+                    .as_ref()
                     .map(|records| records.clone().flatten().count())
                     .unwrap_or(0);
-                
+
                 // Create headers as owned strings
                 let mut headers = vec![
-                    "FrameType".to_string(), 
-                    "Function".to_string(), 
-                    "Address".to_string(), 
-                    "IdentificationNumber".to_string(), 
-                    "Manufacturer".to_string(), 
-                    "AccessNumber".to_string(), 
-                    "Status".to_string(), 
-                    "Signature".to_string(), 
-                    "Version".to_string(), 
-                    "Medium".to_string()
+                    "FrameType".to_string(),
+                    "Function".to_string(),
+                    "Address".to_string(),
+                    "IdentificationNumber".to_string(),
+                    "Manufacturer".to_string(),
+                    "AccessNumber".to_string(),
+                    "Status".to_string(),
+                    "Signature".to_string(),
+                    "Version".to_string(),
+                    "Medium".to_string(),
                 ];
-                
+
                 // Add headers for each data point
                 for i in 1..=data_point_count {
                     headers.push(format!("DataPoint{}_Value", i));
                     headers.push(format!("DataPoint{}_Info", i));
                 }
-                
+
                 // Convert Vec<String> to Vec<&str> for write_record
                 let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
                 writer.write_record(&header_refs).unwrap();
-                
+
                 // Create data row
                 let mut row = vec![
                     "LongFrame".to_string(),
                     function.to_string(),
                     address.to_string(),
                 ];
-                
+
                 // Add header info
                 match &parsed_data.user_data {
-                    Some(UserDataBlock::VariableDataStructure {fixed_data_header, ..}) => {
+                    Some(UserDataBlock::VariableDataStructure {
+                        fixed_data_header, ..
+                    }) => {
                         row.extend_from_slice(&[
                             fixed_data_header.identification_number.to_string(),
-                            fixed_data_header.manufacturer.as_ref().map_or_else(
-                                |e| format!("Err({:?})", e),
-                                |m| format!("{:?}", m)
-                            ),
+                            fixed_data_header
+                                .manufacturer
+                                .as_ref()
+                                .map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m)),
                             fixed_data_header.access_number.to_string(),
                             fixed_data_header.status.to_string(),
                             fixed_data_header.signature.to_string(),
                             fixed_data_header.version.to_string(),
                             fixed_data_header.medium.to_string(),
                         ]);
-                    },
+                    }
                     Some(UserDataBlock::FixedDataStructure {
                         identification_number,
                         access_number,
@@ -316,7 +322,7 @@ pub fn parse_to_csv(input: &str) -> String {
                             "".to_string(), // Version
                             "".to_string(), // Medium
                         ]);
-                    },
+                    }
                     _ => {
                         // Fill with empty strings for header info
                         for _ in 0..7 {
@@ -324,13 +330,13 @@ pub fn parse_to_csv(input: &str) -> String {
                         }
                     }
                 }
-                
+
                 // Add data points
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
                         // Get the parsed value
                         let parsed_value = format!("{}", record.data);
-                        
+
                         // Get data information
                         let data_information = match record
                             .data_record_header
@@ -340,21 +346,23 @@ pub fn parse_to_csv(input: &str) -> String {
                             Some(x) => format!("{}", x),
                             None => "None".to_string(),
                         };
-                        
+
                         // Add value and info to the single row
                         row.push(parsed_value);
                         row.push(data_information);
                     }
                 }
-                
+
                 // Convert Vec<String> to Vec<&str> for write_record
                 let row_refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
                 writer.write_record(&row_refs).unwrap();
-            },
+            }
             _ => {
                 // For other frame types, just output a simple header and row
                 writer.write_record(&["FrameType"]).unwrap();
-                writer.write_record(&[format!("{:?}", parsed_data.frame).as_str()]).unwrap();
+                writer
+                    .write_record(&[format!("{:?}", parsed_data.frame).as_str()])
+                    .unwrap();
             }
         }
     } else {
@@ -370,7 +378,6 @@ pub fn parse_to_csv(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-
 
     #[cfg(feature = "std")]
     #[test]
