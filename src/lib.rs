@@ -6,7 +6,7 @@
 //! ```rust
 //! use m_bus_parser::frames::{ Address, Frame, Function };
 //! use m_bus_parser::user_data::{ DataRecords, UserDataBlock };
-//! use m_bus_parser::MbusData;
+//! use m_bus_parser::mbus_data::MbusData;
 //! use std::io;
 //!
 //!     let example = vec![
@@ -37,7 +37,7 @@
 //!     }
 //!
 //!     // Parse everything at once
-//!     let parsed_data = m_bus_parser::MbusData::try_from(example.as_slice()).unwrap();
+//!     let parsed_data = m_bus_parser::mbus_data::MbusData::try_from(example.as_slice()).unwrap();
 //!     println!("parsed_data: {:#?}", parsed_data);
 //!
 //! ```
@@ -50,6 +50,9 @@ use user_data::ApplicationLayerError;
 pub mod frames;
 pub mod mbus_data;
 pub mod user_data;
+
+#[cfg(feature = "std")]
+pub use mbus_data::serialize_mbus_data;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]

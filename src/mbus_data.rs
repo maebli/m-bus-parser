@@ -9,8 +9,8 @@ use crate::MbusError;
     feature = "serde",
     derive(serde::Serialize),
     serde(bound(deserialize = "'de: 'a")),
-    derive(Debug)
 )]
+#[derive(Debug)]
 pub struct MbusData<'a> {
     pub frame: frames::Frame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
@@ -235,7 +235,6 @@ fn parse_to_table(input: &str) -> String {
 #[cfg(feature = "std")]
 pub fn parse_to_csv(input: &str) -> String {
     use prettytable::csv;
-
     use crate::user_data::UserDataBlock;
 
     let data = clean_and_convert(input);
@@ -243,110 +242,93 @@ pub fn parse_to_csv(input: &str) -> String {
 
     // CSV writer using a vector as an intermediate buffer
     let mut writer = csv::Writer::from_writer(vec![]);
-
-    // Write the CSV headers
-    writer
-        .write_record(&[
-            "FrameType",
-            "Function",
-            "Address",
-            "IdentificationNumber",
-            "Manufacturer",
-            "AccessNumber",
-            "Status",
-            "Signature",
-            "Version",
-            "Medium",
-            "MediumAdUnit",
-            "Counter1",
-            "Counter2",
-            "Subcode",
-            "Value",
-            "DataInformation",
-        ])
-        .unwrap();
-
+    
     if let Ok(parsed_data) = parsed_data {
         match parsed_data.frame {
-            frames::Frame::LongFrame {
-                function, address, ..
-            } => {
+            frames::Frame::LongFrame {function, address, ..} => {
+                // Count how many data points we have
+                let data_point_count = parsed_data.data_records.as_ref()
+                    .map(|records| records.clone().flatten().count())
+                    .unwrap_or(0);
+                
+                // Create headers as owned strings
+                let mut headers = vec![
+                    "FrameType".to_string(), 
+                    "Function".to_string(), 
+                    "Address".to_string(), 
+                    "IdentificationNumber".to_string(), 
+                    "Manufacturer".to_string(), 
+                    "AccessNumber".to_string(), 
+                    "Status".to_string(), 
+                    "Signature".to_string(), 
+                    "Version".to_string(), 
+                    "Medium".to_string()
+                ];
+                
+                // Add headers for each data point
+                for i in 1..=data_point_count {
+                    headers.push(format!("DataPoint{}_Value", i));
+                    headers.push(format!("DataPoint{}_Info", i));
+                }
+                
+                // Convert Vec<String> to Vec<&str> for write_record
+                let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
+                writer.write_record(&header_refs).unwrap();
+                
+                // Create data row
                 let mut row = vec![
                     "LongFrame".to_string(),
                     function.to_string(),
                     address.to_string(),
                 ];
-
-                if let Some(user_data) = parsed_data.user_data {
-                    match user_data {
-                        UserDataBlock::VariableDataStructure {
-                            fixed_data_header, ..
-                        } => {
-                            row.extend_from_slice(&[
-                                fixed_data_header.identification_number.to_string(),
-                                fixed_data_header.manufacturer.to_string(),
-                                fixed_data_header.access_number.to_string(),
-                                fixed_data_header.status.to_string(),
-                                fixed_data_header.signature.to_string(),
-                                fixed_data_header.version.to_string(),
-                                fixed_data_header.medium.to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                            ]);
-                        }
-                        UserDataBlock::FixedDataStructure {
-                            identification_number,
-                            access_number,
-                            status,
-                            medium_ad_unit,
-                            counter1,
-                            counter2,
-                        } => {
-                            row.extend_from_slice(&[
-                                identification_number.to_string(),
-                                "".to_string(),
-                                access_number.to_string(),
-                                status.to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                medium_ad_unit.to_string(),
-                                counter1.to_string(),
-                                counter2.to_string(),
-                                "".to_string(),
-                            ]);
-                        }
-                        UserDataBlock::ResetAtApplicationLevel { subcode } => {
-                            row.extend_from_slice(&[
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                "".to_string(),
-                                subcode.to_string(),
-                            ]);
+                
+                // Add header info
+                match &parsed_data.user_data {
+                    Some(UserDataBlock::VariableDataStructure {fixed_data_header, ..}) => {
+                        row.extend_from_slice(&[
+                            fixed_data_header.identification_number.to_string(),
+                            fixed_data_header.manufacturer.as_ref().map_or_else(
+                                |e| format!("Err({})", e),
+                                |m| m.to_string()
+                            ),
+                            fixed_data_header.access_number.to_string(),
+                            fixed_data_header.status.to_string(),
+                            fixed_data_header.signature.to_string(),
+                            fixed_data_header.version.to_string(),
+                            fixed_data_header.medium.to_string(),
+                        ]);
+                    },
+                    Some(UserDataBlock::FixedDataStructure {
+                        identification_number,
+                        access_number,
+                        status,
+                        ..
+                    }) => {
+                        row.extend_from_slice(&[
+                            identification_number.to_string(),
+                            "".to_string(), // Manufacturer
+                            access_number.to_string(),
+                            status.to_string(),
+                            "".to_string(), // Signature
+                            "".to_string(), // Version
+                            "".to_string(), // Medium
+                        ]);
+                    },
+                    _ => {
+                        // Fill with empty strings for header info
+                        for _ in 0..7 {
+                            row.push("".to_string());
                         }
                     }
                 }
-
+                
+                // Add data points
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
-                        let value_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .value_information
-                        {
-                            Some(x) => format!("{}", x),
-                            None => "None".to_string(),
-                        };
-
+                        // Get the parsed value
+                        let parsed_value = format!("{}", record.data);
+                        
+                        // Get data information
                         let data_information = match record
                             .data_record_header
                             .processed_data_record_header
@@ -355,24 +337,27 @@ pub fn parse_to_csv(input: &str) -> String {
                             Some(x) => format!("{}", x),
                             None => "None".to_string(),
                         };
-
+                        
+                        // Add value and info to the single row
+                        row.push(parsed_value);
+                        row.push(data_information);
                     }
-                } else {
-                    writer.write_record(&row).unwrap();
                 }
-            }
-            frames::Frame::ShortFrame { .. } => {
-                writer.write_record(&["ShortFrame"; 16]).unwrap();
-            }
-            frames::Frame::SingleCharacter { .. } => {
-                writer.write_record(&["SingleCharacter"; 16]).unwrap();
-            }
-            frames::Frame::ControlFrame { .. } => {
-                writer.write_record(&["ControlFrame"; 16]).unwrap();
+                
+                // Convert Vec<String> to Vec<&str> for write_record
+                let row_refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
+                writer.write_record(&row_refs).unwrap();
+            },
+            _ => {
+                // For other frame types, just output a simple header and row
+                writer.write_record(&["FrameType"]).unwrap();
+                writer.write_record(&[format!("{:?}", parsed_data.frame).as_str()]).unwrap();
             }
         }
     } else {
-        writer.write_record(&["Error parsing data"; 16]).unwrap();
+        // Error case
+        writer.write_record(&["Error"]).unwrap();
+        writer.write_record(&["Error parsing data"]).unwrap();
     }
 
     // Convert CSV to a string and return it
@@ -389,7 +374,7 @@ mod tests {
     #[test]
     fn test_csv_converter() {
         use super::parse_to_csv;
-        let x = "0000";
+        let x = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
         let y = parse_to_csv(x);
         println!("{}", y);
     }
