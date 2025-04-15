@@ -129,7 +129,10 @@ fn parse_to_table(input: &str) -> String {
                     }) => {
                         table.add_row(row![
                             fixed_data_header.identification_number,
-                            fixed_data_header.manufacturer,
+                            fixed_data_header.manufacturer.as_ref().map_or_else(
+                                |e| format!("Err({:?})", e),
+                                |m| format!("{:?}", m)
+                            ),
                             fixed_data_header.access_number,
                             fixed_data_header.status,
                             fixed_data_header.signature,
@@ -288,8 +291,8 @@ pub fn parse_to_csv(input: &str) -> String {
                         row.extend_from_slice(&[
                             fixed_data_header.identification_number.to_string(),
                             fixed_data_header.manufacturer.as_ref().map_or_else(
-                                |e| format!("Err({})", e),
-                                |m| m.to_string()
+                                |e| format!("Err({:?})", e),
+                                |m| format!("{:?}", m)
                             ),
                             fixed_data_header.access_number.to_string(),
                             fixed_data_header.status.to_string(),
