@@ -1,5 +1,5 @@
 #[cfg(feature = "std")]
-use prettytable::{csv::Writer, format, row, Table};
+use prettytable::{format, row, Table};
 
 use crate::frames;
 use crate::user_data;
@@ -243,7 +243,6 @@ pub fn parse_to_csv(input: &str) -> String {
     let data = clean_and_convert(input);
     let parsed_data = MbusData::try_from(data.as_slice());
 
-    // CSV writer using a vector as an intermediate buffer
     let mut writer = csv::Writer::from_writer(vec![]);
 
     if let Ok(parsed_data) = parsed_data {
@@ -251,14 +250,12 @@ pub fn parse_to_csv(input: &str) -> String {
             frames::Frame::LongFrame {
                 function, address, ..
             } => {
-                // Count how many data points we have
                 let data_point_count = parsed_data
                     .data_records
                     .as_ref()
                     .map(|records| records.clone().flatten().count())
                     .unwrap_or(0);
 
-                // Create headers as owned strings
                 let mut headers = vec![
                     "FrameType".to_string(),
                     "Function".to_string(),
@@ -272,24 +269,20 @@ pub fn parse_to_csv(input: &str) -> String {
                     "Medium".to_string(),
                 ];
 
-                // Add headers for each data point
                 for i in 1..=data_point_count {
                     headers.push(format!("DataPoint{}_Value", i));
                     headers.push(format!("DataPoint{}_Info", i));
                 }
 
-                // Convert Vec<String> to Vec<&str> for write_record
                 let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
-                writer.write_record(&header_refs).unwrap();
+                writer.write_record(header_refs).map_err(|_| ()).unwrap_or_default();
 
-                // Create data row
                 let mut row = vec![
                     "LongFrame".to_string(),
                     function.to_string(),
                     address.to_string(),
                 ];
 
-                // Add header info
                 match &parsed_data.user_data {
                     Some(UserDataBlock::VariableDataStructure {
                         fixed_data_header, ..
@@ -331,13 +324,10 @@ pub fn parse_to_csv(input: &str) -> String {
                     }
                 }
 
-                // Add data points
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
-                        // Get the parsed value
                         let parsed_value = format!("{}", record.data);
 
-                        // Get data information
                         let data_information = match record
                             .data_record_header
                             .processed_data_record_header
@@ -347,33 +337,29 @@ pub fn parse_to_csv(input: &str) -> String {
                             None => "None".to_string(),
                         };
 
-                        // Add value and info to the single row
                         row.push(parsed_value);
                         row.push(data_information);
                     }
                 }
 
-                // Convert Vec<String> to Vec<&str> for write_record
                 let row_refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-                writer.write_record(&row_refs).unwrap();
+                writer.write_record(row_refs).map_err(|_| ()).unwrap_or_default();
             }
             _ => {
-                // For other frame types, just output a simple header and row
-                writer.write_record(&["FrameType"]).unwrap();
+                writer.write_record(["FrameType"]).map_err(|_| ()).unwrap_or_default();
                 writer
-                    .write_record(&[format!("{:?}", parsed_data.frame).as_str()])
-                    .unwrap();
+                    .write_record([format!("{:?}", parsed_data.frame).as_str()])
+                    .map_err(|_| ()).unwrap_or_default();
             }
         }
     } else {
-        // Error case
-        writer.write_record(&["Error"]).unwrap();
-        writer.write_record(&["Error parsing data"]).unwrap();
+        writer.write_record(["Error"]).unwrap_or_default();
+        writer.write_record(["Error parsing data"]).unwrap_or_default();
     }
 
-    // Convert CSV to a string and return it
-    let csv_data = writer.into_inner().unwrap();
-    String::from_utf8(csv_data).unwrap()
+    let csv_data = writer.into_inner().unwrap_or_default();
+    String::from_utf8(csv_data)
+        .unwrap_or_else(|_| "Error converting CSV data to string".to_string())
 }
 
 #[cfg(test)]
