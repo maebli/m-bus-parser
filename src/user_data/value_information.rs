@@ -1041,6 +1041,8 @@ pub enum ValueLabel {
     DisplayOutputScalingFactor,
     ManufacturerSpecific,
     Volume,
+    FlowTemperature,
+    ReturnTemperature
 }
 
 #[cfg(feature = "std")]
