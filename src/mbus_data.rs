@@ -369,8 +369,14 @@ mod tests {
     #[test]
     fn test_csv_converter() {
         use super::parse_to_csv;
-        let x = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
-        let y = parse_to_csv(x);
-        println!("{}", y);
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let csv_output: String = parse_to_csv(input);
+        println!("{}", csv_output);
+        let yaml_output: String = super::parse_to_yaml(input);
+        println!("{}", yaml_output);
+        let json_output: String = super::parse_to_json(input);
+        println!("{}", json_output);
+        let table_output: String = super::parse_to_table(input);
+        println!("{}", table_output);
     }
 }
