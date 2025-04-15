@@ -1042,7 +1042,7 @@ pub enum ValueLabel {
     ManufacturerSpecific,
     Volume,
     FlowTemperature,
-    ReturnTemperature
+    ReturnTemperature,
 }
 
 #[cfg(feature = "std")]

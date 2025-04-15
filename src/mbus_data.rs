@@ -275,7 +275,10 @@ pub fn parse_to_csv(input: &str) -> String {
                 }
 
                 let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
-                writer.write_record(header_refs).map_err(|_| ()).unwrap_or_default();
+                writer
+                    .write_record(header_refs)
+                    .map_err(|_| ())
+                    .unwrap_or_default();
 
                 let mut row = vec![
                     "LongFrame".to_string(),
@@ -343,18 +346,27 @@ pub fn parse_to_csv(input: &str) -> String {
                 }
 
                 let row_refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-                writer.write_record(row_refs).map_err(|_| ()).unwrap_or_default();
+                writer
+                    .write_record(row_refs)
+                    .map_err(|_| ())
+                    .unwrap_or_default();
             }
             _ => {
-                writer.write_record(["FrameType"]).map_err(|_| ()).unwrap_or_default();
+                writer
+                    .write_record(["FrameType"])
+                    .map_err(|_| ())
+                    .unwrap_or_default();
                 writer
                     .write_record([format!("{:?}", parsed_data.frame).as_str()])
-                    .map_err(|_| ()).unwrap_or_default();
+                    .map_err(|_| ())
+                    .unwrap_or_default();
             }
         }
     } else {
         writer.write_record(["Error"]).unwrap_or_default();
-        writer.write_record(["Error parsing data"]).unwrap_or_default();
+        writer
+            .write_record(["Error parsing data"])
+            .unwrap_or_default();
     }
 
     let csv_data = writer.into_inner().unwrap_or_default();
