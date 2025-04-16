@@ -187,7 +187,7 @@
                 <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
         </a>
-        <pre id="output"><code id="output_code"></code></pre>
+        <pre id="output"></pre>
     </div>
     <script type="module">
         import init, { m_bus_parse } from "./m_bus_parser_wasm_pack.js";
@@ -230,20 +230,14 @@
                 else if (format === 'csv') { extension = 'csv'; mimeType = 'text/csv'; }
                 else if (format === 'table_format') { lang = 'plaintext'; extension = 'txt'; }
 
-                // For CSV, remove the <code> element and just use <pre>
                 if (format === 'csv') {
-                    outputCode.style.display = 'none';
-                    outputContainer.textContent = formattedResult;
+                    outputContainer.innerHTML = formattedResult;
                 } else {
-                    outputCode.style.display = '';
-                    outputCode.className = lang ? `language-${lang}` : '';
-                    outputCode.textContent = formattedResult;
-                    if (window.hljs && lang) hljs.highlightElement(outputCode);
-                    // Ensure <code> is visible and inside <pre>
-                    if (!outputContainer.contains(outputCode)) {
-                        outputContainer.innerHTML = '';
-                        outputContainer.appendChild(outputCode);
-                    }
+                    outputContainer.innerHTML = '<code id="output_code"></code>';
+                    const newOutputCode = document.getElementById('output_code');
+                    newOutputCode.className = lang ? `language-${lang}` : '';
+                    newOutputCode.textContent = formattedResult;
+                    if (window.hljs && lang) hljs.highlightElement(newOutputCode);
                 }
 
                 // Update download link
