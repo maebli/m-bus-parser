@@ -214,7 +214,13 @@
             });
 
             document.getElementById('copy_output').addEventListener('click', () => {
-                const text = document.getElementById('output_code').textContent;
+                const codeElem = document.getElementById('output_code');
+                let text;
+                if (codeElem) {
+                    text = codeElem.textContent;
+                } else {
+                    text = document.getElementById('output').textContent;
+                }
                 navigator.clipboard.writeText(text);
             });
 
