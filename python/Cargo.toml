@@ -17,4 +17,4 @@ hex = "0.4.2"
 name = "pymbusparser"
 
 [package.metadata.release]
-tag_name = "python-v{{version}}"
+tag-name = "python-v{{version}}"
