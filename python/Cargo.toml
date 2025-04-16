@@ -4,6 +4,8 @@ version = "0.0.3"
 edition = "2021"
 homepage = "https://maebli.github.io/"
 repository = "https://github.com/maebli/m-bus-parser"
+description = "A Python binding for the M-Bus parser"
+license = "MIT"
 
 [dependencies]
 m-bus-parser = { path = "..", version = "0.0.24", features = ["std", "serde"] }
