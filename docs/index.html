@@ -22,13 +22,33 @@
             margin-bottom: 20px;
         }
 
-        .header img {
-            margin-right: 10px;
+        .header-text {
+            text-align: left;
+            margin-left: 10px;
         }
 
-        h1 {
-            color: #333;
+        .header-text h1 {
             margin: 0;
+            font-size: 2em;
+            color: #333;
+        }
+
+        .header-text .subtitle {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .header-text .subtitle a {
+            color: #666;
+            text-decoration: none;
+        }
+
+        .parser-version {
+            font-size: 0.7em;
+            color: #888;
+            font-weight: normal;
+            margin-left: 8px;
         }
 
         form {
@@ -86,13 +106,63 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
+
+        #output-container {
+            position: relative;
+            max-width: 1100px;
+            margin: 20px auto 0;
+        }
+
+        #copy_output {
+            position: absolute;
+            top: 10px;
+            right: 45px; /* Make space for download button */
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            cursor: pointer;
+            padding: 8px;
+            z-index: 10;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        #download_output {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            cursor: pointer;
+            padding: 8px;
+            z-index: 10;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+
+        #copy_output:hover,
+        #download_output:hover {
+            background: #f0f0f0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        #copy_output svg,
+        #download_output svg {
+            display: block;
+        }
     </style>
 </head>
 
 <body>
     <div class="header">
         <img id="banner" src="meter.png" alt="Meter Banner">
-        <h1> Online M-Bus parser (wired) <i>https://maebli.github.io/m-bus-parser</i></h1>
+        <div class="header-text">
+            <h1>Online M-Bus parser (wired) <span class="parser-version">v0.0.7</span></h1>
+            <div class="subtitle">
+                <a href="https://maebli.github.io/m-bus-parser" target="_blank">maebli.github.io/m-bus-parser</a> • Michael Aebli
+            </div>
+        </div>
     </div>
     <form>
         <label for="inputstring">Input String:</label>
@@ -101,10 +171,28 @@
         <input id="parse_json" type="button" value="Parse to JSON" />
         <input id="parse_yaml" type="button" value="Parse to YAML" />
         <input id="parse_table" type="button" value="Parse to Table" />
+        <input id="parse_csv" type="button" value="Parse to CSV" />
     </form>
-    <pre id="output"></pre>
+    <div id="output-container">
+        <button id="copy_output" title="Copy Output">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1-2 2v1" />
+            </svg>
+        </button>
+        <a id="download_output" title="Download Output" href="#" download="">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+        </a>
+        <pre id="output"><code id="output_code"></code></pre>
+    </div>
     <script type="module">
         import init, { m_bus_parse } from "./m_bus_parser_wasm_pack.js";
+
+        let currentFormat = "json"; // Keep track of the last used format
 
         async function setup() {
             await init(); // Ensure the WASM module is initialized
@@ -121,11 +209,51 @@
                 parseInput("table_format");
             });
 
+            document.getElementById('parse_csv').addEventListener('click', () => {
+                parseInput("csv");
+            });
+
+            document.getElementById('copy_output').addEventListener('click', () => {
+                const text = document.getElementById('output_code').textContent;
+                navigator.clipboard.writeText(text);
+            });
+
             function parseInput(format) {
+                currentFormat = format; // Update the current format
                 const inputString = document.getElementById('inputstring').value;
                 const formattedResult = m_bus_parse(inputString, format);
-                const outputElement = document.getElementById("output");
-                outputElement.textContent = formattedResult;
+                const outputContainer = document.getElementById('output');
+                const outputCode = document.getElementById('output_code');
+                let lang = '', extension = 'txt', mimeType = 'text/plain';
+                if (format === 'json') { lang = 'json'; extension = 'json'; mimeType = 'application/json'; }
+                else if (format === 'yaml') { lang = 'yaml'; extension = 'yaml'; mimeType = 'application/x-yaml'; }
+                else if (format === 'csv') { extension = 'csv'; mimeType = 'text/csv'; }
+                else if (format === 'table_format') { lang = 'plaintext'; extension = 'txt'; }
+
+                // For CSV, remove the <code> element and just use <pre>
+                if (format === 'csv') {
+                    outputCode.style.display = 'none';
+                    outputContainer.textContent = formattedResult;
+                } else {
+                    outputCode.style.display = '';
+                    outputCode.className = lang ? `language-${lang}` : '';
+                    outputCode.textContent = formattedResult;
+                    if (window.hljs && lang) hljs.highlightElement(outputCode);
+                    // Ensure <code> is visible and inside <pre>
+                    if (!outputContainer.contains(outputCode)) {
+                        outputContainer.innerHTML = '';
+                        outputContainer.appendChild(outputCode);
+                    }
+                }
+
+                // Update download link
+                if (window._lastDownloadUrl) URL.revokeObjectURL(window._lastDownloadUrl);
+                const blob = new Blob([formattedResult], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.getElementById('download_output');
+                downloadLink.href = url;
+                downloadLink.download = `m-bus-output.${extension}`;
+                window._lastDownloadUrl = url;
             }
         }
 
