@@ -127,28 +127,18 @@ fn parse_to_table(input: &str) -> String {
                         fixed_data_header,
                         variable_data_block: _,
                     }) => {
-                        table.add_row(row![
-                            fixed_data_header.identification_number,
-                            fixed_data_header
-                                .manufacturer
-                                .as_ref()
-                                .map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m)),
-                            fixed_data_header.access_number,
-                            fixed_data_header.status,
-                            fixed_data_header.signature,
-                            fixed_data_header.version,
-                            fixed_data_header.medium,
-                        ]);
-
-                        table.set_titles(row![
-                            "Identification Number",
-                            "Manufacturer",
-                            "Access Number",
-                            "Status",
-                            "Signature",
-                            "Version",
-                            "Medium",
-                        ]);
+                        // Key-value table for all fields
+                        let mut info_table = Table::new();
+                        info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
+                        info_table.set_titles(row!["Field", "Value"]);
+                        info_table.add_row(row!["Identification Number", fixed_data_header.identification_number]);
+                        info_table.add_row(row!["Manufacturer", fixed_data_header.manufacturer.as_ref().map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m))]);
+                        info_table.add_row(row!["Access Number", fixed_data_header.access_number]);
+                        info_table.add_row(row!["Status", fixed_data_header.status]);
+                        info_table.add_row(row!["Signature", fixed_data_header.signature]);
+                        info_table.add_row(row!["Version", fixed_data_header.version]);
+                        info_table.add_row(row!["Medium", fixed_data_header.medium]);
+                        table_output.push_str(&info_table.to_string());
                     }
                     Some(UserDataBlock::FixedDataStructure {
                         identification_number,
