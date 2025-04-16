@@ -10,6 +10,8 @@ readme = "README.md"
 authors = ["Michael Aebli"]
 keywords = ["m-bus", "parser", "parse", "wasm-pack"]
 
+[package.metadata.release]
+tag-name = "wasm-v{{version}}"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -10,6 +10,9 @@ readme = "README.md"
 authors = ["Michael Aebli"]
 keywords = ["m-bus", "parser", "parse", "cli"]
 
+[package.metadata.release]
+tag-name = "cli-v{{version}}"
+
 [dev-dependencies]
 
 [build-dependencies]
