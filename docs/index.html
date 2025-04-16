@@ -105,12 +105,17 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background: #f0f0f0;
+            color: #222;
         }
 
         #output-container {
             position: relative;
             max-width: 1100px;
             margin: 20px auto 0;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
 
         #copy_output {
@@ -151,6 +156,102 @@
         #download_output svg {
             display: block;
         }
+
+        body.dark-mode {
+            background-color: #181a1b;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .header-text h1 {
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .header-text .subtitle,
+        body.dark-mode .parser-version {
+            color: #aaa;
+        }
+
+        body.dark-mode form {
+            background: #23272a;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+        }
+
+        body.dark-mode #output-container {
+            background: #23272a;
+            border-radius: 8px;
+        }
+
+        body.dark-mode textarea {
+            background: #23272a;
+            color: #e0e0e0;
+            border: 1px solid #444;
+        }
+
+        body.dark-mode pre {
+            background: #23272a;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode #output {
+            background: #23272a;
+            color: #e0e0e0;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+        }
+
+        body.dark-mode #copy_output,
+        body.dark-mode #download_output {
+            background: #23272a;
+            border: 1px solid #444;
+        }
+
+        body.dark-mode #copy_output:hover,
+        body.dark-mode #download_output:hover {
+            background: #181a1b;
+        }
+
+        body.dark-mode input[type="button"] {
+            background-color: #444;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode input[type="button"]:hover {
+            background-color: #333;
+        }
+
+        body.dark-mode pre code,
+        body.dark-mode .hljs {
+            background: #23272a !important;
+            color: #e0e0e0 !important;
+        }
+
+        body.dark-mode .hljs-keyword,
+        body.dark-mode .hljs-selector-tag,
+        body.dark-mode .hljs-literal,
+        body.dark-mode .hljs-section,
+        body.dark-mode .hljs-link {
+            color: #ffcb6b !important;
+        }
+
+        body.dark-mode .hljs-string,
+        body.dark-mode .hljs-title,
+        body.dark-mode .hljs-name,
+        body.dark-mode .hljs-type,
+        body.dark-mode .hljs-attribute,
+        body.dark-mode .hljs-symbol,
+        body.dark-mode .hljs-bullet,
+        body.dark-mode .hljs-addition {
+            color: #c3e88d !important;
+        }
+
+        body.dark-mode .hljs-comment,
+        body.dark-mode .hljs-quote,
+        body.dark-mode .hljs-deletion {
+            color: #616161 !important;
+        }
+
+        body.dark-mode .hljs-meta {
+            color: #82aaff !important;
+        }
     </style>
 </head>
 
@@ -163,6 +264,12 @@
                 <a href="https://maebli.github.io/m-bus-parser" target="_blank">maebli.github.io/m-bus-parser</a> • <a href="https://github.com/maebli" target="_blank">Michael Aebli</a>
             </div>
         </div>
+        <button id="dark_mode_toggle" title="Toggle dark mode" style="margin-left:auto;background:none;border:none;cursor:pointer;padding:8px;">
+            <svg id="dark_mode_icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5" />
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            </svg>
+        </button>
     </div>
     <form>
         <label for="inputstring">Input String:</label>
@@ -195,6 +302,28 @@
         let currentFormat = "json"; // Keep track of the last used format
 
         async function setup() {
+            // Dark mode setup
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const savedMode = localStorage.getItem('darkMode');
+            const body = document.body;
+            const icon = document.getElementById('dark_mode_icon');
+            function setDarkMode(on) {
+                if (on) {
+                    body.classList.add('dark-mode');
+                    icon.innerHTML = '<path d="M21.64 13.64A9 9 0 1 1 12 3v0a7 7 0 0 0 9.64 10.64z" />';
+                } else {
+                    body.classList.remove('dark-mode');
+                    icon.innerHTML = '<circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />';
+                }
+            }
+            let darkMode = savedMode === null ? prefersDark : savedMode === 'true';
+            setDarkMode(darkMode);
+            document.getElementById('dark_mode_toggle').addEventListener('click', () => {
+                darkMode = !body.classList.contains('dark-mode');
+                setDarkMode(darkMode);
+                localStorage.setItem('darkMode', darkMode);
+            });
+
             await init(); // Ensure the WASM module is initialized
 
             document.getElementById('parse_json').addEventListener('click', () => {
