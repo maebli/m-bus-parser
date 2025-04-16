@@ -15,3 +15,6 @@ hex = "0.4.2"
 
 [lib]
 name = "pymbusparser"
+
+[package.metadata.release]
+tag_name = "python-v{{version}}"
