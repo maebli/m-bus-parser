@@ -60,16 +60,16 @@ jobs:
           cargo fmt -- --check
       - name: Build CLI
         run: |
-          cd cli/src
+          cd cli
           cargo build --verbose
       - name: Run CLI Tests
         run: |
-          cd cli/src
+          cd cli
           cargo test --verbose
       - name: Lint CLI with Clippy
         run: |
           rustup component add clippy
-          cd cli/src
+          cd cli
           cargo clippy -- -D warnings
 
   build-wasm:
@@ -134,7 +134,7 @@ jobs:
           override: true
       - name: Publish CLI to crates.io
         run: |
-          cd cli/src
+          cd cli
           cargo publish --token ${{ secrets.CRATESTOKEN }}
 
   publish-wasm:
@@ -158,6 +158,11 @@ jobs:
         run: |
           cd wasm
           wasm-pack build --target bundler
+      - name: Copy WASM package to docs
+        run: |
+          cp -f wasm/pkg/*.js docs/
+          cp -f wasm/pkg/*.wasm docs/
+          cp -f wasm/pkg/*.d.ts docs/
       - uses: actions/setup-node@v4
         with:
           node-version: '20.x'
