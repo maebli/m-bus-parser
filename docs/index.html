@@ -17,14 +17,25 @@
 
         .header {
             display: flex;
-            align-items: center;
-            justify-content: center;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: flex-start;
             margin-bottom: 20px;
+            max-width: 1100px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .header-text {
             text-align: left;
-            margin-left: 10px;
+            margin-left: 16px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            margin-left: 0;
         }
 
         .header-text h1 {
@@ -264,12 +275,21 @@
                 <a href="https://maebli.github.io/m-bus-parser" target="_blank">maebli.github.io/m-bus-parser</a> • <a href="https://github.com/maebli" target="_blank">Michael Aebli</a>
             </div>
         </div>
-        <button id="dark_mode_toggle" title="Toggle dark mode" style="margin-left:auto;background:none;border:none;cursor:pointer;padding:8px;">
-            <svg id="dark_mode_icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="5" />
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-            </svg>
-        </button>
+        <div class="header-controls">
+            <button id="dark_mode_toggle" title="Toggle dark mode" style="background:none;border:none;cursor:pointer;padding:8px;">
+                <svg id="dark_mode_icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5" />
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+            </button>
+            <button id="report_issue" title="Report Issue" style="background:none;border:none;cursor:pointer;padding:8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <circle cx="12" cy="16" r="1" />
+                </svg>
+            </button>
+        </div>
     </div>
     <form>
         <label for="inputstring">Input String:</label>
@@ -351,6 +371,10 @@
                     text = document.getElementById('output').textContent;
                 }
                 navigator.clipboard.writeText(text);
+            });
+
+            document.getElementById('report_issue').addEventListener('click', () => {
+                window.open('https://github.com/maebli/m-bus-parser/issues/new', '_blank');
             });
 
             function parseInput(format) {
