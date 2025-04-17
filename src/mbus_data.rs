@@ -106,7 +106,7 @@ fn parse_to_table(input: &str) -> String {
     let parsed_data_result = MbusData::try_from(data.as_slice());
     if let Ok(parsed_data) = parsed_data_result {
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_format(*format::consts::FORMAT_BOX_CHARS); // Use box chars for top table
 
         match parsed_data.frame {
             frames::Frame::LongFrame {
@@ -120,75 +120,30 @@ fn parse_to_table(input: &str) -> String {
                 table.add_row(row![function, address]);
 
                 table_output.push_str(&table.to_string());
-                table = Table::new();
 
-                match parsed_data.user_data {
-                    Some(UserDataBlock::VariableDataStructure {
-                        fixed_data_header,
-                        variable_data_block: _,
-                    }) => {
-                        // Key-value table for all fields
-                        let mut info_table = Table::new();
-                        info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                        info_table.set_titles(row!["Field", "Value"]);
-                        info_table.add_row(row![
-                            "Identification Number",
-                            fixed_data_header.identification_number
-                        ]);
-                        info_table.add_row(row![
-                            "Manufacturer",
-                            fixed_data_header
-                                .manufacturer
-                                .as_ref()
-                                .map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m))
-                        ]);
-                        info_table.add_row(row!["Access Number", fixed_data_header.access_number]);
-                        info_table.add_row(row!["Status", fixed_data_header.status]);
-                        info_table.add_row(row!["Signature", fixed_data_header.signature]);
-                        info_table.add_row(row!["Version", fixed_data_header.version]);
-                        info_table.add_row(row!["Medium", fixed_data_header.medium]);
-                        table_output.push_str(&info_table.to_string());
-                    }
-                    Some(UserDataBlock::FixedDataStructure {
-                        identification_number,
-                        access_number,
-                        status,
-                        medium_ad_unit,
-                        counter1,
-                        counter2,
-                    }) => {
-                        table.set_titles(row![
-                            "Identification Number",
-                            "Access Number",
-                            "Status",
-                            "Medium Ad Unit",
-                            "Counter 1",
-                            "Counter 2",
-                        ]);
-                        table.add_row(row![
-                            identification_number,
-                            access_number,
-                            status,
-                            medium_ad_unit,
-                            counter1,
-                            counter2,
-                        ]);
-                    }
-                    Some(UserDataBlock::ResetAtApplicationLevel { subcode }) => {
-                        table.set_titles(row!["Function", "Address", "Subcode"]);
-                        table.add_row(row![function, address, subcode]);
-                    }
-                    None => {
-                        table.set_titles(row!["Function", "Address"]);
-                        table.add_row(row![function, address]);
-                    }
+                // Info table (box style, no extra newlines)
+                if let Some(UserDataBlock::VariableDataStructure {
+                    fixed_data_header,
+                    variable_data_block: _,
+                }) = &parsed_data.user_data
+                {
+                    let mut info_table = Table::new();
+                    info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
+                    info_table.set_titles(row!["Field", "Value"]);
+                    info_table.add_row(row!["Identification Number", fixed_data_header.identification_number]);
+                    info_table.add_row(row!["Manufacturer", fixed_data_header.manufacturer.as_ref().map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m))]);
+                    info_table.add_row(row!["Access Number", fixed_data_header.access_number]);
+                    info_table.add_row(row!["Status", fixed_data_header.status]);
+                    info_table.add_row(row!["Signature", fixed_data_header.signature]);
+                    info_table.add_row(row!["Version", fixed_data_header.version]);
+                    info_table.add_row(row!["Medium", fixed_data_header.medium]);
+                    table_output.push_str(&info_table.to_string());
                 }
 
-                table_output.push_str(&table.to_string());
-                table = Table::new();
-
-                table.set_titles(row!["Value", "Data Information",]);
-
+                // Value/Data Information table (all lines the same, no extra newlines)
+                let mut value_table = Table::new();
+                value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
+                value_table.set_titles(row!["Value", "Data Information"]);
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
                         let value_information = match record
@@ -199,7 +154,6 @@ fn parse_to_table(input: &str) -> String {
                             Some(x) => format!("{}", x),
                             None => "None".to_string(),
                         };
-
                         let data_information = match record
                             .data_record_header
                             .processed_data_record_header
@@ -208,13 +162,10 @@ fn parse_to_table(input: &str) -> String {
                             Some(x) => format!("{}", x),
                             None => "None".to_string(),
                         };
-
-                        table.add_row(row![
-                            format!("({}{}", record.data, value_information),
-                            format!("{}", data_information)
-                        ]);
+                        value_table.add_row(row![format!("({}{})", record.data, value_information), data_information]);
                     }
                 }
+                table_output.push_str(&value_table.to_string());
             }
             frames::Frame::ShortFrame { .. } => {
                 table_output.push_str("Short Frame\n");
@@ -226,8 +177,6 @@ fn parse_to_table(input: &str) -> String {
                 table_output.push_str("Control Frame\n");
             }
         }
-
-        table_output.push_str(&table.to_string());
         table_output
     } else {
         format!("Error {:?} parsing data", parsed_data_result)
