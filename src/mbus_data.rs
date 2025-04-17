@@ -130,8 +130,17 @@ fn parse_to_table(input: &str) -> String {
                     let mut info_table = Table::new();
                     info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
                     info_table.set_titles(row!["Field", "Value"]);
-                    info_table.add_row(row!["Identification Number", fixed_data_header.identification_number]);
-                    info_table.add_row(row!["Manufacturer", fixed_data_header.manufacturer.as_ref().map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m))]);
+                    info_table.add_row(row![
+                        "Identification Number",
+                        fixed_data_header.identification_number
+                    ]);
+                    info_table.add_row(row![
+                        "Manufacturer",
+                        fixed_data_header
+                            .manufacturer
+                            .as_ref()
+                            .map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m))
+                    ]);
                     info_table.add_row(row!["Access Number", fixed_data_header.access_number]);
                     info_table.add_row(row!["Status", fixed_data_header.status]);
                     info_table.add_row(row!["Signature", fixed_data_header.signature]);
@@ -162,7 +171,10 @@ fn parse_to_table(input: &str) -> String {
                             Some(x) => format!("{}", x),
                             None => "None".to_string(),
                         };
-                        value_table.add_row(row![format!("({}{})", record.data, value_information), data_information]);
+                        value_table.add_row(row![
+                            format!("({}{})", record.data, value_information),
+                            data_information
+                        ]);
                     }
                 }
                 table_output.push_str(&value_table.to_string());
