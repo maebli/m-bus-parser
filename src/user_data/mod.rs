@@ -51,11 +51,15 @@ impl<'a> Iterator for DataRecords<'a> {
                     } else {
                         DataRecord::try_from(self.data.get(self.offset..)?)
                     };
-                    if let Ok(record) = record {
-                        self.offset += record.get_size();
-                        return Some(Ok(record));
-                    } else {
-                        self.offset = self.data.len();
+                    match record {
+                        Ok(record) => {
+                            self.offset += record.get_size();
+                            return Some(Ok(record));
+                        }
+                        Err(err) => {
+                            self.offset = self.data.len();
+                            return Some(Err(err));
+                        }
                     }
                 }
             }

@@ -32,6 +32,22 @@ impl<'a> From<(&'a [u8], &'a FixedDataHeader)> for DataRecords<'a> {
     }
 }
 
+impl<'a> TryFrom<&'a [u8]> for DataRecords<'a> {
+    type Error = VariableUserDataError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        Ok(Self::from(data))
+    }
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a FixedDataHeader)> for DataRecords<'a> {
+    type Error = VariableUserDataError;
+
+    fn try_from((data, fixed_data_header): (&'a [u8], &'a FixedDataHeader)) -> Result<Self, Self::Error> {
+        Ok(Self::from((data, fixed_data_header)))
+    }
+}
+
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use crate::user_data::{data_information::DataFieldCoding, data_record::DataRecord};
