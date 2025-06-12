@@ -500,6 +500,12 @@ fn bcd_to_value_internal(
             (byte >> 4) & 0x0F
         };
 
+        if digit > 9 {
+            return Err(DataRecordError::DataInformationError(
+                DataInformationError::InvalidValueInformation,
+            ));
+        }
+
         data_value += f64::from(digit) * current_weight;
         current_weight *= 10.0;
     }
@@ -1010,6 +1016,18 @@ mod tests {
                 size: 3
             }
         );
+    }
+
+    #[test]
+    fn test_bcd_to_value_invalid() {
+        let data = [0x5A, 0x76, 0x98];
+        let result = bcd_to_value_internal(&data, 6, 1, false);
+        assert!(matches!(
+            result,
+            Err(DataRecordError::DataInformationError(
+                DataInformationError::InvalidValueInformation
+            ))
+        ));
     }
 
     #[test]
