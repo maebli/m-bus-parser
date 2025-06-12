@@ -68,7 +68,8 @@ impl<'a> DataRecord<'a> {
         let mut offset = header_size;
         let mut data_out = Data {
             value: Some(DataType::ManufacturerSpecific(
-                data.get(offset..).ok_or(DataRecordError::InsufficientData)?,
+                data.get(offset..)
+                    .ok_or(DataRecordError::InsufficientData)?,
             )),
             size: data.len() - offset,
         };
