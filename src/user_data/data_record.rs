@@ -24,12 +24,25 @@ pub struct ProcessedDataRecordHeader {
 pub struct DataRecord<'a> {
     pub data_record_header: DataRecordHeader<'a>,
     pub data: Data<'a>,
+    pub raw_bytes: &'a [u8],
 }
 
 impl DataRecord<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
         self.data_record_header.get_size() + self.data.get_size()
+    }
+
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn data_hex(&self) -> String {
+        let start = self.data_record_header.get_size();
+        let end = self.get_size();
+        self.raw_bytes[start..end]
+            .iter()
+            .map(|b| format!("{:02X}", b))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -64,9 +77,15 @@ impl<'a> DataRecord<'a> {
             }
         }
 
+        let record_size = data_record_header.get_size() + data_out.get_size();
+        let raw_bytes = data
+            .get(..record_size)
+            .ok_or(DataRecordError::InsufficientData)?;
+
         Ok(DataRecord {
             data_record_header,
             data: data_out,
+            raw_bytes,
         })
     }
 }
