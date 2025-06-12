@@ -30,7 +30,7 @@ pub struct DataRecord<'a> {
 impl DataRecord<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
-        self.data_record_header.get_size() + self.data.get_size()
+        self.raw_bytes.len()
     }
 
     #[cfg(feature = "std")]
@@ -52,19 +52,31 @@ impl<'a> DataRecord<'a> {
         fixed_data_header: Option<&'a FixedDataHeader>,
     ) -> Result<Self, DataRecordError> {
         let data_record_header = DataRecordHeader::try_from(data)?;
-        let mut offset = data_record_header
+        let mut header_size = data_record_header.get_size();
+        if data_record_header
             .raw_data_record_header
             .data_information_block
-            .get_size();
+            .data_information_field
+            .data
+            == 0x0F
+        {
+            header_size = 0;
+        }
+        if data.len() < header_size {
+            return Err(DataRecordError::InsufficientData);
+        }
+        let mut offset = header_size;
         let mut data_out = Data {
-            value: Some(DataType::ManufacturerSpecific(data)),
-            size: data.len(),
+            value: Some(DataType::ManufacturerSpecific(
+                data.get(offset..).ok_or(DataRecordError::InsufficientData)?,
+            )),
+            size: data.len() - offset,
         };
-        if let Some(x) = &data_record_header
+        if data_record_header
             .raw_data_record_header
             .value_information_block
+            .is_some()
         {
-            offset += x.get_size();
             if let Some(data_info) = &data_record_header
                 .processed_data_record_header
                 .data_information
@@ -77,10 +89,11 @@ impl<'a> DataRecord<'a> {
             }
         }
 
-        let record_size = data_record_header.get_size() + data_out.get_size();
-        let raw_bytes = data
-            .get(..record_size)
-            .ok_or(DataRecordError::InsufficientData)?;
+        let mut record_size = data_record_header.get_size() + data_out.get_size();
+        if record_size > data.len() {
+            record_size = data.len();
+        }
+        let raw_bytes = &data[..record_size];
 
         Ok(DataRecord {
             data_record_header,
