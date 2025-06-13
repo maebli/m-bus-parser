@@ -70,6 +70,7 @@ impl<'a> DataRecord<'a> {
             value: Some(DataType::ManufacturerSpecific(
                 data.get(offset..)
                     .ok_or(DataRecordError::InsufficientData)?,
+                    .ok_or(DataRecordError::InsufficientData)?,
             )),
             size: data.len() - offset,
         };

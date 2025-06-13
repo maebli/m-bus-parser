@@ -115,7 +115,11 @@ pub struct ValueInformationBlock {
 #[cfg(feature = "defmt")]
 impl defmt::Format for ValueInformationBlock {
     fn format(&self, f: defmt::Formatter) {
-        defmt::write!(f, "ValueInformationBlock{{ value_information: {:?}", self.value_information);
+        defmt::write!(
+            f,
+            "ValueInformationBlock{{ value_information: {:?}",
+            self.value_information
+        );
         if let Some(ext) = &self.value_information_extension {
             defmt::write!(f, ", value_information_extension: [");
             for (i, vife) in ext.iter().enumerate() {
