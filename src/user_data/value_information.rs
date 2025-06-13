@@ -105,12 +105,35 @@ fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, DataInformat
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationBlock {
     pub value_information: ValueInformationField,
     pub value_information_extension:
         Option<ArrayVec<ValueInformationFieldExtension, MAX_VIFE_RECORDS>>,
     pub plaintext_vife: Option<ArrayVec<char, 9>>,
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for ValueInformationBlock {
+    fn format(&self, f: defmt::Formatter) {
+        defmt::write!(f, "ValueInformationBlock{{ value_information: {:?}", self.value_information);
+        if let Some(ext) = &self.value_information_extension {
+            defmt::write!(f, ", value_information_extension: [");
+            for (i, vife) in ext.iter().enumerate() {
+                if i != 0 {
+                    defmt::write!(f, ", ");
+                }
+                defmt::write!(f, "{:?}", vife);
+            }
+            defmt::write!(f, "]");
+        }
+        if let Some(text) = &self.plaintext_vife {
+            defmt::write!(f, ", plaintext_vife: ");
+            for c in text {
+                defmt::write!(f, "{}", c);
+            }
+        }
+        defmt::write!(f, " }}");
+    }
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
@@ -848,12 +871,44 @@ impl From<u8> for ValueInformationField {
 /// value(x) = (multiplier * value + offset) * units
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformation {
     pub decimal_offset_exponent: isize,
     pub labels: ArrayVec<ValueLabel, 10>,
     pub decimal_scale_exponent: isize,
     pub units: ArrayVec<Unit, 10>,
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for ValueInformation {
+    fn format(&self, f: defmt::Formatter) {
+        defmt::write!(
+            f,
+            "ValueInformation{{ decimal_offset_exponent: {}, decimal_scale_exponent: {}",
+            self.decimal_offset_exponent,
+            self.decimal_scale_exponent
+        );
+        if !self.labels.is_empty() {
+            defmt::write!(f, ", labels: [");
+            for (i, label) in self.labels.iter().enumerate() {
+                if i != 0 {
+                    defmt::write!(f, ", ");
+                }
+                defmt::write!(f, "{:?}", label);
+            }
+            defmt::write!(f, "]");
+        }
+        if !self.units.is_empty() {
+            defmt::write!(f, ", units: [");
+            for (i, unit) in self.units.iter().enumerate() {
+                if i != 0 {
+                    defmt::write!(f, ", ");
+                }
+                defmt::write!(f, "{:?}", unit);
+            }
+            defmt::write!(f, "]");
+        }
+        defmt::write!(f, " }}");
+    }
 }
 
 #[cfg(feature = "std")]
