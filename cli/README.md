@@ -1,5 +1,5 @@
 # M-Bus parser (wired) CLI
-| Value                               | Data Information   | Hex        |
+This is a command line interface for the m-bus parser. The parser is able to parse the link layer of the m-bus protocol. The application layer is not yet implemented fully, but works partially. It is planned to have various formats for the output. currently the output is in a table format. Input can be a a file or a string of the format "0x00 0x01 0x02 ..." or "000102..." or "00 01 02...":.
 +=====================================+====================+============+
 | (182007+0)e0[](FabricationNumber, ) | 0,Inst,BCD 8-digit | 07 20 18 00|
 +-------------------------------------+--------------------+------------+
