@@ -38,7 +38,9 @@ impl DataRecord<'_> {
     pub fn data_hex(&self) -> String {
         let start = self.data_record_header.get_size();
         let end = self.get_size();
-        self.raw_bytes[start..end]
+        self.raw_bytes
+            .get(start..end)
+            .unwrap_or(&[])
             .iter()
             .map(|b| format!("{:02X}", b))
             .collect::<Vec<_>>()
@@ -65,11 +67,14 @@ impl<'a> DataRecord<'a> {
         if data.len() < header_size {
             return Err(DataRecordError::InsufficientData);
         }
-        let mut offset = header_size;
+        let offset = header_size;
         let mut data_out = Data {
             value: Some(DataType::ManufacturerSpecific(
                 data.get(offset..)
                     .ok_or(DataRecordError::InsufficientData)?,
+        let raw_bytes = data
+            .get(..record_size)
+            .ok_or(DataRecordError::InsufficientData)?;
                     .ok_or(DataRecordError::InsufficientData)?,
             )),
             size: data.len() - offset,

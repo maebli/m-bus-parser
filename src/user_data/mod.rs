@@ -1014,7 +1014,7 @@ mod tests {
                 variable_data_block,
             } = user_data_block
             {
-                let mut data_records: Vec<DataRecord> =
+                let data_records: Vec<DataRecord> =
                     DataRecords::try_from((variable_data_block, &fixed_data_header))
                         .unwrap()
                         .flatten()

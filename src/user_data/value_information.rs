@@ -120,6 +120,10 @@ impl defmt::Format for ValueInformationBlock {
             "ValueInformationBlock{{ value_information: {:?}",
             self.value_information
         );
+            f,
+            "ValueInformationBlock{{ value_information: {:?}",
+            self.value_information
+        );
         if let Some(ext) = &self.value_information_extension {
             defmt::write!(f, ", value_information_extension: [");
             for (i, vife) in ext.iter().enumerate() {
