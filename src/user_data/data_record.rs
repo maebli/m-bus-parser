@@ -24,6 +24,7 @@ pub struct ProcessedDataRecordHeader {
 pub struct DataRecord<'a> {
     pub data_record_header: DataRecordHeader<'a>,
     pub data: Data<'a>,
+    /// Raw bytes encompassing this data record
     pub raw_bytes: &'a [u8],
 }
 
@@ -72,6 +73,7 @@ impl<'a> DataRecord<'a> {
             value: Some(DataType::ManufacturerSpecific(
                 data.get(offset..)
                     .ok_or(DataRecordError::InsufficientData)?,
+        // Capture the raw slice for later inspection or display
         let raw_bytes = data
             .get(..record_size)
             .ok_or(DataRecordError::InsufficientData)?;
