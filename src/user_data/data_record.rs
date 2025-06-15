@@ -73,11 +73,6 @@ impl<'a> DataRecord<'a> {
             value: Some(DataType::ManufacturerSpecific(
                 data.get(offset..)
                     .ok_or(DataRecordError::InsufficientData)?,
-        // Capture the raw slice for later inspection or display
-        let raw_bytes = data
-            .get(..record_size)
-            .ok_or(DataRecordError::InsufficientData)?;
-                    .ok_or(DataRecordError::InsufficientData)?,
             )),
             size: data.len() - offset,
         };
