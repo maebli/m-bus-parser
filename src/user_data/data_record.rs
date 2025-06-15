@@ -24,12 +24,28 @@ pub struct ProcessedDataRecordHeader {
 pub struct DataRecord<'a> {
     pub data_record_header: DataRecordHeader<'a>,
     pub data: Data<'a>,
+    /// Raw bytes encompassing this data record
+    pub raw_bytes: &'a [u8],
 }
 
 impl DataRecord<'_> {
     #[must_use]
     pub fn get_size(&self) -> usize {
-        self.data_record_header.get_size() + self.data.get_size()
+        self.raw_bytes.len()
+    }
+
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn data_hex(&self) -> String {
+        let start = self.data_record_header.get_size();
+        let end = self.get_size();
+        self.raw_bytes
+            .get(start..end)
+            .unwrap_or(&[])
+            .iter()
+            .map(|b| format!("{:02X}", b))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -39,19 +55,32 @@ impl<'a> DataRecord<'a> {
         fixed_data_header: Option<&'a FixedDataHeader>,
     ) -> Result<Self, DataRecordError> {
         let data_record_header = DataRecordHeader::try_from(data)?;
-        let mut offset = data_record_header
+        let mut header_size = data_record_header.get_size();
+        if data_record_header
             .raw_data_record_header
             .data_information_block
-            .get_size();
+            .data_information_field
+            .data
+            == 0x0F
+        {
+            header_size = 0;
+        }
+        if data.len() < header_size {
+            return Err(DataRecordError::InsufficientData);
+        }
+        let offset = header_size;
         let mut data_out = Data {
-            value: Some(DataType::ManufacturerSpecific(data)),
-            size: data.len(),
+            value: Some(DataType::ManufacturerSpecific(
+                data.get(offset..)
+                    .ok_or(DataRecordError::InsufficientData)?,
+            )),
+            size: data.len() - offset,
         };
-        if let Some(x) = &data_record_header
+        if data_record_header
             .raw_data_record_header
             .value_information_block
+            .is_some()
         {
-            offset += x.get_size();
             if let Some(data_info) = &data_record_header
                 .processed_data_record_header
                 .data_information
@@ -64,9 +93,18 @@ impl<'a> DataRecord<'a> {
             }
         }
 
+        let mut record_size = data_record_header.get_size() + data_out.get_size();
+        if record_size > data.len() {
+            record_size = data.len();
+        }
+        let raw_bytes = data
+            .get(..record_size)
+            .ok_or(DataRecordError::InsufficientData)?;
+
         Ok(DataRecord {
             data_record_header,
             data: data_out,
+            raw_bytes,
         })
     }
 }

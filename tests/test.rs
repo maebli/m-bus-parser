@@ -101,7 +101,7 @@ mod tests {
         for entry in WalkDir::new("./tests/rscada/test-frames")
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "hex"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "hex"))
         {
             let contents =
                 fs::read_to_string(entry.path()).expect("Something went wrong reading the file");
