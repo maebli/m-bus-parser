@@ -97,7 +97,9 @@ impl<'a> DataRecord<'a> {
         if record_size > data.len() {
             record_size = data.len();
         }
-        let raw_bytes = &data[..record_size];
+        let raw_bytes = data
+            .get(..record_size)
+            .ok_or(DataRecordError::InsufficientData)?;
 
         Ok(DataRecord {
             data_record_header,
