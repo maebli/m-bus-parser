@@ -133,8 +133,9 @@ impl fmt::Display for StatusField {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum Direction {
     SlaveToMaster,
     MasterToSlave,
@@ -172,8 +173,9 @@ impl From<ControlInformation> for Direction {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum ControlInformation {
     SendData,
     SelectSlave,
@@ -231,9 +233,10 @@ impl ControlInformation {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum ApplicationLayerError {
     MissingControlInformation,
     InvalidControlInformation { byte: u8 },
@@ -273,8 +276,9 @@ impl fmt::Display for ApplicationLayerError {
 impl std::error::Error for ApplicationLayerError {}
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum ApplicationResetSubcode {
     All(u8),
     UserData(u8),
@@ -421,6 +425,7 @@ pub struct FixedDataHeder {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum UserDataBlock<'a> {
     ResetAtApplicationLevel {
         subcode: ApplicationResetSubcode,
@@ -440,8 +445,9 @@ pub enum UserDataBlock<'a> {
     },
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum Medium {
     Other,
     Oil,
