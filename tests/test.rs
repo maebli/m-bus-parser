@@ -86,6 +86,7 @@ fn medium_to_str(medium: Medium) -> &'static str {
         Medium::DualWater => "DualWater",
         Medium::Pressure => "Pressure",
         Medium::ADConverter => "ADConverter",
+        _ => unreachable!(),
     }
 }
 #[cfg(test)]

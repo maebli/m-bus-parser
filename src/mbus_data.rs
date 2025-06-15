@@ -67,6 +67,7 @@ fn clean_and_convert(input: &str) -> Vec<u8> {
 }
 
 #[cfg(feature = "std")]
+#[must_use]
 pub fn serialize_mbus_data(data: &str, format: &str) -> String {
     match format {
         "json" => parse_to_json(data),
@@ -77,6 +78,7 @@ pub fn serialize_mbus_data(data: &str, format: &str) -> String {
 }
 
 #[cfg(feature = "std")]
+#[must_use]
 pub fn parse_to_json(input: &str) -> String {
     let data = clean_and_convert(input);
     let parsed_data = MbusData::try_from(data.as_slice());
@@ -87,6 +89,7 @@ pub fn parse_to_json(input: &str) -> String {
 }
 
 #[cfg(feature = "std")]
+#[must_use]
 fn parse_to_yaml(input: &str) -> String {
     let data = clean_and_convert(input);
     let parsed_data = MbusData::try_from(data.as_slice());
@@ -97,6 +100,7 @@ fn parse_to_yaml(input: &str) -> String {
 }
 
 #[cfg(feature = "std")]
+#[must_use]
 fn parse_to_table(input: &str) -> String {
     use user_data::UserDataBlock;
 
@@ -197,6 +201,7 @@ fn parse_to_table(input: &str) -> String {
 }
 
 #[cfg(feature = "std")]
+#[must_use]
 pub fn parse_to_csv(input: &str) -> String {
     use crate::user_data::UserDataBlock;
     use prettytable::csv;
