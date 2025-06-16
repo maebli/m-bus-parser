@@ -187,8 +187,9 @@ impl ValueInformationFieldExtension {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum ValueInformationCoding {
     Primary,
     PlainText,
@@ -197,8 +198,9 @@ pub enum ValueInformationCoding {
     ManufacturerSpecific,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum ValueInformationFieldExtensionCoding {
     MainVIFCodeExtension,
     AlternateVIFCodeExtension,
@@ -859,8 +861,9 @@ fn consume_orthhogonal_vife(
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum ValueInformationError {
     InvalidValueInformation,
 }
@@ -948,8 +951,9 @@ impl fmt::Display for ValueInformation {
     }
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum ValueLabel {
     Instantaneous,
     ReservedForObjectActions,
@@ -1154,6 +1158,7 @@ impl fmt::Display for Unit {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum UnitName {
     Watt,
     ReactiveWatt,

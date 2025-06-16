@@ -162,14 +162,33 @@ const MAXIMUM_DATA_INFORMATION_SIZE: usize = 11;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataInformationExtensionField {}
 
-#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum DataInformationError {
     NoData,
     DataTooLong,
     DataTooShort,
     InvalidValueInformation,
 }
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for DataInformationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataInformationError::NoData => write!(f, "No data available"),
+            DataInformationError::DataTooLong => write!(f, "Data too long"),
+            DataInformationError::DataTooShort => write!(f, "Data too short"),
+            DataInformationError::InvalidValueInformation => {
+                write!(f, "Invalid value information")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DataInformationError {}
 
 impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
     type Error = DataInformationError;
@@ -256,6 +275,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TextUnit<'a>(&'a [u8]);
 impl<'a> TextUnit<'a> {
+    #[must_use]
     pub const fn new(input: &'a [u8]) -> Self {
         Self(input)
     }
@@ -285,8 +305,9 @@ impl From<TextUnit<'_>> for String {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum Month {
     January,
     February,
@@ -331,6 +352,7 @@ pub type Second = u8;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum SingleEveryOrInvalid<T> {
     Single(T),
     Every(),
@@ -340,6 +362,7 @@ pub enum SingleEveryOrInvalid<T> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
     Number(f64),
@@ -834,6 +857,7 @@ impl DataInformation {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum FunctionField {
     InstantaneousValue,
     MaximumValue,
@@ -855,6 +879,7 @@ impl std::fmt::Display for FunctionField {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum SpecialFunctions {
     ManufacturerSpecific,
     MoreRecordsFollow,
@@ -872,6 +897,7 @@ pub struct Value {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum DataFieldCoding {
     NoData,
     Integer8Bit,

@@ -1,18 +1,47 @@
 use super::data_information::{self};
 use super::{DataRecords, FixedDataHeader};
 
-#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum DataRecordError {
     DataInformationError(data_information::DataInformationError),
     InsufficientData,
 }
 
-#[derive(Debug, PartialEq)]
+#[cfg(feature = "std")]
+impl std::fmt::Display for DataRecordError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataRecordError::DataInformationError(e) => write!(f, "{}", e),
+            DataRecordError::InsufficientData => write!(f, "Insufficient data"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DataRecordError {}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum VariableUserDataError {
     DataInformationError(DataRecordError),
 }
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for VariableUserDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VariableUserDataError::DataInformationError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for VariableUserDataError {}
 
 impl From<DataRecordError> for VariableUserDataError {
     fn from(error: DataRecordError) -> Self {
