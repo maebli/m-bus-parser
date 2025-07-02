@@ -319,7 +319,36 @@
     <script type="module">
         import init, { m_bus_parse } from "./m_bus_parser_wasm_pack.js";
 
+        // AWS Lambda Function URL for logging
+        const AWS_API_URL = 'https://hkglyncyok75e7oid25eqswm7u0hdxox.lambda-url.eu-north-1.on.aws';
+
         let currentFormat = "json"; // Keep track of the last used format
+
+        async function logInputToAWS(inputString) {
+            try {
+                const response = await fetch(AWS_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        inputstring: inputString,
+                        timestamp: new Date().toISOString(),
+                        url: window.location.href
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('✅ Logged to AWS:', result);
+                } else {
+                    console.warn('⚠️ AWS logging failed:', response.status);
+                }
+            } catch (error) {
+                console.warn('⚠️ AWS logging error:', error);
+                // Don't show error to user - logging is background operation
+            }
+        }
 
         async function setup() {
             // Dark mode setup
@@ -380,6 +409,12 @@
             function parseInput(format) {
                 currentFormat = format; // Update the current format
                 const inputString = document.getElementById('inputstring').value;
+                
+                // Log input content to AWS Lambda (async, non-blocking)
+                if (inputString.trim()) { // Only log if there's actual content
+                    logInputToAWS(inputString);
+                }
+                
                 const formattedResult = m_bus_parse(inputString, format);
                 const outputContainer = document.getElementById('output');
                 const outputCode = document.getElementById('output_code');
