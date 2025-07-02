@@ -9,7 +9,6 @@ This file explains how AI agents, including OpenAI Codex, should work with this 
 - WebAssembly bindings are in `wasm/`.
 - Python bindings are located in `python/`.
 - Tests live under `tests/`.
-- Static resources and documentation in `resources/` and `docs/` should not be modified automatically.
 
 ## Coding Conventions
 
