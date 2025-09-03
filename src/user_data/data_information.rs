@@ -501,7 +501,7 @@ fn bcd_to_value_internal(
     num_digits: usize,
     sign: i32,
     lsb_order: bool,
-) -> Result<Data, DataRecordError> {
+) -> Result<Data<'_>, DataRecordError> {
     if data.len() < num_digits.div_ceil(2) {
         return Err(DataRecordError::InsufficientData);
     }
