@@ -134,7 +134,7 @@ impl DataRecordHeader<'_> {
 
 impl<'a> TryFrom<&'a [u8]> for RawDataRecordHeader<'a> {
     type Error = DataRecordError;
-    fn try_from(data: &[u8]) -> Result<RawDataRecordHeader, DataRecordError> {
+    fn try_from(data: &[u8]) -> Result<RawDataRecordHeader<'_>, DataRecordError> {
         let difb = DataInformationBlock::try_from(data)?;
         let offset = difb.get_size();
 
