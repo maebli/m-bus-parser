@@ -67,9 +67,9 @@ pub enum MbusError {
 impl std::fmt::Display for MbusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MbusError::FrameError(e) => write!(f, "{}", e),
-            MbusError::ApplicationLayerError(e) => write!(f, "{}", e),
-            MbusError::DataRecordError(e) => write!(f, "{}", e),
+            MbusError::FrameError(e) => write!(f, "{e}"),
+            MbusError::ApplicationLayerError(e) => write!(f, "{e}"),
+            MbusError::DataRecordError(e) => write!(f, "{e}"),
         }
     }
 }
