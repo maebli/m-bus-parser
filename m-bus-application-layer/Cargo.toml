@@ -1,0 +1,24 @@
+[package]
+name = "m-bus-application-layer"
+version = "0.1.0"
+edition = "2021"
+description = "M-Bus application layer parser (EN 13757-3) - shared by wired and wireless M-Bus"
+license = "MIT"
+authors = ["Michael Aebli"]
+repository = "https://github.com/maebli/m-bus-parser"
+keywords = ["m-bus", "parser", "application-layer"]
+
+[features]
+default = []
+std = ["prettytable-rs", "serde_json", "serde_yaml", "serde"]
+serde = ["dep:serde", "arrayvec/serde", "bitflags/serde"]
+defmt = ["dep:defmt"]
+
+[dependencies]
+prettytable-rs = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+serde_yaml = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+bitflags = { workspace = true }
+arrayvec = { workspace = true }
+defmt = { workspace = true, optional = true }

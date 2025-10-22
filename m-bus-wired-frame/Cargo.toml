@@ -1,0 +1,19 @@
+[package]
+name = "m-bus-wired-frame"
+version = "0.1.0"
+edition = "2021"
+description = "M-Bus wired frame parser (EN 13757-2) - link layer for wired M-Bus"
+license = "MIT"
+authors = ["Michael Aebli"]
+repository = "https://github.com/maebli/m-bus-parser"
+keywords = ["m-bus", "parser", "wired", "frame"]
+
+[features]
+default = []
+std = ["serde"]
+serde = ["dep:serde"]
+defmt = ["dep:defmt"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+defmt = { workspace = true, optional = true }

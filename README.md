@@ -1,15 +1,20 @@
 
-# m-bus-parser (wired)
+# m-bus-parser
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Now-blue?style=flat&logo=Discord)](https://discord.gg/FfmecQ4wua)
 [![Crates.io](https://img.shields.io/crates/v/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![Downloads](https://img.shields.io/crates/d/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![License](https://img.shields.io/crates/l/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser) [![Documentation](https://docs.rs/m-bus-parser/badge.svg)](https://docs.rs/m-bus-parser) [![Build Status](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml/badge.svg)](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml)
 
 
-### Introduction 
+### Introduction
 
 *For contributing see [CONTRIBUTING.md](./CONTRIBUTING.md)*
 
-m-bus-parser is an open source parser (sometimes also refered to as decoder and/or deserializer) of **wired** m-bus portocol and is written in rust. 
+m-bus-parser is an open source parser (sometimes also refered to as decoder and/or deserializer) for M-Bus protocol written in Rust. It supports:
+
+- **Wired M-Bus** (EN 13757-2) - Fully implemented ✅
+- **Wireless M-Bus** (EN 13757-4) - Work in progress 🚧
+
+The library is architected with separate crates for wired frames, wireless frames (upcoming), and a shared application layer (EN 13757-3), providing a clean separation of concerns and allowing users to include only what they need. 
 
 "M-Bus or Meter-Bus is a European standard (EN 13757-2 physical and link layer, EN 13757-3 application layer) for the remote reading of water, gas or electricity meters. M-Bus is also usable for other types of consumption meters, such as heating systems or water meters. The M-Bus interface is made for communication on two wires, making it cost-effective." - [Wikipedia](https://en.wikipedia.org/wiki/Meter-Bus)
 
@@ -63,6 +68,31 @@ The searlized application layer above can be further broken into parsable parts.
 - suitable for embedded targets `no_std`
 - Follow the Rust API Guideline https://rust-lang.github.io/api-guidelines/
 - minimal copy
+
+## Architecture
+
+The project is organized as a Cargo workspace with multiple crates:
+
+- **`m-bus-parser`** (main crate) - Unified interface for both wired and wireless M-Bus
+- **`m-bus-application-layer`** - Shared application layer (EN 13757-3) used by both protocols
+- **`m-bus-wired-frame`** - Wired M-Bus frame parsing (EN 13757-2)
+- **`m-bus-wireless-frame`** - Wireless M-Bus frame parsing (EN 13757-4) - *Coming soon*
+- **`m-bus-parser-cli`** - Command-line interface
+- **`m-bus-parser-wasm-pack`** - WebAssembly bindings
+- **`pymbusparser`** - Python bindings
+
+This modular design allows:
+- Code reuse of the application layer between wired and wireless
+- Smaller binary sizes (include only what you need)
+- Clear separation of concerns
+- Easy extension for future M-Bus variants
+
+### Feature Flags
+
+- `std` - Enable standard library features (serialization, etc.)
+- `serde` - Enable serde serialization support
+- `wireless` - Enable wireless M-Bus support (opt-in, *coming soon*)
+- `defmt` - Enable defmt logging for embedded targets
 
 ## Development status 
 

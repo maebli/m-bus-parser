@@ -1,8 +1,8 @@
 [package]
 name = "m-bus-parser"
-version = "0.0.27"
+version = "0.0.28"
 edition = "2021"
-description = "A library for parsing M-Bus frames"
+description = "A library for parsing M-Bus frames (wired and wireless support)"
 license = "MIT"
 homepage = "https://maebli.github.io/"
 repository = "https://github.com/maebli/m-bus-parser"
@@ -24,10 +24,15 @@ bindgen = "0.72.0"
 
 [features]
 default = []
-std = ["prettytable-rs", "serde_json", "serde_yaml", "serde"]
+# Wired M-Bus support (always available for backwards compatibility)
+wired = []
+# Wireless M-Bus support (opt-in)
+wireless = ["dep:m-bus-wireless-frame"]
+# Pass-through features to sub-crates
+std = ["m-bus-application-layer/std", "m-bus-wired-frame/std"]
 plaintext-before-extension = []
-serde = ["dep:serde", "arrayvec/serde", "bitflags/serde"]
-defmt = ["dep:defmt"]
+serde = ["m-bus-application-layer/serde", "m-bus-wired-frame/serde"]
+defmt = ["m-bus-application-layer/defmt", "m-bus-wired-frame/defmt"]
 
 [profile.release]
 opt-level = 'z'   # Optimize for size
@@ -38,16 +43,31 @@ codegen-units = 1 # Reduce codegen units to improve optimizations
 opt-level = "s"
 
 [dependencies]
-prettytable-rs = { version = "^0.10", optional = true }
-serde_json = { version = "1.0.138", optional = true }
-serde_yaml = { version = "0.9", optional = true }
-serde = { version = "1.0", features = ["derive"], optional = true }
+# Sub-crates
+m-bus-application-layer = { path = "m-bus-application-layer", version = "0.1.0" }
+m-bus-wired-frame = { path = "m-bus-wired-frame", version = "0.1.0" }
+m-bus-wireless-frame = { path = "m-bus-wireless-frame", version = "0.1.0", optional = true }
+[workspace]
+members = [
+    "m-bus-application-layer",
+    "m-bus-wired-frame",
+    "m-bus-wireless-frame",
+    "cli",
+    "wasm",
+    "python"
+]
+exclude = ["examples/cortex-m"]
+resolver = "2"
+
+[workspace.dependencies]
+# Shared dependencies across all crates
+prettytable-rs = "^0.10"
+serde_json = "1.0.138"
+serde_yaml = "0.9"
+serde = { version = "1.0", features = ["derive"] }
 bitflags = "2.8.0"
 arrayvec = { version = "0.7.4", default-features = false }
-defmt = { version = "1.0.1", optional = true }
-[workspace]
-members = ["cli", "wasm","python"]
-exclude = ["examples/cortex-m"]
+defmt = "1.0.1"
 
 [[bench]]
 name = "bench"

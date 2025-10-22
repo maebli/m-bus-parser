@@ -1,10 +1,23 @@
-//! Brief summary
-//! * is a library for parsing M-Bus frames and user data.
-//! * aims to be a modern, open source decoder for wired m-bus protocol decoder for EN 13757-2 physical and link layer, EN 13757-3 application layer of m-bus
-//! * was implemented using the publicly available documentation available at <https://m-bus.com/>
-//! # Example
+//! M-Bus Parser - Unified wired and wireless M-Bus parsing
+//!
+//! This library supports parsing of M-Bus (Meter Bus) protocol data for both:
+//! - **Wired M-Bus** (EN 13757-2) - always available
+//! - **Wireless M-Bus** (EN 13757-4) - available with `wireless` feature
+//!
+//! The M-Bus protocol is a European standard for remote reading of water, gas,
+//! electricity, and heating meters.
+//!
+//! # Architecture
+//!
+//! This crate is organized into separate components:
+//! - **Application Layer** (`user_data`, `mbus_data`) - Shared by both protocols
+//! - **Wired Frame Layer** (`frames`) - Wired M-Bus specific
+//! - **Wireless Frame Layer** (`wireless`) - Wireless M-Bus specific (opt-in)
+//!
+//! # Example - Wired M-Bus
+//!
 //! ```rust
-//! use m_bus_parser::frames::{ Address, Frame, Function };
+//! use m_bus_parser::frames::{Address, Frame, Function};
 //! use m_bus_parser::user_data::{DataRecords, UserDataBlock};
 //! use m_bus_parser::mbus_data::MbusData;
 //!
@@ -44,23 +57,59 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frames::FrameError;
-use user_data::ApplicationLayerError;
+// Re-export application layer user_data module (shared by wired and wireless)
+pub use m_bus_application_layer::user_data;
 
-pub mod frames;
+// High-level data aggregation (combines frames + application layer)
 pub mod mbus_data;
-pub mod user_data;
+
+// Wired M-Bus frame parsing (always available)
+pub mod frames {
+    //! Wired M-Bus frame parsing (EN 13757-2)
+    pub use m_bus_wired_frame::*;
+}
+
+// Wireless M-Bus frame parsing (feature-gated)
+#[cfg(feature = "wireless")]
+pub mod wireless {
+    //! Wireless M-Bus frame parsing (EN 13757-4)
+    pub use m_bus_wireless_frame::*;
+}
+
+// Re-export commonly used types
+pub use m_bus_application_layer::{
+    ApplicationLayerError,
+    UserDataBlock,
+    DataRecords,
+};
+
+pub use mbus_data::MbusData;
+
+pub use m_bus_wired_frame::FrameError;
 
 #[cfg(feature = "std")]
 pub use mbus_data::serialize_mbus_data;
 
+// Convenience type aliases
+pub use frames::Frame as WiredFrame;
+
+#[cfg(feature = "wireless")]
+pub use wireless::Frame as WirelessFrame;
+
+/// Unified error type for M-Bus parsing
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum MbusError {
+    /// Error in wired frame parsing
     FrameError(FrameError),
+    /// Error in application layer parsing
     ApplicationLayerError(ApplicationLayerError),
+    /// Error in data record parsing
     DataRecordError(user_data::variable_user_data::DataRecordError),
+    /// Error in wireless frame parsing (when wireless feature is enabled)
+    #[cfg(feature = "wireless")]
+    WirelessFrameError(m_bus_wireless_frame::FrameError),
 }
 
 #[cfg(feature = "std")]
@@ -70,6 +119,8 @@ impl std::fmt::Display for MbusError {
             MbusError::FrameError(e) => write!(f, "{e}"),
             MbusError::ApplicationLayerError(e) => write!(f, "{e}"),
             MbusError::DataRecordError(e) => write!(f, "{e}"),
+            #[cfg(feature = "wireless")]
+            MbusError::WirelessFrameError(e) => write!(f, "{e}"),
         }
     }
 }
@@ -92,5 +143,12 @@ impl From<ApplicationLayerError> for MbusError {
 impl From<user_data::variable_user_data::DataRecordError> for MbusError {
     fn from(error: user_data::variable_user_data::DataRecordError) -> Self {
         Self::DataRecordError(error)
+    }
+}
+
+#[cfg(feature = "wireless")]
+impl From<m_bus_wireless_frame::FrameError> for MbusError {
+    fn from(error: m_bus_wireless_frame::FrameError) -> Self {
+        Self::WirelessFrameError(error)
     }
 }

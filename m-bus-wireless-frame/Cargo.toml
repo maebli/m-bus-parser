@@ -1,0 +1,19 @@
+[package]
+name = "m-bus-wireless-frame"
+version = "0.1.0"
+edition = "2021"
+description = "M-Bus wireless frame parser (EN 13757-4) - link layer for wireless M-Bus (WIP)"
+license = "MIT"
+authors = ["Michael Aebli"]
+repository = "https://github.com/maebli/m-bus-parser"
+keywords = ["m-bus", "parser", "wireless", "wmbus"]
+
+[features]
+default = []
+std = ["serde"]
+serde = ["dep:serde"]
+defmt = ["dep:defmt"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+defmt = { workspace = true, optional = true }
