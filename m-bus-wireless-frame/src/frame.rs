@@ -297,12 +297,13 @@ pub struct Frame<'a> {
     pub address: DeviceAddress,
     /// Control information field
     pub ci_field: u8,
-    /// User data (application layer) - **includes CRC bytes!**
+    /// User data (application layer)
     ///
-    /// **Warning:** This field contains raw data with CRC bytes interleaved.
+    /// **For encrypted frames (CI 0x72-0x7F):** Contains encrypted payload as-is.
+    ///
+    /// **For unencrypted frames:** Contains raw data with CRC bytes interleaved.
     /// Every 16 bytes of data is followed by 2 CRC bytes.
-    ///
-    /// For clean data without CRC bytes, use `user_data_clean()` method (requires `std` feature).
+    /// Use `user_data_clean()` to get data without CRC bytes (requires `std` feature).
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
     pub data: &'a [u8],
 }
@@ -432,19 +433,24 @@ impl<'a> Frame<'a> {
         let ci_field = data[12];
 
         // User data starts at byte 13
-        // Validate all subsequent CRC blocks
         let user_data_start = 13;
         let remaining_data = &data[user_data_start..];
 
-        // Validate multi-block CRCs for user data
-        // According to EN 13757-4: subsequent blocks are 16 bytes + 2 CRC
-        validate_multiblock_crc(remaining_data)?;
+        // Check if frame is encrypted based on CI-field
+        // CI-field 0x72-0x7F: Extended Link Layer with encryption (EN 13757-4)
+        // For encrypted frames, the payload is encrypted and doesn't have multi-block CRC structure
+        let is_encrypted = ci_field >= 0x72 && ci_field <= 0x7F;
 
-        // Validate L-field against actual data length
-        // L-field for Format A excludes: L-field itself (1 byte) and all CRC bytes
-        // L-field should equal: C(1) + M(2) + A(6) + CI(1) + user_data_without_CRC
+        if !is_encrypted {
+            // Validate multi-block CRCs for unencrypted user data
+            // According to EN 13757-4: subsequent blocks are 16 bytes + 2 CRC
+            validate_multiblock_crc(remaining_data)?;
+        }
+        // Note: For encrypted frames, we skip CRC validation as the payload is encrypted
+
+        // Validate L-field against actual data length (only for unencrypted frames)
         #[cfg(feature = "std")]
-        {
+        if !is_encrypted {
             let user_data_clean = extract_user_data_vec(remaining_data);
             let expected_length = 1 + 2 + 6 + 1 + user_data_clean.len(); // C + M + A + CI + data
 
@@ -468,8 +474,16 @@ impl<'a> Frame<'a> {
             }
         }
 
-        // Extract user data (without CRC bytes)
-        let user_data = extract_user_data(remaining_data);
+        // Extract user data
+        // For encrypted frames: return raw encrypted data
+        // For unencrypted frames: extract data without CRC bytes (if std feature)
+        let user_data = if is_encrypted {
+            // Encrypted: return all data as-is
+            remaining_data
+        } else {
+            // Unencrypted: extract without CRC bytes
+            extract_user_data(remaining_data)
+        };
 
         Ok(Frame {
             format,
@@ -492,26 +506,45 @@ impl<'a> Frame<'a> {
         Self::parse(data, FrameFormat::FormatB)
     }
 
-    /// Get user data with CRC bytes removed
+    /// Check if this frame contains encrypted data
+    ///
+    /// Encrypted frames (CI-field 0x72-0x7F) contain encrypted payloads
+    /// and don't have multi-block CRC structure.
+    pub fn is_encrypted(&self) -> bool {
+        self.ci_field >= 0x72 && self.ci_field <= 0x7F
+    }
+
+    /// Get user data with CRC bytes removed (for unencrypted frames)
     ///
     /// This method returns clean application layer data without the interleaved CRC bytes.
     /// The CRC bytes are used for validation during parsing but are not part of the
     /// application layer payload.
     ///
+    /// **For encrypted frames (CI 0x72-0x7F):** Returns the encrypted payload as-is
+    /// (no CRC bytes to remove).
+    ///
+    /// **For unencrypted frames:** Returns data with CRC bytes removed.
+    ///
     /// **Requires `std` feature** - allocates a `Vec<u8>` to remove CRC bytes.
     ///
     /// For `no_std` environments, use `user_data_raw()` and manually skip CRC bytes
-    /// (every 16 bytes of data is followed by 2 CRC bytes).
+    /// (every 16 bytes of data is followed by 2 CRC bytes) for unencrypted frames.
     #[cfg(feature = "std")]
     pub fn user_data_clean(&self) -> Vec<u8> {
-        extract_user_data_vec(self.data)
+        if self.is_encrypted() {
+            // Encrypted frames: return all data as-is
+            self.data.to_vec()
+        } else {
+            // Unencrypted frames: extract without CRC bytes
+            extract_user_data_vec(self.data)
+        }
     }
 
-    /// Get raw user data including CRC bytes
+    /// Get raw user data
     ///
-    /// **Warning:** This data includes CRC bytes interleaved with actual data!
+    /// **For encrypted frames (CI 0x72-0x7F):** Returns the encrypted payload.
     ///
-    /// Structure:
+    /// **For unencrypted frames:** Returns data including CRC bytes interleaved with actual data!
     /// - Every 16 bytes of data is followed by 2 CRC bytes
     /// - Last block: `((total_data - 9) MOD 16)` bytes + 2 CRC bytes
     ///

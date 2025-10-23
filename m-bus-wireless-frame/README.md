@@ -32,10 +32,17 @@ println!("Manufacturer: {:?}", frame.manufacturer.code);
 println!("Device ID: {:08X}", frame.address.identification);
 println!("CI Field: 0x{:02X}", frame.ci_field);
 
-// Get clean application layer data (CRC bytes removed) - requires std feature
+// Check if frame is encrypted
+if frame.is_encrypted() {
+    println!("Frame contains encrypted data");
+}
+
+// Get clean application layer data - requires std feature
+// For encrypted frames: returns encrypted payload
+// For unencrypted frames: returns data with CRC bytes removed
 let user_data_clean = frame.user_data_clean();
 
-// Or get raw data (includes CRC bytes) - for no_std environments
+// Or get raw data - for no_std environments
 let user_data_raw = frame.user_data_raw();
 ```
 
@@ -53,7 +60,15 @@ Byte 8:      A-field version
 Byte 9:      A-field device type/medium
 Byte 10-11:  CRC-16 of bytes 0-9 (big-endian!)
 Byte 12:     CI-field (control information)
+Byte 13+:    User data (structure depends on CI-field)
+```
 
+### User Data Structure
+
+The structure of user data (bytes 13+) depends on whether the frame is encrypted:
+
+**For UNENCRYPTED frames (CI < 0x72 or CI > 0x7F):**
+```text
 [Block 1+ - User Data]
 Byte 13-28:  User data (16 bytes)
 Byte 29-30:  CRC-16 of bytes 13-28 (big-endian!)
@@ -65,7 +80,15 @@ Byte 29-30:  CRC-16 of bytes 13-28 (big-endian!)
 ... ((L-9) MOD 16) bytes data + 2 bytes CRC
 ```
 
-**Important:** CRC bytes are stored in **big-endian** format (MSB first), unlike wired M-Bus which uses little-endian.
+**For ENCRYPTED frames (CI 0x72-0x7F):**
+```text
+Byte 13+:    Encrypted payload (no CRC blocks)
+```
+
+**Important:**
+- CRC bytes are stored in **big-endian** format (MSB first), unlike wired M-Bus which uses little-endian
+- Encrypted frames (CI-field 0x72-0x7F) contain encrypted payloads without multi-block CRC structure
+- Use `frame.is_encrypted()` to check if a frame is encrypted
 
 ### Format A vs Format B
 

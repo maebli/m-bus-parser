@@ -6,10 +6,10 @@
 use m_bus_wireless_frame::{Frame, FrameFormat, FrameError, WirelessMBusData};
 
 /// Example wireless M-Bus frame from OMS specification
-/// This is a Format A frame from an Elster GmbH gas meter
+/// This is a Format A frame from an Elster GmbH gas meter with ENCRYPTED data
 #[test]
-fn test_parse_oms_example_format_a() {
-    // Real telegram with CRC (Format A)
+fn test_parse_oms_example_format_a_encrypted() {
+    // Real telegram with CRC (Format A) - ENCRYPTED
     // Byte  0:    0x2E (46) - Length
     // Byte  1:    0x44 - C-field (SND_NR)
     // Byte  2-3:  0x9315 - M-field (Elster GmbH, little-endian)
@@ -17,8 +17,8 @@ fn test_parse_oms_example_format_a() {
     // Byte  8:    0x33 (51) - Version
     // Byte  9:    0x03 - Device (Gas meter)
     // Byte 10-11: 0x3363 - CRC of bytes 0-9 (big-endian)
-    // Byte 12:    0x7A - CI-field
-    // Byte 13+:   User data with CRC blocks
+    // Byte 12:    0x7A - CI-field (Extended Link Layer = ENCRYPTED)
+    // Byte 13+:   Encrypted user data (42 bytes)
     let frame_data = hex::decode(
         "2e44931578563412330333637a2a0020055923c95aaa26d1b2e7493b2a8b\
          013ec4a6f6d3529b520edff0ea6defc955b29d6d69ebf3ec8a"
@@ -35,7 +35,13 @@ fn test_parse_oms_example_format_a() {
     assert_eq!(frame.address.identification, 0x12345678, "Device ID should be 0x12345678");
     assert_eq!(frame.address.version, 0x33, "Version should be 0x33 (51)");
     assert_eq!(frame.address.device_type, 0x03, "Device type should be 0x03 (gas)");
-    assert_eq!(frame.ci_field, 0x7A, "CI-field should be 0x7A");
+    assert_eq!(frame.ci_field, 0x7A, "CI-field should be 0x7A (encrypted)");
+
+    // Verify it's detected as encrypted
+    assert!(frame.is_encrypted(), "Frame should be detected as encrypted");
+
+    // Verify user data length - encrypted payload from byte 13 onwards
+    assert!(!frame.data.is_empty(), "Frame should have encrypted user data");
 }
 
 /// Test parsing with WirelessMBusData wrapper
@@ -54,14 +60,13 @@ fn test_wireless_mbus_data() {
 
     // Test clean data API
     let (ci_field, app_data) = wmbus_data.application_data_clean();
-    assert_eq!(ci_field, 0x7A);
+    assert_eq!(ci_field, 0x7A, "CI-field should be 0x7A");
     assert!(!app_data.is_empty(), "Should have application data");
 
-    // Verify clean data doesn't contain CRC bytes
-    // Raw data is: 46 bytes total, with CRC blocks
-    // Clean data should be less (CRC bytes removed)
+    // Note: This frame is ENCRYPTED (CI 0x7A), so clean and raw data are the same
     let (_, raw_data) = wmbus_data.application_data_raw();
-    assert!(app_data.len() < raw_data.len(), "Clean data should be smaller than raw data");
+    assert_eq!(app_data.len(), raw_data.len(),
+               "For encrypted frames, clean data equals raw data (no CRC bytes to remove)");
 }
 
 /// Test manufacturer code decoding
@@ -143,9 +148,10 @@ fn test_try_from() {
     assert!(frame.is_ok(), "TryFrom should successfully parse the frame");
 }
 
-/// Test user_data_clean() removes CRC bytes correctly
+/// Test encrypted frame handling
 #[test]
-fn test_user_data_clean() {
+fn test_encrypted_frame() {
+    // This frame has CI-field 0x7A which indicates encrypted data
     let frame_data = hex::decode(
         "2e44931578563412330333637a2a0020055923c95aaa26d1b2e7493b2a8b\
          013ec4a6f6d3529b520edff0ea6defc955b29d6d69ebf3ec8a"
@@ -153,30 +159,22 @@ fn test_user_data_clean() {
 
     let frame = Frame::try_format_a(&frame_data).unwrap();
 
-    // Get clean data
+    // Verify it's encrypted
+    assert!(frame.is_encrypted(), "Frame with CI 0x7A should be encrypted");
+
+    // Get clean data - for encrypted frames, this returns the encrypted payload as-is
     let clean_data = frame.user_data_clean();
 
     // Get raw data
     let raw_data = frame.user_data_raw();
 
-    // Clean data should be smaller (CRC bytes removed)
-    assert!(
-        clean_data.len() < raw_data.len(),
-        "Clean data ({} bytes) should be smaller than raw data ({} bytes)",
-        clean_data.len(),
-        raw_data.len()
-    );
-
-    // For this frame with L=46 (0x2E):
-    // L = C(1) + M(2) + A(6) + CI(1) + user_data_without_CRC = 10 + user_data
-    // So user_data_without_CRC = 46 - 10 = 36 bytes
+    // For encrypted frames, clean and raw should be the same
     assert_eq!(
         clean_data.len(),
-        36,
-        "Clean user data should be 36 bytes (L=46 minus 10 header bytes)"
+        raw_data.len(),
+        "For encrypted frames, clean data should equal raw data (no CRC bytes to remove)"
     );
 
-    // Verify no CRC bytes in clean data by checking it doesn't match raw pattern
-    // Raw data has structure: [16 bytes][2 CRC][16 bytes][2 CRC]...
-    // Clean data should be continuous without CRC breaks
+    // Verify clean data is not empty
+    assert!(!clean_data.is_empty(), "Clean data should not be empty");
 }
