@@ -32,8 +32,11 @@ println!("Manufacturer: {:?}", frame.manufacturer.code);
 println!("Device ID: {:08X}", frame.address.identification);
 println!("CI Field: 0x{:02X}", frame.ci_field);
 
-// Get application layer data for further parsing
-let (ci_field, user_data) = (frame.ci_field, frame.data);
+// Get clean application layer data (CRC bytes removed) - requires std feature
+let user_data_clean = frame.user_data_clean();
+
+// Or get raw data (includes CRC bytes) - for no_std environments
+let user_data_raw = frame.user_data_raw();
 ```
 
 ## Frame Structure
@@ -90,7 +93,9 @@ Implements CRC-16/EN-13757:
 
 ## Integration with Application Layer
 
-The wireless frame's `data` field contains application layer information that can be parsed using the `m-bus-application-layer` crate:
+The wireless frame's user data contains application layer information that can be parsed using the `m-bus-application-layer` crate.
+
+**Important:** The `data` field contains **raw data with CRC bytes interleaved**. For clean data without CRC bytes, use the `user_data_clean()` method (requires `std` feature):
 
 ```rust
 use m_bus_wireless_frame::Frame;
@@ -98,8 +103,20 @@ use m_bus_application_layer::user_data::UserDataBlock;
 
 let frame = Frame::try_from(wireless_data)?;
 
-// Parse application layer
-let user_data_block = UserDataBlock::try_from(frame.data)?;
+// Get clean user data (CRC bytes removed)
+let clean_data = frame.user_data_clean();
+
+// Parse application layer with clean data
+let user_data_block = UserDataBlock::try_from(&clean_data[..])?;
+```
+
+For `no_std` environments, use `user_data_raw()` and manually skip CRC bytes:
+
+```rust
+// In no_std: raw data includes CRC bytes
+// Structure: [16 bytes data][2 CRC][16 bytes data][2 CRC]...
+let raw_data = frame.user_data_raw();
+// You must manually extract data bytes and skip CRC bytes
 ```
 
 ## License

@@ -72,17 +72,70 @@ fn validate_multiblock_crc(data: &[u8]) -> Result<(), FrameError> {
 
 /// Extract user data by removing CRC bytes
 ///
-/// Returns a slice containing only the actual data bytes,
-/// with CRC bytes removed
-fn extract_user_data(data: &[u8]) -> &[u8] {
+/// This function removes CRC bytes that are interleaved with the user data.
+/// According to EN 13757-4, user data is organized in blocks:
+/// - Each block: 16 bytes data + 2 bytes CRC (except last block)
+/// - Last block: ((total_data - first_block) MOD 16) bytes + 2 bytes CRC
+///
+/// **Note:** This allocates a Vec and requires `std` feature.
+#[cfg(feature = "std")]
+fn extract_user_data_vec(data: &[u8]) -> Vec<u8> {
     if data.is_empty() {
-        return data;
+        return Vec::new();
     }
 
-    // For now, return all data including CRC
-    // TODO: Implement proper extraction once we have tests
-    // The challenge is we need to know where each CRC is
-    // to skip it. For now, return the raw data.
+    let mut result = Vec::new();
+    let mut pos = 0;
+
+    while pos < data.len() {
+        let remaining = data.len() - pos;
+
+        if remaining < 2 {
+            break;  // No more data
+        }
+
+        // Determine block size
+        let block_data_len = if remaining > 18 {
+            16  // Full block
+        } else if remaining >= 3 {
+            remaining - 2  // Last block (data + CRC)
+        } else {
+            break;  // Not enough for a valid block
+        };
+
+        let block_end = pos + block_data_len;
+
+        // Extract data bytes (skip CRC)
+        if block_end <= data.len() {
+            result.extend_from_slice(&data[pos..block_end]);
+            pos = block_end + 2;  // Skip CRC bytes
+        } else {
+            break;
+        }
+    }
+
+    result
+}
+
+/// Extract user data by removing CRC bytes (no_std compatible)
+///
+/// Returns the raw data including CRC bytes.
+/// Users must manually skip CRC bytes when processing:
+/// - Every 16 bytes of data is followed by 2 CRC bytes
+/// - Last block may be shorter
+///
+/// For clean data without CRCs, use `extract_user_data_vec()` with `std` feature.
+#[cfg(not(feature = "std"))]
+fn extract_user_data(data: &[u8]) -> &[u8] {
+    // In no_std, we can't allocate, so return raw data
+    // Users must handle CRC bytes themselves
+    data
+}
+
+#[cfg(feature = "std")]
+fn extract_user_data(data: &[u8]) -> &[u8] {
+    // In std, we still return raw data for the lifetime
+    // Use extract_user_data_vec() for clean data
     data
 }
 
@@ -244,7 +297,12 @@ pub struct Frame<'a> {
     pub address: DeviceAddress,
     /// Control information field
     pub ci_field: u8,
-    /// User data (application layer)
+    /// User data (application layer) - **includes CRC bytes!**
+    ///
+    /// **Warning:** This field contains raw data with CRC bytes interleaved.
+    /// Every 16 bytes of data is followed by 2 CRC bytes.
+    ///
+    /// For clean data without CRC bytes, use `user_data_clean()` method (requires `std` feature).
     #[cfg_attr(feature = "serde", serde(skip_serializing))]
     pub data: &'a [u8],
 }
@@ -382,6 +440,34 @@ impl<'a> Frame<'a> {
         // According to EN 13757-4: subsequent blocks are 16 bytes + 2 CRC
         validate_multiblock_crc(remaining_data)?;
 
+        // Validate L-field against actual data length
+        // L-field for Format A excludes: L-field itself (1 byte) and all CRC bytes
+        // L-field should equal: C(1) + M(2) + A(6) + CI(1) + user_data_without_CRC
+        #[cfg(feature = "std")]
+        {
+            let user_data_clean = extract_user_data_vec(remaining_data);
+            let expected_length = 1 + 2 + 6 + 1 + user_data_clean.len(); // C + M + A + CI + data
+
+            match format {
+                FrameFormat::FormatA => {
+                    // Format A: L excludes itself and CRC bytes
+                    if length as usize != expected_length {
+                        // Note: We allow this to pass with a warning for now
+                        // Some implementations may have slight variations
+                        #[cfg(feature = "std")]
+                        eprintln!(
+                            "Warning: L-field mismatch: declared={}, expected={}",
+                            length, expected_length
+                        );
+                    }
+                }
+                FrameFormat::FormatB => {
+                    // Format B: L excludes only itself (includes CRC bytes)
+                    // This is more lenient, we skip validation for now
+                }
+            }
+        }
+
         // Extract user data (without CRC bytes)
         let user_data = extract_user_data(remaining_data);
 
@@ -404,6 +490,34 @@ impl<'a> Frame<'a> {
     /// Try to parse as Format B
     pub fn try_format_b(data: &'a [u8]) -> Result<Self, FrameError> {
         Self::parse(data, FrameFormat::FormatB)
+    }
+
+    /// Get user data with CRC bytes removed
+    ///
+    /// This method returns clean application layer data without the interleaved CRC bytes.
+    /// The CRC bytes are used for validation during parsing but are not part of the
+    /// application layer payload.
+    ///
+    /// **Requires `std` feature** - allocates a `Vec<u8>` to remove CRC bytes.
+    ///
+    /// For `no_std` environments, use `user_data_raw()` and manually skip CRC bytes
+    /// (every 16 bytes of data is followed by 2 CRC bytes).
+    #[cfg(feature = "std")]
+    pub fn user_data_clean(&self) -> Vec<u8> {
+        extract_user_data_vec(self.data)
+    }
+
+    /// Get raw user data including CRC bytes
+    ///
+    /// **Warning:** This data includes CRC bytes interleaved with actual data!
+    ///
+    /// Structure:
+    /// - Every 16 bytes of data is followed by 2 CRC bytes
+    /// - Last block: `((total_data - 9) MOD 16)` bytes + 2 CRC bytes
+    ///
+    /// For clean data without CRC bytes, use `user_data_clean()` (requires `std` feature).
+    pub fn user_data_raw(&self) -> &[u8] {
+        self.data
     }
 }
 

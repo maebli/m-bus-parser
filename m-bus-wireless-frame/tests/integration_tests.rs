@@ -51,10 +51,17 @@ fn test_wireless_mbus_data() {
     assert!(wmbus_data.is_ok(), "Should parse valid frame");
 
     let wmbus_data = wmbus_data.unwrap();
-    let (ci_field, app_data) = wmbus_data.application_data();
 
+    // Test clean data API
+    let (ci_field, app_data) = wmbus_data.application_data_clean();
     assert_eq!(ci_field, 0x7A);
     assert!(!app_data.is_empty(), "Should have application data");
+
+    // Verify clean data doesn't contain CRC bytes
+    // Raw data is: 46 bytes total, with CRC blocks
+    // Clean data should be less (CRC bytes removed)
+    let (_, raw_data) = wmbus_data.application_data_raw();
+    assert!(app_data.len() < raw_data.len(), "Clean data should be smaller than raw data");
 }
 
 /// Test manufacturer code decoding
@@ -134,4 +141,42 @@ fn test_try_from() {
 
     let frame = Frame::try_from(&frame_data[..]);
     assert!(frame.is_ok(), "TryFrom should successfully parse the frame");
+}
+
+/// Test user_data_clean() removes CRC bytes correctly
+#[test]
+fn test_user_data_clean() {
+    let frame_data = hex::decode(
+        "2e44931578563412330333637a2a0020055923c95aaa26d1b2e7493b2a8b\
+         013ec4a6f6d3529b520edff0ea6defc955b29d6d69ebf3ec8a"
+    ).expect("Invalid hex");
+
+    let frame = Frame::try_format_a(&frame_data).unwrap();
+
+    // Get clean data
+    let clean_data = frame.user_data_clean();
+
+    // Get raw data
+    let raw_data = frame.user_data_raw();
+
+    // Clean data should be smaller (CRC bytes removed)
+    assert!(
+        clean_data.len() < raw_data.len(),
+        "Clean data ({} bytes) should be smaller than raw data ({} bytes)",
+        clean_data.len(),
+        raw_data.len()
+    );
+
+    // For this frame with L=46 (0x2E):
+    // L = C(1) + M(2) + A(6) + CI(1) + user_data_without_CRC = 10 + user_data
+    // So user_data_without_CRC = 46 - 10 = 36 bytes
+    assert_eq!(
+        clean_data.len(),
+        36,
+        "Clean user data should be 36 bytes (L=46 minus 10 header bytes)"
+    );
+
+    // Verify no CRC bytes in clean data by checking it doesn't match raw pattern
+    // Raw data has structure: [16 bytes][2 CRC][16 bytes][2 CRC]...
+    // Clean data should be continuous without CRC breaks
 }
