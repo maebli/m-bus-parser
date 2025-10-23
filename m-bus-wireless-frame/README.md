@@ -1,0 +1,91 @@
+# m-bus-wireless-frame
+
+Wireless M-Bus (WM-Bus) frame parser implementing EN 13757-4.
+
+## Features
+
+- ✅ Format A and Format B frame parsing
+- ✅ CRC-16/EN-13757 validation
+- ✅ Manufacturer ID decoding
+- ✅ Device address parsing
+- ✅ Control field parsing
+- ✅ Transmission mode types (S, T, C, R, N, F)
+- ✅ `no_std` compatible
+- ✅ Optional serde support
+
+## Usage
+
+```rust
+use m_bus_wireless_frame::{Frame, WirelessMBusData};
+
+// Parse a wireless M-Bus frame
+let frame_data = /* your wireless M-Bus frame bytes */;
+
+// Try parsing (attempts Format A first, then Format B)
+let frame = Frame::try_from(frame_data)?;
+
+// Or specify format explicitly
+let frame = Frame::try_format_a(frame_data)?;
+
+// Access frame fields
+println!("Manufacturer: {:?}", frame.manufacturer.code);
+println!("Device ID: {:08X}", frame.address.identification);
+println!("CI Field: 0x{:02X}", frame.ci_field);
+
+// Get application layer data for further parsing
+let (ci_field, user_data) = (frame.ci_field, frame.data);
+```
+
+## Frame Structure
+
+Wireless M-Bus frames consist of:
+
+1. **L-field**: Length field
+2. **C-field**: Control field (function, accessibility, etc.)
+3. **M-field**: 2-byte manufacturer ID
+4. **A-field**: 6-byte device address (ID + version + type)
+5. **CI-field**: Control information
+6. **User Data**: Application layer data
+7. **CRC-16 blocks**: EN-13757 CRC validation
+
+### Format A vs Format B
+
+- **Format A**: Length excludes itself and CRC bytes (IEC 60870-5-1 FT3)
+- **Format B**: Length excludes only itself
+
+## Transmission Modes
+
+- **S-mode**: Stationary (walk-by reading), 32.768 kHz
+- **T-mode**: Frequent transmission (fixed network), 32.768 kHz
+- **C-mode**: Compact, low power, bidirectional, 100 kHz
+- **R-mode**: Frequent bidirectional, 32.768 kHz
+- **N-mode**: Narrowband, optimized for long range
+- **F-mode**: Frequent transmission, longer range
+
+## CRC-16 Algorithm
+
+Implements CRC-16/EN-13757:
+- Polynomial: 0x3D65
+- Init: 0x0000
+- RefIn: false
+- RefOut: false
+- XorOut: 0xFFFF
+- Check: 0xC2B7 (for "123456789")
+
+## Integration with Application Layer
+
+The wireless frame's `data` field contains application layer information that can be parsed using the `m-bus-application-layer` crate:
+
+```rust
+use m_bus_wireless_frame::Frame;
+use m_bus_application_layer::user_data::UserDataBlock;
+
+let frame = Frame::try_from(wireless_data)?;
+
+// Parse application layer
+let user_data_block = UserDataBlock::try_from(frame.data)?;
+```
+
+## License
+
+MIT

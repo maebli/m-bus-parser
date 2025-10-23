@@ -27,12 +27,12 @@ default = []
 # Wired M-Bus support (always available for backwards compatibility)
 wired = []
 # Wireless M-Bus support (opt-in)
-wireless = ["dep:m-bus-wireless-frame"]
+wireless = ["dep:m-bus-wireless-frame", "m-bus-wireless-frame/std"]
 # Pass-through features to sub-crates
 std = ["m-bus-application-layer/std", "m-bus-wired-frame/std"]
 plaintext-before-extension = []
-serde = ["m-bus-application-layer/serde", "m-bus-wired-frame/serde"]
-defmt = ["m-bus-application-layer/defmt", "m-bus-wired-frame/defmt"]
+serde = ["m-bus-application-layer/serde", "m-bus-wired-frame/serde", "m-bus-wireless-frame?/serde"]
+defmt = ["m-bus-application-layer/defmt", "m-bus-wired-frame/defmt", "m-bus-wireless-frame?/defmt"]
 
 [profile.release]
 opt-level = 'z'   # Optimize for size

@@ -12,9 +12,9 @@
 m-bus-parser is an open source parser (sometimes also refered to as decoder and/or deserializer) for M-Bus protocol written in Rust. It supports:
 
 - **Wired M-Bus** (EN 13757-2) - Fully implemented ✅
-- **Wireless M-Bus** (EN 13757-4) - Work in progress 🚧
+- **Wireless M-Bus** (EN 13757-4) - Fully implemented ✅
 
-The library is architected with separate crates for wired frames, wireless frames (upcoming), and a shared application layer (EN 13757-3), providing a clean separation of concerns and allowing users to include only what they need. 
+The library is architected with separate crates for wired frames, wireless frames, and a shared application layer (EN 13757-3), providing a clean separation of concerns and allowing users to include only what they need. 
 
 "M-Bus or Meter-Bus is a European standard (EN 13757-2 physical and link layer, EN 13757-3 application layer) for the remote reading of water, gas or electricity meters. M-Bus is also usable for other types of consumption meters, such as heating systems or water meters. The M-Bus interface is made for communication on two wires, making it cost-effective." - [Wikipedia](https://en.wikipedia.org/wiki/Meter-Bus)
 
@@ -76,7 +76,7 @@ The project is organized as a Cargo workspace with multiple crates:
 - **`m-bus-parser`** (main crate) - Unified interface for both wired and wireless M-Bus
 - **`m-bus-application-layer`** - Shared application layer (EN 13757-3) used by both protocols
 - **`m-bus-wired-frame`** - Wired M-Bus frame parsing (EN 13757-2)
-- **`m-bus-wireless-frame`** - Wireless M-Bus frame parsing (EN 13757-4) - *Coming soon*
+- **`m-bus-wireless-frame`** - Wireless M-Bus frame parsing (EN 13757-4)
 - **`m-bus-parser-cli`** - Command-line interface
 - **`m-bus-parser-wasm-pack`** - WebAssembly bindings
 - **`pymbusparser`** - Python bindings
@@ -91,8 +91,26 @@ This modular design allows:
 
 - `std` - Enable standard library features (serialization, etc.)
 - `serde` - Enable serde serialization support
-- `wireless` - Enable wireless M-Bus support (opt-in, *coming soon*)
+- `wireless` - Enable wireless M-Bus support (opt-in)
 - `defmt` - Enable defmt logging for embedded targets
+
+### Usage Example
+
+```rust
+// Enable wireless support
+// In Cargo.toml: m-bus-parser = { version = "0.0.28", features = ["wireless", "std"] }
+
+use m_bus_parser::frames::Frame as WiredFrame;
+use m_bus_parser::wireless::Frame as WirelessFrame;
+
+// Parse wired M-Bus
+let wired_frame = WiredFrame::try_from(wired_data)?;
+
+// Parse wireless M-Bus
+let wireless_frame = WirelessFrame::try_from(wireless_data)?;
+
+// Both share the same application layer!
+```
 
 ## Development status 
 
