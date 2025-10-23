@@ -10,13 +10,15 @@ use m_bus_wireless_frame::{Frame, FrameFormat, FrameError, WirelessMBusData};
 #[test]
 fn test_parse_oms_example_format_a() {
     // Real telegram with CRC (Format A)
-    // Length: 0x2E (46 bytes)
-    // C-field: 0x44 (SND_NR)
-    // M-field: 0x9315 (Elster GmbH)
-    // ID: 12345678 (BCD: 0x12 0x34 0x56 0x78)
-    // Version: 0x33 (51)
-    // Device: 0x03 (Gas meter)
-    // CI-field: 0x7A
+    // Byte  0:    0x2E (46) - Length
+    // Byte  1:    0x44 - C-field (SND_NR)
+    // Byte  2-3:  0x9315 - M-field (Elster GmbH, little-endian)
+    // Byte  4-7:  0x78563412 - ID: 12345678 (BCD, little-endian)
+    // Byte  8:    0x33 (51) - Version
+    // Byte  9:    0x03 - Device (Gas meter)
+    // Byte 10-11: 0x3363 - CRC of bytes 0-9 (big-endian)
+    // Byte 12:    0x7A - CI-field
+    // Byte 13+:   User data with CRC blocks
     let frame_data = hex::decode(
         "2e44931578563412330333637a2a0020055923c95aaa26d1b2e7493b2a8b\
          013ec4a6f6d3529b520edff0ea6defc955b29d6d69ebf3ec8a"
@@ -24,16 +26,16 @@ fn test_parse_oms_example_format_a() {
 
     let frame = Frame::try_format_a(&frame_data);
 
-    assert!(frame.is_ok(), "Should parse valid Format A frame");
+    assert!(frame.is_ok(), "Should parse valid Format A frame: {:?}", frame.err());
 
     let frame = frame.unwrap();
-    assert_eq!(frame.length, 0x2E);
-    assert_eq!(frame.control.raw, 0x44);
-    assert_eq!(frame.manufacturer.raw, 0x9315);
-    assert_eq!(frame.address.identification, 0x12345678);
-    assert_eq!(frame.address.version, 0x33);
-    assert_eq!(frame.address.device_type, 0x03);
-    assert_eq!(frame.ci_field, 0x7A);
+    assert_eq!(frame.length, 0x2E, "Length should be 0x2E (46)");
+    assert_eq!(frame.control.raw, 0x44, "C-field should be 0x44");
+    assert_eq!(frame.manufacturer.raw, 0x1593, "M-field should be 0x1593 (from little-endian 0x93 0x15)");
+    assert_eq!(frame.address.identification, 0x12345678, "Device ID should be 0x12345678");
+    assert_eq!(frame.address.version, 0x33, "Version should be 0x33 (51)");
+    assert_eq!(frame.address.device_type, 0x03, "Device type should be 0x03 (gas)");
+    assert_eq!(frame.ci_field, 0x7A, "CI-field should be 0x7A");
 }
 
 /// Test parsing with WirelessMBusData wrapper
@@ -84,12 +86,12 @@ fn test_invalid_crc() {
          013ec4a6f6d3529b520edff0ea6defc955b29d6d69ebf3ec8a"
     ).expect("Invalid hex");
 
-    // Corrupt the first CRC bytes (at positions 11-12)
+    // Corrupt the first CRC bytes (at positions 10-11)
+    frame_data[10] = 0xFF;
     frame_data[11] = 0xFF;
-    frame_data[12] = 0xFF;
 
     let result = Frame::try_format_a(&frame_data);
-    assert!(matches!(result, Err(FrameError::CrcError { .. })));
+    assert!(matches!(result, Err(FrameError::CrcError { .. })), "Should fail CRC validation");
 }
 
 /// Test empty data

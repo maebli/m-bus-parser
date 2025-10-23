@@ -40,13 +40,29 @@ let (ci_field, user_data) = (frame.ci_field, frame.data);
 
 Wireless M-Bus frames consist of:
 
-1. **L-field**: Length field
-2. **C-field**: Control field (function, accessibility, etc.)
-3. **M-field**: 2-byte manufacturer ID
-4. **A-field**: 6-byte device address (ID + version + type)
-5. **CI-field**: Control information
-6. **User Data**: Application layer data
-7. **CRC-16 blocks**: EN-13757 CRC validation
+```text
+[Block 0 - Header]
+Byte 0:      L-field (length)
+Byte 1:      C-field (control: function, accessibility, synchronous)
+Byte 2-3:    M-field (manufacturer ID, little-endian)
+Byte 4-7:    A-field device ID (4 bytes, little-endian BCD)
+Byte 8:      A-field version
+Byte 9:      A-field device type/medium
+Byte 10-11:  CRC-16 of bytes 0-9 (big-endian!)
+Byte 12:     CI-field (control information)
+
+[Block 1+ - User Data]
+Byte 13-28:  User data (16 bytes)
+Byte 29-30:  CRC-16 of bytes 13-28 (big-endian!)
+
+[Subsequent blocks]
+... 16 bytes data + 2 bytes CRC ...
+
+[Last block]
+... ((L-9) MOD 16) bytes data + 2 bytes CRC
+```
+
+**Important:** CRC bytes are stored in **big-endian** format (MSB first), unlike wired M-Bus which uses little-endian.
 
 ### Format A vs Format B
 

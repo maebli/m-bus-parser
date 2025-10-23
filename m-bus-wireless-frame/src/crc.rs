@@ -55,14 +55,19 @@ pub fn calculate_crc16(data: &[u8]) -> u16 {
 /// # Arguments
 ///
 /// * `data` - The data bytes (without CRC)
-/// * `expected_crc` - The expected CRC value (2 bytes, little-endian)
+/// * `expected_crc` - The expected CRC value (2 bytes, **big-endian** - MSB first)
 ///
 /// # Returns
 ///
 /// `true` if the CRC matches, `false` otherwise
+///
+/// # Note
+///
+/// Wireless M-Bus stores CRC in big-endian format (MSB, LSB),
+/// unlike wired M-Bus which uses little-endian.
 pub fn verify_crc16(data: &[u8], expected_crc: &[u8; 2]) -> bool {
     let calculated = calculate_crc16(data);
-    let expected = u16::from_le_bytes(*expected_crc);
+    let expected = u16::from_be_bytes(*expected_crc);  // Big-endian!
     calculated == expected
 }
 
@@ -88,7 +93,7 @@ mod tests {
     #[test]
     fn test_verify_crc16() {
         let data = b"123456789";
-        let crc_bytes = 0xC2B7u16.to_le_bytes();
+        let crc_bytes = 0xC2B7u16.to_be_bytes();  // Big-endian
         assert!(verify_crc16(data, &crc_bytes));
     }
 
