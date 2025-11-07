@@ -153,10 +153,9 @@ fn parse_to_table(input: &str) -> String {
                     table_output.push_str(&info_table.to_string());
                 }
 
-                // Value/Data Information table (all lines the same, no extra newlines)
                 let mut value_table = Table::new();
                 value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                value_table.set_titles(row!["Value", "Data Information", "Hex"]);
+                value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
                 if let Some(data_records) = parsed_data.data_records {
                     for record in data_records.flatten() {
                         let value_information = match record
@@ -178,6 +177,7 @@ fn parse_to_table(input: &str) -> String {
                         value_table.add_row(row![
                             format!("({}{})", record.data, value_information),
                             data_information,
+                            record.data_record_header_hex(),
                             record.data_hex()
                         ]);
                     }
