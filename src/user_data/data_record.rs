@@ -36,6 +36,20 @@ impl DataRecord<'_> {
 
     #[cfg(feature = "std")]
     #[must_use]
+    pub fn data_record_header_hex(&self) -> String {
+        let start = 0;
+        let end = self.data_record_header.get_size();
+        self.raw_bytes
+            .get(start..end)
+            .unwrap_or(&[])
+            .iter()
+            .map(|b| format!("{:02X}", b))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[cfg(feature = "std")]
+    #[must_use]
     pub fn data_hex(&self) -> String {
         let start = self.data_record_header.get_size();
         let end = self.get_size();
