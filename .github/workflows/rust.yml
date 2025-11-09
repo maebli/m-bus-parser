@@ -177,6 +177,11 @@ jobs:
           npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Create new artifacts for website
+        run: |
+          rm -rf wasm/pkg
+          cd wasm
+          wasm-pack build --target web
       - name: Copy wasm artifacts to docs
         run: |
           cp wasm/pkg/m_bus_parser_wasm_pack.js docs/
