@@ -48,3 +48,12 @@ The code and its function may be confusing at first. The following resouces may 
 7. Create a pull request
 
 
+# How to release a new version
+
+To release the following steps are followed, that need to be optimized / automated more:
+
+1. cargo release version patch --execute
+2. cd python; cargo release version patch --execute
+3. cd wasm; cargo release version patch --execute
+4. cd cli; cargo release version patch --execute
+
