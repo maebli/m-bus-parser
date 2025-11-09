@@ -46,7 +46,7 @@ bitflags = "2.8.0"
 arrayvec = { version = "0.7.4", default-features = false }
 defmt = { version = "1.0.1", optional = true }
 [workspace]
-members = ["cli", "wasm","python"]
+members = ["cli", "wasm","python", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer"]
 exclude = ["examples/cortex-m"]
 
 [[bench]]
