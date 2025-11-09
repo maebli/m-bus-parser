@@ -4,7 +4,7 @@
 //! * was implemented using the publicly available documentation available at <https://m-bus.com/>
 //! # Example
 //! ```rust
-//! use m_bus_parser::frames::{ Address, Frame, Function };
+//! use m_bus_parser::{ Address, Frame, Function };
 //! use m_bus_parser::user_data::{DataRecords, UserDataBlock};
 //! use m_bus_parser::mbus_data::MbusData;
 //!
@@ -44,12 +44,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frames::FrameError;
 use user_data::ApplicationLayerError;
 
-pub mod frames;
 pub mod mbus_data;
 pub mod user_data;
+
+// Re-export link layer types for convenience
+pub use wired_mbus_link_layer::{Address, Frame, FrameError, Function};
 
 #[cfg(feature = "std")]
 pub use mbus_data::serialize_mbus_data;

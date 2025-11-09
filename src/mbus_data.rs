@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use prettytable::{format, row, Table};
 
-use crate::frames;
+use wired_mbus_link_layer as frames;
 use crate::user_data;
 use crate::MbusError;
 
@@ -40,6 +40,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
             frames::Frame::SingleCharacter { .. } => (),
             frames::Frame::ShortFrame { .. } => (),
             frames::Frame::ControlFrame { .. } => (),
+            _ => (),
         };
 
         Ok(MbusData {
@@ -192,6 +193,9 @@ fn parse_to_table(input: &str) -> String {
             }
             frames::Frame::ControlFrame { .. } => {
                 table_output.push_str("Control Frame\n");
+            }
+            _ => {
+                table_output.push_str("Unknown Frame\n");
             }
         }
         table_output
