@@ -92,7 +92,7 @@ fn medium_to_str(medium: Medium) -> &'static str {
 #[cfg(test)]
 mod tests {
 
-    use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
+    use m_bus_parser::{Frame, user_data::UserDataBlock};
 
     use super::*;
 

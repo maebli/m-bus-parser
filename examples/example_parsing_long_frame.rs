@@ -1,4 +1,4 @@
-use m_bus_parser::frames::{Address, Frame, Function};
+use m_bus_parser::{Address, Frame, Function};
 ///       68 4d 4d 68 08 01 72 01 00 00 00 96 15 01 00 18 00 00 00 0c 78 56 00 00 00 01
 ///       fd 1b 00 02 fc 03 48 52 25 74 44 0d 22 fc 03 48 52 25 74 f1 0c 12 fc 03 48 52
 ///       25 74 63 11 02 65 b4 09 22 65 86 09 12 65 b7 09 01 72 00 72 65 00 00 b2 01 65
