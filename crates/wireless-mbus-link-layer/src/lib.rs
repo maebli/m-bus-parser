@@ -1,7 +1,7 @@
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
     FormatA { function: Function, data: &'a [u8] },
-    FormatB { function: Function },
+    FormatB { function: Function, data: &'a [u8] },
 }
 
 #[derive(Debug, PartialEq)]
@@ -43,18 +43,22 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
-        let length = *data.first().ok_or(FrameError::EmptyData)? as usize;
-
-        if length != data.len() {
-            return Err(FrameError::WrongLength {
-                expected: length,
+        let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
+        let length = data.len();
+        match length_byte {
+            length => Ok(Frame::FormatA {
+                function: Function::SndNke { prm: false },
+                data,
+            }),
+            l if l == length - 2 => Ok(Frame::FormatB {
+                function: Function::SndNke { prm: false },
+                data,
+            }),
+            _ => Err(FrameError::WrongLength {
+                expected: length_byte,
                 actual: data.len(),
-            });
+            }),
         }
-        Ok(Frame::FormatA {
-            function: Function::SndNke { prm: false },
-            data,
-        })
     }
 }
 
