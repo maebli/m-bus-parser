@@ -1,8 +1,10 @@
+#[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
     FormatA { function: Function, data: &'a [u8] },
     FormatB { function: Function },
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Function {
     SndNke { prm: bool },
     SndUd { prm: bool },
@@ -21,9 +23,10 @@ pub enum Function {
 }
 
 // check if this can be unified with wired mbus frame error some how
+#[derive(Debug, PartialEq)]
 pub enum FrameError {
     EmptyData,
-    WrongLength,
+    WrongLength { expected: usize, actual: usize },
 }
 
 impl TryFrom<u8> for Function {
@@ -43,7 +46,10 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
         let length = *data.first().ok_or(FrameError::EmptyData)? as usize;
 
         if length != data.len() {
-            return Err(FrameError::WrongLength);
+            return Err(FrameError::WrongLength {
+                expected: length,
+                actual: data.len(),
+            });
         }
         Ok(Frame::FormatA {
             function: Function::SndNke { prm: false },
@@ -62,5 +68,13 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_dummy() {}
+    fn test_dummy() {
+        let _id = 33225544;
+        let frame: &[u8] = &[
+            0x18, 0x44, 0xAE, 0x4C, 0x44, 0x55, 0x22, 0x33, 0x68, 0x07, 0x7A, 0x55, 0x00, 0x00,
+            0x00, 0x00, 0x04, 0x13, 0x89, 0xE2, 0x01, 0x00, 0x02, 0x3B, 0x00, 0x00,
+        ];
+        let parsed = Frame::try_from(frame);
+        println!("{:#?}", parsed);
+    }
 }
