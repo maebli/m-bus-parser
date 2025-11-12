@@ -48,7 +48,7 @@ defmt = { version = "1.0.1", optional = true }
 wired-mbus-link-layer = {path = "crates/wired-mbus-link-layer"} 
 
 [workspace]
-members = ["cli", "wasm","python", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer"]
+members = ["cli", "wasm","python", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer", "crates/m-bus-core"]
 exclude = ["examples/cortex-m"]
 
 [[bench]]

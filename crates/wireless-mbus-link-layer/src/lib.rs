@@ -30,7 +30,6 @@ pub struct DeviceType {}
 
 pub struct ManufacturerId {
     manufacturer_code: ManufacturerCode,
-
     device_type: DeviceType,
     version: u8,
     is_unique_globally: bool,
