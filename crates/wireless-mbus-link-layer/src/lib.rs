@@ -1,3 +1,5 @@
+use m_bus_core::{ApplicationLayerError, IdentificationNumber, ManufacturerCode};
+
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
     FormatA { function: Function, data: &'a [u8] },
@@ -22,10 +24,6 @@ pub enum Function {
     RspUd { prm: bool },
 }
 
-pub struct ManufacturerCode {
-    pub code: [char; 3],
-}
-
 pub struct DeviceType {}
 
 pub struct ManufacturerId {
@@ -33,34 +31,6 @@ pub struct ManufacturerId {
     device_type: DeviceType,
     version: u8,
     is_unique_globally: bool,
-}
-
-#[non_exhaustive]
-pub enum ApplicationLayerError {
-    MissingControlInformation,
-    InvalidControlInformation { byte: u8 },
-    IdentificationNumberError { digits: [u8; 4], number: u32 },
-    InvalidManufacturerCode { code: u16 },
-    InsufficientData,
-}
-
-impl ManufacturerCode {
-    pub const fn from_id(id: u16) -> Result<Self, ApplicationLayerError> {
-        let first_letter = ((id / (32 * 32)) + 64) as u8 as char;
-        let second_letter = (((id % (32 * 32)) / 32) + 64) as u8 as char;
-        let third_letter = ((id % 32) + 64) as u8 as char;
-
-        if first_letter.is_ascii_uppercase()
-            && second_letter.is_ascii_uppercase()
-            && third_letter.is_ascii_uppercase()
-        {
-            Ok(Self {
-                code: [first_letter, second_letter, third_letter],
-            })
-        } else {
-            Err(ApplicationLayerError::InvalidManufacturerCode { code: id })
-        }
-    }
 }
 
 // check if this can be unified with wired mbus frame error some how
