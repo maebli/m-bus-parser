@@ -22,10 +22,53 @@ pub enum Function {
     RspUd { prm: bool },
 }
 
+pub struct ManufacturerCode {
+    pub code: [char; 3],
+}
+
+pub struct DeviceType {}
+
+pub struct ManufacturerId {
+    manufacturer_code: ManufacturerCode,
+
+    device_type: DeviceType,
+    version: u8,
+    is_unique_globally: bool,
+}
+
+#[non_exhaustive]
+pub enum ApplicationLayerError {
+    MissingControlInformation,
+    InvalidControlInformation { byte: u8 },
+    IdentificationNumberError { digits: [u8; 4], number: u32 },
+    InvalidManufacturerCode { code: u16 },
+    InsufficientData,
+}
+
+impl ManufacturerCode {
+    pub const fn from_id(id: u16) -> Result<Self, ApplicationLayerError> {
+        let first_letter = ((id / (32 * 32)) + 64) as u8 as char;
+        let second_letter = (((id % (32 * 32)) / 32) + 64) as u8 as char;
+        let third_letter = ((id % 32) + 64) as u8 as char;
+
+        if first_letter.is_ascii_uppercase()
+            && second_letter.is_ascii_uppercase()
+            && third_letter.is_ascii_uppercase()
+        {
+            Ok(Self {
+                code: [first_letter, second_letter, third_letter],
+            })
+        } else {
+            Err(ApplicationLayerError::InvalidManufacturerCode { code: id })
+        }
+    }
+}
+
 // check if this can be unified with wired mbus frame error some how
 #[derive(Debug, PartialEq)]
 pub enum FrameError {
     EmptyData,
+    TooShort,
     WrongLength { expected: usize, actual: usize },
 }
 
@@ -43,8 +86,10 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
-        let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
         let length = data.len();
+        let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
+        let c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
+
         match length_byte {
             length => Ok(Frame::FormatA {
                 function: Function::SndNke { prm: false },
