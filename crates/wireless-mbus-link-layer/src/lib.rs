@@ -2,8 +2,16 @@ use m_bus_core::{ApplicationLayerError, DeviceType, IdentificationNumber, Manufa
 
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
-    FormatA { function: Function, data: &'a [u8] },
-    FormatB { function: Function, data: &'a [u8] },
+    FormatA {
+        function: Function,
+        manufacturer_id: ManufacturerId,
+        data: &'a [u8],
+    },
+    FormatB {
+        function: Function,
+        manufacturer_id: ManufacturerId,
+        data: &'a [u8],
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -24,6 +32,7 @@ pub enum Function {
     RspUd { prm: bool },
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ManufacturerId {
     manufacturer_code: ManufacturerCode,
     device_type: DeviceType,
@@ -73,15 +82,17 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
         let length = data.len();
         let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
         let c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
-        let manufacturer_id = ManufacturerId::try_from(&data[2..8])?;
+        let manufacturer_id = ManufacturerId::try_from(&data[2..])?;
 
         match length_byte {
             length => Ok(Frame::FormatA {
                 function: Function::SndNke { prm: false },
+                manufacturer_id,
                 data,
             }),
             l if l == length - 2 => Ok(Frame::FormatB {
                 function: Function::SndNke { prm: false },
+                manufacturer_id,
                 data,
             }),
             _ => Err(FrameError::WrongLength {
@@ -104,6 +115,9 @@ mod test {
     #[test]
     fn test_dummy() {
         let _id = 33225544;
+        let _medium = 7; // water
+        let _man = "SEN";
+        let _version = 104;
         let frame: &[u8] = &[
             0x18, 0x44, 0xAE, 0x4C, 0x44, 0x55, 0x22, 0x33, 0x68, 0x07, 0x7A, 0x55, 0x00, 0x00,
             0x00, 0x00, 0x04, 0x13, 0x89, 0xE2, 0x01, 0x00, 0x02, 0x3B, 0x00, 0x00,
