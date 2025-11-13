@@ -1,4 +1,4 @@
-use m_bus_core::{ApplicationLayerError, IdentificationNumber, ManufacturerCode};
+use m_bus_core::{ApplicationLayerError, DeviceType, IdentificationNumber, ManufacturerCode};
 
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
@@ -24,8 +24,6 @@ pub enum Function {
     RspUd { prm: bool },
 }
 
-pub struct DeviceType {}
-
 pub struct ManufacturerId {
     manufacturer_code: ManufacturerCode,
     device_type: DeviceType,
@@ -43,9 +41,9 @@ impl TryFrom<&[u8]> for ManufacturerId {
                 *iter.next().ok_or(FrameError::TooShort)?,
             ]))
             .map_err(|e| FrameError::TooShort)?,
-            device_type: (),
-            version: (),
-            is_unique_globally: (),
+            device_type: DeviceType::from(*iter.next().ok_or(FrameError::TooShort)?),
+            version: *iter.next().ok_or(FrameError::TooShort)?,
+            is_unique_globally: false, /*todo not sure about this field*/
         })
     }
 }
@@ -75,6 +73,7 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
         let length = data.len();
         let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
         let c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
+        let manufacturer_id = ManufacturerId::try_from(&data[2..8])?;
 
         match length_byte {
             length => Ok(Frame::FormatA {

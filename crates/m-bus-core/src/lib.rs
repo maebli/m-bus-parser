@@ -102,6 +102,73 @@ impl fmt::Display for IdentificationNumber {
     }
 }
 
+/// This used to be called "Medium"
+/// Defined in EN 13757-7
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
+pub enum DeviceType {
+    Other,
+    Oil,
+    Electricity,
+    Gas,
+    Heat,
+    Steam,
+    HotWater,
+    Water,
+    HeatCostAllocator,
+    Reserved,
+    GasMode2,
+    HeatMode2,
+    HotWaterMode2,
+    WaterMode2,
+    HeatCostAllocator2,
+    ReservedMode2,
+    Unknown,
+    ColdWater,
+    DualWater,
+    Pressure,
+    ADConverter,
+}
+
+impl From<u8> for DeviceType {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0x00 => Self::Other,
+            0x01 => Self::Oil,
+            0x02 => Self::Electricity,
+            0x03 => Self::Gas,
+            0x04 => Self::Heat,
+            0x05 => Self::Steam,
+            0x06 => Self::HotWater,
+            0x07 => Self::Water,
+            0x08 => Self::HeatCostAllocator,
+            0x09 => Self::Reserved, // Note: Reserved for 0x09 from the first set
+            0x0A => Self::GasMode2,
+            0x0B => Self::HeatMode2,
+            0x0C => Self::HotWaterMode2,
+            0x0D => Self::WaterMode2,
+            0x0E => Self::HeatCostAllocator2,
+            0x0F => Self::ReservedMode2,
+            // Unique mediums from the second set
+            0x10 => Self::Reserved, // Reserved range
+            0x11 => Self::Reserved, // Reserved range
+            0x12 => Self::Reserved, // Reserved range
+            0x13 => Self::Reserved, // Reserved range
+            0x14 => Self::Reserved, // Reserved range
+            0x15 => Self::Reserved, // Reserved range
+            0x16 => Self::ColdWater,
+            0x17 => Self::DualWater,
+            0x18 => Self::Pressure,
+            0x19 => Self::ADConverter,
+            // Extended reserved range from the second set
+            0x20..=0xFF => Self::Reserved,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 impl From<IdentificationNumber> for u32 {
     fn from(id: IdentificationNumber) -> Self {
         id.number
