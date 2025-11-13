@@ -33,6 +33,23 @@ pub struct ManufacturerId {
     is_unique_globally: bool,
 }
 
+impl TryFrom<&[u8]> for ManufacturerId {
+    type Error = FrameError;
+    fn try_from(data: &[u8]) -> Result<Self, FrameError> {
+        let mut iter = data.iter();
+        Ok(ManufacturerId {
+            manufacturer_code: ManufacturerCode::from_id(u16::from_le_bytes([
+                *iter.next().ok_or(FrameError::TooShort)?,
+                *iter.next().ok_or(FrameError::TooShort)?,
+            ]))
+            .map_err(|e| FrameError::TooShort)?,
+            device_type: (),
+            version: (),
+            is_unique_globally: (),
+        })
+    }
+}
+
 // check if this can be unified with wired mbus frame error some how
 #[derive(Debug, PartialEq)]
 pub enum FrameError {
