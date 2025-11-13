@@ -214,7 +214,6 @@ impl From<u8> for DeviceType {
         }
     }
 }
-
 impl From<IdentificationNumber> for u32 {
     fn from(id: IdentificationNumber) -> Self {
         id.number
@@ -250,5 +249,81 @@ mod test {
         let result = IdentificationNumber::from_bcd_hex_digits(data)?;
         assert_eq!(result, IdentificationNumber { number: 12345678 });
         Ok(())
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
+pub enum Function {
+    SndNk,
+    SndUd { fcb: bool },
+    SndUd2,
+    SndUd3,
+    SndNr,
+    SendIr,
+    AccNr,
+    AccDmd,
+    ReqUd1 { fcb: bool },
+    ReqUd2 { fcb: bool },
+    RspUd { acd: bool, dfc: bool },
+    Ack,
+    Nack,
+    CnfIr,
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Function::SndNk => write!(f, "SndNk"),
+            Function::SndUd { fcb } => write!(f, "SndUd (FCB: {fcb})"),
+            Function::ReqUd2 { fcb } => write!(f, "ReqUd2 (FCB: {fcb})"),
+            Function::ReqUd1 { fcb } => write!(f, "ReqUd1 (FCB: {fcb})"),
+            Function::RspUd { acd, dfc } => write!(f, "RspUd (ACD: {acd}, DFC: {dfc})"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum FrameError {
+    EmptyData,
+    TooShort,
+    WrongLength { expected: usize, actual: usize },
+    InvalidFunction { byte: u8 },
+}
+
+impl TryFrom<u8> for Function {
+    type Error = FrameError;
+
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
+        match byte {
+            0x40 => Ok(Self::SndNk),
+            0x44 => Ok(Self::SndNr),
+            0x53 => Ok(Self::SndUd { fcb: false }),
+            0x73 => Ok(Self::SndUd { fcb: true }),
+            0x5B => Ok(Self::ReqUd2 { fcb: false }),
+            0x7B => Ok(Self::ReqUd2 { fcb: true }),
+            0x5A => Ok(Self::ReqUd1 { fcb: false }),
+            0x7A => Ok(Self::ReqUd1 { fcb: true }),
+            0x08 => Ok(Self::RspUd {
+                acd: false,
+                dfc: false,
+            }),
+            0x18 => Ok(Self::RspUd {
+                acd: false,
+                dfc: true,
+            }),
+            0x28 => Ok(Self::RspUd {
+                acd: true,
+                dfc: false,
+            }),
+            0x38 => Ok(Self::RspUd {
+                acd: true,
+                dfc: true,
+            }),
+            _ => Err(FrameError::InvalidFunction { byte }),
+        }
     }
 }

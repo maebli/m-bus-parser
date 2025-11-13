@@ -1,4 +1,6 @@
-use m_bus_core::{ApplicationLayerError, DeviceType, IdentificationNumber, ManufacturerCode};
+use m_bus_core::{
+    ApplicationLayerError, DeviceType, FrameError, Function, IdentificationNumber, ManufacturerCode,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
@@ -12,24 +14,6 @@ pub enum Frame<'a> {
         manufacturer_id: ManufacturerId,
         data: &'a [u8],
     },
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Function {
-    SndNke { prm: bool },
-    SndUd { prm: bool },
-    SndUd2 { prm: bool },
-    SndNR { prm: bool },
-    SndUd3 { prm: bool },
-    SndIr { prm: bool },
-    AccNr { prm: bool },
-    AccDmd { prm: bool },
-    ReqUd1 { prm: bool },
-    ReqUd2 { prm: bool },
-    Ack { prm: bool },
-    Nack { prm: bool },
-    CnfIr { prm: bool },
-    RspUd { prm: bool },
 }
 
 #[derive(Debug, PartialEq)]
@@ -65,41 +49,23 @@ impl TryFrom<&[u8]> for ManufacturerId {
     }
 }
 
-// check if this can be unified with wired mbus frame error some how
-#[derive(Debug, PartialEq)]
-pub enum FrameError {
-    EmptyData,
-    TooShort,
-    WrongLength { expected: usize, actual: usize },
-}
-
-impl TryFrom<u8> for Function {
-    type Error = FrameError;
-
-    fn try_from(byte: u8) -> Result<Self, Self::Error> {
-        match byte {
-            _ => todo!(),
-        }
-    }
-}
-
 impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
         let length = data.len();
         let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
-        let c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
+        let c_field = *data.get(1).ok_or(FrameError::TooShort)?;
         let manufacturer_id = ManufacturerId::try_from(&data[2..])?;
 
         match length_byte {
             length => Ok(Frame::FormatA {
-                function: Function::SndNke { prm: false },
+                function: Function::try_from(c_field)?,
                 manufacturer_id,
                 data,
             }),
             l if l == length - 2 => Ok(Frame::FormatB {
-                function: Function::SndNke { prm: false },
+                function: Function::try_from(c_field)?,
                 manufacturer_id,
                 data,
             }),
