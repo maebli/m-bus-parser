@@ -35,6 +35,7 @@ pub enum Function {
 #[derive(Debug, PartialEq)]
 pub struct ManufacturerId {
     manufacturer_code: ManufacturerCode,
+    identification_number: IdentificationNumber,
     device_type: DeviceType,
     version: u8,
     is_unique_globally: bool,
@@ -50,8 +51,15 @@ impl TryFrom<&[u8]> for ManufacturerId {
                 *iter.next().ok_or(FrameError::TooShort)?,
             ]))
             .map_err(|e| FrameError::TooShort)?,
-            device_type: DeviceType::from(*iter.next().ok_or(FrameError::TooShort)?),
+            identification_number: IdentificationNumber::from_bcd_hex_digits([
+                *iter.next().ok_or(FrameError::TooShort)?,
+                *iter.next().ok_or(FrameError::TooShort)?,
+                *iter.next().ok_or(FrameError::TooShort)?,
+                *iter.next().ok_or(FrameError::TooShort)?,
+            ])
+            .map_err(|e| FrameError::TooShort)?,
             version: *iter.next().ok_or(FrameError::TooShort)?,
+            device_type: DeviceType::from(*iter.next().ok_or(FrameError::TooShort)?),
             is_unique_globally: false, /*todo not sure about this field*/
         })
     }
