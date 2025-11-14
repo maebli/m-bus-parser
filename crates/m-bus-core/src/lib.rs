@@ -291,6 +291,7 @@ pub enum FrameError {
     EmptyData,
     TooShort,
     WrongLength { expected: usize, actual: usize },
+    WrongCrc { expected: u16, actual: u16 },
     InvalidFunction { byte: u8 },
 }
 

@@ -1,3 +1,4 @@
+use crc16::{EN_13757, State};
 use m_bus_core::{
     ApplicationLayerError, DeviceType, FrameError, Function, IdentificationNumber, ManufacturerCode,
 };
@@ -79,7 +80,13 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
 
 fn validate_crc(data: &[u8]) -> Result<(), FrameError> {
     let crc_byte_index = data.len() - 2;
-    Ok(())
+    let actual = State::<EN_13757>::calculate(&data[..crc_byte_index]);
+    let expected: u16 = 0;
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(FrameError::WrongCrc { expected, actual })
+    }
 }
 
 #[cfg(test)]
