@@ -1,5 +1,9 @@
 //! is part of the MBUS data link layer
 //! It is used to encapsulate the application layer data
+use m_bus_core::{
+    ApplicationLayerError, DeviceType, FrameError, Function, IdentificationNumber, ManufacturerCode,
+};
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -26,63 +30,6 @@ pub enum Frame<'a> {
     },
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum Function {
-    SndNk,
-    SndUd { fcb: bool },
-    ReqUd2 { fcb: bool },
-    ReqUd1 { fcb: bool },
-    RspUd { acd: bool, dfc: bool },
-}
-
-#[cfg(feature = "std")]
-impl std::fmt::Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Function::SndNk => write!(f, "SndNk"),
-            Function::SndUd { fcb } => write!(f, "SndUd (FCB: {fcb})"),
-            Function::ReqUd2 { fcb } => write!(f, "ReqUd2 (FCB: {fcb})"),
-            Function::ReqUd1 { fcb } => write!(f, "ReqUd1 (FCB: {fcb})"),
-            Function::RspUd { acd, dfc } => write!(f, "RspUd (ACD: {acd}, DFC: {dfc})"),
-        }
-    }
-}
-
-impl TryFrom<u8> for Function {
-    type Error = FrameError;
-
-    fn try_from(byte: u8) -> Result<Self, Self::Error> {
-        match byte {
-            0x40 => Ok(Self::SndNk),
-            0x53 => Ok(Self::SndUd { fcb: false }),
-            0x73 => Ok(Self::SndUd { fcb: true }),
-            0x5B => Ok(Self::ReqUd2 { fcb: false }),
-            0x7B => Ok(Self::ReqUd2 { fcb: true }),
-            0x5A => Ok(Self::ReqUd1 { fcb: false }),
-            0x7A => Ok(Self::ReqUd1 { fcb: true }),
-            0x08 => Ok(Self::RspUd {
-                acd: false,
-                dfc: false,
-            }),
-            0x18 => Ok(Self::RspUd {
-                acd: false,
-                dfc: true,
-            }),
-            0x28 => Ok(Self::RspUd {
-                acd: true,
-                dfc: false,
-            }),
-            0x38 => Ok(Self::RspUd {
-                acd: true,
-                dfc: true,
-            }),
-            _ => Err(FrameError::InvalidFunction { byte }),
-        }
-    }
-}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -122,22 +69,6 @@ impl Address {
             _ => Self::Primary(byte),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum FrameError {
-    EmptyData,
-    InvalidStartByte,
-    InvalidStopByte,
-    WrongLengthIndication,
-    LengthShort,
-    LengthShorterThanSix { length: usize },
-    WrongChecksum { expected: u8, actual: u8 },
-    InvalidControlInformation { byte: u8 },
-    InvalidFunction { byte: u8 },
 }
 
 impl<'a> TryFrom<&'a [u8]> for Frame<'a> {

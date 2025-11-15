@@ -1,17 +1,45 @@
-use crc16::{EN_13757, State};
-use m_bus_core::{
-    ApplicationLayerError, DeviceType, FrameError, Function, IdentificationNumber, ManufacturerCode,
-};
+use m_bus_core::{ApplicationLayerError, DeviceType, IdentificationNumber, ManufacturerCode};
 
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
-    // this frame type assumes that CRC has already been stripped
-    // todo: check if frametype A and B are needed
-    Wireless {
+    FormatA {
         function: Function,
         manufacturer_id: ManufacturerId,
         data: &'a [u8],
     },
+    FormatB {
+        function: Function,
+        manufacturer_id: ManufacturerId,
+        data: &'a [u8],
+    },
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Function {
+    SndNke { prm: bool },
+    SndUd { prm: bool },
+    SndUd2 { prm: bool },
+    SndNR { prm: bool },
+    SndUd3 { prm: bool },
+    SndIr { prm: bool },
+    AccNr { prm: bool },
+    AccDmd { prm: bool },
+    ReqUd1 { prm: bool },
+    ReqUd2 { prm: bool },
+    Ack { prm: bool },
+    Nack { prm: bool },
+    CnfIr { prm: bool },
+    RspUd { prm: bool },
+}
+
+impl TryFrom<u8> for Function {
+    type Error = FrameError;
+
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
+        match byte {
+            _ => todo!(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -47,39 +75,44 @@ impl TryFrom<&[u8]> for ManufacturerId {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum FrameError {
+    EmptyData,
+    TooShort,
+    WrongLength { expected: usize, actual: usize },
+}
+
 impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
+        let length = data.len();
         let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
-        let c_field = *data.get(1).ok_or(FrameError::TooShort)?;
+        let c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
         let manufacturer_id = ManufacturerId::try_from(&data[2..])?;
-        let function = Function::try_from(c_field)?;
 
-        if length_byte == (data.len() - 2) {
-            Ok(Frame::Wireless {
-                function,
+        match length_byte {
+            length => Ok(Frame::FormatA {
+                function: Function::SndNke { prm: false },
                 manufacturer_id,
                 data,
-            })
-        } else {
-            Err(FrameError::WrongLength {
+            }),
+            l if l == length - 2 => Ok(Frame::FormatB {
+                function: Function::SndNke { prm: false },
+                manufacturer_id,
+                data,
+            }),
+            _ => Err(FrameError::WrongLength {
                 expected: length_byte,
                 actual: data.len(),
-            })
+            }),
         }
     }
 }
 
 fn validate_crc(data: &[u8]) -> Result<(), FrameError> {
     let crc_byte_index = data.len() - 2;
-    let actual = State::<EN_13757>::calculate(&data[..crc_byte_index]);
-    let expected: u16 = 0;
-    if expected == actual {
-        Ok(())
-    } else {
-        Err(FrameError::WrongCrc { expected, actual })
-    }
+    Ok(())
 }
 
 #[cfg(test)]

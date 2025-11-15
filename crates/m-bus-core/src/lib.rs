@@ -286,12 +286,33 @@ impl std::fmt::Display for Function {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[cfg(feature = "std")]
+impl std::fmt::Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Function::SndNk => write!(f, "SndNk"),
+            Function::SndUd { fcb } => write!(f, "SndUd (FCB: {fcb})"),
+            Function::ReqUd2 { fcb } => write!(f, "ReqUd2 (FCB: {fcb})"),
+            Function::ReqUd1 { fcb } => write!(f, "ReqUd1 (FCB: {fcb})"),
+            Function::RspUd { acd, dfc } => write!(f, "RspUd (ACD: {acd}, DFC: {dfc})"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FrameError {
     EmptyData,
-    TooShort,
+    InvalidStartByte,
+    InvalidStopByte,
+    WrongLengthIndication,
+    LengthShort,
+    LengthShorterThanSix { length: usize },
     WrongLength { expected: usize, actual: usize },
     WrongCrc { expected: u16, actual: u16 },
+    WrongChecksum { expected: u8, actual: u8 },
+    InvalidControlInformation { byte: u8 },
     InvalidFunction { byte: u8 },
 }
 
