@@ -5,12 +5,9 @@ use m_bus_core::{
 
 #[derive(Debug, PartialEq)]
 pub enum Frame<'a> {
-    FormatA {
-        function: Function,
-        manufacturer_id: ManufacturerId,
-        data: &'a [u8],
-    },
-    FormatB {
+    // this frame type assumes that CRC has already been stripped
+    // todo: check if frametype A and B are needed
+    Wireless {
         function: Function,
         manufacturer_id: ManufacturerId,
         data: &'a [u8],
@@ -54,26 +51,22 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
-        let length = data.len();
         let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
         let c_field = *data.get(1).ok_or(FrameError::TooShort)?;
         let manufacturer_id = ManufacturerId::try_from(&data[2..])?;
+        let function = Function::try_from(c_field)?;
 
-        match length_byte {
-            length => Ok(Frame::FormatA {
-                function: Function::try_from(c_field)?,
+        if length_byte == (data.len() - 2) {
+            Ok(Frame::Wireless {
+                function,
                 manufacturer_id,
                 data,
-            }),
-            l if l == length - 2 => Ok(Frame::FormatB {
-                function: Function::try_from(c_field)?,
-                manufacturer_id,
-                data,
-            }),
-            _ => Err(FrameError::WrongLength {
+            })
+        } else {
+            Err(FrameError::WrongLength {
                 expected: length_byte,
                 actual: data.len(),
-            }),
+            })
         }
     }
 }
