@@ -8,7 +8,7 @@ use m_bus_core::{
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
-pub enum Frame<'a> {
+pub enum WiredFrame<'a> {
     SingleCharacter {
         character: u8,
     },
@@ -71,14 +71,14 @@ impl Address {
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
+impl<'a> TryFrom<&'a [u8]> for WiredFrame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
         let first_byte = *data.first().ok_or(FrameError::EmptyData)?;
 
         if first_byte == 0xE5 {
-            return Ok(Frame::SingleCharacter { character: 0xE5 });
+            return Ok(WiredFrame::SingleCharacter { character: 0xE5 });
         }
 
         let second_byte = *data.get(1).ok_or(FrameError::LengthShort)?;
@@ -100,12 +100,12 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
                 let control_field = *data.get(4).ok_or(FrameError::LengthShort)?;
                 let address_field = *data.get(5).ok_or(FrameError::LengthShort)?;
                 match control_field {
-                    0x53 => Ok(Frame::ControlFrame {
+                    0x53 => Ok(WiredFrame::ControlFrame {
                         function: Function::try_from(control_field)?,
                         address: Address::from(address_field),
                         data: data.get(6..data.len() - 2).ok_or(FrameError::LengthShort)?,
                     }),
-                    _ => Ok(Frame::LongFrame {
+                    _ => Ok(WiredFrame::LongFrame {
                         function: Function::try_from(control_field)?,
                         address: Address::from(address_field),
                         data: data.get(6..data.len() - 2).ok_or(FrameError::LengthShort)?,
@@ -115,7 +115,7 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
             0x10 => {
                 validate_checksum(data.get(1..).ok_or(FrameError::LengthShort)?)?;
                 if data.len() == 5 && *data.last().ok_or(FrameError::InvalidStopByte)? == 0x16 {
-                    Ok(Frame::ShortFrame {
+                    Ok(WiredFrame::ShortFrame {
                         function: Function::try_from(second_byte)?,
                         address: Address::from(third_byte),
                     })
@@ -199,19 +199,19 @@ mod tests {
         ];
 
         assert_eq!(
-            Frame::try_from(single_character_frame),
-            Ok(Frame::SingleCharacter { character: 0xE5 })
+            WiredFrame::try_from(single_character_frame),
+            Ok(WiredFrame::SingleCharacter { character: 0xE5 })
         );
         assert_eq!(
-            Frame::try_from(short_frame),
-            Ok(Frame::ShortFrame {
+            WiredFrame::try_from(short_frame),
+            Ok(WiredFrame::ShortFrame {
                 function: Function::try_from(0x7B).unwrap(),
                 address: Address::from(0x8B)
             })
         );
         assert_eq!(
-            Frame::try_from(control_frame),
-            Ok(Frame::ControlFrame {
+            WiredFrame::try_from(control_frame),
+            Ok(WiredFrame::ControlFrame {
                 function: Function::try_from(0x53).unwrap(),
                 address: Address::from(0x01),
                 data: &[0x51]
@@ -219,8 +219,8 @@ mod tests {
         );
 
         assert_eq!(
-            Frame::try_from(example),
-            Ok(Frame::LongFrame {
+            WiredFrame::try_from(example),
+            Ok(WiredFrame::LongFrame {
                 function: Function::try_from(8).unwrap(),
                 address: Address::from(1),
                 data: &[

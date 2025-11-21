@@ -51,7 +51,7 @@ pub mod user_data;
 
 // Re-export link layer types for convenience
 pub use m_bus_core::{FrameError, Function};
-pub use wired_mbus_link_layer::{Address, Frame};
+pub use wired_mbus_link_layer::{Address, WiredFrame};
 
 #[cfg(feature = "std")]
 pub use mbus_data::serialize_mbus_data;

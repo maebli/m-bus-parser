@@ -1,9 +1,9 @@
 #[cfg(feature = "std")]
 use prettytable::{format, row, Table};
 
-use wired_mbus_link_layer as frames;
 use crate::user_data;
 use crate::MbusError;
+use wired_mbus_link_layer as frames;
 
 #[cfg_attr(
     feature = "serde",
@@ -12,7 +12,7 @@ use crate::MbusError;
 )]
 #[derive(Debug)]
 pub struct MbusData<'a> {
-    pub frame: frames::Frame<'a>,
+    pub frame: frames::WiredFrame<'a>,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
     pub data_records: Option<user_data::DataRecords<'a>>,
 }
@@ -21,11 +21,11 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
     type Error = MbusError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
-        let frame = frames::Frame::try_from(data)?;
+        let frame = frames::WiredFrame::try_from(data)?;
         let mut user_data = None;
         let mut data_records = None;
         match &frame {
-            frames::Frame::LongFrame { data, .. } => {
+            frames::WiredFrame::LongFrame { data, .. } => {
                 if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
                     user_data = Some(x);
                     if let Ok(user_data::UserDataBlock::VariableDataStructure {
@@ -37,9 +37,9 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
                     }
                 }
             }
-            frames::Frame::SingleCharacter { .. } => (),
-            frames::Frame::ShortFrame { .. } => (),
-            frames::Frame::ControlFrame { .. } => (),
+            frames::WiredFrame::SingleCharacter { .. } => (),
+            frames::WiredFrame::ShortFrame { .. } => (),
+            frames::WiredFrame::ControlFrame { .. } => (),
             _ => (),
         };
 
@@ -114,7 +114,7 @@ fn parse_to_table(input: &str) -> String {
         table.set_format(*format::consts::FORMAT_BOX_CHARS); // Use box chars for top table
 
         match parsed_data.frame {
-            frames::Frame::LongFrame {
+            frames::WiredFrame::LongFrame {
                 function,
                 address,
                 data: _,
@@ -185,13 +185,13 @@ fn parse_to_table(input: &str) -> String {
                 }
                 table_output.push_str(&value_table.to_string());
             }
-            frames::Frame::ShortFrame { .. } => {
+            frames::WiredFrame::ShortFrame { .. } => {
                 table_output.push_str("Short Frame\n");
             }
-            frames::Frame::SingleCharacter { .. } => {
+            frames::WiredFrame::SingleCharacter { .. } => {
                 table_output.push_str("Single Character Frame\n");
             }
-            frames::Frame::ControlFrame { .. } => {
+            frames::WiredFrame::ControlFrame { .. } => {
                 table_output.push_str("Control Frame\n");
             }
             _ => {
@@ -217,7 +217,7 @@ pub fn parse_to_csv(input: &str) -> String {
 
     if let Ok(parsed_data) = parsed_data {
         match parsed_data.frame {
-            frames::Frame::LongFrame {
+            frames::WiredFrame::LongFrame {
                 function, address, ..
             } => {
                 let data_point_count = parsed_data

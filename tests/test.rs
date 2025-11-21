@@ -92,7 +92,7 @@ fn medium_to_str(medium: Medium) -> &'static str {
 #[cfg(test)]
 mod tests {
 
-    use m_bus_parser::{Frame, user_data::UserDataBlock};
+    use m_bus_parser::{user_data::UserDataBlock, WiredFrame};
 
     use super::*;
 
@@ -117,8 +117,8 @@ mod tests {
 
             let contents = contents.trim().replace(' ', "");
             let bytes = hex::decode(contents).unwrap();
-            let frame = Frame::try_from(bytes.as_slice()).unwrap();
-            if let Frame::LongFrame {
+            let frame = WiredFrame::try_from(bytes.as_slice()).unwrap();
+            if let WiredFrame::LongFrame {
                 function: _,
                 address: _,
                 data,

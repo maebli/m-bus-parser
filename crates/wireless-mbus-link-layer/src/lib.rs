@@ -1,7 +1,7 @@
 use m_bus_core::{ApplicationLayerError, DeviceType, IdentificationNumber, ManufacturerCode};
 
 #[derive(Debug, PartialEq)]
-pub enum Frame<'a> {
+pub enum WirelessFrame<'a> {
     FormatA {
         function: Function,
         manufacturer_id: ManufacturerId,
@@ -82,7 +82,7 @@ pub enum FrameError {
     WrongLength { expected: usize, actual: usize },
 }
 
-impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
+impl<'a> TryFrom<&'a [u8]> for WirelessFrame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
@@ -92,12 +92,12 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
         let manufacturer_id = ManufacturerId::try_from(&data[2..])?;
 
         match length_byte {
-            length => Ok(Frame::FormatA {
+            length => Ok(WirelessFrame::FormatA {
                 function: Function::SndNke { prm: false },
                 manufacturer_id,
                 data,
             }),
-            l if l == length - 2 => Ok(Frame::FormatB {
+            l if l == length - 2 => Ok(WirelessFrame::FormatB {
                 function: Function::SndNke { prm: false },
                 manufacturer_id,
                 data,
@@ -129,7 +129,7 @@ mod test {
             0x18, 0x44, 0xAE, 0x4C, 0x44, 0x55, 0x22, 0x33, 0x68, 0x07, 0x7A, 0x55, 0x00, 0x00,
             0x00, 0x00, 0x04, 0x13, 0x89, 0xE2, 0x01, 0x00, 0x02, 0x3B, 0x00, 0x00,
         ];
-        let parsed = Frame::try_from(frame);
+        let parsed = WirelessFrame::try_from(frame);
         println!("{:#?}", parsed);
     }
 }
