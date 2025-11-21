@@ -4,6 +4,7 @@ use prettytable::{format, row, Table};
 use crate::user_data;
 use crate::MbusError;
 use wired_mbus_link_layer as frames;
+use wireless_mbus_link_layer;
 
 #[cfg_attr(
     feature = "serde",
@@ -11,13 +12,13 @@ use wired_mbus_link_layer as frames;
     serde(bound(deserialize = "'de: 'a"))
 )]
 #[derive(Debug)]
-pub struct MbusData<'a> {
-    pub frame: frames::WiredFrame<'a>,
+pub struct MbusData<'a, F> {
+    pub frame: F,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
     pub data_records: Option<user_data::DataRecords<'a>>,
 }
 
-impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
+impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
     type Error = MbusError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
@@ -41,6 +42,50 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a> {
             frames::WiredFrame::ShortFrame { .. } => (),
             frames::WiredFrame::ControlFrame { .. } => (),
             _ => (),
+        };
+
+        Ok(MbusData {
+            frame,
+            user_data,
+            data_records,
+        })
+    }
+}
+
+impl<'a> TryFrom<&'a [u8]> for MbusData<'a, wireless_mbus_link_layer::WirelessFrame<'a>> {
+    type Error = MbusError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        let frame = wireless_mbus_link_layer::WirelessFrame::try_from(data)?;
+        let mut user_data = None;
+        let mut data_records = None;
+
+        // Extract application layer data from wireless frame
+        match &frame {
+            wireless_mbus_link_layer::WirelessFrame::FormatA { data, .. } => {
+                if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
+                    user_data = Some(x);
+                    if let Ok(user_data::UserDataBlock::VariableDataStructure {
+                        fixed_data_header: _,
+                        variable_data_block,
+                    }) = user_data::UserDataBlock::try_from(*data)
+                    {
+                        data_records = Some(variable_data_block.into());
+                    }
+                }
+            }
+            wireless_mbus_link_layer::WirelessFrame::FormatB { data, .. } => {
+                if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
+                    user_data = Some(x);
+                    if let Ok(user_data::UserDataBlock::VariableDataStructure {
+                        fixed_data_header: _,
+                        variable_data_block,
+                    }) = user_data::UserDataBlock::try_from(*data)
+                    {
+                        data_records = Some(variable_data_block.into());
+                    }
+                }
+            }
         };
 
         Ok(MbusData {
@@ -82,7 +127,7 @@ pub fn serialize_mbus_data(data: &str, format: &str) -> String {
 #[must_use]
 pub fn parse_to_json(input: &str) -> String {
     let data = clean_and_convert(input);
-    let parsed_data = MbusData::try_from(data.as_slice());
+    let parsed_data = MbusData::<frames::WiredFrame>::try_from(data.as_slice());
 
     serde_json::to_string_pretty(&parsed_data)
         .unwrap_or_default()
@@ -93,7 +138,7 @@ pub fn parse_to_json(input: &str) -> String {
 #[must_use]
 fn parse_to_yaml(input: &str) -> String {
     let data = clean_and_convert(input);
-    let parsed_data = MbusData::try_from(data.as_slice());
+    let parsed_data = MbusData::<frames::WiredFrame>::try_from(data.as_slice());
 
     serde_yaml::to_string(&parsed_data)
         .unwrap_or_default()
@@ -108,7 +153,7 @@ fn parse_to_table(input: &str) -> String {
     let data = clean_and_convert(input);
 
     let mut table_output = String::new();
-    let parsed_data_result = MbusData::try_from(data.as_slice());
+    let parsed_data_result = MbusData::<frames::WiredFrame>::try_from(data.as_slice());
     if let Ok(parsed_data) = parsed_data_result {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_BOX_CHARS); // Use box chars for top table
@@ -211,7 +256,7 @@ pub fn parse_to_csv(input: &str) -> String {
     use prettytable::csv;
 
     let data = clean_and_convert(input);
-    let parsed_data = MbusData::try_from(data.as_slice());
+    let parsed_data = MbusData::<frames::WiredFrame>::try_from(data.as_slice());
 
     let mut writer = csv::Writer::from_writer(vec![]);
 

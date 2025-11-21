@@ -75,7 +75,7 @@ impl TryFrom<&[u8]> for ManufacturerId {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FrameError {
     EmptyData,
     TooShort,

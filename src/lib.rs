@@ -38,7 +38,7 @@
 //!     }
 //!
 //!     // Parse everything at once
-//!     let parsed_data = MbusData::try_from(example.as_slice())?;
+//!     let parsed_data = MbusData::<WiredFrame>::try_from(example.as_slice())?;
 //!     println!("parsed_data: {:#?}", parsed_data);
 //!     Ok(())
 //! }
@@ -64,6 +64,7 @@ pub use mbus_data::serialize_mbus_data;
 #[non_exhaustive]
 pub enum MbusError {
     FrameError(FrameError),
+    WirelessFrameError(wireless_mbus_link_layer::FrameError),
     ApplicationLayerError(ApplicationLayerError),
     DataRecordError(user_data::variable_user_data::DataRecordError),
 }
@@ -73,6 +74,7 @@ impl std::fmt::Display for MbusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MbusError::FrameError(e) => write!(f, "{e}"),
+            MbusError::WirelessFrameError(e) => write!(f, "{:?}", e),
             MbusError::ApplicationLayerError(e) => write!(f, "{e}"),
             MbusError::DataRecordError(e) => write!(f, "{e}"),
         }
@@ -97,5 +99,11 @@ impl From<ApplicationLayerError> for MbusError {
 impl From<user_data::variable_user_data::DataRecordError> for MbusError {
     fn from(error: user_data::variable_user_data::DataRecordError) -> Self {
         Self::DataRecordError(error)
+    }
+}
+
+impl From<wireless_mbus_link_layer::FrameError> for MbusError {
+    fn from(error: wireless_mbus_link_layer::FrameError) -> Self {
+        Self::WirelessFrameError(error)
     }
 }
