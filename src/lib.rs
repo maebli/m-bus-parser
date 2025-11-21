@@ -4,7 +4,9 @@
 //! * was implemented using the publicly available documentation available at <https://m-bus.com/>
 //! # Example
 //! ```rust
-//! use m_bus_parser::{ Address, Frame, Function };
+//!
+//! use m_bus_core::{FrameError, Function};
+//! use wired_mbus_link_layer::{Address, WiredFrame};
 //! use m_bus_parser::user_data::{DataRecords, UserDataBlock};
 //! use m_bus_parser::mbus_data::MbusData;
 //!
@@ -24,9 +26,9 @@
 //!     ];
 //!
 //!     // Parse the frame
-//!     let frame = Frame::try_from(example.as_slice())?;
+//!     let frame = WiredFrame::try_from(example.as_slice())?;
 //!
-//!     if let Frame::LongFrame { function, address, data } = frame {
+//!     if let WiredFrame::LongFrame { function, address, data } = frame {
 //!         assert_eq!(function, Function::RspUd { acd: false, dfc: false });
 //!         assert_eq!(address, Address::Primary(1));
 //!         if let Ok(UserDataBlock::VariableDataStructure { fixed_data_header, variable_data_block }) = UserDataBlock::try_from(data) {
