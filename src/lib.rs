@@ -59,7 +59,7 @@ pub use wireless_mbus_link_layer::{ManufacturerId, WirelessFrame};
 #[cfg(feature = "std")]
 pub use mbus_data::serialize_mbus_data;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum MbusError {

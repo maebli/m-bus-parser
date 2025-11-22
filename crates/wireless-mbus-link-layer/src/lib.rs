@@ -1,6 +1,6 @@
-use m_bus_core::{ApplicationLayerError, DeviceType, IdentificationNumber, ManufacturerCode};
+use m_bus_core::{DeviceType, IdentificationNumber, ManufacturerCode};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WirelessFrame<'a> {
     FormatA {
         function: Function,
@@ -13,8 +13,7 @@ pub enum WirelessFrame<'a> {
         data: &'a [u8],
     },
 }
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Function {
     SndNke { prm: bool },
     SndUd { prm: bool },
@@ -42,7 +41,7 @@ impl TryFrom<u8> for Function {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ManufacturerId {
     manufacturer_code: ManufacturerCode,
     identification_number: IdentificationNumber,
@@ -60,14 +59,14 @@ impl TryFrom<&[u8]> for ManufacturerId {
                 *iter.next().ok_or(FrameError::TooShort)?,
                 *iter.next().ok_or(FrameError::TooShort)?,
             ]))
-            .map_err(|e| FrameError::TooShort)?,
+            .map_err(|_| FrameError::TooShort)?,
             identification_number: IdentificationNumber::from_bcd_hex_digits([
                 *iter.next().ok_or(FrameError::TooShort)?,
                 *iter.next().ok_or(FrameError::TooShort)?,
                 *iter.next().ok_or(FrameError::TooShort)?,
                 *iter.next().ok_or(FrameError::TooShort)?,
             ])
-            .map_err(|e| FrameError::TooShort)?,
+            .map_err(|_| FrameError::TooShort)?,
             version: *iter.next().ok_or(FrameError::TooShort)?,
             device_type: DeviceType::from(*iter.next().ok_or(FrameError::TooShort)?),
             is_unique_globally: false, /*todo not sure about this field*/
@@ -75,7 +74,7 @@ impl TryFrom<&[u8]> for ManufacturerId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FrameError {
     EmptyData,
     TooShort,
