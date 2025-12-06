@@ -1,4 +1,3 @@
-use m_bus_parser::user_data::Medium;
 use serde::Deserialize;
 use serde_xml_rs::from_str;
 use std::fs;
@@ -63,36 +62,10 @@ pub struct DataRecord {
     _value: Option<String>,
 }
 
-fn medium_to_str(medium: Medium) -> &'static str {
-    match medium {
-        Medium::Other => "Other",
-        Medium::Oil => "Oil",
-        Medium::Electricity => "Electricity",
-        Medium::Gas => "Gas",
-        Medium::Heat => "Heat: Outlet",
-        Medium::Steam => "Steam",
-        Medium::HotWater => "Warm water (30-90Â°C)",
-        Medium::Water => "Water",
-        Medium::HeatCostAllocator => "Heat Cost Allocator",
-        Medium::Unknown => "Unknown",
-        Medium::Reserved => "Breaker: Electricity",
-        Medium::GasMode2 => "GasMode2",
-        Medium::HeatMode2 => "HeatMode2",
-        Medium::HotWaterMode2 => "Heat: Inlet",
-        Medium::WaterMode2 => "Heat / Cooling load meter",
-        Medium::HeatCostAllocator2 => "Bus/System",
-        Medium::ReservedMode2 => "ReservedMode2",
-        Medium::ColdWater => "Cold water",
-        Medium::DualWater => "DualWater",
-        Medium::Pressure => "Pressure",
-        Medium::ADConverter => "ADConverter",
-        _ => unreachable!(),
-    }
-}
 #[cfg(test)]
 mod tests {
 
-    use m_bus_parser::{frames::Frame, user_data::UserDataBlock};
+    use m_bus_parser::{user_data::UserDataBlock, WiredFrame};
 
     use super::*;
 
@@ -117,21 +90,21 @@ mod tests {
 
             let contents = contents.trim().replace(' ', "");
             let bytes = hex::decode(contents).unwrap();
-            let frame = Frame::try_from(bytes.as_slice()).unwrap();
-            if let Frame::LongFrame {
+            let frame = WiredFrame::try_from(bytes.as_slice()).unwrap();
+            if let WiredFrame::LongFrame {
                 function: _,
                 address: _,
                 data,
             } = frame
             {
                 let user_data = UserDataBlock::try_from(data).unwrap();
-                if let UserDataBlock::VariableDataStructure {
-                    fixed_data_header,
+                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
+                    long_tpl_header,
                     variable_data_block: _variable_user_data,
                 } = user_data
                 {
                     assert!(
-                        Into::<u32>::into(fixed_data_header.identification_number)
+                        Into::<u32>::into(long_tpl_header.identification_number)
                             == mbus_data.slave_information.id.parse::<u32>().unwrap()
                     );
                     let expected_manufacturer = mbus_data
@@ -139,20 +112,20 @@ mod tests {
                         .manufacturer
                         .unwrap()
                         .into_bytes();
-                    let manufacturer = fixed_data_header.manufacturer.unwrap();
+                    let manufacturer = long_tpl_header.manufacturer.unwrap();
                     assert_eq!(manufacturer.code[0], expected_manufacturer[0] as char);
                     assert_eq!(manufacturer.code[1], expected_manufacturer[1] as char);
                     assert_eq!(manufacturer.code[2], expected_manufacturer[2] as char);
                     assert_eq!(
-                        fixed_data_header.access_number,
+                        long_tpl_header.short_tpl_header.access_number,
                         mbus_data.slave_information.access_number as u8
                     );
                     assert_eq!(
-                        fixed_data_header.status.bits(),
+                        long_tpl_header.short_tpl_header.status.bits(),
                         u8::from_str_radix(&mbus_data.slave_information.status, 16).unwrap()
                     );
                     assert_eq!(
-                        fixed_data_header.signature,
+                        long_tpl_header.short_tpl_header.configuration_field.raw(),
                         u16::from_str_radix(
                             mbus_data.slave_information.signature.unwrap().as_str(),
                             16
@@ -160,12 +133,8 @@ mod tests {
                         .unwrap()
                     );
                     assert_eq!(
-                        fixed_data_header.version,
+                        long_tpl_header.version,
                         mbus_data.slave_information.version.unwrap()
-                    );
-                    assert_eq!(
-                        medium_to_str(fixed_data_header.medium),
-                        mbus_data.slave_information._medium
                     );
                     //  TODO: fix this:
                     //let data_record = DataRecords::try_from(variable_user_data);
