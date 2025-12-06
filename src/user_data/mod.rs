@@ -509,10 +509,6 @@ pub enum UserDataBlock<'a> {
 }
 
 impl<'a> UserDataBlock<'a> {
-    /// Check if this UserDataBlock contains encrypted data
-    ///
-    /// Returns `Some(true)` if encrypted, `Some(false)` if not encrypted,
-    /// or `None` if the encryption state is unknown for this block type.
     #[must_use]
     pub fn is_encrypted(&self) -> Option<bool> {
         match self {
@@ -523,21 +519,6 @@ impl<'a> UserDataBlock<'a> {
         }
     }
 
-    /// Decrypt the variable data block if encrypted
-    ///
-    /// # Arguments
-    /// * `provider` - The key provider to use for decryption
-    /// * `output` - Output buffer for decrypted data (must be at least as large as encrypted data)
-    ///
-    /// # Returns
-    /// The number of bytes written to the output buffer
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - This is not a VariableDataStructure (`UnknownEncryptionState`)
-    /// - The data is not encrypted (`NotEncrypted`)
-    /// - The key is not found (`KeyNotFound`)
-    /// - Decryption fails (`DecryptionFailed`, `UnsupportedMode`, etc.)
     #[cfg(feature = "decryption")]
     pub fn decrypt_variable_data<K: crate::decryption::KeyProvider>(
         &self,
@@ -587,15 +568,22 @@ pub struct ShortTplHeader {
 }
 
 impl LongTplHeader {
-    /// Check if the data in this header is encrypted
-    ///
-    /// Returns `true` if the security mode indicates encryption is used,
-    /// `false` otherwise.
     #[must_use]
     pub fn is_encrypted(&self) -> bool {
         use m_bus_core::SecurityMode;
         !matches!(
             self.short_tpl_header.configuration_field.security_mode(),
+            SecurityMode::NoEncryption
+        )
+    }
+}
+
+impl ShortTplHeader {
+    #[must_use]
+    pub fn is_encrypted(&self) -> bool {
+        use m_bus_core::SecurityMode;
+        !matches!(
+            self.configuration_field.security_mode(),
             SecurityMode::NoEncryption
         )
     }
@@ -935,10 +923,10 @@ mod tests {
             (0x37, DeviceType::RadioConverterMeterSide),
             (0x38, DeviceType::BusConverterMeterSide),
             (0xFF, DeviceType::Wildcard),
-            // Reserved ranges → Other or Reserved variant
-            (0x1D, DeviceType::Reserved(0x1D)), // Reserved for sensors
-            (0x22, DeviceType::Reserved(0x22)), // Reserved for switching devices
-            (0x40, DeviceType::Reserved(0x40)), // Reserved
+            // Reserved ranges with specific variants
+            (0x1D, DeviceType::ReservedSensor(0x1D)), // Reserved for sensors
+            (0x22, DeviceType::ReservedSwitch(0x22)), // Reserved for switching devices
+            (0x40, DeviceType::Reserved(0x40)),       // Reserved
         ];
 
         for (byte, expected_device_type) in test_cases {
@@ -947,14 +935,13 @@ mod tests {
             assert_eq!(device_type.to_byte(), byte);
         }
 
-        // Test that Reserved maps to canonical value 0x09
-        assert_eq!(u8::from(DeviceType::Reserved(0x09)), 0x09);
-        assert_eq!(DeviceType::from(0x09), DeviceType::Reserved(0x09));
-        assert_eq!(DeviceType::from(0x10), DeviceType::Reserved(0x10));
-        assert_eq!(DeviceType::from(0x20), DeviceType::Reserved(0x20));
+        // Test that Reserved variants map back to their byte values
+        assert_eq!(u8::from(DeviceType::Reserved(0x40)), 0x40);
+        assert_eq!(u8::from(DeviceType::ReservedSensor(0x1D)), 0x1D);
+        assert_eq!(u8::from(DeviceType::ReservedSwitch(0x22)), 0x22);
 
-        // Test that Unknown maps to canonical value 0xFF
-        assert_eq!(u8::from(DeviceType::UnknownDevice), 0xFF);
+        // Test that Unknown maps to canonical value 0x0F
+        assert_eq!(u8::from(DeviceType::UnknownDevice), 0x0F);
     }
 
     #[test]

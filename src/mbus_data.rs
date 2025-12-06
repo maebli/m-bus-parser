@@ -1,5 +1,6 @@
 #[cfg(feature = "std")]
 use prettytable::{format, row, Table};
+use wireless_mbus_link_layer::WirelessFrame;
 
 use crate::user_data;
 use crate::MbusError;
@@ -30,7 +31,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
                 if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
                     user_data = Some(x);
                     if let Ok(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                        long_tpl_header,
+                        long_tpl_header: _,
                         variable_data_block,
                     }) = user_data::UserDataBlock::try_from(*data)
                     {
@@ -52,7 +53,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for MbusData<'a, wireless_mbus_link_layer::WirelessFrame<'a>> {
+impl<'a> TryFrom<&'a [u8]> for MbusData<'a, WirelessFrame<'a>> {
     type Error = MbusError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
@@ -61,38 +62,23 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, wireless_mbus_link_layer::WirelessFr
         let mut data_records = None;
 
         // Extract application layer data from wireless frame
-        match &frame {
-            wireless_mbus_link_layer::WirelessFrame::FormatA { data, .. } => {
-                if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
-                    user_data = Some(x);
-                    match user_data::UserDataBlock::try_from(*data) {
-                        Ok(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                            long_tpl_header,
-                            variable_data_block,
-                        }) => {
-                            data_records = Some(variable_data_block.into());
-                        }
-                        Ok(user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
-                            short_tpl_header,
-                            variable_data_block,
-                        }) => {
-                            data_records = Some(variable_data_block.into());
-                        }
-                        _ => (),
-                    }
+        let wireless_mbus_link_layer::WirelessFrame { data, .. } = &frame;
+        if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
+            user_data = Some(x);
+            match user_data::UserDataBlock::try_from(*data) {
+                Ok(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                    long_tpl_header: _,
+                    variable_data_block,
+                }) => {
+                    data_records = Some(variable_data_block.into());
                 }
-            }
-            wireless_mbus_link_layer::WirelessFrame::FormatB { data, .. } => {
-                if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
-                    user_data = Some(x);
-                    if let Ok(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                        long_tpl_header,
-                        variable_data_block,
-                    }) = user_data::UserDataBlock::try_from(*data)
-                    {
-                        data_records = Some(variable_data_block.into());
-                    }
+                Ok(user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                    short_tpl_header: _,
+                    variable_data_block,
+                }) => {
+                    data_records = Some(variable_data_block.into());
                 }
+                _ => (),
             }
         };
 
@@ -197,7 +183,7 @@ fn parse_to_table(input: &str) -> String {
                 table.add_row(row![function, address]);
 
                 table_output.push_str(&table.to_string());
-
+                let mut _is_encyrpted = false;
                 if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block: _,
@@ -232,8 +218,8 @@ fn parse_to_table(input: &str) -> String {
                     info_table.add_row(row!["Version", long_tpl_header.version]);
                     info_table.add_row(row!["DeviceType", long_tpl_header.device_type]);
                     table_output.push_str(&info_table.to_string());
+                    _is_encyrpted = long_tpl_header.is_encrypted();
                 }
-
                 let mut value_table = Table::new();
                 value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
                 value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
@@ -285,135 +271,40 @@ fn parse_to_table(input: &str) -> String {
     if let Ok(parsed_data) =
         MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(data.as_slice())
     {
-        match &parsed_data.frame {
-            wireless_mbus_link_layer::WirelessFrame::FormatA {
-                function,
-                manufacturer_id,
-                data: _,
-            } => {
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                table.set_titles(row!["Field", "Value"]);
-                table.add_row(row!["Function", format!("{:?}", function)]);
-                table.add_row(row![
-                    "Manufacturer Code",
-                    format!("{:?}", manufacturer_id.manufacturer_code)
-                ]);
-                table.add_row(row![
-                    "Identification Number",
-                    format!("{:?}", manufacturer_id.identification_number)
-                ]);
-                table.add_row(row![
-                    "Device Type",
-                    format!("{:?}", manufacturer_id.device_type)
-                ]);
-                table.add_row(row!["Version", format!("{:?}", manufacturer_id.version)]);
-                table.add_row(row![
-                    "Is globally Unique Id",
-                    format!("{:?}", manufacturer_id.is_unique_globally)
-                ]);
-                table_output.push_str(&table.to_string());
-
-                match &parsed_data.user_data {
-                    Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                        long_tpl_header,
-                        variable_data_block: _,
-                    }) => {
-                        let mut info_table = Table::new();
-                        info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                        info_table.set_titles(row!["Field", "Value"]);
-                        info_table.add_row(row![
-                            "Identification Number",
-                            long_tpl_header.identification_number
-                        ]);
-                        info_table.add_row(row![
-                            "Manufacturer",
-                            long_tpl_header
-                                .manufacturer
-                                .as_ref()
-                                .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m))
-                        ]);
-                        info_table.add_row(row![
-                            "Access Number",
-                            long_tpl_header.short_tpl_header.access_number
-                        ]);
-                        info_table.add_row(row!["Status", long_tpl_header.short_tpl_header.status]);
-                        info_table.add_row(row![
-                            "Security Mode",
-                            long_tpl_header
-                                .short_tpl_header
-                                .configuration_field
-                                .security_mode()
-                        ]);
-                        info_table.add_row(row!["Version", long_tpl_header.version]);
-                        info_table.add_row(row!["Device Type", long_tpl_header.device_type]);
-                        table_output.push_str(&info_table.to_string());
-                    }
-                    Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
-                        short_tpl_header,
-                        variable_data_block,
-                    }) => {
-                        let mut info_table = Table::new();
-                        info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                        info_table.set_titles(row!["Field", "Value"]);
-                        info_table.add_row(row!["Access Number", short_tpl_header.access_number]);
-                        info_table.add_row(row!["Status", short_tpl_header.status]);
-                        info_table.add_row(row![
-                            "Security Mode",
-                            short_tpl_header.configuration_field.security_mode()
-                        ]);
-                        table_output.push_str(&info_table.to_string());
-                    }
-                    _ => (),
-                }
-
-                let mut value_table = Table::new();
-                value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
-                if let Some(data_records) = &parsed_data.data_records {
-                    for record in data_records.clone().flatten() {
-                        let value_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .value_information
-                        {
-                            Some(ref x) => format!("{}", x),
-                            None => "None".to_string(),
-                        };
-                        let data_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .data_information
-                        {
-                            Some(ref x) => format!("{}", x),
-                            None => "None".to_string(),
-                        };
-                        value_table.add_row(row![
-                            format!("({}{}", record.data, value_information),
-                            data_information,
-                            record.data_record_header_hex(),
-                            record.data_hex()
-                        ]);
-                    }
-                }
-                table_output.push_str(&value_table.to_string());
-            }
-            wireless_mbus_link_layer::WirelessFrame::FormatB {
-                function,
-                manufacturer_id,
-                data,
-            } => {
-                let mut table = Table::new();
-                table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                table.set_titles(row!["Field", "Value"]);
-                table.add_row(row!["Function", format!("{:?}", function)]);
-                table_output.push_str(&table.to_string());
-
-                if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+        let wireless_mbus_link_layer::WirelessFrame {
+            function,
+            manufacturer_id,
+            data,
+        } = &parsed_data.frame;
+        {
+            let mut table = Table::new();
+            table.set_format(*format::consts::FORMAT_BOX_CHARS);
+            table.set_titles(row!["Field", "Value"]);
+            table.add_row(row!["Function", format!("{:?}", function)]);
+            table.add_row(row![
+                "Manufacturer Code",
+                format!("{:?}", manufacturer_id.manufacturer_code)
+            ]);
+            table.add_row(row![
+                "Identification Number",
+                format!("{:?}", manufacturer_id.identification_number)
+            ]);
+            table.add_row(row![
+                "Device Type",
+                format!("{:?}", manufacturer_id.device_type)
+            ]);
+            table.add_row(row!["Version", format!("{:?}", manufacturer_id.version)]);
+            table.add_row(row![
+                "Is globally Unique Id",
+                format!("{:?}", manufacturer_id.is_unique_globally)
+            ]);
+            table_output.push_str(&table.to_string());
+            let mut is_encrypted = false;
+            match &parsed_data.user_data {
+                Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block: _,
-                }) = &parsed_data.user_data
-                {
+                }) => {
                     let mut info_table = Table::new();
                     info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
                     info_table.set_titles(row!["Field", "Value"]);
@@ -443,8 +334,37 @@ fn parse_to_table(input: &str) -> String {
                     info_table.add_row(row!["Version", long_tpl_header.version]);
                     info_table.add_row(row!["Device Type", long_tpl_header.device_type]);
                     table_output.push_str(&info_table.to_string());
+                    is_encrypted = long_tpl_header.is_encrypted();
                 }
+                Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
+                    short_tpl_header,
+                    variable_data_block: _,
+                }) => {
+                    let mut info_table = Table::new();
+                    info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
+                    info_table.set_titles(row!["Field", "Value"]);
+                    info_table.add_row(row!["Access Number", short_tpl_header.access_number]);
+                    info_table.add_row(row!["Status", short_tpl_header.status]);
+                    info_table.add_row(row![
+                        "Security Mode",
+                        short_tpl_header.configuration_field.security_mode()
+                    ]);
+                    table_output.push_str(&info_table.to_string());
+                    is_encrypted = short_tpl_header.is_encrypted();
+                }
+                _ => (),
+            }
 
+            if is_encrypted {
+                table_output.push_str("Encrypted Payload : ");
+                table_output.push_str(
+                    &data
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<String>(),
+                );
+                table_output.push('\n');
+            } else {
                 let mut value_table = Table::new();
                 value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
                 value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
@@ -641,10 +561,7 @@ pub fn parse_to_csv(input: &str) -> String {
     if let Ok(parsed_data) =
         MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(data.as_slice())
     {
-        let frame_type = match &parsed_data.frame {
-            wireless_mbus_link_layer::WirelessFrame::FormatA { .. } => "WirelessFormatA",
-            wireless_mbus_link_layer::WirelessFrame::FormatB { .. } => "WirelessFormatB",
-        };
+        let frame_type = "Wireless";
 
         let data_point_count = parsed_data
             .data_records
@@ -679,7 +596,7 @@ pub fn parse_to_csv(input: &str) -> String {
         match &parsed_data.user_data {
             Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                 long_tpl_header,
-                variable_data_block,
+                variable_data_block: _,
             }) => {
                 row.extend_from_slice(&[
                     long_tpl_header.identification_number.to_string(),
@@ -782,7 +699,7 @@ mod tests {
         let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
         let csv_output = parse_to_csv(input);
 
-        let expected = "FrameType,Function,Address,Identification Number,Manufacturer,Access Number,Status,Security Mode,Version,Device Type,Device Type,DataPoint1_Value,DataPoint1_Info,DataPoint2_Value,DataPoint2_Info,DataPoint3_Value,DataPoint3_Info,DataPoint4_Value,DataPoint4_Info,DataPoint5_Value,DataPoint5_Info,DataPoint6_Value,DataPoint6_Info,DataPoint7_Value,DataPoint7_Info,DataPoint8_Value,DataPoint8_Info,DataPoint9_Value,DataPoint9_Info,DataPoint10_Value,DataPoint10_Info\nLongFrame,\"RspUd (ACD: false, DFC: false)\",Primary (1),02205100,\"ManufacturerCode { code: ['S', 'L', 'B'] }\",0,\"Permanent error, Manufacturer specific 3\",No encryption used,2,Heat,(0))e4[Wh],\"0,Inst,32-bit Integer\",(3))e-1[m³](Volume),\"0,Inst,BCD 8-digit\",(0))e3[W],\"0,Inst,BCD 6-digit\",(0))e-3[m³h⁻¹],\"0,Inst,BCD 6-digit\",(1288))e-1[°C],\"0,Inst,BCD 4-digit\",(516))e-1[°C],\"0,Inst,BCD 4-digit\",(7723))e-2[°K],\"0,Inst,BCD 6-digit\",(12/Jan/12))(Date),\"0,Inst,Date Type G\",(3383))[day],\"0,Inst,16-bit Integer\",\"(Manufacturer Specific: [15, 96, 0])None\",None\n";
+        let expected = "FrameType,Function,Address,Identification Number,Manufacturer,Access Number,Status,Security Mode,Version,Device Type,DataPoint1_Value,DataPoint1_Info,DataPoint2_Value,DataPoint2_Info,DataPoint3_Value,DataPoint3_Info,DataPoint4_Value,DataPoint4_Info,DataPoint5_Value,DataPoint5_Info,DataPoint6_Value,DataPoint6_Info,DataPoint7_Value,DataPoint7_Info,DataPoint8_Value,DataPoint8_Info,DataPoint9_Value,DataPoint9_Info,DataPoint10_Value,DataPoint10_Info\nLongFrame,\"RspUd (ACD: false, DFC: false)\",Primary (1),02205100,SLB,0,\"Permanent error, Manufacturer specific 3\",No encryption used,2,Heat Meter (Return),(0)e4[Wh],\"0,Inst,32-bit Integer\",(3)e-1[m³](Volume),\"0,Inst,BCD 8-digit\",(0)e3[W],\"0,Inst,BCD 6-digit\",(0)e-3[m³h⁻¹],\"0,Inst,BCD 6-digit\",(1288)e-1[°C],\"0,Inst,BCD 4-digit\",(516)e-1[°C],\"0,Inst,BCD 4-digit\",(7723)e-2[°K],\"0,Inst,BCD 6-digit\",(12/Jan/12)(Date),\"0,Inst,Date Type G\",(3383)[day],\"0,Inst,16-bit Integer\",\"(Manufacturer Specific: [15, 96, 0]None\",None\n";
 
         assert_eq!(csv_output, expected);
     }
@@ -795,11 +712,11 @@ mod tests {
         let yaml_output = parse_to_yaml(input);
 
         // First line of YAML output to test against - we'll test just the beginning to avoid a massive string
-        let expected_start = "frame: !LongFrame\n  function: !RspUd\n    acd: false\n    dfc: false\n  address: !Primary 1\nuser_data: !VariableDataStructure\n";
+        let expected_start = "frame: !LongFrame\n  function: !RspUd\n    acd: false\n    dfc: false\n  address: !Primary 1\nuser_data: !VariableDataStructureWithLongTplHeader\n";
 
         assert!(yaml_output.starts_with(expected_start));
         // Additional checks for specific content in the YAML
-        assert!(yaml_output.contains("device_type: Heat Meter"));
+        assert!(yaml_output.contains("device_type: HeatMeterReturn"));
         assert!(yaml_output.contains("identification_number:"));
         assert!(yaml_output.contains("status: PERMANENT_ERROR | MANUFACTURER_SPECIFIC_3"));
     }
@@ -816,7 +733,7 @@ mod tests {
         assert!(json_output.contains("\"LongFrame\""));
         assert!(json_output.contains("\"RspUd\""));
         assert!(json_output.contains("\"number\": 2205100"));
-        assert!(json_output.contains("\"device type\": \"Heat\""));
+        assert!(json_output.contains("\"device_type\": \"HeatMeterReturn\""));
         assert!(json_output.contains("\"status\": \"PERMANENT_ERROR | MANUFACTURER_SPECIFIC_3\""));
 
         // Verify JSON structure is valid
@@ -839,7 +756,7 @@ mod tests {
         assert!(table_output.contains("Primary (1)"));
         assert!(table_output.contains("Identification Number"));
         assert!(table_output.contains("02205100"));
-        assert!(table_output.contains("ManufacturerCode { code: ['S', 'L', 'B'] }"));
+        assert!(table_output.contains("SLB"));
 
         // Data point verifications
         assert!(table_output.contains("(0)e4[Wh]"));

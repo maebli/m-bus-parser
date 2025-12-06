@@ -1,21 +1,11 @@
 use m_bus_core::{DeviceType, Function, IdentificationNumber, ManufacturerCode};
 
-#[cfg(feature = "std")]
-use std::fmt;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum WirelessFrame<'a> {
-    FormatA {
-        function: Function,
-        manufacturer_id: ManufacturerId,
-        data: &'a [u8],
-    },
-    FormatB {
-        function: Function,
-        manufacturer_id: ManufacturerId,
-        data: &'a [u8],
-    },
+pub struct WirelessFrame<'a> {
+    pub function: Function,
+    pub manufacturer_id: ManufacturerId,
+    pub data: &'a [u8],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,31 +56,23 @@ impl<'a> TryFrom<&'a [u8]> for WirelessFrame<'a> {
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
         let length = data.len();
         let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
-        let c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
+        let _c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
         let manufacturer_id = ManufacturerId::try_from(&data[2..])?;
 
-        match length_byte {
-            length => Ok(WirelessFrame::FormatA {
+        // In wireless M-Bus, the L-field contains the number of bytes following the L-field
+        if length_byte + 1 == length {
+            return Ok(WirelessFrame {
                 function: Function::SndNk { prm: false },
                 manufacturer_id,
                 data: &data[10..],
-            }),
-            l if l == length - 2 => Ok(WirelessFrame::FormatB {
-                function: Function::SndNk { prm: false },
-                manufacturer_id,
-                data: &data[10..],
-            }),
-            _ => Err(FrameError::WrongLength {
-                expected: length_byte,
-                actual: data.len(),
-            }),
+            });
         }
-    }
-}
 
-fn validate_crc(data: &[u8]) -> Result<(), FrameError> {
-    let crc_byte_index = data.len() - 2;
-    Ok(())
+        Err(FrameError::WrongLength {
+            expected: length_byte + 1,
+            actual: data.len(),
+        })
+    }
 }
 
 #[cfg(test)]

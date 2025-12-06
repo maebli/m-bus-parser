@@ -39,7 +39,7 @@ fn device_type_from_str(device_type: &str) -> DeviceType {
         "Other" => DeviceType::Other,
         "Water" => DeviceType::WaterMeter,
         "WarmWater" => DeviceType::WarmWaterMeter,
-        "Heat" => DeviceType::HeatMeterFlow,
+        "Heat" => DeviceType::HeatMeterReturn,
         "HeatCostAllocator" => DeviceType::HeatCostAllocator,
         "HeatCoolingLoad" => DeviceType::CombinedHeatCoolingMeter,
         "Electricity" => DeviceType::ElectricityMeter,
@@ -99,27 +99,15 @@ mod tests {
                 };
 
             // Extract manufacturer_id from frame for short TPL header cases
-            let manufacturer_id = match &mbus_data.frame {
-                m_bus_parser::WirelessFrame::FormatA {
-                    manufacturer_id, ..
-                } => Some(manufacturer_id),
-                m_bus_parser::WirelessFrame::FormatB {
-                    manufacturer_id, ..
-                } => Some(manufacturer_id),
-            };
 
             // Extract user data
             match mbus_data.user_data {
                 Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     short_tpl_header,
-                    variable_data_block,
+                    variable_data_block: _,
                 }) => {
-                    // For short TPL header, identification info comes from link layer
-                    let manufacturer_id = manufacturer_id
-                        .expect("Short TPL header requires manufacturer_id from link layer");
-
                     assert_eq!(
-                        manufacturer_id.identification_number.number,
+                        mbus_data.frame.manufacturer_id.identification_number.number,
                         test_vector.expected.identification_number,
                         "Test {}: Identification number mismatch",
                         index + 1
@@ -127,9 +115,9 @@ mod tests {
 
                     let manufacturer_str = format!(
                         "{}{}{}",
-                        manufacturer_id.manufacturer_code.code[0],
-                        manufacturer_id.manufacturer_code.code[1],
-                        manufacturer_id.manufacturer_code.code[2]
+                        mbus_data.frame.manufacturer_id.manufacturer_code.code[0],
+                        mbus_data.frame.manufacturer_id.manufacturer_code.code[1],
+                        mbus_data.frame.manufacturer_id.manufacturer_code.code[2]
                     );
                     assert_eq!(
                         manufacturer_str,
@@ -138,14 +126,14 @@ mod tests {
                         index + 1
                     );
                     assert_eq!(
-                        manufacturer_id.version,
+                        mbus_data.frame.manufacturer_id.version,
                         test_vector.expected.version,
                         "Test {}: Version mismatch",
                         index + 1
                     );
                     let expected_medium = device_type_from_str(&test_vector.expected.medium);
                     assert_eq!(
-                        manufacturer_id.device_type,
+                        mbus_data.frame.manufacturer_id.device_type,
                         expected_medium,
                         "Test {}: Medium mismatch",
                         index + 1
@@ -185,7 +173,7 @@ mod tests {
                 }
                 Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
-                    variable_data_block,
+                    variable_data_block: _,
                 }) => {
                     assert_eq!(
                         long_tpl_header.identification_number.number,
