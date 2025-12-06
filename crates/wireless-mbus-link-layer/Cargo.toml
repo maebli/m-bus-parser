@@ -1,0 +1,17 @@
+[package]
+name = "wireless-mbus-link-layer"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+std = ["m-bus-core/std"]
+serde = ["dep:serde", "m-bus-core/serde"]
+defmt = ["dep:defmt"]
+
+[dependencies]
+crc16 = "0.4.0"
+m-bus-core = { version = "0.1.0", path = "../m-bus-core" }
+serde = { version = "1.0", features = ["derive"], optional = true }
+defmt = { version = "1.0.1", optional = true }
+

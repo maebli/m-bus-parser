@@ -2,9 +2,11 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
+use m_bus_core::{ConfigurationField, DeviceType, ManufacturerCode};
 use variable_user_data::DataRecordError;
 
 use self::data_record::DataRecord;
+use m_bus_core::ApplicationLayerError;
 
 pub mod data_information;
 pub mod data_record;
@@ -12,16 +14,19 @@ pub mod value_information;
 pub mod variable_user_data;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(into = "Vec<DataRecord>"))]
+#[cfg_attr(
+    all(feature = "serde", feature = "std"),
+    serde(into = "Vec<DataRecord>")
+)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataRecords<'a> {
     offset: usize,
     data: &'a [u8],
-    fixed_data_header: Option<&'a FixedDataHeader>,
+    long_tpl_header: Option<&'a LongTplHeader>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "std")]
 impl<'a> From<DataRecords<'a>> for Vec<DataRecord<'a>> {
     fn from(value: DataRecords<'a>) -> Self {
         let value: Result<Vec<_>, _> = value.collect();
@@ -46,8 +51,8 @@ impl<'a> Iterator for DataRecords<'a> {
                     self.offset += 1;
                 }
                 _ => {
-                    let record = if let Some(fixed_data_header) = self.fixed_data_header {
-                        DataRecord::try_from((self.data.get(self.offset..)?, fixed_data_header))
+                    let record = if let Some(long_tpl_header) = self.long_tpl_header {
+                        DataRecord::try_from((self.data.get(self.offset..)?, long_tpl_header))
                     } else {
                         DataRecord::try_from(self.data.get(self.offset..)?)
                     };
@@ -66,11 +71,11 @@ impl<'a> Iterator for DataRecords<'a> {
 
 impl<'a> DataRecords<'a> {
     #[must_use]
-    pub const fn new(data: &'a [u8], fixed_data_header: Option<&'a FixedDataHeader>) -> Self {
+    pub const fn new(data: &'a [u8], long_tpl_header: Option<&'a LongTplHeader>) -> Self {
         DataRecords {
             offset: 0,
             data,
-            fixed_data_header,
+            long_tpl_header,
         }
     }
 }
@@ -169,6 +174,41 @@ impl From<ControlInformation> for Direction {
                 Self::SlaveToMaster
             }
             ControlInformation::ResponseWithFixedDataStructure => Self::SlaveToMaster,
+            ControlInformation::DataSentWithShortTransportLayer => Self::MasterToSlave,
+            ControlInformation::DataSentWithLongTransportLayer => Self::MasterToSlave,
+            ControlInformation::CosemDataWithLongTransportLayer => Self::MasterToSlave,
+            ControlInformation::CosemDataWithShortTransportLayer => Self::MasterToSlave,
+            ControlInformation::ObisDataReservedLongTransportLayer => Self::MasterToSlave,
+            ControlInformation::ObisDataReservedShortTransportLayer => Self::MasterToSlave,
+            ControlInformation::ApplicationLayerFormatFrameNoTransport => Self::MasterToSlave,
+            ControlInformation::ApplicationLayerFormatFrameShortTransport => Self::MasterToSlave,
+            ControlInformation::ApplicationLayerFormatFrameLongTransport => Self::MasterToSlave,
+            ControlInformation::ClockSyncAbsolute => Self::MasterToSlave,
+            ControlInformation::ClockSyncRelative => Self::MasterToSlave,
+            ControlInformation::ApplicationErrorShortTransport => Self::SlaveToMaster,
+            ControlInformation::ApplicationErrorLongTransport => Self::SlaveToMaster,
+            ControlInformation::AlarmShortTransport => Self::SlaveToMaster,
+            ControlInformation::AlarmLongTransport => Self::SlaveToMaster,
+            ControlInformation::ApplicationLayerNoTransport => Self::SlaveToMaster,
+            ControlInformation::ApplicationLayerCompactFrameNoTransport => Self::SlaveToMaster,
+            ControlInformation::ApplicationLayerShortTransport => Self::SlaveToMaster,
+            ControlInformation::ApplicationLayerCompactFrameShortTransport => Self::SlaveToMaster,
+            ControlInformation::CosemApplicationLayerLongTransport => Self::SlaveToMaster,
+            ControlInformation::CosemApplicationLayerShortTransport => Self::SlaveToMaster,
+            ControlInformation::ObisApplicationLayerReservedLongTransport => Self::SlaveToMaster,
+            ControlInformation::ObisApplicationLayerReservedShortTransport => Self::SlaveToMaster,
+            ControlInformation::TransportLayerLongReadoutToMeter => Self::MasterToSlave,
+            ControlInformation::NetworkLayerData => Self::MasterToSlave,
+            ControlInformation::FutureUse => Self::MasterToSlave,
+            ControlInformation::NetworkManagementApplication => Self::MasterToSlave,
+            ControlInformation::TransportLayerCompactFrame => Self::MasterToSlave,
+            ControlInformation::TransportLayerFormatFrame => Self::MasterToSlave,
+            ControlInformation::NetworkManagementDataReserved => Self::MasterToSlave,
+            ControlInformation::TransportLayerShortMeterToReadout => Self::SlaveToMaster,
+            ControlInformation::TransportLayerLongMeterToReadout => Self::SlaveToMaster,
+            ControlInformation::ExtendedLinkLayerI => Self::SlaveToMaster,
+            ControlInformation::ExtendedLinkLayerII => Self::SlaveToMaster,
+            ControlInformation::ExtendedLinkLayerIII => Self::SlaveToMaster,
         }
     }
 }
@@ -199,6 +239,42 @@ pub enum ControlInformation {
     SendAlarmStatus,
     ResponseWithVariableDataStructure { lsb_order: bool },
     ResponseWithFixedDataStructure,
+    // Wireless M-Bus CI values
+    DataSentWithShortTransportLayer,
+    DataSentWithLongTransportLayer,
+    CosemDataWithLongTransportLayer,
+    CosemDataWithShortTransportLayer,
+    ObisDataReservedLongTransportLayer,
+    ObisDataReservedShortTransportLayer,
+    ApplicationLayerFormatFrameNoTransport,
+    ApplicationLayerFormatFrameShortTransport,
+    ApplicationLayerFormatFrameLongTransport,
+    ClockSyncAbsolute,
+    ClockSyncRelative,
+    ApplicationErrorShortTransport,
+    ApplicationErrorLongTransport,
+    AlarmShortTransport,
+    AlarmLongTransport,
+    ApplicationLayerNoTransport,
+    ApplicationLayerCompactFrameNoTransport,
+    ApplicationLayerShortTransport,
+    ApplicationLayerCompactFrameShortTransport,
+    CosemApplicationLayerLongTransport,
+    CosemApplicationLayerShortTransport,
+    ObisApplicationLayerReservedLongTransport,
+    ObisApplicationLayerReservedShortTransport,
+    TransportLayerLongReadoutToMeter,
+    NetworkLayerData,
+    FutureUse,
+    NetworkManagementApplication,
+    TransportLayerCompactFrame,
+    TransportLayerFormatFrame,
+    NetworkManagementDataReserved,
+    TransportLayerShortMeterToReadout,
+    TransportLayerLongMeterToReadout,
+    ExtendedLinkLayerI,
+    ExtendedLinkLayerII,
+    ExtendedLinkLayerIII,
 }
 
 impl ControlInformation {
@@ -208,6 +284,53 @@ impl ControlInformation {
             0x51 => Ok(Self::SendData),
             0x52 => Ok(Self::SelectSlave),
             0x54 => Ok(Self::SynchronizeSlave),
+            0x5A => Ok(Self::DataSentWithShortTransportLayer),
+            0x5B => Ok(Self::DataSentWithLongTransportLayer),
+            0x60 => Ok(Self::CosemDataWithLongTransportLayer),
+            0x61 => Ok(Self::CosemDataWithShortTransportLayer),
+            0x64 => Ok(Self::ObisDataReservedLongTransportLayer),
+            0x65 => Ok(Self::ObisDataReservedShortTransportLayer),
+            0x69 => Ok(Self::ApplicationLayerFormatFrameNoTransport),
+            0x6A => Ok(Self::ApplicationLayerFormatFrameShortTransport),
+            0x6B => Ok(Self::ApplicationLayerFormatFrameLongTransport),
+            0x6C => Ok(Self::ClockSyncAbsolute),
+            0x6D => Ok(Self::ClockSyncRelative),
+            0x6E => Ok(Self::ApplicationErrorShortTransport),
+            0x6F => Ok(Self::ApplicationErrorLongTransport),
+            0x70 => Ok(Self::SendErrorStatus),
+            0x71 => Ok(Self::SendAlarmStatus),
+            0x72 | 0x76 => Ok(Self::ResponseWithVariableDataStructure {
+                lsb_order: byte & 0x04 != 0,
+            }),
+            0x73 | 0x77 => Ok(Self::ResponseWithFixedDataStructure),
+            0x74 => Ok(Self::AlarmShortTransport),
+            0x75 => Ok(Self::AlarmLongTransport),
+            0x78 => Ok(Self::ApplicationLayerNoTransport),
+            0x79 => Ok(Self::ApplicationLayerCompactFrameNoTransport),
+            0x7A => Ok(Self::ApplicationLayerShortTransport),
+            0x7B => Ok(Self::ApplicationLayerCompactFrameShortTransport),
+            0x7C => Ok(Self::CosemApplicationLayerLongTransport),
+            0x7D => Ok(Self::CosemApplicationLayerShortTransport),
+            0x7E => Ok(Self::ObisApplicationLayerReservedLongTransport),
+            0x7F => Ok(Self::ObisApplicationLayerReservedShortTransport),
+            0x80 => Ok(Self::TransportLayerLongReadoutToMeter),
+            0x81 => Ok(Self::NetworkLayerData),
+            0x82 => Ok(Self::FutureUse),
+            0x83 => Ok(Self::NetworkManagementApplication),
+            0x84 => Ok(Self::TransportLayerCompactFrame),
+            0x85 => Ok(Self::TransportLayerFormatFrame),
+            0x89 => Ok(Self::NetworkManagementDataReserved),
+            0x8A => Ok(Self::TransportLayerShortMeterToReadout),
+            0x8B => Ok(Self::TransportLayerLongMeterToReadout),
+            0x8C => Ok(Self::ExtendedLinkLayerI),
+            0x8D => Ok(Self::ExtendedLinkLayerII),
+            0x8E => Ok(Self::ExtendedLinkLayerIII),
+            0x90..=0x97 => Ok(Self::HashProcedure(byte - 0x90)),
+            0xB1 => Ok(Self::OutputRAMContent),
+            0xB2 => Ok(Self::WriteRAMContent),
+            0xB3 => Ok(Self::StartCalibrationTestMode),
+            0xB4 => Ok(Self::ReadEEPROM),
+            0xB6 => Ok(Self::StartSoftwareTest),
             0xB8 => Ok(Self::SetBaudRate300),
             0xB9 => Ok(Self::SetBaudRate600),
             0xBA => Ok(Self::SetBaudRate1200),
@@ -216,64 +339,10 @@ impl ControlInformation {
             0xBD => Ok(Self::SetBaudRate9600),
             0xBE => Ok(Self::SetBaudRate19200),
             0xBF => Ok(Self::SetBaudRate38400),
-            0xB1 => Ok(Self::OutputRAMContent),
-            0xB2 => Ok(Self::WriteRAMContent),
-            0xB3 => Ok(Self::StartCalibrationTestMode),
-            0xB4 => Ok(Self::ReadEEPROM),
-            0xB6 => Ok(Self::StartSoftwareTest),
-            0x90..=0x97 => Ok(Self::HashProcedure(byte - 0x90)),
-            0x70 => Ok(Self::SendErrorStatus),
-            0x71 => Ok(Self::SendAlarmStatus),
-            0x72 | 0x76 => Ok(Self::ResponseWithVariableDataStructure {
-                lsb_order: byte & 0x04 != 0,
-            }),
-            0x73 | 0x77 => Ok(Self::ResponseWithFixedDataStructure),
             _ => Err(ApplicationLayerError::InvalidControlInformation { byte }),
         }
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum ApplicationLayerError {
-    MissingControlInformation,
-    InvalidControlInformation { byte: u8 },
-    IdentificationNumberError { digits: [u8; 4], number: u32 },
-    InvalidManufacturerCode { code: u16 },
-    InsufficientData,
-}
-
-#[cfg(feature = "std")]
-impl fmt::Display for ApplicationLayerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ApplicationLayerError::MissingControlInformation => {
-                write!(f, "Missing control information")
-            }
-            ApplicationLayerError::InvalidControlInformation { byte } => {
-                write!(f, "Invalid control information: {}", byte)
-            }
-            ApplicationLayerError::InvalidManufacturerCode { code } => {
-                write!(f, "Invalid manufacturer code: {}", code)
-            }
-            ApplicationLayerError::IdentificationNumberError { digits, number } => {
-                write!(
-                    f,
-                    "Invalid identification number: {:?}, number: {}",
-                    digits, number
-                )
-            }
-            ApplicationLayerError::InsufficientData => {
-                write!(f, "Insufficient data")
-            }
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for ApplicationLayerError {}
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -409,18 +478,6 @@ impl Counter {
     }
 }
 
-#[derive(Debug, PartialEq)]
-#[allow(dead_code)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct FixedDataHeder {
-    identification_number: IdentificationNumber,
-    manufacturer_code: ManufacturerCode,
-    version: u8,
-    medium: Medium,
-    access_number: u8,
-    status: StatusField,
-    signature: u16,
-}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
@@ -434,169 +491,113 @@ pub enum UserDataBlock<'a> {
         identification_number: IdentificationNumber,
         access_number: u8,
         status: StatusField,
-        medium_ad_unit: u16,
+        device_type_and_unit: u16,
         counter1: Counter,
         counter2: Counter,
     },
-    VariableDataStructure {
-        fixed_data_header: FixedDataHeader,
+    VariableDataStructureWithLongTplHeader {
+        long_tpl_header: LongTplHeader,
+        #[cfg_attr(feature = "serde", serde(skip_serializing))]
+        variable_data_block: &'a [u8],
+    },
+
+    VariableDataStructureWithShortTplHeader {
+        short_tpl_header: ShortTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
     },
 }
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum Medium {
-    Other,
-    Oil,
-    Electricity,
-    Gas,
-    Heat,
-    Steam,
-    HotWater,
-    Water,
-    HeatCostAllocator,
-    Reserved,
-    GasMode2,
-    HeatMode2,
-    HotWaterMode2,
-    WaterMode2,
-    HeatCostAllocator2,
-    ReservedMode2,
-    Unknown,
-    ColdWater,
-    DualWater,
-    Pressure,
-    ADConverter,
-}
 
-impl Medium {
+impl<'a> UserDataBlock<'a> {
+    /// Check if this UserDataBlock contains encrypted data
+    ///
+    /// Returns `Some(true)` if encrypted, `Some(false)` if not encrypted,
+    /// or `None` if the encryption state is unknown for this block type.
     #[must_use]
-    pub const fn from_byte(byte: u8) -> Self {
-        match byte {
-            0x00 => Self::Other,
-            0x01 => Self::Oil,
-            0x02 => Self::Electricity,
-            0x03 => Self::Gas,
-            0x04 => Self::Heat,
-            0x05 => Self::Steam,
-            0x06 => Self::HotWater,
-            0x07 => Self::Water,
-            0x08 => Self::HeatCostAllocator,
-            0x09 => Self::Reserved, // Note: Reserved for 0x09 from the first set
-            0x0A => Self::GasMode2,
-            0x0B => Self::HeatMode2,
-            0x0C => Self::HotWaterMode2,
-            0x0D => Self::WaterMode2,
-            0x0E => Self::HeatCostAllocator2,
-            0x0F => Self::ReservedMode2,
-            // Unique mediums from the second set
-            0x10 => Self::Reserved, // Reserved range
-            0x11 => Self::Reserved, // Reserved range
-            0x12 => Self::Reserved, // Reserved range
-            0x13 => Self::Reserved, // Reserved range
-            0x14 => Self::Reserved, // Reserved range
-            0x15 => Self::Reserved, // Reserved range
-            0x16 => Self::ColdWater,
-            0x17 => Self::DualWater,
-            0x18 => Self::Pressure,
-            0x19 => Self::ADConverter,
-            // Extended reserved range from the second set
-            0x20..=0xFF => Self::Reserved,
-            _ => Self::Unknown,
+    pub fn is_encrypted(&self) -> Option<bool> {
+        match self {
+            Self::VariableDataStructureWithLongTplHeader {
+                long_tpl_header, ..
+            } => Some(long_tpl_header.is_encrypted()),
+            _ => None,
+        }
+    }
+
+    /// Decrypt the variable data block if encrypted
+    ///
+    /// # Arguments
+    /// * `provider` - The key provider to use for decryption
+    /// * `output` - Output buffer for decrypted data (must be at least as large as encrypted data)
+    ///
+    /// # Returns
+    /// The number of bytes written to the output buffer
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - This is not a VariableDataStructure (`UnknownEncryptionState`)
+    /// - The data is not encrypted (`NotEncrypted`)
+    /// - The key is not found (`KeyNotFound`)
+    /// - Decryption fails (`DecryptionFailed`, `UnsupportedMode`, etc.)
+    #[cfg(feature = "decryption")]
+    pub fn decrypt_variable_data<K: crate::decryption::KeyProvider>(
+        &self,
+        provider: &K,
+        output: &mut [u8],
+    ) -> Result<usize, crate::decryption::DecryptionError> {
+        match self {
+            Self::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                variable_data_block,
+            } => {
+                if !long_tpl_header.is_encrypted() {
+                    return Err(crate::decryption::DecryptionError::NotEncrypted);
+                }
+
+                let payload = crate::decryption::EncryptedPayload::from_long_data_header(
+                    long_tpl_header,
+                    variable_data_block,
+                )?;
+
+                payload.decrypt_into(provider, output)
+            }
+            _ => Err(crate::decryption::DecryptionError::UnknownEncryptionState),
         }
     }
 }
 
-#[cfg(feature = "std")]
-impl fmt::Display for Medium {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let medium = match self {
-            Self::Other => "Other",
-            Self::Oil => "Oil",
-            Self::Electricity => "Electricity",
-            Self::Gas => "Gas",
-            Self::Heat => "Heat",
-            Self::Steam => "Steam",
-            Self::HotWater => "Hot water",
-            Self::Water => "Water",
-            Self::HeatCostAllocator => "Heat Cost Allocator",
-            Self::Reserved => "Reserved",
-            Self::GasMode2 => "Gas Mode 2",
-            Self::HeatMode2 => "Heat Mode 2",
-            Self::HotWaterMode2 => "Hot Water Mode 2",
-            Self::WaterMode2 => "Water Mode 2",
-            Self::HeatCostAllocator2 => "Heat Cost Allocator 2",
-            Self::ReservedMode2 => "Reserved",
-            Self::Unknown => "Unknown",
-            Self::ColdWater => "Cold Water",
-            Self::DualWater => "Dual Water",
-            Self::Pressure => "Pressure",
-            Self::ADConverter => "AD Converter",
-        };
-        write!(f, "{}", medium)
-    }
-}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct FixedDataHeader {
+pub struct LongTplHeader {
     pub identification_number: IdentificationNumber,
     pub manufacturer: Result<ManufacturerCode, ApplicationLayerError>,
     pub version: u8,
-    pub medium: Medium,
-    pub access_number: u8,
-    pub status: StatusField,
-    pub signature: u16,
+    pub device_type: DeviceType,
+    pub short_tpl_header: ShortTplHeader,
     pub lsb_order: bool,
 }
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ManufacturerCode {
-    pub code: [char; 3],
+pub struct ShortTplHeader {
+    pub access_number: u8,
+    pub status: StatusField,
+    pub configuration_field: ConfigurationField,
 }
 
-impl ManufacturerCode {
-    pub const fn from_id(id: u16) -> Result<Self, ApplicationLayerError> {
-        let first_letter = ((id / (32 * 32)) + 64) as u8 as char;
-        let second_letter = (((id % (32 * 32)) / 32) + 64) as u8 as char;
-        let third_letter = ((id % 32) + 64) as u8 as char;
-
-        if first_letter.is_ascii_uppercase()
-            && second_letter.is_ascii_uppercase()
-            && third_letter.is_ascii_uppercase()
-        {
-            Ok(Self {
-                code: [first_letter, second_letter, third_letter],
-            })
-        } else {
-            Err(ApplicationLayerError::InvalidManufacturerCode { code: id })
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl fmt::Display for ManufacturerCode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}", self.code[0], self.code[1], self.code[2])
-    }
-}
-
-#[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct MeasuredMedium {
-    pub medium: Medium,
-}
-
-impl MeasuredMedium {
+impl LongTplHeader {
+    /// Check if the data in this header is encrypted
+    ///
+    /// Returns `true` if the security mode indicates encryption is used,
+    /// `false` otherwise.
     #[must_use]
-    pub const fn new(byte: u8) -> Self {
-        Self {
-            medium: Medium::from_byte(byte),
-        }
+    pub fn is_encrypted(&self) -> bool {
+        use m_bus_core::SecurityMode;
+        !matches!(
+            self.short_tpl_header.configuration_field.security_mode(),
+            SecurityMode::NoEncryption
+        )
     }
 }
 
@@ -607,7 +608,6 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
         if data.is_empty() {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
-
         let control_information = ControlInformation::from(
             *data
                 .first()
@@ -652,8 +652,8 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     identification_number_bytes.reverse();
                 }
 
-                Ok(UserDataBlock::VariableDataStructure {
-                    fixed_data_header: FixedDataHeader {
+                Ok(UserDataBlock::VariableDataStructureWithLongTplHeader {
+                    long_tpl_header: LongTplHeader {
                         identification_number: IdentificationNumber::from_bcd_hex_digits(
                             identification_number_bytes,
                         )?,
@@ -662,20 +662,25 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ])),
                         version: *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                        medium: MeasuredMedium::new(
-                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                        )
-                        .medium,
-                        access_number: *iter
-                            .next()
-                            .ok_or(ApplicationLayerError::InsufficientData)?,
-                        status: StatusField::from_bits_truncate(
+                        device_type: DeviceType::from(
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ),
-                        signature: u16::from_le_bytes([
-                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                            *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                        ]),
+                        short_tpl_header: ShortTplHeader {
+                            access_number: *iter
+                                .next()
+                                .ok_or(ApplicationLayerError::InsufficientData)?,
+                            status: {
+                                StatusField::from_bits_truncate(
+                                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                                )
+                            },
+                            configuration_field: {
+                                ConfigurationField::from_bytes(
+                                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                                )
+                            },
+                        },
                         lsb_order,
                     },
                     variable_data_block: data
@@ -697,7 +702,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 let status = StatusField::from_bits_truncate(
                     *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                 );
-                let medium_and_unit = u16::from_be_bytes([
+                let device_type_and_unit = u16::from_be_bytes([
                     *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                     *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                 ]);
@@ -717,15 +722,75 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     identification_number,
                     access_number,
                     status,
-                    medium_ad_unit: medium_and_unit,
+                    device_type_and_unit,
                     counter1,
                     counter2,
                 })
             }
+            ControlInformation::DataSentWithShortTransportLayer => todo!(),
+            ControlInformation::DataSentWithLongTransportLayer => todo!(),
+            ControlInformation::CosemDataWithLongTransportLayer => todo!(),
+            ControlInformation::CosemDataWithShortTransportLayer => todo!(),
+            ControlInformation::ObisDataReservedLongTransportLayer => todo!(),
+            ControlInformation::ObisDataReservedShortTransportLayer => todo!(),
+            ControlInformation::ApplicationLayerFormatFrameNoTransport => todo!(),
+            ControlInformation::ApplicationLayerFormatFrameShortTransport => todo!(),
+            ControlInformation::ApplicationLayerFormatFrameLongTransport => todo!(),
+            ControlInformation::ClockSyncAbsolute => todo!(),
+            ControlInformation::ClockSyncRelative => todo!(),
+            ControlInformation::ApplicationErrorShortTransport => todo!(),
+            ControlInformation::ApplicationErrorLongTransport => todo!(),
+            ControlInformation::AlarmShortTransport => todo!(),
+            ControlInformation::AlarmLongTransport => todo!(),
+            ControlInformation::ApplicationLayerNoTransport => todo!(),
+            ControlInformation::ApplicationLayerCompactFrameNoTransport => todo!(),
+            ControlInformation::ApplicationLayerShortTransport => {
+                let mut iter = data.iter().skip(1);
+
+                Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
+                    short_tpl_header: ShortTplHeader {
+                        access_number: *iter
+                            .next()
+                            .ok_or(ApplicationLayerError::InsufficientData)?,
+                        status: {
+                            StatusField::from_bits_truncate(
+                                *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                            )
+                        },
+                        configuration_field: {
+                            ConfigurationField::from_bytes(
+                                *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                                *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                            )
+                        },
+                    },
+                    variable_data_block: data
+                        .get(5..data.len())
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
+                })
+            }
+            ControlInformation::ApplicationLayerCompactFrameShortTransport => todo!(),
+            ControlInformation::CosemApplicationLayerLongTransport => todo!(),
+            ControlInformation::CosemApplicationLayerShortTransport => todo!(),
+            ControlInformation::ObisApplicationLayerReservedLongTransport => todo!(),
+            ControlInformation::ObisApplicationLayerReservedShortTransport => todo!(),
+            ControlInformation::TransportLayerLongReadoutToMeter => todo!(),
+            ControlInformation::NetworkLayerData => todo!(),
+            ControlInformation::FutureUse => todo!(),
+            ControlInformation::NetworkManagementApplication => todo!(),
+            ControlInformation::TransportLayerCompactFrame => todo!(),
+            ControlInformation::TransportLayerFormatFrame => todo!(),
+            ControlInformation::NetworkManagementDataReserved => todo!(),
+            ControlInformation::TransportLayerShortMeterToReadout => todo!(),
+            ControlInformation::TransportLayerLongMeterToReadout => todo!(),
+            ControlInformation::ExtendedLinkLayerI => todo!(),
+            ControlInformation::ExtendedLinkLayerII => todo!(),
+            ControlInformation::ExtendedLinkLayerIII => todo!(),
         }
     }
 }
 
+#[allow(clippy::unwrap_used, clippy::panic)]
 #[cfg(all(test, feature = "std"))]
 mod tests {
 
@@ -825,6 +890,74 @@ mod tests {
     }
 
     #[test]
+    fn test_device_type_roundtrip() {
+        // Test that to_byte is the inverse of from_byte for specific values
+        let test_cases = [
+            (0x00, DeviceType::Other),
+            (0x01, DeviceType::OilMeter),
+            (0x02, DeviceType::ElectricityMeter),
+            (0x03, DeviceType::GasMeter),
+            (0x04, DeviceType::HeatMeterReturn),
+            (0x05, DeviceType::SteamMeter),
+            (0x06, DeviceType::WarmWaterMeter),
+            (0x07, DeviceType::WaterMeter),
+            (0x08, DeviceType::HeatCostAllocator),
+            (0x09, DeviceType::CompressedAir),
+            (0x0A, DeviceType::CoolingMeterReturn),
+            (0x0B, DeviceType::CoolingMeterFlow),
+            (0x0C, DeviceType::HeatMeterFlow),
+            (0x0D, DeviceType::CombinedHeatCoolingMeter),
+            (0x0E, DeviceType::BusSystemComponent),
+            (0x0F, DeviceType::UnknownDevice),
+            (0x10, DeviceType::IrrigationWaterMeter),
+            (0x11, DeviceType::WaterDataLogger),
+            (0x12, DeviceType::GasDataLogger),
+            (0x13, DeviceType::GasConverter),
+            (0x14, DeviceType::CalorificValue),
+            (0x15, DeviceType::HotWaterMeter),
+            (0x16, DeviceType::ColdWaterMeter),
+            (0x17, DeviceType::DualRegisterWaterMeter),
+            (0x18, DeviceType::PressureMeter),
+            (0x19, DeviceType::AdConverter),
+            (0x1A, DeviceType::SmokeDetector),
+            (0x1B, DeviceType::RoomSensor),
+            (0x1C, DeviceType::GasDetector),
+            (0x20, DeviceType::ElectricityBreaker),
+            (0x21, DeviceType::Valve),
+            (0x25, DeviceType::CustomerUnit),
+            (0x28, DeviceType::WasteWaterMeter),
+            (0x29, DeviceType::Garbage),
+            (0x30, DeviceType::ServiceTool),
+            (0x31, DeviceType::CommunicationController),
+            (0x32, DeviceType::UnidirectionalRepeater),
+            (0x33, DeviceType::BidirectionalRepeater),
+            (0x36, DeviceType::RadioConverterSystemSide),
+            (0x37, DeviceType::RadioConverterMeterSide),
+            (0x38, DeviceType::BusConverterMeterSide),
+            (0xFF, DeviceType::Wildcard),
+            // Reserved ranges → Other or Reserved variant
+            (0x1D, DeviceType::Reserved(0x1D)), // Reserved for sensors
+            (0x22, DeviceType::Reserved(0x22)), // Reserved for switching devices
+            (0x40, DeviceType::Reserved(0x40)), // Reserved
+        ];
+
+        for (byte, expected_device_type) in test_cases {
+            let device_type = DeviceType::from(byte);
+            assert_eq!(device_type, expected_device_type);
+            assert_eq!(device_type.to_byte(), byte);
+        }
+
+        // Test that Reserved maps to canonical value 0x09
+        assert_eq!(u8::from(DeviceType::Reserved(0x09)), 0x09);
+        assert_eq!(DeviceType::from(0x09), DeviceType::Reserved(0x09));
+        assert_eq!(DeviceType::from(0x10), DeviceType::Reserved(0x10));
+        assert_eq!(DeviceType::from(0x20), DeviceType::Reserved(0x20));
+
+        // Test that Unknown maps to canonical value 0xFF
+        assert_eq!(u8::from(DeviceType::UnknownDevice), 0xFF);
+    }
+
+    #[test]
     fn test_identification_number() -> Result<(), ApplicationLayerError> {
         let data = [0x78, 0x56, 0x34, 0x12];
         let result = IdentificationNumber::from_bcd_hex_digits(data)?;
@@ -847,7 +980,7 @@ mod tests {
                 identification_number: IdentificationNumber { number: 12345678 },
                 access_number: 0x0A,
                 status: StatusField::from_bits_truncate(0x00),
-                medium_ad_unit: 0xE97E,
+                device_type_and_unit: 0xE97E,
                 counter1: Counter { count: 1 },
                 counter2: Counter { count: 135 },
             })
@@ -868,8 +1001,8 @@ mod tests {
 
     #[test]
     fn test_lsb_frame() {
-        use crate::frames::Frame;
         use crate::user_data::data_information::DataType;
+        use crate::WiredFrame;
 
         let lsb_frame: &[u8] = &[
             0x68, 0x64, 0x64, 0x68, 0x8, 0x7f, 0x76, 0x9, 0x67, 0x1, 0x6, 0x0, 0x0, 0x51, 0x4,
@@ -903,17 +1036,17 @@ mod tests {
         ];
 
         for (frame, expected_iden_nr, data_record_value) in frames {
-            let frame = Frame::try_from(frame).unwrap();
+            let frame = WiredFrame::try_from(frame).unwrap();
 
-            if let Frame::LongFrame {
+            if let WiredFrame::LongFrame {
                 function: _,
                 address: _,
                 data,
             } = frame
             {
                 let user_data_block = UserDataBlock::try_from(data).unwrap();
-                if let UserDataBlock::VariableDataStructure {
-                    fixed_data_header,
+                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
+                    long_tpl_header: fixed_data_header,
                     variable_data_block,
                 } = user_data_block
                 {
@@ -923,9 +1056,7 @@ mod tests {
                     );
 
                     let mut data_records =
-                        DataRecords::try_from((variable_data_block, &fixed_data_header))
-                            .unwrap()
-                            .flatten();
+                        DataRecords::from((variable_data_block, &fixed_data_header)).flatten();
                     data_records.next().unwrap();
                     assert_eq!(data_records.next().unwrap().data.value, data_record_value);
                 } else {
@@ -939,8 +1070,8 @@ mod tests {
 
     #[test]
     fn test_manufacturer_specific_data() {
-        use crate::frames::Frame;
         use crate::user_data::data_information::DataType;
+        use crate::WiredFrame;
 
         let manufacturer_specific_data_frame: &[u8] = &[
             0x68, 0x55, 0x55, 0x68, 0x8, 0x1e, 0x72, 0x34, 0x35, 0x58, 0x12, 0x92, 0x26, 0x18, 0x4,
@@ -951,23 +1082,22 @@ mod tests {
             0xc0, 0x0, 0x15, 0x71, 0x25, 0x0, 0x0, 0xf, 0x0, 0x0, 0x86, 0x16,
         ];
 
-        let frame = Frame::try_from(manufacturer_specific_data_frame).unwrap();
+        let frame = WiredFrame::try_from(manufacturer_specific_data_frame).unwrap();
 
-        if let Frame::LongFrame {
+        if let WiredFrame::LongFrame {
             function: _,
             address: _,
             data,
         } = frame
         {
             let user_data_block = UserDataBlock::try_from(data).unwrap();
-            if let UserDataBlock::VariableDataStructure {
-                fixed_data_header,
+            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header: fixed_data_header,
                 variable_data_block,
             } = user_data_block
             {
                 let mut data_records: Vec<_> =
-                    DataRecords::try_from((variable_data_block, &fixed_data_header))
-                        .unwrap()
+                    DataRecords::from((variable_data_block, &fixed_data_header))
                         .flatten()
                         .collect();
 
@@ -987,9 +1117,9 @@ mod tests {
 
     #[test]
     fn real32bit() {
-        use crate::frames::Frame;
         use crate::user_data::data_information::DataType;
         use crate::user_data::value_information::ValueLabel;
+        use crate::WiredFrame;
 
         let real32bit: &[u8] = &[
             0x68, 0xa7, 0xa7, 0x68, 0x8, 0x4d, 0x72, 0x82, 0x4, 0x75, 0x30, 0xee, 0x4d, 0x19, 0x4,
@@ -1006,23 +1136,22 @@ mod tests {
             0x1f, 0xa4, 0x16,
         ];
 
-        let frame = Frame::try_from(real32bit).unwrap();
+        let frame = WiredFrame::try_from(real32bit).unwrap();
 
-        if let Frame::LongFrame {
+        if let WiredFrame::LongFrame {
             function: _,
             address: _,
             data,
         } = frame
         {
             let user_data_block = UserDataBlock::try_from(data).unwrap();
-            if let UserDataBlock::VariableDataStructure {
-                fixed_data_header,
+            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header: fixed_data_header,
                 variable_data_block,
             } = user_data_block
             {
                 let data_records: Vec<DataRecord> =
-                    DataRecords::try_from((variable_data_block, &fixed_data_header))
-                        .unwrap()
+                    DataRecords::from((variable_data_block, &fixed_data_header))
                         .flatten()
                         .collect();
 

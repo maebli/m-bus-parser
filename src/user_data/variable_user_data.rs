@@ -1,5 +1,5 @@
 use super::data_information::{self};
-use super::{DataRecords, FixedDataHeader};
+use super::{DataRecords, LongTplHeader};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,8 +55,8 @@ impl<'a> From<&'a [u8]> for DataRecords<'a> {
     }
 }
 
-impl<'a> From<(&'a [u8], &'a FixedDataHeader)> for DataRecords<'a> {
-    fn from((data, fixed_data_header): (&'a [u8], &'a FixedDataHeader)) -> Self {
+impl<'a> From<(&'a [u8], &'a LongTplHeader)> for DataRecords<'a> {
+    fn from((data, fixed_data_header): (&'a [u8], &'a LongTplHeader)) -> Self {
         DataRecords::new(data, Some(fixed_data_header))
     }
 }

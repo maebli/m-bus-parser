@@ -1,10 +1,11 @@
 //! is part of the MBUS data link layer
 //! It is used to encapsulate the application layer data
+use m_bus_core::{FrameError, Function};
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
-pub enum Frame<'a> {
+pub enum WiredFrame<'a> {
     SingleCharacter {
         character: u8,
     },
@@ -26,63 +27,6 @@ pub enum Frame<'a> {
     },
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum Function {
-    SndNk,
-    SndUd { fcb: bool },
-    ReqUd2 { fcb: bool },
-    ReqUd1 { fcb: bool },
-    RspUd { acd: bool, dfc: bool },
-}
-
-#[cfg(feature = "std")]
-impl std::fmt::Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Function::SndNk => write!(f, "SndNk"),
-            Function::SndUd { fcb } => write!(f, "SndUd (FCB: {fcb})"),
-            Function::ReqUd2 { fcb } => write!(f, "ReqUd2 (FCB: {fcb})"),
-            Function::ReqUd1 { fcb } => write!(f, "ReqUd1 (FCB: {fcb})"),
-            Function::RspUd { acd, dfc } => write!(f, "RspUd (ACD: {acd}, DFC: {dfc})"),
-        }
-    }
-}
-
-impl TryFrom<u8> for Function {
-    type Error = FrameError;
-
-    fn try_from(byte: u8) -> Result<Self, Self::Error> {
-        match byte {
-            0x40 => Ok(Self::SndNk),
-            0x53 => Ok(Self::SndUd { fcb: false }),
-            0x73 => Ok(Self::SndUd { fcb: true }),
-            0x5B => Ok(Self::ReqUd2 { fcb: false }),
-            0x7B => Ok(Self::ReqUd2 { fcb: true }),
-            0x5A => Ok(Self::ReqUd1 { fcb: false }),
-            0x7A => Ok(Self::ReqUd1 { fcb: true }),
-            0x08 => Ok(Self::RspUd {
-                acd: false,
-                dfc: false,
-            }),
-            0x18 => Ok(Self::RspUd {
-                acd: false,
-                dfc: true,
-            }),
-            0x28 => Ok(Self::RspUd {
-                acd: true,
-                dfc: false,
-            }),
-            0x38 => Ok(Self::RspUd {
-                acd: true,
-                dfc: true,
-            }),
-            _ => Err(FrameError::InvalidFunction { byte }),
-        }
-    }
-}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -124,30 +68,14 @@ impl Address {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum FrameError {
-    EmptyData,
-    InvalidStartByte,
-    InvalidStopByte,
-    WrongLengthIndication,
-    LengthShort,
-    LengthShorterThanSix { length: usize },
-    WrongChecksum { expected: u8, actual: u8 },
-    InvalidControlInformation { byte: u8 },
-    InvalidFunction { byte: u8 },
-}
-
-impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
+impl<'a> TryFrom<&'a [u8]> for WiredFrame<'a> {
     type Error = FrameError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
         let first_byte = *data.first().ok_or(FrameError::EmptyData)?;
 
         if first_byte == 0xE5 {
-            return Ok(Frame::SingleCharacter { character: 0xE5 });
+            return Ok(WiredFrame::SingleCharacter { character: 0xE5 });
         }
 
         let second_byte = *data.get(1).ok_or(FrameError::LengthShort)?;
@@ -169,12 +97,12 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
                 let control_field = *data.get(4).ok_or(FrameError::LengthShort)?;
                 let address_field = *data.get(5).ok_or(FrameError::LengthShort)?;
                 match control_field {
-                    0x53 => Ok(Frame::ControlFrame {
+                    0x53 => Ok(WiredFrame::ControlFrame {
                         function: Function::try_from(control_field)?,
                         address: Address::from(address_field),
                         data: data.get(6..data.len() - 2).ok_or(FrameError::LengthShort)?,
                     }),
-                    _ => Ok(Frame::LongFrame {
+                    _ => Ok(WiredFrame::LongFrame {
                         function: Function::try_from(control_field)?,
                         address: Address::from(address_field),
                         data: data.get(6..data.len() - 2).ok_or(FrameError::LengthShort)?,
@@ -184,7 +112,7 @@ impl<'a> TryFrom<&'a [u8]> for Frame<'a> {
             0x10 => {
                 validate_checksum(data.get(1..).ok_or(FrameError::LengthShort)?)?;
                 if data.len() == 5 && *data.last().ok_or(FrameError::InvalidStopByte)? == 0x16 {
-                    Ok(Frame::ShortFrame {
+                    Ok(WiredFrame::ShortFrame {
                         function: Function::try_from(second_byte)?,
                         address: Address::from(third_byte),
                     })
@@ -220,34 +148,6 @@ fn validate_checksum(data: &[u8]) -> Result<(), FrameError> {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for FrameError {}
-
-#[cfg(feature = "std")]
-impl std::fmt::Display for FrameError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FrameError::EmptyData => write!(f, "Data is empty"),
-            FrameError::InvalidStartByte => write!(f, "Invalid start byte"),
-            FrameError::InvalidStopByte => write!(f, "Invalid stop byte"),
-            FrameError::LengthShort => write!(f, "Length mismatch"),
-            FrameError::LengthShorterThanSix { length } => {
-                write!(f, "Length is shorter than six: {}", length)
-            }
-            FrameError::WrongChecksum { expected, actual } => write!(
-                f,
-                "Wrong checksum, expected: {}, actual: {}",
-                expected, actual
-            ),
-            FrameError::InvalidControlInformation { byte } => {
-                write!(f, "Invalid control information: {}", byte)
-            }
-            FrameError::InvalidFunction { byte } => write!(f, "Invalid function: {}", byte),
-            FrameError::WrongLengthIndication => write!(f, "Wrong length indication"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,19 +168,19 @@ mod tests {
         ];
 
         assert_eq!(
-            Frame::try_from(single_character_frame),
-            Ok(Frame::SingleCharacter { character: 0xE5 })
+            WiredFrame::try_from(single_character_frame),
+            Ok(WiredFrame::SingleCharacter { character: 0xE5 })
         );
         assert_eq!(
-            Frame::try_from(short_frame),
-            Ok(Frame::ShortFrame {
+            WiredFrame::try_from(short_frame),
+            Ok(WiredFrame::ShortFrame {
                 function: Function::try_from(0x7B).unwrap(),
                 address: Address::from(0x8B)
             })
         );
         assert_eq!(
-            Frame::try_from(control_frame),
-            Ok(Frame::ControlFrame {
+            WiredFrame::try_from(control_frame),
+            Ok(WiredFrame::ControlFrame {
                 function: Function::try_from(0x53).unwrap(),
                 address: Address::from(0x01),
                 data: &[0x51]
@@ -288,8 +188,8 @@ mod tests {
         );
 
         assert_eq!(
-            Frame::try_from(example),
-            Ok(Frame::LongFrame {
+            WiredFrame::try_from(example),
+            Ok(WiredFrame::LongFrame {
                 function: Function::try_from(8).unwrap(),
                 address: Address::from(1),
                 data: &[
