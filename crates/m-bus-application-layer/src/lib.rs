@@ -16,8 +16,11 @@ use m_bus_core::ApplicationLayerError;
 
 pub mod data_information;
 pub mod data_record;
+pub mod extended_link_layer;
 pub mod value_information;
 pub mod variable_user_data;
+
+use extended_link_layer::ExtendedLinkLayer;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(
@@ -502,12 +505,14 @@ pub enum UserDataBlock<'a> {
         counter2: Counter,
     },
     VariableDataStructureWithLongTplHeader {
+        extended_link_layer: Option<ExtendedLinkLayer>,
         long_tpl_header: LongTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
     },
 
     VariableDataStructureWithShortTplHeader {
+        extended_link_layer: Option<ExtendedLinkLayer>,
         short_tpl_header: ShortTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
@@ -534,12 +539,13 @@ impl<'a> UserDataBlock<'a> {
         match self {
             Self::VariableDataStructureWithLongTplHeader {
                 long_tpl_header,
-                variable_data_block,
+                variable_data_block: _variable_data_block,
+                ..
             } => {
                 if !long_tpl_header.is_encrypted() {
-                    return Err(NotEncrypted);
+                    Err(NotEncrypted)
                 } else {
-                    return Err(UnknownEncryptionState);
+                    Err(UnknownEncryptionState)
                 }
             }
             _ => Err(crate::decryption::DecryptionError::UnknownEncryptionState),
@@ -675,6 +681,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     variable_data_block: data
                         .get(13..data.len())
                         .ok_or(ApplicationLayerError::InsufficientData)?,
+                    extended_link_layer: None,
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
@@ -756,6 +763,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     variable_data_block: data
                         .get(5..data.len())
                         .ok_or(ApplicationLayerError::InsufficientData)?,
+                    extended_link_layer: None,
                 })
             }
             ControlInformation::ApplicationLayerCompactFrameShortTransport => todo!(),
@@ -772,7 +780,36 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             ControlInformation::NetworkManagementDataReserved => todo!(),
             ControlInformation::TransportLayerShortMeterToReadout => todo!(),
             ControlInformation::TransportLayerLongMeterToReadout => todo!(),
-            ControlInformation::ExtendedLinkLayerI => todo!(),
+            ControlInformation::ExtendedLinkLayerI => {
+                let mut iter = data.iter();
+                iter.next();
+                let extended_link_layer = Some(ExtendedLinkLayer {
+                    communication_control: *iter
+                        .next()
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
+                    access_number: *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
+                    receiver_address: None,
+                    encryption: None,
+                });
+                let user_block = UserDataBlock::try_from(iter.as_slice());
+                if let Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
+                    extended_link_layer: _,
+                    short_tpl_header,
+                    variable_data_block,
+                }) = user_block
+                {
+                    Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
+                        extended_link_layer,
+                        short_tpl_header,
+                        variable_data_block: {
+                            data.get(8..data.len())
+                                .ok_or(ApplicationLayerError::InsufficientData)?
+                        },
+                    })
+                } else {
+                    Err(ApplicationLayerError::MissingControlInformation)
+                }
+            }
             ControlInformation::ExtendedLinkLayerII => todo!(),
             ControlInformation::ExtendedLinkLayerIII => todo!(),
         }
@@ -1036,6 +1073,7 @@ mod tests {
                 if let UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header: fixed_data_header,
                     variable_data_block,
+                    ..
                 } = user_data_block
                 {
                     assert_eq!(
@@ -1082,6 +1120,7 @@ mod tests {
             if let UserDataBlock::VariableDataStructureWithLongTplHeader {
                 long_tpl_header: fixed_data_header,
                 variable_data_block,
+                ..
             } = user_data_block
             {
                 let mut data_records: Vec<_> =
@@ -1136,6 +1175,7 @@ mod tests {
             if let UserDataBlock::VariableDataStructureWithLongTplHeader {
                 long_tpl_header: fixed_data_header,
                 variable_data_block,
+                ..
             } = user_data_block
             {
                 let data_records: Vec<DataRecord> =

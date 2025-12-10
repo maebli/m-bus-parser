@@ -1,3 +1,4 @@
+use m_bus_core::ApplicationLayerError;
 #[cfg(feature = "std")]
 use prettytable::{format, row, Table};
 use wireless_mbus_link_layer::WirelessFrame;
@@ -33,6 +34,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
                     if let Ok(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
                         long_tpl_header: _,
                         variable_data_block,
+                        ..
                     }) = user_data::UserDataBlock::try_from(*data)
                     {
                         data_records = Some(variable_data_block.into());
@@ -60,27 +62,27 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, WirelessFrame<'a>> {
         let frame = wireless_mbus_link_layer::WirelessFrame::try_from(data)?;
         let mut user_data = None;
         let mut data_records = None;
-
         // Extract application layer data from wireless frame
         let wireless_mbus_link_layer::WirelessFrame { data, .. } = &frame;
-        if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
-            user_data = Some(x);
-            match user_data::UserDataBlock::try_from(*data) {
-                Ok(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header: _,
+
+        if let Ok(user_data_block) = user_data::UserDataBlock::try_from(*data) {
+            match &user_data_block {
+                user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
                     variable_data_block,
-                }) => {
-                    data_records = Some(variable_data_block.into());
+                    ..
+                } => {
+                    data_records = Some((*variable_data_block).into());
                 }
-                Ok(user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
-                    short_tpl_header: _,
+                user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
                     variable_data_block,
-                }) => {
-                    data_records = Some(variable_data_block.into());
+                    ..
+                } => {
+                    data_records = Some((*variable_data_block).into());
                 }
-                _ => (),
+                _ => {}
             }
-        };
+            user_data = Some(user_data_block);
+        }
 
         Ok(MbusData {
             frame,
@@ -187,6 +189,7 @@ fn parse_to_table(input: &str) -> String {
                 if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block: _,
+                    ..
                 }) = &parsed_data.user_data
                 {
                     let mut info_table = Table::new();
@@ -304,6 +307,7 @@ fn parse_to_table(input: &str) -> String {
                 Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block: _,
+                    extended_link_layer,
                 }) => {
                     let mut info_table = Table::new();
                     info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
@@ -339,6 +343,7 @@ fn parse_to_table(input: &str) -> String {
                 Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     short_tpl_header,
                     variable_data_block: _,
+                    extended_link_layer,
                 }) => {
                     let mut info_table = Table::new();
                     info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
@@ -597,6 +602,7 @@ pub fn parse_to_csv(input: &str) -> String {
             Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                 long_tpl_header,
                 variable_data_block: _,
+                extended_link_layer,
             }) => {
                 row.extend_from_slice(&[
                     long_tpl_header.identification_number.to_string(),
