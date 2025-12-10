@@ -47,7 +47,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod mbus_data;
-pub mod user_data;
+pub use m_bus_application_layer as user_data;
 
 pub use m_bus_core::decryption;
 use m_bus_core::ApplicationLayerError;

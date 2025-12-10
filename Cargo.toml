@@ -25,11 +25,11 @@ bindgen = "0.72.0"
 
 [features]
 default = []
-std = ["prettytable-rs", "serde_json", "serde_yaml", "serde", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std"]
-plaintext-before-extension = []
-serde = ["dep:serde", "arrayvec/serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde"]
-defmt = ["dep:defmt", "wired-mbus-link-layer/defmt", "wireless-mbus-link-layer/defmt", "m-bus-core/defmt"]
-decryption = ["dep:aes", "dep:cbc", "dep:cipher", "dep:aes-gcm", "dep:ccm"]
+std = ["prettytable-rs", "serde_json", "serde_yaml", "serde", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std", "m-bus-application-layer/std"]
+plaintext-before-extension = ["m-bus-application-layer/plaintext-before-extension"]
+serde = ["dep:serde", "arrayvec/serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde", "m-bus-application-layer/serde"]
+defmt = ["dep:defmt", "wired-mbus-link-layer/defmt", "wireless-mbus-link-layer/defmt", "m-bus-core/defmt", "m-bus-application-layer/defmt"]
+decryption = ["dep:aes", "dep:cbc", "dep:cipher", "dep:aes-gcm", "dep:ccm", "m-bus-application-layer/decryption"]
 
 [profile.release]
 opt-level = 'z'   # Optimize for size
@@ -50,6 +50,7 @@ defmt = { version = "1.0.1", optional = true }
 wired-mbus-link-layer = {path = "crates/wired-mbus-link-layer"}
 wireless-mbus-link-layer = {path = "crates/wireless-mbus-link-layer"}
 m-bus-core = {path = "crates/m-bus-core"}
+m-bus-application-layer = {path = "crates/m-bus-application-layer"}
 aes = { version = "0.8", optional = true, default-features = false }
 cbc = { version = "0.1", optional = true, default-features = false }
 cipher = { version = "0.4", optional = true, default-features = false, features = ["block-padding"] }

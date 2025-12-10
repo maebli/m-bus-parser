@@ -1250,8 +1250,8 @@ mod tests {
 
     #[test]
     fn test_single_byte_primary_value_information_parsing() {
-        use crate::user_data::value_information::UnitName;
-        use crate::user_data::value_information::{
+        use crate::value_information::UnitName;
+        use crate::value_information::{
             Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
         };
         use arrayvec::ArrayVec;
@@ -1363,8 +1363,8 @@ mod tests {
 
     #[test]
     fn test_multibyte_primary_value_information() {
-        use crate::user_data::value_information::UnitName;
-        use crate::user_data::value_information::{
+        use crate::value_information::UnitName;
+        use crate::value_information::{
             Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
         };
         use arrayvec::ArrayVec;
@@ -1450,9 +1450,9 @@ mod tests {
     fn test_plain_text_vif_norm_conform() {
         use arrayvec::ArrayVec;
 
-        use crate::user_data::value_information::{Unit, ValueInformation, ValueLabel};
+        use crate::value_information::{Unit, ValueInformation, ValueLabel};
 
-        use crate::user_data::value_information::ValueInformationBlock;
+        use crate::value_information::ValueInformationBlock;
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
         // 0xFC, 0x74, 0x03, 0x52, 0x48, 0x25,
@@ -1494,7 +1494,7 @@ mod tests {
 
     #[test]
     fn test_short_vif_with_vife() {
-        use crate::user_data::value_information::ValueInformationBlock;
+        use crate::value_information::ValueInformationBlock;
         let data = [253, 27];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);

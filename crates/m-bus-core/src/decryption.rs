@@ -4,8 +4,8 @@ use crate::{DeviceType, ManufacturerCode, SecurityMode};
 use aes::Aes128;
 #[cfg(feature = "decryption")]
 use cbc::{
-    cipher::{BlockDecryptMut, KeyIvInit},
     Decryptor,
+    cipher::{BlockDecryptMut, KeyIvInit},
 };
 
 #[derive(Debug, Clone, PartialEq)]
