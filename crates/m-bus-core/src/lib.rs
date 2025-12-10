@@ -603,39 +603,22 @@ impl TryFrom<u8> for Function {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum SecurityMode {
-    /// Mode 0: No encryption used
     NoEncryption,
-    /// Mode 1: Manufacturer specific usage (Reference: 9.4.2)
     ManufacturerSpecific,
-    /// Mode 2: DES; IV = 0 (deprecated) (Reference: 9.4.3)
     DesIvZero,
-    /// Mode 3: DES; IV ≠ 0 (deprecated) (Reference: 9.4.3)
     DesIvNonZero,
-    /// Mode 4: Specific usage (See Bibliographical Entry [6])
     SpecificUsage4,
-    /// Mode 5: AES-CBC-128; IV ≠ 0 (Reference: 9.4.4)
     AesCbc128IvNonZero,
-    /// Mode 6: Reserved for future use
     Reserved6,
-    /// Mode 7: AES-CBC-128; IV = 0 (Reference: 9.4.5)
     AesCbc128IvZero,
-    /// Mode 8: AES-CTR-128; CMAC (Reference: 9.4.6)
     AesCtr128Cmac,
-    /// Mode 9: AES-GCM-128 (Reference: 9.4.7)
     AesGcm128,
-    /// Mode 10: AES-CCM-128 (Reference: 9.4.8)
     AesCcm128,
-    /// Mode 11: Reserved for future use
     Reserved11,
-    /// Mode 12: Reserved for future use
     Reserved12,
-    /// Mode 13: Specific usage (See Bibliographical Entry [8])
     SpecificUsage13,
-    /// Mode 14: Reserved for future use
     Reserved14,
-    /// Mode 15: Specific usage (See Bibliographical Entry [7])
     SpecificUsage15,
-    /// Modes 16-31: Reserved for future use
     ReservedHigher(u8),
 }
 
