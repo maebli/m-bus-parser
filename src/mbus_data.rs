@@ -1,4 +1,3 @@
-use m_bus_core::ApplicationLayerError;
 #[cfg(feature = "std")]
 use prettytable::{format, row, Table};
 use wireless_mbus_link_layer::WirelessFrame;
@@ -307,7 +306,7 @@ fn parse_to_table(input: &str) -> String {
                 Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block: _,
-                    extended_link_layer,
+                    extended_link_layer: _,
                 }) => {
                     let mut info_table = Table::new();
                     info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
@@ -343,7 +342,7 @@ fn parse_to_table(input: &str) -> String {
                 Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     short_tpl_header,
                     variable_data_block: _,
-                    extended_link_layer,
+                    extended_link_layer: _,
                 }) => {
                     let mut info_table = Table::new();
                     info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
@@ -602,7 +601,7 @@ pub fn parse_to_csv(input: &str) -> String {
             Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                 long_tpl_header,
                 variable_data_block: _,
-                extended_link_layer,
+                extended_link_layer: _,
             }) => {
                 row.extend_from_slice(&[
                     long_tpl_header.identification_number.to_string(),

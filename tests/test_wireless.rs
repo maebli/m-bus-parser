@@ -105,6 +105,7 @@ mod tests {
                 Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     short_tpl_header,
                     variable_data_block: _,
+                    ..
                 }) => {
                     assert_eq!(
                         mbus_data.frame.manufacturer_id.identification_number.number,
@@ -174,6 +175,7 @@ mod tests {
                 Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block: _,
+                    ..
                 }) => {
                     assert_eq!(
                         long_tpl_header.identification_number.number,

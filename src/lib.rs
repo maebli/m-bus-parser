@@ -31,7 +31,7 @@
 //!     if let WiredFrame::LongFrame { function, address, data } = frame {
 //!         assert_eq!(function, Function::RspUd { acd: false, dfc: false });
 //!         assert_eq!(address, Address::Primary(1));
-//!         if let Ok(UserDataBlock::VariableDataStructureWithLongTplHeader { long_tpl_header, variable_data_block }) = UserDataBlock::try_from(data) {
+//!         if let Ok(UserDataBlock::VariableDataStructureWithLongTplHeader { long_tpl_header, variable_data_block, .. }) = UserDataBlock::try_from(data) {
 //!             let data_records = DataRecords::from((variable_data_block, &long_tpl_header));
 //!             println!("data_records: {:#?}", data_records.collect::<Result<Vec<_>, _>>()?);
 //!         }

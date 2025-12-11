@@ -31,6 +31,7 @@ fn main() {
             m_bus_parser::user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
                 long_tpl_header,
                 variable_data_block,
+                ..
             },
         ) = m_bus_parser::user_data::UserDataBlock::try_from(data)
         {

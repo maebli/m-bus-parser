@@ -38,6 +38,7 @@ fn main() {
                 if let Ok(m_bus_parser::user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block,
+                    extended_link_layer,
                 }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
                 {
                     println!("long_tpl_header: {:#?}", long_tpl_header);

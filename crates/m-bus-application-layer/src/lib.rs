@@ -792,7 +792,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 if let Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     extended_link_layer: _,
                     short_tpl_header,
-                    variable_data_block,
+                    variable_data_block: _,
                 }) = user_block
                 {
                     Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {

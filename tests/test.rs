@@ -101,6 +101,7 @@ mod tests {
                 if let UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block: _variable_user_data,
+                    ..
                 } = user_data
                 {
                     assert!(
