@@ -269,9 +269,8 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(all(feature = "serde", feature = "std"), serde(into = "String"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(into = "String"))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TextUnit<'a>(&'a [u8]);
 impl<'a> TextUnit<'a> {

@@ -28,8 +28,7 @@ pub enum DecryptionError {
     UnknownEncryptionState,
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Display for DecryptionError {
+impl core::fmt::Display for DecryptionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnsupportedMode(mode) => write!(f, "Unsupported security mode: {:?}", mode),
@@ -45,8 +44,7 @@ impl std::fmt::Display for DecryptionError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for DecryptionError {}
+impl core::error::Error for DecryptionError {}
 
 pub trait KeyProvider {
     fn get_key(&self, context: &KeyContext) -> Result<&[u8], DecryptionError>;

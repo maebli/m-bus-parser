@@ -110,8 +110,7 @@ pub struct IdentificationNumber {
     pub number: u32,
 }
 
-#[cfg(feature = "std")]
-impl fmt::Display for IdentificationNumber {
+impl core::fmt::Display for IdentificationNumber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:08}", self.number)
     }

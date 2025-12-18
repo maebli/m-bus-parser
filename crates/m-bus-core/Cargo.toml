@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = []
 std = []
-serde = ["dep:serde"]
+serde = ["dep:serde","std"]
 defmt = ["dep:defmt"]
 
 [dependencies]

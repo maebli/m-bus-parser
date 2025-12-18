@@ -23,10 +23,7 @@ pub mod variable_user_data;
 use extended_link_layer::ExtendedLinkLayer;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(
-    all(feature = "serde", feature = "std"),
-    serde(into = "Vec<DataRecord>")
-)]
+#[cfg_attr(feature = "serde", serde(into = "Vec<DataRecord>"))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataRecords<'a> {
