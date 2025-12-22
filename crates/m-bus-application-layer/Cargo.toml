@@ -8,7 +8,7 @@ default = []
 std = ["m-bus-core/std"]
 serde = ["dep:serde", "arrayvec/serde", "bitflags/serde", "m-bus-core/serde"]
 defmt = ["dep:defmt", "m-bus-core/defmt"]
-decryption = []
+decryption = ["m-bus-core/decryption"]
 plaintext-before-extension = []
 
 [dependencies]

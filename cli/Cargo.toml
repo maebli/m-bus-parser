@@ -18,8 +18,10 @@ tag-name = "cli-v{{version}}"
 [build-dependencies]
 
 [features]
-
+default = ["decryption"]
+decryption = ["m-bus-parser/decryption"]
 
 [dependencies]
 m-bus-parser = { path = "..", version = "0.1.0", features = ["std", "serde"] }
+hex = "0.4"
 clap = { version = "4.5.4", features = ["derive"] }

@@ -527,25 +527,119 @@ impl<'a> UserDataBlock<'a> {
         }
     }
 
+    /// Returns the length of the variable data block (encrypted payload size)
+    #[must_use]
+    pub fn variable_data_len(&self) -> usize {
+        match self {
+            Self::VariableDataStructureWithLongTplHeader {
+                variable_data_block,
+                ..
+            } => variable_data_block.len(),
+            Self::VariableDataStructureWithShortTplHeader {
+                variable_data_block,
+                ..
+            } => variable_data_block.len(),
+            _ => 0,
+        }
+    }
+
     #[cfg(feature = "decryption")]
     pub fn decrypt_variable_data<K: crate::decryption::KeyProvider>(
         &self,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
+        use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
+
         match self {
             Self::VariableDataStructureWithLongTplHeader {
                 long_tpl_header,
-                variable_data_block: _variable_data_block,
+                variable_data_block,
                 ..
             } => {
                 if !long_tpl_header.is_encrypted() {
+                    return Err(NotEncrypted);
+                }
+
+                let security_mode = long_tpl_header
+                    .short_tpl_header
+                    .configuration_field
+                    .security_mode();
+
+                let manufacturer = long_tpl_header
+                    .manufacturer
+                    .map_err(|_| DecryptionError::DecryptionFailed)?;
+
+                let context = KeyContext {
+                    manufacturer,
+                    identification_number: long_tpl_header.identification_number.number,
+                    version: long_tpl_header.version,
+                    device_type: long_tpl_header.device_type,
+                    security_mode,
+                    access_number: long_tpl_header.short_tpl_header.access_number,
+                };
+
+                let payload = EncryptedPayload::new(variable_data_block, context);
+                payload.decrypt_into(provider, output)
+            }
+            Self::VariableDataStructureWithShortTplHeader {
+                short_tpl_header, ..
+            } => {
+                if !short_tpl_header.is_encrypted() {
                     Err(NotEncrypted)
                 } else {
+                    // Short TPL header doesn't contain manufacturer info,
+                    // use decrypt_variable_data_with_context() instead
                     Err(UnknownEncryptionState)
                 }
             }
-            _ => Err(crate::decryption::DecryptionError::UnknownEncryptionState),
+            _ => Err(DecryptionError::UnknownEncryptionState),
+        }
+    }
+
+    /// Decrypt variable data when manufacturer info is not available in the TPL header.
+    /// Use this for frames with Short TPL header where manufacturer info comes from the link layer.
+    #[cfg(feature = "decryption")]
+    pub fn decrypt_variable_data_with_context<K: crate::decryption::KeyProvider>(
+        &self,
+        provider: &K,
+        manufacturer: ManufacturerCode,
+        identification_number: u32,
+        version: u8,
+        device_type: DeviceType,
+        output: &mut [u8],
+    ) -> Result<usize, crate::decryption::DecryptionError> {
+        use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
+
+        match self {
+            Self::VariableDataStructureWithShortTplHeader {
+                short_tpl_header,
+                variable_data_block,
+                ..
+            } => {
+                if !short_tpl_header.is_encrypted() {
+                    return Err(NotEncrypted);
+                }
+
+                let security_mode = short_tpl_header.configuration_field.security_mode();
+
+                let context = KeyContext {
+                    manufacturer,
+                    identification_number,
+                    version,
+                    device_type,
+                    security_mode,
+                    access_number: short_tpl_header.access_number,
+                };
+
+                let payload = EncryptedPayload::new(variable_data_block, context);
+                payload.decrypt_into(provider, output)
+            }
+            Self::VariableDataStructureWithLongTplHeader { .. } => {
+                // Long TPL header has its own manufacturer info, use decrypt_variable_data() instead
+                self.decrypt_variable_data(provider, output)
+            }
+            _ => Err(DecryptionError::UnknownEncryptionState),
         }
     }
 }
