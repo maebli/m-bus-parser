@@ -160,18 +160,16 @@ pub fn parse_to_json(input: &str, key: Option<&[u8; 16]>) -> String {
         // Apply decrypted data records if decryption succeeded
         #[cfg(feature = "decryption")]
         if decrypted_len > 0 {
-            if let Some(user_data) = &parsed_data.user_data {
-                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    ..
-                } = user_data
-                {
-                    if let Some(decrypted_data) = decrypted_buffer.get(..decrypted_len) {
-                        parsed_data.data_records = Some(user_data::DataRecords::new(
-                            decrypted_data,
-                            Some(long_tpl_header),
-                        ));
-                    }
+            if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                ..
+            }) = &parsed_data.user_data
+            {
+                if let Some(decrypted_data) = decrypted_buffer.get(..decrypted_len) {
+                    parsed_data.data_records = Some(user_data::DataRecords::new(
+                        decrypted_data,
+                        Some(long_tpl_header),
+                    ));
                 }
             }
         }
@@ -309,18 +307,16 @@ fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
         // Apply decrypted data records if decryption succeeded
         #[cfg(feature = "decryption")]
         if decrypted_len > 0 {
-            if let Some(user_data) = &parsed_data.user_data {
-                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    ..
-                } = user_data
-                {
-                    let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
-                    parsed_data.data_records = Some(user_data::DataRecords::new(
-                        decrypted_data,
-                        Some(long_tpl_header),
-                    ));
-                }
+            if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                ..
+            }) = &parsed_data.user_data
+            {
+                let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
+                parsed_data.data_records = Some(user_data::DataRecords::new(
+                    decrypted_data,
+                    Some(long_tpl_header),
+                ));
             }
         }
 
@@ -818,18 +814,16 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
         // Apply decrypted data records if decryption succeeded
         #[cfg(feature = "decryption")]
         if decrypted_len > 0 {
-            if let Some(user_data) = &parsed_data.user_data {
-                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    ..
-                } = user_data
-                {
-                    let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
-                    parsed_data.data_records = Some(user_data::DataRecords::new(
-                        decrypted_data,
-                        Some(long_tpl_header),
-                    ));
-                }
+            if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                ..
+            }) = &parsed_data.user_data
+            {
+                let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
+                parsed_data.data_records = Some(user_data::DataRecords::new(
+                    decrypted_data,
+                    Some(long_tpl_header),
+                ));
             }
         }
 

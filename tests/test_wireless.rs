@@ -25,6 +25,7 @@ struct ExpectedData {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ExpectedDataRecord {
     value: i64,
     unit: String,
@@ -40,10 +41,19 @@ fn device_type_from_str(device_type: &str) -> DeviceType {
         "Water" => DeviceType::WaterMeter,
         "WarmWater" => DeviceType::WarmWaterMeter,
         "Heat" => DeviceType::HeatMeterReturn,
+        "HeatMeterFlow" => DeviceType::HeatMeterFlow,
         "HeatCostAllocator" => DeviceType::HeatCostAllocator,
         "HeatCoolingLoad" => DeviceType::CombinedHeatCoolingMeter,
         "Electricity" => DeviceType::ElectricityMeter,
         "RoomSensor" => DeviceType::RoomSensor,
+        s if s.starts_with("Reserved(") => {
+            // Parse "Reserved(128)" format
+            let num_str = s.trim_start_matches("Reserved(").trim_end_matches(')');
+            let code = num_str
+                .parse::<u8>()
+                .unwrap_or_else(|_| panic!("Invalid Reserved code: {}", s));
+            DeviceType::Reserved(code)
+        }
         _ => panic!("Unknown device type: {}", device_type),
     }
 }

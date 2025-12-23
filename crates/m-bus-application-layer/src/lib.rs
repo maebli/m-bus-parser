@@ -334,6 +334,13 @@ impl ControlInformation {
             0x8D => Ok(Self::ExtendedLinkLayerII),
             0x8E => Ok(Self::ExtendedLinkLayerIII),
             0x90..=0x97 => Ok(Self::HashProcedure(byte - 0x90)),
+            // Encrypted CI codes (0xA0-0xAF) - these are encrypted variants of 0x7A (ApplicationLayerShortTransport)
+            // When used with NOKEY, they should be parsed as unencrypted ApplicationLayerShortTransport
+            // The lower 4 bits indicate the encryption mode:
+            //   0xA0 = Mode 5 (AES-CBC-IV zero) or NOKEY
+            //   0xA2 = Mode 7 (AES-CBC-IV non-zero) or NOKEY
+            //   0xA4, 0xA6, etc. = other modes
+            0xA0..=0xAF => Ok(Self::ApplicationLayerShortTransport),
             0xB1 => Ok(Self::OutputRAMContent),
             0xB2 => Ok(Self::WriteRAMContent),
             0xB3 => Ok(Self::StartCalibrationTestMode),
@@ -611,11 +618,20 @@ impl<'a> UserDataBlock<'a> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LongTplHeader {
     pub identification_number: IdentificationNumber,
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_deserializing, default = "default_manufacturer_result")
+    )]
     pub manufacturer: Result<ManufacturerCode, ApplicationLayerError>,
     pub version: u8,
     pub device_type: DeviceType,
     pub short_tpl_header: ShortTplHeader,
     pub lsb_order: bool,
+}
+
+#[cfg(feature = "serde")]
+fn default_manufacturer_result() -> Result<ManufacturerCode, ApplicationLayerError> {
+    Err(ApplicationLayerError::InsufficientData)
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -669,101 +685,65 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 );
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
-            ControlInformation::SendData => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SendData control information",
-                })
-            }
-            ControlInformation::SelectSlave => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SelectSlave control information",
-                })
-            }
-            ControlInformation::SynchronizeSlave => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SynchronizeSlave control information",
-                })
-            }
-            ControlInformation::SetBaudRate300 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate300 control information",
-                })
-            }
-            ControlInformation::SetBaudRate600 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate600 control information",
-                })
-            }
-            ControlInformation::SetBaudRate1200 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate1200 control information",
-                })
-            }
-            ControlInformation::SetBaudRate2400 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate2400 control information",
-                })
-            }
-            ControlInformation::SetBaudRate4800 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate4800 control information",
-                })
-            }
-            ControlInformation::SetBaudRate9600 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate9600 control information",
-                })
-            }
-            ControlInformation::SetBaudRate19200 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate19200 control information",
-                })
-            }
-            ControlInformation::SetBaudRate38400 => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SetBaudRate38400 control information",
-                })
-            }
-            ControlInformation::OutputRAMContent => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "OutputRAMContent control information",
-                })
-            }
-            ControlInformation::WriteRAMContent => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "WriteRAMContent control information",
-                })
-            }
+            ControlInformation::SendData => Err(ApplicationLayerError::Unimplemented {
+                feature: "SendData control information",
+            }),
+            ControlInformation::SelectSlave => Err(ApplicationLayerError::Unimplemented {
+                feature: "SelectSlave control information",
+            }),
+            ControlInformation::SynchronizeSlave => Err(ApplicationLayerError::Unimplemented {
+                feature: "SynchronizeSlave control information",
+            }),
+            ControlInformation::SetBaudRate300 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate300 control information",
+            }),
+            ControlInformation::SetBaudRate600 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate600 control information",
+            }),
+            ControlInformation::SetBaudRate1200 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate1200 control information",
+            }),
+            ControlInformation::SetBaudRate2400 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate2400 control information",
+            }),
+            ControlInformation::SetBaudRate4800 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate4800 control information",
+            }),
+            ControlInformation::SetBaudRate9600 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate9600 control information",
+            }),
+            ControlInformation::SetBaudRate19200 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate19200 control information",
+            }),
+            ControlInformation::SetBaudRate38400 => Err(ApplicationLayerError::Unimplemented {
+                feature: "SetBaudRate38400 control information",
+            }),
+            ControlInformation::OutputRAMContent => Err(ApplicationLayerError::Unimplemented {
+                feature: "OutputRAMContent control information",
+            }),
+            ControlInformation::WriteRAMContent => Err(ApplicationLayerError::Unimplemented {
+                feature: "WriteRAMContent control information",
+            }),
             ControlInformation::StartCalibrationTestMode => {
                 Err(ApplicationLayerError::Unimplemented {
                     feature: "StartCalibrationTestMode control information",
                 })
             }
-            ControlInformation::ReadEEPROM => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ReadEEPROM control information",
-                })
-            }
-            ControlInformation::StartSoftwareTest => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "StartSoftwareTest control information",
-                })
-            }
-            ControlInformation::HashProcedure(_) => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "HashProcedure control information",
-                })
-            }
-            ControlInformation::SendErrorStatus => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SendErrorStatus control information",
-                })
-            }
-            ControlInformation::SendAlarmStatus => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "SendAlarmStatus control information",
-                })
-            }
+            ControlInformation::ReadEEPROM => Err(ApplicationLayerError::Unimplemented {
+                feature: "ReadEEPROM control information",
+            }),
+            ControlInformation::StartSoftwareTest => Err(ApplicationLayerError::Unimplemented {
+                feature: "StartSoftwareTest control information",
+            }),
+            ControlInformation::HashProcedure(_) => Err(ApplicationLayerError::Unimplemented {
+                feature: "HashProcedure control information",
+            }),
+            ControlInformation::SendErrorStatus => Err(ApplicationLayerError::Unimplemented {
+                feature: "SendErrorStatus control information",
+            }),
+            ControlInformation::SendAlarmStatus => Err(ApplicationLayerError::Unimplemented {
+                feature: "SendAlarmStatus control information",
+            }),
             ControlInformation::ResponseWithVariableDataStructure { lsb_order } => {
                 let mut iter = data.iter().skip(1);
                 let mut identification_number_bytes = [
@@ -897,16 +877,12 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     feature: "ApplicationLayerFormatFrameLongTransport control information",
                 })
             }
-            ControlInformation::ClockSyncAbsolute => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ClockSyncAbsolute control information",
-                })
-            }
-            ControlInformation::ClockSyncRelative => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ClockSyncRelative control information",
-                })
-            }
+            ControlInformation::ClockSyncAbsolute => Err(ApplicationLayerError::Unimplemented {
+                feature: "ClockSyncAbsolute control information",
+            }),
+            ControlInformation::ClockSyncRelative => Err(ApplicationLayerError::Unimplemented {
+                feature: "ClockSyncRelative control information",
+            }),
             ControlInformation::ApplicationErrorShortTransport => {
                 Err(ApplicationLayerError::Unimplemented {
                     feature: "ApplicationErrorShortTransport control information",
@@ -917,16 +893,12 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     feature: "ApplicationErrorLongTransport control information",
                 })
             }
-            ControlInformation::AlarmShortTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "AlarmShortTransport control information",
-                })
-            }
-            ControlInformation::AlarmLongTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "AlarmLongTransport control information",
-                })
-            }
+            ControlInformation::AlarmShortTransport => Err(ApplicationLayerError::Unimplemented {
+                feature: "AlarmShortTransport control information",
+            }),
+            ControlInformation::AlarmLongTransport => Err(ApplicationLayerError::Unimplemented {
+                feature: "AlarmLongTransport control information",
+            }),
             ControlInformation::ApplicationLayerNoTransport => {
                 Err(ApplicationLayerError::Unimplemented {
                     feature: "ApplicationLayerNoTransport control information",
@@ -938,7 +910,13 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 })
             }
             ControlInformation::ApplicationLayerShortTransport => {
-                let mut iter = data.iter().skip(1);
+                // CI=0xA0 (encryption mode 5) has an additional encryption configuration byte after CI
+                // Other encrypted CI codes (0xA2, 0xA4, etc.) do not have this byte
+                let has_encryption_config_byte = data[0] == 0xA0;
+                let skip_count = if has_encryption_config_byte { 2 } else { 1 };
+                let data_block_offset = if has_encryption_config_byte { 6 } else { 5 };
+
+                let mut iter = data.iter().skip(skip_count);
 
                 Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     short_tpl_header: ShortTplHeader {
@@ -958,7 +936,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         },
                     },
                     variable_data_block: data
-                        .get(5..data.len())
+                        .get(data_block_offset..data.len())
                         .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer: None,
                 })
@@ -993,16 +971,12 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     feature: "TransportLayerLongReadoutToMeter control information",
                 })
             }
-            ControlInformation::NetworkLayerData => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "NetworkLayerData control information",
-                })
-            }
-            ControlInformation::FutureUse => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "FutureUse control information",
-                })
-            }
+            ControlInformation::NetworkLayerData => Err(ApplicationLayerError::Unimplemented {
+                feature: "NetworkLayerData control information",
+            }),
+            ControlInformation::FutureUse => Err(ApplicationLayerError::Unimplemented {
+                feature: "FutureUse control information",
+            }),
             ControlInformation::NetworkManagementApplication => {
                 Err(ApplicationLayerError::Unimplemented {
                     feature: "NetworkManagementApplication control information",
@@ -1063,16 +1037,12 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     Err(ApplicationLayerError::MissingControlInformation)
                 }
             }
-            ControlInformation::ExtendedLinkLayerII => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ExtendedLinkLayerII control information",
-                })
-            }
-            ControlInformation::ExtendedLinkLayerIII => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ExtendedLinkLayerIII control information",
-                })
-            }
+            ControlInformation::ExtendedLinkLayerII => Err(ApplicationLayerError::Unimplemented {
+                feature: "ExtendedLinkLayerII control information",
+            }),
+            ControlInformation::ExtendedLinkLayerIII => Err(ApplicationLayerError::Unimplemented {
+                feature: "ExtendedLinkLayerIII control information",
+            }),
         }
     }
 }

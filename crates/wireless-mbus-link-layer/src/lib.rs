@@ -36,7 +36,23 @@ impl TryFrom<&[u8]> for ManufacturerId {
             ])
             .map_err(|_| FrameError::TooShort)?,
             version: *iter.next().ok_or(FrameError::TooShort)?,
-            device_type: DeviceType::from(*iter.next().ok_or(FrameError::TooShort)?),
+            // In wireless M-Bus, device type encoding depends on the CI (Control Information) field:
+            // - For unencrypted frames (CI=0x7A): use full device type byte
+            // - For encrypted frames (CI=0xA0-0xAF): device type is in upper nibble,
+            //   lower nibble contains encryption mode information
+            device_type: {
+                let device_byte = *iter.next().ok_or(FrameError::TooShort)?;
+                // Peek ahead at the CI field (at offset 8 from start of ManufacturerId data)
+                let ci_byte = *data.get(8).ok_or(FrameError::TooShort)?;
+                let device_type_code = if (0xA0..=0xAF).contains(&ci_byte) {
+                    // Encrypted frame: extract upper nibble only
+                    (device_byte >> 4) & 0x0F
+                } else {
+                    // Unencrypted frame: use full byte
+                    device_byte
+                };
+                DeviceType::from(device_type_code)
+            },
             is_unique_globally: false, /*todo not sure about this field*/
         })
     }
