@@ -171,6 +171,7 @@ pub enum DataInformationError {
     DataTooLong,
     DataTooShort,
     InvalidValueInformation,
+    Unimplemented { feature: &'static str },
 }
 
 #[cfg(feature = "std")]
@@ -182,6 +183,9 @@ impl std::fmt::Display for DataInformationError {
             DataInformationError::DataTooShort => write!(f, "Data too short"),
             DataInformationError::InvalidValueInformation => {
                 write!(f, "Invalid value information")
+            }
+            DataInformationError::Unimplemented { feature } => {
+                write!(f, "Unimplemented feature: {}", feature)
             }
         }
     }
@@ -721,18 +725,21 @@ impl DataFieldCoding {
                             Err(err) => Err(err),
                         }
                     }
-                    _ => {
-                        todo!(
-                            "Variable length parsing for length: {} is a reserved value",
-                            length
-                        );
-                    }
+                    _ => Err(DataRecordError::DataInformationError(
+                        DataInformationError::Unimplemented {
+                            feature: "Variable length parsing for reserved length values",
+                        },
+                    )),
                 }
             }
 
             Self::SpecialFunctions(_code) => {
                 // Special functions parsing based on the code
-                todo!()
+                Err(DataRecordError::DataInformationError(
+                    DataInformationError::Unimplemented {
+                        feature: "Special functions data parsing",
+                    },
+                ))
             }
 
             Self::DateTypeG => {

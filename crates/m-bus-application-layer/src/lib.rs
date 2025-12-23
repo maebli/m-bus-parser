@@ -6,7 +6,9 @@ use std::fmt;
 
 pub use m_bus_core::decryption;
 
-use m_bus_core::{ConfigurationField, DeviceType, ManufacturerCode};
+use m_bus_core::{
+    bcd_hex_digits_to_u32, ConfigurationField, DeviceType, IdentificationNumber, ManufacturerCode,
+};
 use variable_user_data::DataRecordError;
 
 use self::data_record::DataRecord;
@@ -423,20 +425,6 @@ impl ApplicationResetSubcode {
     }
 }
 
-fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> {
-    let mut number = 0u32;
-
-    for &digit in digits.iter().rev() {
-        let lower = digit & 0x0F;
-        let upper = digit >> 4;
-        if lower > 9 || upper > 9 {
-            return Err(ApplicationLayerError::IdentificationNumberError { digits, number });
-        }
-        number = number * 100 + (u32::from(upper) * 10) + u32::from(lower);
-    }
-
-    Ok(number)
-}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -448,32 +436,6 @@ pub struct Counter {
 impl fmt::Display for Counter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:08}", self.count)
-    }
-}
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct IdentificationNumber {
-    pub number: u32,
-}
-
-#[cfg(feature = "std")]
-impl fmt::Display for IdentificationNumber {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:08}", self.number)
-    }
-}
-
-impl From<IdentificationNumber> for u32 {
-    fn from(id: IdentificationNumber) -> Self {
-        id.number
-    }
-}
-
-impl IdentificationNumber {
-    pub fn from_bcd_hex_digits(digits: [u8; 4]) -> Result<Self, ApplicationLayerError> {
-        let number = bcd_hex_digits_to_u32(digits)?;
-        Ok(Self { number })
     }
 }
 
@@ -707,25 +669,101 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 );
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
-            ControlInformation::SendData => todo!(),
-            ControlInformation::SelectSlave => todo!(),
-            ControlInformation::SynchronizeSlave => todo!(),
-            ControlInformation::SetBaudRate300 => todo!(),
-            ControlInformation::SetBaudRate600 => todo!(),
-            ControlInformation::SetBaudRate1200 => todo!(),
-            ControlInformation::SetBaudRate2400 => todo!(),
-            ControlInformation::SetBaudRate4800 => todo!(),
-            ControlInformation::SetBaudRate9600 => todo!(),
-            ControlInformation::SetBaudRate19200 => todo!(),
-            ControlInformation::SetBaudRate38400 => todo!(),
-            ControlInformation::OutputRAMContent => todo!(),
-            ControlInformation::WriteRAMContent => todo!(),
-            ControlInformation::StartCalibrationTestMode => todo!(),
-            ControlInformation::ReadEEPROM => todo!(),
-            ControlInformation::StartSoftwareTest => todo!(),
-            ControlInformation::HashProcedure(_) => todo!(),
-            ControlInformation::SendErrorStatus => todo!(),
-            ControlInformation::SendAlarmStatus => todo!(),
+            ControlInformation::SendData => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SendData control information",
+                })
+            }
+            ControlInformation::SelectSlave => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SelectSlave control information",
+                })
+            }
+            ControlInformation::SynchronizeSlave => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SynchronizeSlave control information",
+                })
+            }
+            ControlInformation::SetBaudRate300 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate300 control information",
+                })
+            }
+            ControlInformation::SetBaudRate600 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate600 control information",
+                })
+            }
+            ControlInformation::SetBaudRate1200 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate1200 control information",
+                })
+            }
+            ControlInformation::SetBaudRate2400 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate2400 control information",
+                })
+            }
+            ControlInformation::SetBaudRate4800 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate4800 control information",
+                })
+            }
+            ControlInformation::SetBaudRate9600 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate9600 control information",
+                })
+            }
+            ControlInformation::SetBaudRate19200 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate19200 control information",
+                })
+            }
+            ControlInformation::SetBaudRate38400 => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SetBaudRate38400 control information",
+                })
+            }
+            ControlInformation::OutputRAMContent => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "OutputRAMContent control information",
+                })
+            }
+            ControlInformation::WriteRAMContent => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "WriteRAMContent control information",
+                })
+            }
+            ControlInformation::StartCalibrationTestMode => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "StartCalibrationTestMode control information",
+                })
+            }
+            ControlInformation::ReadEEPROM => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ReadEEPROM control information",
+                })
+            }
+            ControlInformation::StartSoftwareTest => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "StartSoftwareTest control information",
+                })
+            }
+            ControlInformation::HashProcedure(_) => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "HashProcedure control information",
+                })
+            }
+            ControlInformation::SendErrorStatus => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SendErrorStatus control information",
+                })
+            }
+            ControlInformation::SendAlarmStatus => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "SendAlarmStatus control information",
+                })
+            }
             ControlInformation::ResponseWithVariableDataStructure { lsb_order } => {
                 let mut iter = data.iter().skip(1);
                 let mut identification_number_bytes = [
@@ -814,23 +852,91 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     counter2,
                 })
             }
-            ControlInformation::DataSentWithShortTransportLayer => todo!(),
-            ControlInformation::DataSentWithLongTransportLayer => todo!(),
-            ControlInformation::CosemDataWithLongTransportLayer => todo!(),
-            ControlInformation::CosemDataWithShortTransportLayer => todo!(),
-            ControlInformation::ObisDataReservedLongTransportLayer => todo!(),
-            ControlInformation::ObisDataReservedShortTransportLayer => todo!(),
-            ControlInformation::ApplicationLayerFormatFrameNoTransport => todo!(),
-            ControlInformation::ApplicationLayerFormatFrameShortTransport => todo!(),
-            ControlInformation::ApplicationLayerFormatFrameLongTransport => todo!(),
-            ControlInformation::ClockSyncAbsolute => todo!(),
-            ControlInformation::ClockSyncRelative => todo!(),
-            ControlInformation::ApplicationErrorShortTransport => todo!(),
-            ControlInformation::ApplicationErrorLongTransport => todo!(),
-            ControlInformation::AlarmShortTransport => todo!(),
-            ControlInformation::AlarmLongTransport => todo!(),
-            ControlInformation::ApplicationLayerNoTransport => todo!(),
-            ControlInformation::ApplicationLayerCompactFrameNoTransport => todo!(),
+            ControlInformation::DataSentWithShortTransportLayer => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "DataSentWithShortTransportLayer control information",
+                })
+            }
+            ControlInformation::DataSentWithLongTransportLayer => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "DataSentWithLongTransportLayer control information",
+                })
+            }
+            ControlInformation::CosemDataWithLongTransportLayer => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "CosemDataWithLongTransportLayer control information",
+                })
+            }
+            ControlInformation::CosemDataWithShortTransportLayer => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "CosemDataWithShortTransportLayer control information",
+                })
+            }
+            ControlInformation::ObisDataReservedLongTransportLayer => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ObisDataReservedLongTransportLayer control information",
+                })
+            }
+            ControlInformation::ObisDataReservedShortTransportLayer => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ObisDataReservedShortTransportLayer control information",
+                })
+            }
+            ControlInformation::ApplicationLayerFormatFrameNoTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationLayerFormatFrameNoTransport control information",
+                })
+            }
+            ControlInformation::ApplicationLayerFormatFrameShortTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationLayerFormatFrameShortTransport control information",
+                })
+            }
+            ControlInformation::ApplicationLayerFormatFrameLongTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationLayerFormatFrameLongTransport control information",
+                })
+            }
+            ControlInformation::ClockSyncAbsolute => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ClockSyncAbsolute control information",
+                })
+            }
+            ControlInformation::ClockSyncRelative => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ClockSyncRelative control information",
+                })
+            }
+            ControlInformation::ApplicationErrorShortTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationErrorShortTransport control information",
+                })
+            }
+            ControlInformation::ApplicationErrorLongTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationErrorLongTransport control information",
+                })
+            }
+            ControlInformation::AlarmShortTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "AlarmShortTransport control information",
+                })
+            }
+            ControlInformation::AlarmLongTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "AlarmLongTransport control information",
+                })
+            }
+            ControlInformation::ApplicationLayerNoTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationLayerNoTransport control information",
+                })
+            }
+            ControlInformation::ApplicationLayerCompactFrameNoTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationLayerCompactFrameNoTransport control information",
+                })
+            }
             ControlInformation::ApplicationLayerShortTransport => {
                 let mut iter = data.iter().skip(1);
 
@@ -857,20 +963,76 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     extended_link_layer: None,
                 })
             }
-            ControlInformation::ApplicationLayerCompactFrameShortTransport => todo!(),
-            ControlInformation::CosemApplicationLayerLongTransport => todo!(),
-            ControlInformation::CosemApplicationLayerShortTransport => todo!(),
-            ControlInformation::ObisApplicationLayerReservedLongTransport => todo!(),
-            ControlInformation::ObisApplicationLayerReservedShortTransport => todo!(),
-            ControlInformation::TransportLayerLongReadoutToMeter => todo!(),
-            ControlInformation::NetworkLayerData => todo!(),
-            ControlInformation::FutureUse => todo!(),
-            ControlInformation::NetworkManagementApplication => todo!(),
-            ControlInformation::TransportLayerCompactFrame => todo!(),
-            ControlInformation::TransportLayerFormatFrame => todo!(),
-            ControlInformation::NetworkManagementDataReserved => todo!(),
-            ControlInformation::TransportLayerShortMeterToReadout => todo!(),
-            ControlInformation::TransportLayerLongMeterToReadout => todo!(),
+            ControlInformation::ApplicationLayerCompactFrameShortTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ApplicationLayerCompactFrameShortTransport control information",
+                })
+            }
+            ControlInformation::CosemApplicationLayerLongTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "CosemApplicationLayerLongTransport control information",
+                })
+            }
+            ControlInformation::CosemApplicationLayerShortTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "CosemApplicationLayerShortTransport control information",
+                })
+            }
+            ControlInformation::ObisApplicationLayerReservedLongTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ObisApplicationLayerReservedLongTransport control information",
+                })
+            }
+            ControlInformation::ObisApplicationLayerReservedShortTransport => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ObisApplicationLayerReservedShortTransport control information",
+                })
+            }
+            ControlInformation::TransportLayerLongReadoutToMeter => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "TransportLayerLongReadoutToMeter control information",
+                })
+            }
+            ControlInformation::NetworkLayerData => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "NetworkLayerData control information",
+                })
+            }
+            ControlInformation::FutureUse => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "FutureUse control information",
+                })
+            }
+            ControlInformation::NetworkManagementApplication => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "NetworkManagementApplication control information",
+                })
+            }
+            ControlInformation::TransportLayerCompactFrame => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "TransportLayerCompactFrame control information",
+                })
+            }
+            ControlInformation::TransportLayerFormatFrame => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "TransportLayerFormatFrame control information",
+                })
+            }
+            ControlInformation::NetworkManagementDataReserved => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "NetworkManagementDataReserved control information",
+                })
+            }
+            ControlInformation::TransportLayerShortMeterToReadout => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "TransportLayerShortMeterToReadout control information",
+                })
+            }
+            ControlInformation::TransportLayerLongMeterToReadout => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "TransportLayerLongMeterToReadout control information",
+                })
+            }
             ControlInformation::ExtendedLinkLayerI => {
                 let mut iter = data.iter();
                 iter.next();
@@ -901,8 +1063,16 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     Err(ApplicationLayerError::MissingControlInformation)
                 }
             }
-            ControlInformation::ExtendedLinkLayerII => todo!(),
-            ControlInformation::ExtendedLinkLayerIII => todo!(),
+            ControlInformation::ExtendedLinkLayerII => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ExtendedLinkLayerII control information",
+                })
+            }
+            ControlInformation::ExtendedLinkLayerIII => {
+                Err(ApplicationLayerError::Unimplemented {
+                    feature: "ExtendedLinkLayerIII control information",
+                })
+            }
         }
     }
 }
@@ -1061,7 +1231,7 @@ mod tests {
         for (byte, expected_device_type) in test_cases {
             let device_type = DeviceType::from(byte);
             assert_eq!(device_type, expected_device_type);
-            assert_eq!(device_type.to_byte(), byte);
+            assert_eq!(u8::from(device_type), byte);
         }
 
         // Test that Reserved variants map back to their byte values

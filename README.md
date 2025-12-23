@@ -18,6 +18,43 @@ Furthermore, the Open Metering System (OMS) Group has published a specification 
 
 There are many m bus parsers in the wild on github, such as a no longer maitained [ m-bus encoder and decoder by rscada](https://github.com/rscada/libmbus) written in **c**, [jMbus](https://github.com/qvest-digital/jmbus) written in **java**,[Valley.Net.Protocols.MeterBus](https://github.com/sympthom/Valley.Net.Protocols.MeterBus/) written in **C#**, [tmbus](https://dev-lab.github.io/tmbus/) written in javascript or [pyMeterBus](https://github.com/ganehag/pyMeterBus) written in python.
 
+## Supported Features
+
+### Control Information Types
+
+The parser currently supports the following Control Information (CI) types:
+
+#### Implemented
+- **ResetAtApplicationLevel** - Application layer reset
+- **ResponseWithVariableDataStructure** - Variable data response (CI: 0x72, 0x76, 0x7A)
+- **ResponseWithFixedDataStructure** - Fixed data response (CI: 0x73)
+- **ApplicationLayerShortTransport** - Short transport layer frame (CI: 0x7D)
+- **ApplicationLayerLongTransport** - Long transport layer frame (CI: 0x7E)
+- **ExtendedLinkLayerI** - Extended link layer type I (CI: 0x8A)
+
+#### Not Yet Implemented
+The following CI types will return an `ApplicationLayerError::Unimplemented` error:
+- SendData, SelectSlave, SynchronizeSlave
+- SetBaudRate* (300, 600, 1200, 2400, 4800, 9600, 19200, 38400)
+- OutputRAMContent, WriteRAMContent
+- StartCalibrationTestMode, ReadEEPROM, StartSoftwareTest
+- HashProcedure, SendErrorStatus, SendAlarmStatus
+- DataSentWith*TransportLayer, CosemData*, ObisData*
+- ApplicationLayerFormatFrame*, ClockSync*
+- ApplicationError*, Alarm*, NetworkLayer*
+- TransportLayer* (various types)
+- ExtendedLinkLayerII, ExtendedLinkLayerIII
+
+For a complete list, refer to EN 13757-3 specification.
+
+### Value Information Units
+
+Most common value information unit codes are supported. Some specialized units may return `DataInformationError::Unimplemented`:
+- Reserved length values in variable length data
+- Special functions data parsing
+- Partial primary and extended value information unit codes
+
+Contributions to implement additional CI types and value information units are welcome!
 
 ## Dependants and Deployments
 

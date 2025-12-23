@@ -324,7 +324,11 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x7A => labels.push(ValueLabel::Address),
                     0x7B => {}
 
-                    x => todo!("Implement the rest of the units: {:X?}", x),
+                    _ => {
+                        return Err(DataInformationError::Unimplemented {
+                            feature: "Primary value information unit codes (partial)",
+                        })
+                    }
                 };
                 /* consume orthogonal vife */
                 consume_orthhogonal_vife(
@@ -598,7 +602,11 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b110_1101 => populate!(HCAUnit, 1,dec: 0, LowTemperatureRatingFactor),
                     0b110_1110 => populate!(HCAUnit, 1,dec: 0, DisplayOutputScalingFactor),
 
-                    _ => todo!("Implement the rest of the units: {:X?}", first_vife_data),
+                    _ => {
+                        return Err(DataInformationError::Unimplemented {
+                            feature: "Extended value information unit codes (partial)",
+                        })
+                    }
                 };
             }
             // we need to check if the next byte is equivalent to the length of the rest of the

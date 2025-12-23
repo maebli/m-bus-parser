@@ -90,6 +90,7 @@ impl<'a> EncryptedPayload<'a> {
         }
     }
 
+    #[cfg(feature = "decryption")]
     fn _derive_iv(&self) -> [u8; 16] {
         let mut iv = [0u8; 16];
         // Bytes 0-1: Manufacturer ID (numeric, little-endian)
@@ -101,7 +102,7 @@ impl<'a> EncryptedPayload<'a> {
         // Byte 6: Version
         iv[6] = self.context.version;
         // Byte 7: Device type
-        iv[7] = self.context.device_type.to_byte();
+        iv[7] = self.context.device_type.into();
         // Bytes 8-15: Access number repeated 8 times
         iv[8..16].fill(self.context.access_number);
         iv
@@ -110,6 +111,7 @@ impl<'a> EncryptedPayload<'a> {
 
 /// Convert a decimal number to BCD bytes (little-endian, 4 bytes)
 /// e.g., 14639203 -> [0x03, 0x92, 0x63, 0x14]
+#[cfg(feature = "decryption")]
 fn decimal_to_bcd(mut value: u32) -> [u8; 4] {
     let mut bcd = [0u8; 4];
     for byte in &mut bcd {

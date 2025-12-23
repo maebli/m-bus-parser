@@ -56,6 +56,7 @@ pub enum ApplicationLayerError {
     IdentificationNumberError { digits: [u8; 4], number: u32 },
     InvalidManufacturerCode { code: u16 },
     InsufficientData,
+    Unimplemented { feature: &'static str },
 }
 
 #[cfg(feature = "std")]
@@ -81,6 +82,9 @@ impl fmt::Display for ApplicationLayerError {
             ApplicationLayerError::InsufficientData => {
                 write!(f, "Insufficient data")
             }
+            ApplicationLayerError::Unimplemented { feature } => {
+                write!(f, "Unimplemented feature: {}", feature)
+            }
         }
     }
 }
@@ -88,7 +92,7 @@ impl fmt::Display for ApplicationLayerError {
 #[cfg(feature = "std")]
 impl std::error::Error for ApplicationLayerError {}
 
-fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> {
+pub fn bcd_hex_digits_to_u32(digits: [u8; 4]) -> Result<u32, ApplicationLayerError> {
     let mut number = 0u32;
 
     for &digit in digits.iter().rev() {
@@ -230,62 +234,6 @@ impl Display for DeviceType {
             DeviceType::BusConverterMeterSide => write!(f, "Bus Converter (Meter Side)"),
             DeviceType::Reserved(code) => write!(f, "Reserved (0x{:02X})", code),
             DeviceType::Wildcard => write!(f, "Wildcard"),
-        }
-    }
-}
-
-impl DeviceType {
-    pub fn to_byte(&self) -> u8 {
-        match self {
-            DeviceType::Other => 0x00,
-            DeviceType::OilMeter => 0x01,
-            DeviceType::ElectricityMeter => 0x02,
-            DeviceType::GasMeter => 0x03,
-            DeviceType::HeatMeterReturn => 0x04,
-            DeviceType::SteamMeter => 0x05,
-            DeviceType::WarmWaterMeter => 0x06,
-            DeviceType::WaterMeter => 0x07,
-            DeviceType::HeatCostAllocator => 0x08,
-            DeviceType::CompressedAir => 0x09,
-            DeviceType::CoolingMeterReturn => 0x0A,
-            DeviceType::CoolingMeterFlow => 0x0B,
-            DeviceType::HeatMeterFlow => 0x0C,
-            DeviceType::CombinedHeatCoolingMeter => 0x0D,
-            DeviceType::BusSystemComponent => 0x0E,
-            DeviceType::UnknownDevice => 0x0F,
-            DeviceType::IrrigationWaterMeter => 0x10,
-            DeviceType::WaterDataLogger => 0x11,
-            DeviceType::GasDataLogger => 0x12,
-            DeviceType::GasConverter => 0x13,
-            DeviceType::CalorificValue => 0x14,
-            DeviceType::HotWaterMeter => 0x15,
-            DeviceType::ColdWaterMeter => 0x16,
-            DeviceType::DualRegisterWaterMeter => 0x17,
-            DeviceType::PressureMeter => 0x18,
-            DeviceType::AdConverter => 0x19,
-            DeviceType::SmokeDetector => 0x1A,
-            DeviceType::RoomSensor => 0x1B,
-            DeviceType::GasDetector => 0x1C,
-            DeviceType::ReservedSensor(code) => *code,
-            DeviceType::ElectricityBreaker => 0x20,
-            DeviceType::Valve => 0x21,
-            DeviceType::ReservedSwitch(code) => *code,
-            DeviceType::CustomerUnit => 0x25,
-            DeviceType::ReservedCustomer(code) => *code,
-            DeviceType::WasteWaterMeter => 0x28,
-            DeviceType::Garbage => 0x29,
-            DeviceType::ReservedCO2 => 0x2A,
-            DeviceType::ReservedEnvironmental(code) => *code,
-            DeviceType::ServiceTool => 0x30,
-            DeviceType::CommunicationController => 0x31,
-            DeviceType::UnidirectionalRepeater => 0x32,
-            DeviceType::BidirectionalRepeater => 0x33,
-            DeviceType::ReservedSystem(code) => *code,
-            DeviceType::RadioConverterSystemSide => 0x36,
-            DeviceType::RadioConverterMeterSide => 0x37,
-            DeviceType::BusConverterMeterSide => 0x38,
-            DeviceType::Reserved(code) => *code,
-            DeviceType::Wildcard => 0xFF,
         }
     }
 }
