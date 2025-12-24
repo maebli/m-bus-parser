@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use m_bus_core::DeviceType;
 use m_bus_parser::mbus_data::MbusData;
 use m_bus_parser::user_data::UserDataBlock;
@@ -39,12 +41,14 @@ fn device_type_from_str(device_type: &str) -> DeviceType {
     match device_type {
         "Other" => DeviceType::Other,
         "Water" => DeviceType::WaterMeter,
+        "ColdWater" => DeviceType::ColdWaterMeter,
         "WarmWater" => DeviceType::WarmWaterMeter,
         "Heat" => DeviceType::HeatMeterReturn,
         "HeatMeterFlow" => DeviceType::HeatMeterFlow,
         "HeatCostAllocator" => DeviceType::HeatCostAllocator,
         "HeatCoolingLoad" => DeviceType::CombinedHeatCoolingMeter,
         "Electricity" => DeviceType::ElectricityMeter,
+        "Gas" => DeviceType::GasMeter,
         "RoomSensor" => DeviceType::RoomSensor,
         s if s.starts_with("Reserved(") => {
             // Parse "Reserved(128)" format

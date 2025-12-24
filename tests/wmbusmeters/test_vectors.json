@@ -255,5 +255,94 @@
         {"value": 211, "unit": "°C", "exponent": -1, "storage_number": 0, "function": "Instantaneous"}
       ]
     }
+  },
+  {
+    "input": "374493444836351218067ac70000200c13911900004c1391170000426cbf2ccc081391170000c2086cbf2c02bb560000326cffff046d1e02",
+    "expected": {
+      "identification_number": 12353648,
+      "manufacturer": "QDS",
+      "version": 24,
+      "medium": "WarmWater",
+      "access_number": 199,
+      "status": 0,
+      "data_records": [
+        {"value": 1991, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 1791, "unit": "m^3", "exponent": -3, "storage_number": 1, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "5E4409071212101510077A710050052F2F046D0110A92704130000000004933B0000000004933C00000000023B000002592A0A446D0000A12744130000000044933B0000000044933C0000000001FD74622F2F2F2F2F2F2F2F2F2F2F2F2F2F",
+    "expected": {
+      "identification_number": 15101212,
+      "manufacturer": "AXI",
+      "version": 16,
+      "medium": "Water",
+      "access_number": 113,
+      "status": 0,
+      "data_records": [
+        {"value": 0, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "2A442D2C998734761B168D2091D37CAC21E1D68CDAFFCD3DC452BD802913FF7B1706CA9E355D6C2701CC24",
+    "expected": {
+      "identification_number": 76348799,
+      "manufacturer": "KAM",
+      "version": 27,
+      "medium": "ColdWater",
+      "access_number": 145,
+      "status": 32,
+      "data_records": []
+    }
+  },
+  {
+    "input": "23442D2C454571631B168D206A31FB7C2039A379604B90BDFCBE8DD8CB18CE77DC41CE8C",
+    "expected": {
+      "identification_number": 63714545,
+      "manufacturer": "KAM",
+      "version": 27,
+      "medium": "ColdWater",
+      "access_number": 106,
+      "status": 32,
+      "data_records": []
+    }
+  },
+  {
+    "input": "2e4493157856341233037a2a0020055923c95aaa26d1b2e7493b013ec4a6f6d3529b520edff0ea6defc99d6d69ebf3",
+    "expected": {
+      "identification_number": 12345678,
+      "manufacturer": "ELS",
+      "version": 51,
+      "medium": "Gas",
+      "access_number": 42,
+      "status": 0,
+      "data_records": []
+    }
+  },
+  {
+    "input": "5E442D2C1371938240047ADD105025F9DA8C440B00327ACE751EE1E0A2BD41376463033CF9701816B884AB7C26031C301869B81C990C9E0F2619320C26FF656A893F73E5C62C2ED7B554FAFA6952823BB533EF684415AEBAA7BE48DAC11AD2",
+    "expected": {
+      "identification_number": 82937113,
+      "manufacturer": "KAM",
+      "version": 64,
+      "medium": "Heat",
+      "access_number": 221,
+      "status": 16,
+      "data_records": []
+    }
+  },
+  {
+    "input": "5E442D2C1371938240047ADE105025AB1AEA30807184FAF7ADE4D6D91CA8EA3550165F99370FF78A0FA424A59E190021F83A747DF56639D967E841155325266FBDB50109CEC8406D7A625974C817F7999BDFBE4C70326C126805941CEFF7ED",
+    "expected": {
+      "identification_number": 82937113,
+      "manufacturer": "KAM",
+      "version": 64,
+      "medium": "Heat",
+      "access_number": 222,
+      "status": 16,
+      "data_records": []
+    }
   }
 ]

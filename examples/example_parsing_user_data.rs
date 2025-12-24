@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::unnecessary_fallible_conversions)]
+
 use m_bus_parser::user_data::DataRecords;
 
 fn main() {

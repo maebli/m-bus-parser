@@ -1,3 +1,9 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::unnecessary_fallible_conversions
+)]
+
 use m_bus_parser::{Address, Function, WiredFrame};
 ///       68 4d 4d 68 08 01 72 01 00 00 00 96 15 01 00 18 00 00 00 0c 78 56 00 00 00 01
 ///       fd 1b 00 02 fc 03 48 52 25 74 44 0d 22 fc 03 48 52 25 74 f1 0c 12 fc 03 48 52

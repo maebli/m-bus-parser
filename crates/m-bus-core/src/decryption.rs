@@ -319,8 +319,8 @@ mod tests {
         assert_eq!(iv[7], 0x07);
 
         // Check access number repeated (bytes 8-15)
-        for i in 8..16 {
-            assert_eq!(iv[i], 0x50);
+        for &byte in iv.iter().skip(8) {
+            assert_eq!(byte, 0x50);
         }
     }
 
