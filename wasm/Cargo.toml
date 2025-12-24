@@ -17,7 +17,8 @@ tag-name = "wasm-v{{version}}"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["console_error_panic_hook"]
+default = ["console_error_panic_hook", "decryption"]
+decryption = ["m-bus-parser/decryption"]
 
 [dependencies]
 wasm-bindgen = "0.2.84"
