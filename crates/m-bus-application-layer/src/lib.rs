@@ -1037,12 +1037,54 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     Err(ApplicationLayerError::MissingControlInformation)
                 }
             }
-            ControlInformation::ExtendedLinkLayerII => Err(ApplicationLayerError::Unimplemented {
-                feature: "ExtendedLinkLayerII control information",
-            }),
-            ControlInformation::ExtendedLinkLayerIII => Err(ApplicationLayerError::Unimplemented {
-                feature: "ExtendedLinkLayerIII control information",
-            }),
+            ControlInformation::ExtendedLinkLayerII => {
+                // CI byte + ELL II (8 bytes) = 9 bytes total before application data
+                let (ell, ell_size) = ExtendedLinkLayer::parse(
+                    data.get(1..).ok_or(ApplicationLayerError::InsufficientData)?,
+                    extended_link_layer::EllFormat::FormatII,
+                )?;
+                let app_data_offset = 1 + ell_size;
+
+                // Create a ShortTplHeader from ELL fields
+                // For encrypted ELL frames, the ELL fields become the "header"
+                let short_tpl_header = ShortTplHeader {
+                    access_number: ell.access_number,
+                    status: StatusField::from_bits_truncate(ell.communication_control),
+                    configuration_field: ConfigurationField::from_bytes(0x00, 0x00),
+                };
+
+                Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
+                    extended_link_layer: Some(ell),
+                    short_tpl_header,
+                    variable_data_block: data
+                        .get(app_data_offset..)
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
+                })
+            }
+            ControlInformation::ExtendedLinkLayerIII => {
+                // CI byte + ELL III (16 bytes) = 17 bytes total before application data
+                let (ell, ell_size) = ExtendedLinkLayer::parse(
+                    data.get(1..).ok_or(ApplicationLayerError::InsufficientData)?,
+                    extended_link_layer::EllFormat::FormatIII,
+                )?;
+                let app_data_offset = 1 + ell_size;
+
+                // Create a ShortTplHeader from ELL fields
+                // For encrypted ELL frames, the ELL fields become the "header"
+                let short_tpl_header = ShortTplHeader {
+                    access_number: ell.access_number,
+                    status: StatusField::from_bits_truncate(ell.communication_control),
+                    configuration_field: ConfigurationField::from_bytes(0x00, 0x00),
+                };
+
+                Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
+                    extended_link_layer: Some(ell),
+                    short_tpl_header,
+                    variable_data_block: data
+                        .get(app_data_offset..)
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
+                })
+            }
         }
     }
 }

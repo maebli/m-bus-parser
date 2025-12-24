@@ -39,6 +39,7 @@ fn device_type_from_str(device_type: &str) -> DeviceType {
     match device_type {
         "Other" => DeviceType::Other,
         "Water" => DeviceType::WaterMeter,
+        "ColdWater" => DeviceType::ColdWaterMeter,
         "WarmWater" => DeviceType::WarmWaterMeter,
         "Heat" => DeviceType::HeatMeterReturn,
         "HeatMeterFlow" => DeviceType::HeatMeterFlow,
