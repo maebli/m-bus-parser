@@ -255,5 +255,46 @@
         {"value": 211, "unit": "°C", "exponent": -1, "storage_number": 0, "function": "Instantaneous"}
       ]
     }
+  },
+  {
+    "input": "374493444836351218067ac70000200c13911900004c1391170000426cbf2ccc081391170000c2086cbf2c02bb560000326cffff046d1e02",
+    "expected": {
+      "identification_number": 12353648,
+      "manufacturer": "QDS",
+      "version": 24,
+      "medium": "WarmWater",
+      "access_number": 199,
+      "status": 0,
+      "data_records": [
+        {"value": 1991, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 1791, "unit": "m^3", "exponent": -3, "storage_number": 1, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "5E4409071212101510077A710050052F2F046D0110A92704130000000004933B0000000004933C00000000023B000002592A0A446D0000A12744130000000044933B0000000044933C0000000001FD74622F2F2F2F2F2F2F2F2F2F2F2F2F2F",
+    "expected": {
+      "identification_number": 15101212,
+      "manufacturer": "AXI",
+      "version": 16,
+      "medium": "Water",
+      "access_number": 113,
+      "status": 0,
+      "data_records": [
+        {"value": 0, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "2A442D2C998734761B168D2091D37CAC21E1D68CDAFFCD3DC452BD802913FF7B1706CA9E355D6C2701CC24",
+    "expected": {
+      "identification_number": 76348799,
+      "manufacturer": "KAM",
+      "version": 27,
+      "medium": "ColdWater",
+      "access_number": 145,
+      "status": 32,
+      "data_records": []
+    }
   }
 ]
