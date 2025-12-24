@@ -4,7 +4,9 @@
 //! * was implemented using the publicly available documentation available at <https://m-bus.com/>
 //! # Example
 //! ```rust
-//! use m_bus_parser::frames::{ Address, Frame, Function };
+//!
+//! use m_bus_core::{FrameError, Function};
+//! use wired_mbus_link_layer::{Address, WiredFrame};
 //! use m_bus_parser::user_data::{DataRecords, UserDataBlock};
 //! use m_bus_parser::mbus_data::MbusData;
 //!
@@ -24,19 +26,19 @@
 //!     ];
 //!
 //!     // Parse the frame
-//!     let frame = Frame::try_from(example.as_slice())?;
+//!     let frame = WiredFrame::try_from(example.as_slice())?;
 //!
-//!     if let Frame::LongFrame { function, address, data } = frame {
+//!     if let WiredFrame::LongFrame { function, address, data } = frame {
 //!         assert_eq!(function, Function::RspUd { acd: false, dfc: false });
 //!         assert_eq!(address, Address::Primary(1));
-//!         if let Ok(UserDataBlock::VariableDataStructure { fixed_data_header, variable_data_block }) = UserDataBlock::try_from(data) {
-//!             let data_records = DataRecords::from((variable_data_block, &fixed_data_header));
+//!         if let Ok(UserDataBlock::VariableDataStructureWithLongTplHeader { long_tpl_header, variable_data_block, .. }) = UserDataBlock::try_from(data) {
+//!             let data_records = DataRecords::from((variable_data_block, &long_tpl_header));
 //!             println!("data_records: {:#?}", data_records.collect::<Result<Vec<_>, _>>()?);
 //!         }
 //!     }
 //!
 //!     // Parse everything at once
-//!     let parsed_data = MbusData::try_from(example.as_slice())?;
+//!     let parsed_data = MbusData::<WiredFrame>::try_from(example.as_slice())?;
 //!     println!("parsed_data: {:#?}", parsed_data);
 //!     Ok(())
 //! }
@@ -44,21 +46,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frames::FrameError;
-use user_data::ApplicationLayerError;
-
-pub mod frames;
 pub mod mbus_data;
-pub mod user_data;
+pub use m_bus_application_layer as user_data;
+
+pub use m_bus_core::decryption;
+use m_bus_core::ApplicationLayerError;
+// Re-export link layer types for convenience
+pub use m_bus_core::{FrameError, Function};
+pub use wired_mbus_link_layer::{Address, WiredFrame};
+pub use wireless_mbus_link_layer::{ManufacturerId, WirelessFrame};
 
 #[cfg(feature = "std")]
 pub use mbus_data::serialize_mbus_data;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub enum MbusError {
     FrameError(FrameError),
+    WirelessFrameError(wireless_mbus_link_layer::FrameError),
     ApplicationLayerError(ApplicationLayerError),
     DataRecordError(user_data::variable_user_data::DataRecordError),
 }
@@ -68,6 +74,7 @@ impl std::fmt::Display for MbusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MbusError::FrameError(e) => write!(f, "{e}"),
+            MbusError::WirelessFrameError(e) => write!(f, "{:?}", e),
             MbusError::ApplicationLayerError(e) => write!(f, "{e}"),
             MbusError::DataRecordError(e) => write!(f, "{e}"),
         }
@@ -92,5 +99,11 @@ impl From<ApplicationLayerError> for MbusError {
 impl From<user_data::variable_user_data::DataRecordError> for MbusError {
     fn from(error: user_data::variable_user_data::DataRecordError) -> Self {
         Self::DataRecordError(error)
+    }
+}
+
+impl From<wireless_mbus_link_layer::FrameError> for MbusError {
+    fn from(error: wireless_mbus_link_layer::FrameError) -> Self {
+        Self::WirelessFrameError(error)
     }
 }

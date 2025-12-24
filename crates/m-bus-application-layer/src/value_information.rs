@@ -324,7 +324,11 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x7A => labels.push(ValueLabel::Address),
                     0x7B => {}
 
-                    x => todo!("Implement the rest of the units: {:X?}", x),
+                    _ => {
+                        return Err(DataInformationError::Unimplemented {
+                            feature: "Primary value information unit codes (partial)",
+                        })
+                    }
                 };
                 /* consume orthogonal vife */
                 consume_orthhogonal_vife(
@@ -598,7 +602,11 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b110_1101 => populate!(HCAUnit, 1,dec: 0, LowTemperatureRatingFactor),
                     0b110_1110 => populate!(HCAUnit, 1,dec: 0, DisplayOutputScalingFactor),
 
-                    _ => todo!("Implement the rest of the units: {:X?}", first_vife_data),
+                    _ => {
+                        return Err(DataInformationError::Unimplemented {
+                            feature: "Extended value information unit codes (partial)",
+                        })
+                    }
                 };
             }
             // we need to check if the next byte is equivalent to the length of the rest of the
@@ -1250,8 +1258,8 @@ mod tests {
 
     #[test]
     fn test_single_byte_primary_value_information_parsing() {
-        use crate::user_data::value_information::UnitName;
-        use crate::user_data::value_information::{
+        use crate::value_information::UnitName;
+        use crate::value_information::{
             Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
         };
         use arrayvec::ArrayVec;
@@ -1363,8 +1371,8 @@ mod tests {
 
     #[test]
     fn test_multibyte_primary_value_information() {
-        use crate::user_data::value_information::UnitName;
-        use crate::user_data::value_information::{
+        use crate::value_information::UnitName;
+        use crate::value_information::{
             Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
         };
         use arrayvec::ArrayVec;
@@ -1450,9 +1458,9 @@ mod tests {
     fn test_plain_text_vif_norm_conform() {
         use arrayvec::ArrayVec;
 
-        use crate::user_data::value_information::{Unit, ValueInformation, ValueLabel};
+        use crate::value_information::{Unit, ValueInformation, ValueLabel};
 
-        use crate::user_data::value_information::ValueInformationBlock;
+        use crate::value_information::ValueInformationBlock;
         // This is the ascii conform method of encoding the VIF
         // VIF  VIFE  LEN(3) 'R'   'H'  '%'
         // 0xFC, 0x74, 0x03, 0x52, 0x48, 0x25,
@@ -1494,7 +1502,7 @@ mod tests {
 
     #[test]
     fn test_short_vif_with_vife() {
-        use crate::user_data::value_information::ValueInformationBlock;
+        use crate::value_information::ValueInformationBlock;
         let data = [253, 27];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);

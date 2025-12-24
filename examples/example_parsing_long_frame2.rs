@@ -1,4 +1,5 @@
-use m_bus_parser::frames::{Address, Frame, Function};
+use m_bus_parser::{Address, Function, WiredFrame};
+
 fn main() {
     let example = vec![
         0x68, 0x3C, 0x3C, 0x68, 0x08, 0x08, 0x72, 0x78, 0x03, 0x49, 0x11, 0x77, 0x04, 0x0E, 0x16,
@@ -7,9 +8,11 @@ fn main() {
         0xCD, 0x13, 0x02, 0x27, 0x00, 0x00, 0x09, 0xFD, 0x0E, 0x02, 0x09, 0xFD, 0x0F, 0x06, 0x0F,
         0x00, 0x01, 0x75, 0x13, 0xD3, 0x16,
     ];
-    let frame = Frame::try_from(example.as_slice()).unwrap();
 
-    if let Frame::LongFrame {
+    #[allow(clippy::unwrap_used)]
+    let frame = WiredFrame::try_from(example.as_slice()).unwrap();
+
+    if let WiredFrame::LongFrame {
         function,
         address,
         data,
@@ -24,12 +27,15 @@ fn main() {
         );
         assert_eq!(address, Address::Primary(8));
 
-        if let Ok(m_bus_parser::user_data::UserDataBlock::VariableDataStructure {
-            fixed_data_header,
-            variable_data_block,
-        }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
+        if let Ok(
+            m_bus_parser::user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                variable_data_block,
+                ..
+            },
+        ) = m_bus_parser::user_data::UserDataBlock::try_from(data)
         {
-            println!("fixed_data_header: {:#?}", fixed_data_header);
+            println!("long_tpl_header: {:#?}", long_tpl_header);
             println!("variable_data_block: {:?}", variable_data_block);
             let data_records = m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
             println!("data_records: {:#?}", data_records.unwrap());

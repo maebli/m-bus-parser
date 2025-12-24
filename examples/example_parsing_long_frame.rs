@@ -1,4 +1,4 @@
-use m_bus_parser::frames::{Address, Frame, Function};
+use m_bus_parser::{Address, Function, WiredFrame};
 ///       68 4d 4d 68 08 01 72 01 00 00 00 96 15 01 00 18 00 00 00 0c 78 56 00 00 00 01
 ///       fd 1b 00 02 fc 03 48 52 25 74 44 0d 22 fc 03 48 52 25 74 f1 0c 12 fc 03 48 52
 ///       25 74 63 11 02 65 b4 09 22 65 86 09 12 65 b7 09 01 72 00 72 65 00 00 b2 01 65
@@ -25,9 +25,6 @@ use m_bus_parser::frames::{Address, Frame, Function};
 ///       External Temperature (Minimum)  24.38 °C
 ///       External Temperature (Maximum)  24.87 °C
 ///       Averaging Duration      0 hours
-///
-//  This is an example of how to use the library to parse a frame.
-
 #[cfg(feature = "plaintext-before-extension")]
 fn main() {
     let example = vec![
@@ -39,9 +36,10 @@ fn main() {
         0xB2, 0x01, 0x65, 0x00, 0x00, 0x1F, 0xB3, 0x16,
     ];
 
-    let frame = Frame::try_from(example.as_slice()).unwrap();
+    #[allow(clippy::unwrap_used)]
+    let frame = WiredFrame::try_from(example.as_slice()).unwrap();
 
-    if let Frame::LongFrame {
+    if let WiredFrame::LongFrame {
         function,
         address,
         data,
@@ -56,12 +54,15 @@ fn main() {
         );
         assert_eq!(address, Address::Primary(1));
 
-        if let Ok(m_bus_parser::user_data::UserDataBlock::VariableDataStructure {
-            fixed_data_header,
-            variable_data_block,
-        }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
+        if let Ok(
+            m_bus_parser::user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                variable_data_block,
+                ..
+            },
+        ) = m_bus_parser::user_data::UserDataBlock::try_from(data)
         {
-            println!("fixed_data_header: {:#?}", fixed_data_header);
+            println!("fixed_data_header: {:#?}", long_tpl_header);
             println!("variable_data_block: {:?}", variable_data_block);
             let data_records = m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
             println!("data_records: {:#?}", data_records.unwrap());
@@ -81,9 +82,9 @@ fn main() {
         0xB2, 0x01, 0x65, 0x00, 0x00, 0x1F, 0xB3, 0x16,
     ];
 
-    let frame = Frame::try_from(example.as_slice()).unwrap();
+    let frame = WiredFrame::try_from(example.as_slice()).unwrap();
 
-    if let Frame::LongFrame {
+    if let WiredFrame::LongFrame {
         function,
         address,
         data,
@@ -98,12 +99,15 @@ fn main() {
         );
         assert_eq!(address, Address::Primary(1));
 
-        if let Ok(m_bus_parser::user_data::UserDataBlock::VariableDataStructure {
-            fixed_data_header,
-            variable_data_block,
-        }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
+        if let Ok(
+            m_bus_parser::user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                variable_data_block,
+                ..
+            },
+        ) = m_bus_parser::user_data::UserDataBlock::try_from(data)
         {
-            println!("fixed_data_header: {:#?}", fixed_data_header);
+            println!("fixed_data_header: {:#?}", long_tpl_header);
             println!("variable_data_block: {:?}", variable_data_block);
             let data_records = m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
             println!("data_records: {:#?}", data_records.unwrap());

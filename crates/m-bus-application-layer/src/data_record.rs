@@ -2,7 +2,7 @@ use super::{
     data_information::{Data, DataFieldCoding, DataInformation, DataInformationBlock, DataType},
     value_information::{ValueInformation, ValueInformationBlock, ValueLabel},
     variable_user_data::DataRecordError,
-    FixedDataHeader,
+    LongTplHeader,
 };
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq, Clone)]
@@ -66,7 +66,7 @@ impl DataRecord<'_> {
 impl<'a> DataRecord<'a> {
     fn parse(
         data: &'a [u8],
-        fixed_data_header: Option<&'a FixedDataHeader>,
+        fixed_data_header: Option<&'a LongTplHeader>,
     ) -> Result<Self, DataRecordError> {
         let data_record_header = DataRecordHeader::try_from(data)?;
         let mut header_size = data_record_header.get_size();
@@ -216,10 +216,10 @@ impl<'a> TryFrom<&'a [u8]> for DataRecordHeader<'a> {
     }
 }
 
-impl<'a> TryFrom<(&'a [u8], &'a FixedDataHeader)> for DataRecord<'a> {
+impl<'a> TryFrom<(&'a [u8], &'a LongTplHeader)> for DataRecord<'a> {
     type Error = DataRecordError;
     fn try_from(
-        (data, fixed_data_header): (&'a [u8], &'a FixedDataHeader),
+        (data, fixed_data_header): (&'a [u8], &'a LongTplHeader),
     ) -> Result<Self, Self::Error> {
         Self::parse(data, Some(fixed_data_header))
     }

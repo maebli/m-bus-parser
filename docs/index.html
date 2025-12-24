@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Wired M-Bus Parser</title>
+    <title>M-Bus Parser (Wired & Wireless)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/default.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/languages/json.min.js"></script>
@@ -85,6 +85,43 @@
             box-sizing: border-box;
             margin-bottom: 10px;
             font-family: monospace;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+
+        .key-input-container {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .key-help {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 4px;
+            margin-bottom: 8px;
+        }
+
+        .key-toggle {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: #666;
+        }
+
+        .key-toggle:hover {
+            color: #333;
         }
 
         input[type="button"] {
@@ -198,6 +235,24 @@
             border: 1px solid #444;
         }
 
+        body.dark-mode input[type="text"] {
+            background: #23272a;
+            color: #e0e0e0;
+            border: 1px solid #444;
+        }
+
+        body.dark-mode .key-help {
+            color: #aaa;
+        }
+
+        body.dark-mode .key-toggle {
+            color: #aaa;
+        }
+
+        body.dark-mode .key-toggle:hover {
+            color: #e0e0e0;
+        }
+
         body.dark-mode pre {
             background: #23272a;
             color: #e0e0e0;
@@ -270,7 +325,7 @@
     <div class="header">
         <img id="banner" src="meter.png" alt="Meter Banner">
         <div class="header-text">
-            <h1>Online M-Bus parser (wired) <span class="parser-version">v0.0.7</span></h1>
+            <h1>Online M-Bus Parser <span class="parser-version">v0.0.8</span></h1>
             <div class="subtitle">
                 <a href="https://maebli.github.io/m-bus-parser" target="_blank">maebli.github.io/m-bus-parser</a> • <a href="https://github.com/maebli" target="_blank">Michael Aebli</a>
             </div>
@@ -295,6 +350,19 @@
         <label for="inputstring">Input String:</label>
         <textarea rows="5" cols="80"
             id="inputstring">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
+
+        <label for="aeskey">AES-128 Decryption Key (optional):</label>
+        <div class="key-input-container">
+            <input type="password" id="aeskey" placeholder="Enter 32 hex characters (16 bytes)" maxlength="32" pattern="[0-9A-Fa-f]{32}" />
+            <button type="button" class="key-toggle" id="key-toggle" title="Show/Hide key">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+        </div>
+        <div class="key-help">Leave empty for unencrypted frames. Format: 32 hexadecimal characters (e.g., 0123456789ABCDEF0123456789ABCDEF)</div>
+
         <input id="parse_json" type="button" value="Parse to JSON" />
         <input id="parse_yaml" type="button" value="Parse to YAML" />
         <input id="parse_table" type="button" value="Parse to Table" />
@@ -317,7 +385,7 @@
         <pre id="output"></pre>
     </div>
     <script type="module">
-        import init, { m_bus_parse } from "./m_bus_parser_wasm_pack.js";
+        import init, { m_bus_parse, m_bus_parse_with_key } from "./m_bus_parser_wasm_pack.js";
 
         let currentFormat = "json"; // Keep track of the last used format
 
@@ -342,6 +410,20 @@
                 darkMode = !body.classList.contains('dark-mode');
                 setDarkMode(darkMode);
                 localStorage.setItem('darkMode', darkMode);
+            });
+
+            // Key visibility toggle
+            const keyInput = document.getElementById('aeskey');
+            const keyToggle = document.getElementById('key-toggle');
+            keyToggle.addEventListener('click', () => {
+                const type = keyInput.getAttribute('type');
+                if (type === 'password') {
+                    keyInput.setAttribute('type', 'text');
+                    keyToggle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+                } else {
+                    keyInput.setAttribute('type', 'password');
+                    keyToggle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+                }
             });
 
             await init(); // Ensure the WASM module is initialized
@@ -380,7 +462,21 @@
             function parseInput(format) {
                 currentFormat = format; // Update the current format
                 const inputString = document.getElementById('inputstring').value;
-                const formattedResult = m_bus_parse(inputString, format);
+                const aesKey = document.getElementById('aeskey').value.trim();
+
+                // Use the appropriate parsing function based on whether a key is provided
+                let formattedResult;
+                if (aesKey && aesKey.length > 0) {
+                    // Validate key format (32 hex characters)
+                    if (!/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
+                        alert('Invalid AES key format. Please enter exactly 32 hexadecimal characters (0-9, A-F).');
+                        return;
+                    }
+                    formattedResult = m_bus_parse_with_key(inputString, format, aesKey);
+                } else {
+                    formattedResult = m_bus_parse(inputString, format);
+                }
+
                 const outputContainer = document.getElementById('output');
                 const outputCode = document.getElementById('output_code');
                 let lang = '', extension = 'txt', mimeType = 'text/plain';

@@ -1,7 +1,7 @@
 use super::data_information::{self};
-use super::{DataRecords, FixedDataHeader};
+use super::{DataRecords, LongTplHeader};
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
@@ -23,7 +23,7 @@ impl std::fmt::Display for DataRecordError {
 #[cfg(feature = "std")]
 impl std::error::Error for DataRecordError {}
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
@@ -55,22 +55,22 @@ impl<'a> From<&'a [u8]> for DataRecords<'a> {
     }
 }
 
-impl<'a> From<(&'a [u8], &'a FixedDataHeader)> for DataRecords<'a> {
-    fn from((data, fixed_data_header): (&'a [u8], &'a FixedDataHeader)) -> Self {
+impl<'a> From<(&'a [u8], &'a LongTplHeader)> for DataRecords<'a> {
+    fn from((data, fixed_data_header): (&'a [u8], &'a LongTplHeader)) -> Self {
         DataRecords::new(data, Some(fixed_data_header))
     }
 }
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use crate::user_data::{data_information::DataFieldCoding, data_record::DataRecord};
+    use crate::{data_information::DataFieldCoding, data_record::DataRecord};
 
     #[test]
     fn test_parse_variable_data_length() {
-        use crate::user_data::data_information::DataFieldCoding;
-        use crate::user_data::data_information::DataType;
-        use crate::user_data::data_information::TextUnit;
-        use crate::user_data::DataRecords;
+        use crate::data_information::DataFieldCoding;
+        use crate::data_information::DataType;
+        use crate::data_information::TextUnit;
+        use crate::DataRecords;
 
         let data: &[u8] = &[
             0x0D, 0x06, 0xC1, 0x12, 0x0D, 0x06, 0xD3, 0x12, 0x34, 0x56, 0x0D, 0x06, 0x02, 0x31,
@@ -119,10 +119,10 @@ mod tests {
 
     #[test]
     fn test_parse_variable_lossy_data_length() {
-        use crate::user_data::data_information::DataFieldCoding;
-        use crate::user_data::data_information::DataType;
-        use crate::user_data::data_information::TextUnit;
-        use crate::user_data::DataRecords;
+        use crate::data_information::DataFieldCoding;
+        use crate::data_information::DataType;
+        use crate::data_information::TextUnit;
+        use crate::DataRecords;
 
         let data: &[u8] = &[
             0x0D, 0x06, 0xE9, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0D, 0x06,
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_parse_variable_data() {
-        use crate::user_data::DataRecords;
+        use crate::DataRecords;
 
         /* Data block 1: unit 0, storage No 0, no tariff, instantaneous volume, 12565 l (24 bit integer) */
         /* DIF = 0x03, VIF = 0x13, Value = 0x153100 */
@@ -239,7 +239,7 @@ mod tests {
     #[cfg(feature = "plaintext-before-extension")]
     #[test]
     fn test_parse_variable_data3() {
-        use crate::user_data::DataRecords;
+        use crate::DataRecords;
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let data = &[0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D];
         let _data = DataRecords::try_from(data.as_slice());
@@ -250,7 +250,7 @@ mod tests {
     #[cfg(not(feature = "plaintext-before-extension"))]
     #[test]
     fn test_parse_variable_data3() {
-        use crate::user_data::DataRecords;
+        use crate::DataRecords;
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let data = &[0x02, 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25, 0x44, 0x0D];
         let _data = DataRecords::try_from(data.as_slice());

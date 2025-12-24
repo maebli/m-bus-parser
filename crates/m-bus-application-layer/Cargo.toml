@@ -1,0 +1,22 @@
+[package]
+name = "m-bus-application-layer"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+std = ["m-bus-core/std"]
+serde = ["dep:serde", "arrayvec/serde", "bitflags/serde", "m-bus-core/serde"]
+defmt = ["dep:defmt", "m-bus-core/defmt"]
+decryption = ["m-bus-core/decryption"]
+plaintext-before-extension = []
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"], optional = true }
+defmt = { version = "1.0.1", optional = true }
+bitflags = "2.8.0"
+arrayvec = { version = "0.7.4", default-features = false }
+m-bus-core = { path = "../m-bus-core" }
+
+[dev-dependencies]
+wired-mbus-link-layer = { path = "../wired-mbus-link-layer" }

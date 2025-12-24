@@ -1,6 +1,6 @@
 use super::data_information::{self};
 use super::variable_user_data::DataRecordError;
-use super::FixedDataHeader;
+use super::LongTplHeader;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq, Clone)]
@@ -171,6 +171,7 @@ pub enum DataInformationError {
     DataTooLong,
     DataTooShort,
     InvalidValueInformation,
+    Unimplemented { feature: &'static str },
 }
 
 #[cfg(feature = "std")]
@@ -182,6 +183,9 @@ impl std::fmt::Display for DataInformationError {
             DataInformationError::DataTooShort => write!(f, "Data too short"),
             DataInformationError::InvalidValueInformation => {
                 write!(f, "Invalid value information")
+            }
+            DataInformationError::Unimplemented { feature } => {
+                write!(f, "Unimplemented feature: {}", feature)
             }
         }
     }
@@ -269,9 +273,8 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(into = "String"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize), serde(into = "String"))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TextUnit<'a>(&'a [u8]);
 impl<'a> TextUnit<'a> {
@@ -296,7 +299,7 @@ impl std::fmt::Display for TextUnit<'_> {
     }
 }
 
-#[cfg(any(feature = "serde", feature = "std"))]
+#[cfg(feature = "std")]
 impl From<TextUnit<'_>> for String {
     fn from(value: TextUnit<'_>) -> Self {
         let value: Vec<u8> = value.0.iter().copied().rev().collect();
@@ -571,7 +574,7 @@ impl DataFieldCoding {
     pub fn parse<'a>(
         &self,
         input: &'a [u8],
-        fixed_data_header: Option<&'a FixedDataHeader>,
+        fixed_data_header: Option<&'a LongTplHeader>,
     ) -> Result<Data<'a>, DataRecordError> {
         let lsb_order = fixed_data_header.map(|x| x.lsb_order).unwrap_or(false);
 
@@ -722,18 +725,21 @@ impl DataFieldCoding {
                             Err(err) => Err(err),
                         }
                     }
-                    _ => {
-                        todo!(
-                            "Variable length parsing for length: {} is a reserved value",
-                            length
-                        );
-                    }
+                    _ => Err(DataRecordError::DataInformationError(
+                        DataInformationError::Unimplemented {
+                            feature: "Variable length parsing for reserved length values",
+                        },
+                    )),
                 }
             }
 
             Self::SpecialFunctions(_code) => {
                 // Special functions parsing based on the code
-                todo!()
+                Err(DataRecordError::DataInformationError(
+                    DataInformationError::Unimplemented {
+                        feature: "Special functions data parsing",
+                    },
+                ))
             }
 
             Self::DateTypeG => {

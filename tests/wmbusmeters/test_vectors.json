@@ -1,0 +1,259 @@
+[
+  {
+    "input": "1E44AE4C9956341268077A360010002F2F0413181E0000023B00002F2F2F2F",
+    "expected": {
+      "identification_number": 12345699,
+      "manufacturer": "SEN",
+      "version": 104,
+      "medium": "Water",
+      "access_number": 54,
+      "status": 0,
+      "data_records": [
+        {"value": 7704, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 0, "unit": "m^3/h", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "1844AE4C4455223368077A55000000041389E20100023B0000",
+    "expected": {
+      "identification_number": 33225544,
+      "manufacturer": "SEN",
+      "version": 104,
+      "medium": "Water",
+      "access_number": 85,
+      "status": 0,
+      "data_records": [
+        {"value": 123529, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 0, "unit": "m^3/h", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "234433300602010014007A8E0000002F2F0EFD3A1147000000008E40FD3A341200000000",
+    "expected": {
+      "identification_number": 10206,
+      "manufacturer": "LAS",
+      "version": 20,
+      "medium": "Other",
+      "access_number": 142,
+      "status": 0,
+      "data_records": [
+        {"value": 4711, "unit": "", "storage_number": 0, "function": "Instantaneous"},
+        {"value": 1234, "unit": "", "storage_number": 1, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "2E44B05C82340100021B7A460000002F2F0A6601020AFB1A570602FD971D00002F2F2F2F2F2F2F2F2F2F2F2F2F2F2F",
+    "expected": {
+      "identification_number": 13482,
+      "manufacturer": "WEP",
+      "version": 2,
+      "medium": "RoomSensor",
+      "access_number": 70,
+      "status": 0,
+      "data_records": [
+        {"value": 201, "unit": "°C", "exponent": -1, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 657, "unit": "%RH", "exponent": -1, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "3E44A5119035246141047A1A0030052F2F0C06026301000C13688609040B3B0802000C2B220000F00A5A71020A5E72020AA61800004C0636370100426CBF25",
+    "expected": {
+      "identification_number": 61243590,
+      "manufacturer": "DME",
+      "version": 65,
+      "medium": "Heat",
+      "access_number": 26,
+      "status": 0,
+      "data_records": [
+        {"value": 16302, "unit": "kWh", "exponent": 0, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 4096868, "unit": "m^3", "exponent": -2, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 208, "unit": "m^3/h", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 22, "unit": "W", "exponent": 2, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 271, "unit": "°C", "exponent": -1, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 272, "unit": "°C", "exponent": -1, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 18, "unit": "K", "exponent": -1, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 13736, "unit": "kWh", "exponent": 0, "storage_number": 1, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "4E4401061010101002027A000040052F2F0E035040691500000B2B300300066D00790C7423400C78371204860BABC8FC100000000E833C8074000000000BAB3C0000000AFDC9FC0136022F2F2F2F2F",
+    "expected": {
+      "identification_number": 10101010,
+      "manufacturer": "APA",
+      "version": 2,
+      "medium": "Electricity",
+      "access_number": 0,
+      "status": 0,
+      "data_records": [
+        {"value": 1569405, "unit": "Wh", "exponent": -2, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 330, "unit": "W", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 748, "unit": "Wh", "exponent": -2, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 0, "unit": "W", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 236, "unit": "V", "exponent": 0, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "31446850226677116980A0119F27020480048300C408F709143C003D341A2B0B2A0707000000000000062D114457563D71A1",
+    "expected": {
+      "identification_number": 11776622,
+      "manufacturer": "TCH",
+      "version": 105,
+      "medium": "HeatCostAllocator",
+      "access_number": 159,
+      "status": 39,
+      "data_records": [
+        {"value": 131, "unit": "HCA", "exponent": 0, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 1026, "unit": "HCA", "exponent": 0, "storage_number": 1, "function": "Instantaneous"},
+        {"value": 2244, "unit": "°C", "exponent": -2, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 2551, "unit": "°C", "exponent": -2, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "2F446850313233347462A2069F255900B029310000000306060906030609070606050509050505050407040605070500",
+    "expected": {
+      "identification_number": 34333231,
+      "manufacturer": "TCH",
+      "version": 116,
+      "medium": "WarmWater",
+      "access_number": 6,
+      "status": 159,
+      "data_records": [
+        {"value": 138, "unit": "m^3", "exponent": -1, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 89, "unit": "m^3", "exponent": -1, "storage_number": 1, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "2F446850200141029562A206702901006017030004000300000000000000000000000000000000000000000000000000",
+    "expected": {
+      "identification_number": 2410120,
+      "manufacturer": "TCH",
+      "version": 149,
+      "medium": "WarmWater",
+      "access_number": 6,
+      "status": 112,
+      "data_records": [
+        {"value": 4, "unit": "m^3", "exponent": -1, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 1, "unit": "m^3", "exponent": -1, "storage_number": 1, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "374468506549235827C3A2129F25383300A8622600008200800A2AF862115175552877A36F26C9AB1CB24400000004000000000004908002",
+    "expected": {
+      "identification_number": 58234965,
+      "manufacturer": "TCH",
+      "version": 39,
+      "medium": "HeatMeterFlow",
+      "access_number": 18,
+      "status": 159,
+      "data_records": [
+        {"value": 6371666, "unit": "Wh", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 2729444, "unit": "Wh", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 3642222, "unit": "Wh", "exponent": -3, "storage_number": 1, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "6E4401062020202005077A9A0060852F2F0F0A734393CC0000435B0183001A54E06F630291342510030F00007B013E0B00003E0B00003E0B00003E0B00003E0B00003E0B00003E0B0000650000003D0000003D0000003D00000000000000A0910CB003FFFFFFFFFFFFFFFFFFFFA62B",
+    "expected": {
+      "identification_number": 20202020,
+      "manufacturer": "APA",
+      "version": 5,
+      "medium": "Water",
+      "access_number": 154,
+      "status": 0,
+      "data_records": [
+        {"value": 3843, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "4E4401062020202105077A130040852F2F0F6D4C389300020043840210351F040075012C0B040048D603003E630300CD2C03001EF402000ACE0200A098A39603FFFFFFFFFFFFFFFFFFFFFFFFFF1977",
+    "expected": {
+      "identification_number": 21202020,
+      "manufacturer": "APA",
+      "version": 5,
+      "medium": "Water",
+      "access_number": 19,
+      "status": 0,
+      "data_records": [
+        {"value": 270133, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "4E4401062020202205077A4B0040852F2F0FE566B99390000087C0B24B732679FF75350010FCFB00004155594265086A0043B4017301DFF600006AE70000BFD5000051BC0000A0F56C2602FFFF1B1B",
+    "expected": {
+      "identification_number": 22202020,
+      "manufacturer": "APA",
+      "version": 5,
+      "medium": "Water",
+      "access_number": 75,
+      "status": 0,
+      "data_records": [
+        {"value": 64508, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "4E4401062020202305077A9D0040852F2F0F81902C9300000010B82F010041555942BD2882004319027301BC2601005C180100CB0A0100DFF60000A0F56C2602FFFFFFFFFFFFFFFFFFFFFFFFFF5B7C",
+    "expected": {
+      "identification_number": 23202020,
+      "manufacturer": "APA",
+      "version": 5,
+      "medium": "Water",
+      "access_number": 157,
+      "status": 0,
+      "data_records": [
+        {"value": 77752, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "5E44B6105843250000027A2A0050052F2F0C7835221400066D404708AC2A400E032022650900000E833C0000000000001B2B9647000B2B5510000BAB3C0000000AFDC9FC0135020AFDC9FC0245020AFDC9FC0339020BABC8FC100000002F2F",
+    "expected": {
+      "identification_number": 254358,
+      "manufacturer": "DEV",
+      "version": 0,
+      "medium": "Electricity",
+      "access_number": 42,
+      "status": 0,
+      "data_records": [
+        {"value": 965222, "unit": "Wh", "exponent": -2, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 1055, "unit": "W", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 0, "unit": "Wh", "exponent": -2, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 0, "unit": "W", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 235, "unit": "V", "exponent": 0, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 245, "unit": "V", "exponent": 0, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 239, "unit": "V", "exponent": 0, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  },
+  {
+    "input": "8E44B409747372710B0D7A798080052F2F0C0E59600100046D1D36B9290C13679947000C0E000000000C13590000000C13000000000C13000000000A5A18020A5E11020F823D06003D06003D06003D0600140600620500480400E4020016010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002F2",
+    "expected": {
+      "identification_number": 71727374,
+      "manufacturer": "BMT",
+      "version": 11,
+      "medium": "HeatCoolingLoad",
+      "access_number": 121,
+      "status": 128,
+      "data_records": [
+        {"value": 16059, "unit": "kJ", "exponent": 0, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 479967, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 0, "unit": "kJ", "exponent": 0, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 59, "unit": "m^3", "exponent": -3, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 218, "unit": "°C", "exponent": -1, "storage_number": 0, "function": "Instantaneous"},
+        {"value": 211, "unit": "°C", "exponent": -1, "storage_number": 0, "function": "Instantaneous"}
+      ]
+    }
+  }
+]
