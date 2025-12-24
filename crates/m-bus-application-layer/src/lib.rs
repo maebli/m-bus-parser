@@ -1040,7 +1040,8 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             ControlInformation::ExtendedLinkLayerII => {
                 // CI byte + ELL II (8 bytes) = 9 bytes total before application data
                 let (ell, ell_size) = ExtendedLinkLayer::parse(
-                    data.get(1..).ok_or(ApplicationLayerError::InsufficientData)?,
+                    data.get(1..)
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer::EllFormat::FormatII,
                 )?;
                 let app_data_offset = 1 + ell_size;
@@ -1064,7 +1065,8 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             ControlInformation::ExtendedLinkLayerIII => {
                 // CI byte + ELL III (16 bytes) = 17 bytes total before application data
                 let (ell, ell_size) = ExtendedLinkLayer::parse(
-                    data.get(1..).ok_or(ApplicationLayerError::InsufficientData)?,
+                    data.get(1..)
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer::EllFormat::FormatIII,
                 )?;
                 let app_data_offset = 1 + ell_size;

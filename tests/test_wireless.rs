@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use m_bus_core::DeviceType;
 use m_bus_parser::mbus_data::MbusData;
 use m_bus_parser::user_data::UserDataBlock;

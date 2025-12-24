@@ -81,7 +81,7 @@ mod tests {
 
         assert_eq!(records.len(), 5);
         {
-            let record = records.get(0).unwrap();
+            let record = records.first().unwrap();
             let code = get_data_field_coding(record);
             assert_eq!(code, DataFieldCoding::VariableLength);
             let value = record.data.value.clone().unwrap();
@@ -146,7 +146,7 @@ mod tests {
 
         assert_eq!(records.len(), 10);
         {
-            let record = records.get(0).unwrap();
+            let record = records.first().unwrap();
             let code = get_data_field_coding(record);
             assert_eq!(code, DataFieldCoding::VariableLength);
             let value = record.data.value.clone().unwrap();
@@ -225,7 +225,7 @@ mod tests {
         /* DIF = 0x03, VIF = 0x13, Value = 0x153100 */
         let data = &[0x03, 0x13, 0x15, 0x31, 0x00];
 
-        let _result = DataRecords::try_from(data.as_slice());
+        let _result = DataRecords::from(data.as_slice());
     }
 
     #[test]
@@ -253,7 +253,7 @@ mod tests {
         use crate::DataRecords;
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let data = &[0x02, 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25, 0x44, 0x0D];
-        let _data = DataRecords::try_from(data.as_slice());
+        let _data = DataRecords::from(data.as_slice());
     }
 
     const fn _test_parse_variable_data2() {
