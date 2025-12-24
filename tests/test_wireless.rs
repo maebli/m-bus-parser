@@ -46,6 +46,7 @@ fn device_type_from_str(device_type: &str) -> DeviceType {
         "HeatCostAllocator" => DeviceType::HeatCostAllocator,
         "HeatCoolingLoad" => DeviceType::CombinedHeatCoolingMeter,
         "Electricity" => DeviceType::ElectricityMeter,
+        "Gas" => DeviceType::GasMeter,
         "RoomSensor" => DeviceType::RoomSensor,
         s if s.starts_with("Reserved(") => {
             // Parse "Reserved(128)" format
