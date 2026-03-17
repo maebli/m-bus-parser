@@ -7,6 +7,11 @@ extern "C" {
 }
 
 #[wasm_bindgen]
+pub fn version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[wasm_bindgen]
 pub fn m_bus_parse(data: &str, format: &str) -> String {
     serialize_mbus_data(data, format, None)
 }
