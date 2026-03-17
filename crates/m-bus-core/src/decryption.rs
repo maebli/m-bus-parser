@@ -197,14 +197,20 @@ fn decrypt_aes_cbc_into(
         return Err(DecryptionError::InvalidDataLength);
     }
 
-    // Check if data length is a multiple of block size (16 bytes for AES)
-    if !data.len().is_multiple_of(16) {
-        return Err(DecryptionError::InvalidDataLength);
+    let len = data.len();
+    // Round down to nearest multiple of 16 for encryption
+    let encrypted_len = len - (len % 16);
+
+    if encrypted_len == 0 {
+        // No full blocks to decrypt, just copy data as-is
+        let dest = output
+            .get_mut(..len)
+            .ok_or(DecryptionError::InvalidDataLength)?;
+        dest.copy_from_slice(data);
+        return Ok(len);
     }
 
-    let len = data.len();
-
-    // Copy encrypted data to output buffer
+    // Copy all data to output buffer (encrypted + any trailing plaintext)
     let dest = output
         .get_mut(..len)
         .ok_or(DecryptionError::InvalidDataLength)?;
@@ -222,15 +228,16 @@ fn decrypt_aes_cbc_into(
 
     let decryptor = Aes128CbcDec::new(&key_array.into(), &iv_array.into());
 
-    // Decrypt in place
+    // Decrypt only the aligned portion in place
     let decrypt_buf = output
-        .get_mut(..len)
+        .get_mut(..encrypted_len)
         .ok_or(DecryptionError::InvalidDataLength)?;
-    let decrypted = decryptor
+    decryptor
         .decrypt_padded_mut::<cipher::block_padding::NoPadding>(decrypt_buf)
         .map_err(|_| DecryptionError::DecryptionFailed)?;
 
-    Ok(decrypted.len())
+    // Return total length (decrypted blocks + trailing plaintext)
+    Ok(len)
 }
 
 #[cfg(all(test, feature = "decryption"))]

@@ -179,9 +179,12 @@ pub fn parse_to_json(input: &str, key: Option<&[u8; 16]>) -> String {
             .to_string();
     }
 
-    // If wired fails, try wireless
+    // If wired fails, try wireless - strip Format A CRCs if present
+    let mut crc_buf = [0u8; 512];
+    let wireless_data =
+        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
     if let Ok(mut parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(data.as_slice())
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
     {
         #[cfg(feature = "decryption")]
         {
@@ -325,9 +328,12 @@ fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
             .to_string();
     }
 
-    // If wired fails, try wireless
+    // If wired fails, try wireless - strip Format A CRCs if present
+    let mut crc_buf = [0u8; 512];
+    let wireless_data =
+        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
     if let Ok(mut parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(data.as_slice())
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
     {
         #[cfg(feature = "decryption")]
         {
@@ -521,9 +527,12 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
         return table_output;
     }
 
-    // If wired fails, try wireless
+    // If wired fails, try wireless - strip Format A CRCs if present
+    let mut crc_buf = [0u8; 512];
+    let wireless_data =
+        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
     if let Ok(parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(data.as_slice())
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
     {
         let wireless_mbus_link_layer::WirelessFrame {
             function,
@@ -968,9 +977,12 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
             .unwrap_or_else(|_| "Error converting CSV data to string".to_string());
     }
 
-    // If wired fails, try wireless
+    // If wired fails, try wireless - strip Format A CRCs if present
+    let mut crc_buf = [0u8; 512];
+    let wireless_data =
+        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
     if let Ok(mut parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(data.as_slice())
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
     {
         // Reset decrypted_len for wireless section
         decrypted_len = 0;
