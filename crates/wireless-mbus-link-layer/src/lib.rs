@@ -1,5 +1,84 @@
 use m_bus_core::{DeviceType, Function, IdentificationNumber, ManufacturerCode};
 
+/// CRC-16/EN13757 used in wireless M-Bus Format A frames.
+/// Polynomial: 0x3D65, Init: 0x0000, XorOut: 0xFFFF, RefIn: false, RefOut: false.
+fn crc16_en13757(data: &[u8]) -> u16 {
+    let mut crc: u16 = 0x0000;
+    for &byte in data {
+        crc ^= (byte as u16) << 8;
+        for _ in 0..8 {
+            if crc & 0x8000 != 0 {
+                crc = (crc << 1) ^ 0x3D65;
+            } else {
+                crc <<= 1;
+            }
+        }
+    }
+    crc ^ 0xFFFF
+}
+
+/// Strip Format A CRCs from a wireless M-Bus frame.
+///
+/// Format A frames have CRC-16 checksums embedded in the data:
+/// - Block 1: first 10 bytes (L, C, M, M, ID, ID, ID, ID, Ver, Type) + 2 CRC bytes
+/// - Block 2+: up to 16 bytes of data + 2 CRC bytes each
+///
+/// Writes the stripped frame into `output` and returns the resulting slice,
+/// or `None` if the frame doesn't have valid Format A CRCs.
+/// The L-field is corrected to reflect the stripped payload size.
+pub fn strip_format_a_crcs<'a>(data: &[u8], output: &'a mut [u8]) -> Option<&'a [u8]> {
+    if data.len() < 12 || output.len() < data.len() {
+        return None;
+    }
+
+    // Check block 1: first 10 bytes + 2 CRC
+    if crc16_en13757(&data[0..10]) != u16::from_be_bytes([data[10], data[11]]) {
+        return None;
+    }
+
+    let mut out_pos = 10;
+    output[..10].copy_from_slice(&data[..10]);
+
+    let mut pos = 12;
+    while pos < data.len() {
+        let remaining = data.len() - pos;
+        if remaining < 3 {
+            output[out_pos..out_pos + remaining].copy_from_slice(&data[pos..pos + remaining]);
+            out_pos += remaining;
+            break;
+        }
+
+        let max_data_len = 16.min(remaining - 2);
+        let mut found = false;
+
+        for data_len in (1..=max_data_len).rev() {
+            let crc_start = pos + data_len;
+            if crc_start + 2 > data.len() {
+                continue;
+            }
+            if crc16_en13757(&data[pos..crc_start])
+                == u16::from_be_bytes([data[crc_start], data[crc_start + 1]])
+            {
+                output[out_pos..out_pos + data_len].copy_from_slice(&data[pos..crc_start]);
+                out_pos += data_len;
+                pos = crc_start + 2;
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            let remaining = data.len() - pos;
+            output[out_pos..out_pos + remaining].copy_from_slice(&data[pos..]);
+            out_pos += remaining;
+            break;
+        }
+    }
+
+    output[0] = (out_pos - 1) as u8;
+    Some(&output[..out_pos])
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WirelessFrame<'a> {

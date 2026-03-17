@@ -325,7 +325,7 @@
     <div class="header">
         <img id="banner" src="meter.png" alt="Meter Banner">
         <div class="header-text">
-            <h1>Online M-Bus Parser <span class="parser-version">v0.0.8</span></h1>
+            <h1>Online M-Bus Parser <span class="parser-version" id="parser-version"></span></h1>
             <div class="subtitle">
                 <a href="https://maebli.github.io/m-bus-parser" target="_blank">maebli.github.io/m-bus-parser</a> • <a href="https://github.com/maebli" target="_blank">Michael Aebli</a>
             </div>
@@ -385,7 +385,7 @@
         <pre id="output"></pre>
     </div>
     <script type="module">
-        import init, { m_bus_parse, m_bus_parse_with_key } from "./m_bus_parser_wasm_pack.js";
+        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js";
 
         let currentFormat = "json"; // Keep track of the last used format
 
@@ -427,6 +427,7 @@
             });
 
             await init(); // Ensure the WASM module is initialized
+            document.getElementById('parser-version').textContent = 'v' + version();
 
             document.getElementById('parse_json').addEventListener('click', () => {
                 parseInput("json");
