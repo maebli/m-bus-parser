@@ -114,6 +114,7 @@ pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> 
         "json" => parse_to_json(data, key),
         "yaml" => parse_to_yaml(data, key),
         "csv" => parse_to_csv(data, key).to_string(),
+        "mermaid" => parse_to_mermaid(data, key),
         _ => parse_to_table(data, key).to_string(),
     }
 }
@@ -1171,6 +1172,313 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
         .unwrap_or_else(|_| "Error converting CSV data to string".to_string())
 }
 
+#[cfg(feature = "std")]
+#[must_use]
+pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
+    use user_data::UserDataBlock;
+
+    const MAX_PER_ROW: usize = 4;
+    // Colors for data record nodes (fill, text), cycling through the palette
+    const RECORD_COLORS: &[(&str, &str)] = &[
+        ("#1565c0", "#fff"),
+        ("#2e7d32", "#fff"),
+        ("#e65100", "#fff"),
+        ("#6a1b9a", "#fff"),
+        ("#c62828", "#fff"),
+        ("#00695c", "#fff"),
+        ("#f9a825", "#000"),
+        ("#4527a0", "#fff"),
+    ];
+
+    let data = clean_and_convert(input);
+
+    // Try wired first
+    if let Ok(parsed_data) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
+        let mut out = String::from("flowchart TD\n");
+        let mut styles = String::new();
+
+        match parsed_data.frame {
+            frames::WiredFrame::LongFrame {
+                function,
+                address,
+                data: _,
+            } => {
+                // Frame header subgraph
+                out.push_str("    subgraph FRAME_SG[\"Frame Header\"]\n");
+                out.push_str("        direction LR\n");
+                out.push_str(&format!(
+                    "        FTYPE[\"Long Frame\"]\n        FUNC[\"Function: {}\"]\n        ADDR[\"Address: {}\"]\n",
+                    mermaid_escape(&format!("{}", function)),
+                    mermaid_escape(&format!("{}", address))
+                ));
+                let (chains, pads) =
+                    mermaid_centered_chains(&["FTYPE", "FUNC", "ADDR"], MAX_PER_ROW, "FP");
+                out.push_str(&chains);
+                out.push_str("    end\n");
+                styles.push_str(&pads);
+                styles.push_str("    style FRAME_SG fill:#2e86c1,color:#fff,stroke:#1a5276\n");
+                styles.push_str("    style FTYPE fill:#2980b9,color:#fff,stroke:#1a5276\n");
+                styles.push_str("    style FUNC fill:#2980b9,color:#fff,stroke:#1a5276\n");
+                styles.push_str("    style ADDR fill:#2980b9,color:#fff,stroke:#1a5276\n");
+
+                if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+                    long_tpl_header,
+                    ..
+                }) = &parsed_data.user_data
+                {
+                    let mfr = long_tpl_header
+                        .manufacturer
+                        .as_ref()
+                        .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m));
+
+                    out.push_str("    subgraph DEV_SG[\"Device Info\"]\n");
+                    out.push_str("        direction LR\n");
+                    out.push_str(&format!(
+                        "        DEV1[\"ID: {}\"]\n",
+                        mermaid_escape(&format!("{}", long_tpl_header.identification_number))
+                    ));
+                    out.push_str(&format!(
+                        "        DEV2[\"Manufacturer: {}\"]\n",
+                        mermaid_escape(&mfr)
+                    ));
+                    out.push_str(&format!(
+                        "        DEV3[\"Version: {}\"]\n",
+                        long_tpl_header.version
+                    ));
+                    out.push_str(&format!(
+                        "        DEV4[\"Device Type: {}\"]\n",
+                        mermaid_escape(&format!("{:?}", long_tpl_header.device_type))
+                    ));
+                    out.push_str(&format!(
+                        "        DEV5[\"Access Number: {}\"]\n",
+                        long_tpl_header.short_tpl_header.access_number
+                    ));
+                    out.push_str(&format!(
+                        "        DEV6[\"Status: {}\"]\n",
+                        mermaid_escape(&format!("{}", long_tpl_header.short_tpl_header.status))
+                    ));
+                    let (chains, pads) = mermaid_centered_chains(
+                        &["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"],
+                        MAX_PER_ROW,
+                        "DP",
+                    );
+                    out.push_str(&chains);
+                    out.push_str("    end\n");
+                    styles.push_str(&pads);
+                    styles.push_str("    style DEV_SG fill:#1e8449,color:#fff,stroke:#145a32\n");
+                    for i in 1..=6 {
+                        styles.push_str(&format!(
+                            "    style DEV{} fill:#27ae60,color:#fff,stroke:#145a32\n",
+                            i
+                        ));
+                    }
+
+                    out.push_str("    FRAME_SG --> DEV_SG\n");
+                }
+
+                if let Some(data_records) = parsed_data.data_records {
+                    out.push_str("    subgraph REC_SG[\"Data Records\"]\n");
+                    out.push_str("        direction LR\n");
+                    let records: Vec<_> = data_records.flatten().collect();
+                    for (i, record) in records.iter().enumerate() {
+                        let value_information = match record
+                            .data_record_header
+                            .processed_data_record_header
+                            .value_information
+                        {
+                            Some(ref x) => format!("{}", x),
+                            None => String::new(),
+                        };
+                        let label = format!("({}{}", record.data, value_information);
+                        out.push_str(&format!("        R{}[\"{}\"]\n", i, mermaid_escape(&label)));
+                        let (fill, text) = RECORD_COLORS
+                            .get(i % RECORD_COLORS.len())
+                            .copied()
+                            .unwrap_or(("#888", "#fff"));
+                        styles.push_str(&format!(
+                            "    style R{} fill:{},color:{},stroke:#333\n",
+                            i, fill, text
+                        ));
+                    }
+                    let ids: Vec<String> = (0..records.len()).map(|i| format!("R{}", i)).collect();
+                    let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+                    let (chains, pads) = mermaid_centered_chains(&id_refs, MAX_PER_ROW, "RP");
+                    out.push_str(&chains);
+                    out.push_str("    end\n");
+                    styles.push_str("    style REC_SG fill:#6c3483,color:#fff,stroke:#4a235a\n");
+                    styles.push_str(&pads);
+                    out.push_str("    DEV_SG --> REC_SG\n");
+                }
+            }
+            frames::WiredFrame::ShortFrame { function, address } => {
+                out.push_str("    subgraph FRAME_SG[\"Short Frame\"]\n");
+                out.push_str(&format!(
+                    "        FUNC[\"Function: {}\"]\n        ADDR[\"Address: {}\"]\n",
+                    mermaid_escape(&format!("{}", function)),
+                    mermaid_escape(&format!("{}", address))
+                ));
+                out.push_str("    end\n");
+                styles.push_str("    style FRAME_SG fill:#2e86c1,color:#fff,stroke:#1a5276\n");
+            }
+            frames::WiredFrame::SingleCharacter { character } => {
+                out.push_str(&format!(
+                    "    FRAME[\"Single Character: 0x{:02X}\"]\n",
+                    character
+                ));
+                styles.push_str("    style FRAME fill:#2e86c1,color:#fff,stroke:#1a5276\n");
+            }
+            frames::WiredFrame::ControlFrame {
+                function, address, ..
+            } => {
+                out.push_str("    subgraph FRAME_SG[\"Control Frame\"]\n");
+                out.push_str(&format!(
+                    "        FUNC[\"Function: {}\"]\n        ADDR[\"Address: {}\"]\n",
+                    mermaid_escape(&format!("{}", function)),
+                    mermaid_escape(&format!("{}", address))
+                ));
+                out.push_str("    end\n");
+                styles.push_str("    style FRAME_SG fill:#2e86c1,color:#fff,stroke:#1a5276\n");
+            }
+            _ => {
+                out.push_str("    FRAME[\"Unknown Frame\"]\n");
+            }
+        }
+        out.push_str(&styles);
+        return out;
+    }
+
+    // Try wireless
+    let mut crc_buf = [0u8; 512];
+    let wireless_data =
+        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
+    if let Ok(parsed_data) =
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
+    {
+        let wireless_mbus_link_layer::WirelessFrame {
+            function,
+            manufacturer_id,
+            data: _,
+        } = &parsed_data.frame;
+
+        let mut out = String::from("flowchart TD\n");
+        let mut styles = String::new();
+
+        out.push_str("    subgraph FRAME_SG[\"Wireless Frame\"]\n");
+        out.push_str(&format!("        FUNC[\"Function: {:?}\"]\n", function));
+        out.push_str(&format!(
+            "        MFR[\"Manufacturer: {:?}\"]\n",
+            manufacturer_id.manufacturer_code
+        ));
+        out.push_str(&format!(
+            "        ID[\"ID: {:?}\"]\n",
+            manufacturer_id.identification_number
+        ));
+        out.push_str(&format!(
+            "        DEVT[\"Device Type: {:?}\"]\n",
+            manufacturer_id.device_type
+        ));
+        out.push_str(&format!(
+            "        VER[\"Version: {:?}\"]\n",
+            manufacturer_id.version
+        ));
+        out.push_str("    end\n");
+        styles.push_str("    style FRAME_SG fill:#2e86c1,color:#fff,stroke:#1a5276\n");
+        for node in &["FUNC", "MFR", "ID", "DEVT", "VER"] {
+            styles.push_str(&format!(
+                "    style {} fill:#2980b9,color:#fff,stroke:#1a5276\n",
+                node
+            ));
+        }
+
+        if let Some(data_records) = parsed_data.data_records {
+            out.push_str("    subgraph REC_SG[\"Data Records\"]\n");
+            let records: Vec<_> = data_records.flatten().collect();
+            for (i, record) in records.iter().enumerate() {
+                let value_information = match record
+                    .data_record_header
+                    .processed_data_record_header
+                    .value_information
+                {
+                    Some(ref x) => format!("{}", x),
+                    None => String::new(),
+                };
+                let label = format!("({}{}", record.data, value_information);
+                out.push_str(&format!("        R{}[\"{}\"]\n", i, mermaid_escape(&label)));
+                let (fill, text) = RECORD_COLORS
+                    .get(i % RECORD_COLORS.len())
+                    .copied()
+                    .unwrap_or(("#888", "#fff"));
+                styles.push_str(&format!(
+                    "    style R{} fill:{},color:{},stroke:#333\n",
+                    i, fill, text
+                ));
+            }
+            out.push_str("    end\n");
+            styles.push_str("    style REC_SG fill:#6c3483,color:#fff,stroke:#4a235a\n");
+            out.push_str("    FRAME_SG --> REC_SG\n");
+        }
+
+        out.push_str(&styles);
+        return out;
+    }
+
+    "flowchart TD\n    ERR[\"Error: Could not parse data\"]\n".to_string()
+}
+
+/// Returns (body, styles) where body contains padding node declarations + chain lines,
+/// and styles contains the invisible styles for padding nodes.
+/// Pads each incomplete row symmetrically so nodes appear centred.
+#[cfg(feature = "std")]
+fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -> (String, String) {
+    let mut body = String::new();
+    let mut styles = String::new();
+    let mut pad_idx = 0usize;
+    for chunk in ids.chunks(max_per_row) {
+        if chunk.len() == max_per_row {
+            if chunk.len() > 1 {
+                body.push_str(&format!("        {}\n", chunk.join(" ~~~ ")));
+            }
+        } else {
+            let padding = max_per_row - chunk.len();
+            let left = padding / 2;
+            let right = padding - left;
+            let mut row: Vec<String> = Vec::new();
+            for _ in 0..left {
+                let id = format!("{}P{}", pad_prefix, pad_idx);
+                body.push_str(&format!("        {}[\" \"]\n", id));
+                styles.push_str(&format!(
+                    "    style {} fill:none,stroke:none,color:none\n",
+                    id
+                ));
+                row.push(id);
+                pad_idx += 1;
+            }
+            row.extend(chunk.iter().map(|s| s.to_string()));
+            for _ in 0..right {
+                let id = format!("{}P{}", pad_prefix, pad_idx);
+                body.push_str(&format!("        {}[\" \"]\n", id));
+                styles.push_str(&format!(
+                    "    style {} fill:none,stroke:none,color:none\n",
+                    id
+                ));
+                row.push(id);
+                pad_idx += 1;
+            }
+            if row.len() > 1 {
+                body.push_str(&format!("        {}\n", row.join(" ~~~ ")));
+            }
+        }
+    }
+    (body, styles)
+}
+
+#[cfg(feature = "std")]
+fn mermaid_escape(s: &str) -> String {
+    s.replace('"', "#quot;")
+        .replace('[', "#lsqb;")
+        .replace(']', "#rsqb;")
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1236,6 +1544,21 @@ mod tests {
         // Verify JSON structure is valid
         let json_parsed = serde_json::from_str::<serde_json::Value>(&json_output);
         assert!(json_parsed.is_ok());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_mermaid_expected_output() {
+        use super::parse_to_mermaid;
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let mermaid_output = parse_to_mermaid(input, None);
+
+        assert!(mermaid_output.starts_with("flowchart TD\n"));
+        assert!(mermaid_output.contains("Long Frame"));
+        assert!(mermaid_output.contains("Device Info"));
+        assert!(mermaid_output.contains("Data Records"));
+        assert!(mermaid_output.contains("02205100"));
+        assert!(mermaid_output.contains("SLB"));
     }
 
     #[cfg(feature = "std")]

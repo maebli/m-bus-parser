@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/default.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/languages/json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -205,6 +206,10 @@
             display: block;
         }
 
+        body.dark-mode #share_button svg {
+            stroke: #aaa;
+        }
+
         body.dark-mode {
             background-color: #181a1b;
             color: #e0e0e0;
@@ -337,6 +342,12 @@
                     <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                 </svg>
             </button>
+            <button id="share_button" title="Copy share link" style="background:none;border:none;cursor:pointer;padding:8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                </svg>
+            </button>
             <button id="report_issue" title="Report Issue" style="background:none;border:none;cursor:pointer;padding:8px;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10" />
@@ -367,6 +378,7 @@
         <input id="parse_yaml" type="button" value="Parse to YAML" />
         <input id="parse_table" type="button" value="Parse to Table" />
         <input id="parse_csv" type="button" value="Parse to CSV" />
+        <input id="parse_mermaid" type="button" value="Parse to Diagram" />
     </form>
     <div id="output-container">
         <button id="copy_output" title="Copy Output">
@@ -388,6 +400,8 @@
         import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js";
 
         let currentFormat = "json"; // Keep track of the last used format
+
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
         async function setup() {
             // Dark mode setup
@@ -429,6 +443,15 @@
             await init(); // Ensure the WASM module is initialized
             document.getElementById('parser-version').textContent = 'v' + version();
 
+            // Load data and format from URL params and auto-parse if present
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlData = urlParams.get('data');
+            const urlFormat = urlParams.get('format');
+            if (urlData) {
+                document.getElementById('inputstring').value = urlData;
+                parseInput(urlFormat || 'mermaid');
+            }
+
             document.getElementById('parse_json').addEventListener('click', () => {
                 parseInput("json");
             });
@@ -445,25 +468,43 @@
                 parseInput("csv");
             });
 
+            document.getElementById('parse_mermaid').addEventListener('click', () => {
+                parseInput("mermaid");
+            });
+
             document.getElementById('copy_output').addEventListener('click', () => {
-                const codeElem = document.getElementById('output_code');
                 let text;
-                if (codeElem) {
-                    text = codeElem.textContent;
+                if (currentFormat === 'mermaid' && window._mermaidSource) {
+                    text = window._mermaidSource;
                 } else {
-                    text = document.getElementById('output').textContent;
+                    const codeElem = document.getElementById('output_code');
+                    text = codeElem ? codeElem.textContent : document.getElementById('output').textContent;
                 }
                 navigator.clipboard.writeText(text);
+            });
+
+            document.getElementById('share_button').addEventListener('click', () => {
+                const inputString = document.getElementById('inputstring').value;
+                const params = new URLSearchParams({ data: inputString, format: currentFormat });
+                const shareUrl = `${location.origin}${location.pathname}?${params}`;
+                navigator.clipboard.writeText(shareUrl);
+                const btn = document.getElementById('share_button');
+                btn.title = 'Copied!';
+                setTimeout(() => { btn.title = 'Copy share link'; }, 2000);
             });
 
             document.getElementById('report_issue').addEventListener('click', () => {
                 window.open('https://github.com/maebli/m-bus-parser/issues/new', '_blank');
             });
 
-            function parseInput(format) {
+            async function parseInput(format) {
                 currentFormat = format; // Update the current format
                 const inputString = document.getElementById('inputstring').value;
                 const aesKey = document.getElementById('aeskey').value.trim();
+
+                // Update URL so the current parse can be shared
+                const params = new URLSearchParams({ data: inputString, format });
+                history.replaceState(null, '', `?${params}`);
 
                 // Use the appropriate parsing function based on whether a key is provided
                 let formattedResult;
@@ -485,9 +526,19 @@
                 else if (format === 'yaml') { lang = 'yaml'; extension = 'yaml'; mimeType = 'application/x-yaml'; }
                 else if (format === 'csv') { extension = 'csv'; mimeType = 'text/csv'; }
                 else if (format === 'table_format') { lang = 'plaintext'; extension = 'txt'; }
+                else if (format === 'mermaid') { extension = 'mmd'; mimeType = 'text/plain'; }
+
+                outputContainer.style.background = '';
+                outputContainer.style.whiteSpace = '';
 
                 if (format === 'csv') {
                     outputContainer.innerHTML = formattedResult;
+                } else if (format === 'mermaid') {
+                    window._mermaidSource = formattedResult;
+                    outputContainer.style.background = 'none';
+                    outputContainer.style.whiteSpace = 'normal';
+                    outputContainer.innerHTML = '<div id="mermaid_diagram">' + formattedResult + '</div>';
+                    await mermaid.run({ nodes: [document.getElementById('mermaid_diagram')] });
                 } else {
                     outputContainer.innerHTML = '<code id="output_code"></code>';
                     const newOutputCode = document.getElementById('output_code');
