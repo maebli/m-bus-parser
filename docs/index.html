@@ -537,8 +537,12 @@
                     window._mermaidSource = formattedResult;
                     outputContainer.style.background = 'none';
                     outputContainer.style.whiteSpace = 'normal';
-                    outputContainer.innerHTML = '<div id="mermaid_diagram">' + formattedResult + '</div>';
-                    await mermaid.run({ nodes: [document.getElementById('mermaid_diagram')] });
+                    outputContainer.innerHTML = '';
+                    const mermaidDiv = document.createElement('div');
+                    mermaidDiv.id = 'mermaid_diagram';
+                    mermaidDiv.textContent = formattedResult;
+                    outputContainer.appendChild(mermaidDiv);
+                    await mermaid.run({ nodes: [mermaidDiv] });
                 } else {
                     outputContainer.innerHTML = '<code id="output_code"></code>';
                     const newOutputCode = document.getElementById('output_code');
