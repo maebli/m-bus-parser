@@ -1205,7 +1205,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
             } => {
                 // Frame header subgraph
                 out.push_str("    subgraph FRAME_SG[\"Frame Header\"]\n");
-                out.push_str("        direction LR\n");
+                out.push_str("");
                 out.push_str(&format!(
                     "        FTYPE[\"Long Frame\"]\n        FUNC[\"Function: {}\"]\n        ADDR[\"Address: {}\"]\n",
                     mermaid_escape(&format!("{}", function)),
@@ -1232,7 +1232,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
                         .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m));
 
                     out.push_str("    subgraph DEV_SG[\"Device Info\"]\n");
-                    out.push_str("        direction LR\n");
+                    out.push_str("");
                     out.push_str(&format!(
                         "        DEV1[\"ID: {}\"]\n",
                         mermaid_escape(&format!("{}", long_tpl_header.identification_number))
@@ -1278,7 +1278,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
 
                 if let Some(data_records) = parsed_data.data_records {
                     out.push_str("    subgraph REC_SG[\"Data Records\"]\n");
-                    out.push_str("        direction LR\n");
+                    out.push_str("");
                     let records: Vec<_> = data_records.flatten().collect();
                     for (i, record) in records.iter().enumerate() {
                         let value_information = match record
@@ -1434,10 +1434,8 @@ fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -
     let mut styles = String::new();
     let mut pad_idx = 0usize;
     for chunk in ids.chunks(max_per_row) {
-        if chunk.len() == max_per_row {
-            if chunk.len() > 1 {
-                body.push_str(&format!("        {}\n", chunk.join(" ~~~ ")));
-            }
+        let row: Vec<String> = if chunk.len() == max_per_row {
+            chunk.iter().map(|s| s.to_string()).collect()
         } else {
             let padding = max_per_row - chunk.len();
             let left = padding / 2;
@@ -1464,8 +1462,12 @@ fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -
                 row.push(id);
                 pad_idx += 1;
             }
-            if row.len() > 1 {
-                body.push_str(&format!("        {}\n", row.join(" ~~~ ")));
+            row
+        };
+        // Emit individual pairs instead of a chain to maximise mermaid compatibility
+        for pair in row.windows(2) {
+            if let (Some(a), Some(b)) = (pair.first(), pair.get(1)) {
+                body.push_str(&format!("        {}~~~{}\n", a, b));
             }
         }
     }
@@ -1475,8 +1477,8 @@ fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -
 #[cfg(feature = "std")]
 fn mermaid_escape(s: &str) -> String {
     s.replace('"', "#quot;")
-        .replace('[', "#lsqb;")
-        .replace(']', "#rsqb;")
+        .replace('[', "#91;")
+        .replace(']', "#93;")
 }
 
 #[cfg(test)]
