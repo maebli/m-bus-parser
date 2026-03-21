@@ -11,7 +11,7 @@ fn main() {
     for entry in WalkDir::new("./tests/rscada/test-frames")
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "hex"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "hex"))
     {
         use m_bus_parser::WiredFrame;
 
@@ -38,14 +38,14 @@ fn main() {
                 if let Ok(m_bus_parser::user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
                     variable_data_block,
-                    extended_link_layer,
+                    extended_link_layer: _,
                 }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
                 {
                     println!("long_tpl_header: {:#?}", long_tpl_header);
                     println!("variable_data_block: {:?}", variable_data_block);
-                    let data_records =
-                        m_bus_parser::user_data::DataRecords::try_from(variable_data_block);
-                    println!("data_records: {:#?}", data_records.unwrap());
+                    let data_records: Vec<_> =
+                        m_bus_parser::user_data::DataRecords::from(variable_data_block).collect();
+                    println!("data_records: {:#?}", data_records);
                 }
             }
         }

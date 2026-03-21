@@ -570,7 +570,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                             .value_information
                         {
                             Some(ref x) => format!("{}", x),
-                            None => "None".to_string(),
+                            None => ")".to_string(),
                         };
                         let data_information = match record
                             .data_record_header
@@ -581,7 +581,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                             None => "None".to_string(),
                         };
                         value_table.add_row(row![
-                            format!("({}{})", record.data, value_information),
+                            format!("({}{}", record.data, value_information),
                             data_information,
                             record.data_record_header_hex(),
                             record.data_hex()
@@ -775,7 +775,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                                         .value_information
                                     {
                                         Some(ref x) => format!("{}", x),
-                                        None => "None".to_string(),
+                                        None => ")".to_string(),
                                     };
                                     let data_information = match record
                                         .data_record_header
@@ -786,7 +786,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                                         None => "None".to_string(),
                                     };
                                     value_table.add_row(row![
-                                        format!("({}{})", record.data, value_information),
+                                        format!("({}{}", record.data, value_information),
                                         data_information,
                                         record.data_record_header_hex(),
                                         record.data_hex()
@@ -839,7 +839,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                             .value_information
                         {
                             Some(ref x) => format!("{}", x),
-                            None => "None".to_string(),
+                            None => ")".to_string(),
                         };
                         let data_information = match record
                             .data_record_header
@@ -850,7 +850,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                             None => "None".to_string(),
                         };
                         value_table.add_row(row![
-                            format!("({}{})", record.data, value_information),
+                            format!("({}{}", record.data, value_information),
                             data_information,
                             record.data_record_header_hex(),
                             record.data_hex()
@@ -1023,11 +1023,11 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
                             .value_information
                         {
                             Some(x) => format!("{}", x),
-                            None => "None".to_string(),
+                            None => ")".to_string(),
                         };
 
                         // Format the value similar to the table output with units
-                        let formatted_value = format!("({}{})", parsed_value, value_information);
+                        let formatted_value = format!("({}{}", parsed_value, value_information);
 
                         let data_information = match record
                             .data_record_header
@@ -1218,9 +1218,9 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
                     .value_information
                 {
                     Some(x) => format!("{}", x),
-                    None => "None".to_string(),
+                    None => ")".to_string(),
                 };
-                let formatted_value = format!("({}{})", parsed_value, value_information);
+                let formatted_value = format!("({}{}", parsed_value, value_information);
                 let data_information = match record
                     .data_record_header
                     .processed_data_record_header
@@ -1398,7 +1398,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
                             Some(ref x) => format!("{}", x),
                             None => String::new(),
                         };
-                        let label = format!("({}{})", record.data, value_information);
+                        let label = format!("({}{}", record.data, value_information);
                         out.push_str(&format!("        R{}[\"{}\"]\n", i, mermaid_escape(&label)));
                         let (fill, text) = RECORD_COLORS
                             .get(i % RECORD_COLORS.len())
@@ -1529,7 +1529,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
                     Some(ref x) => format!("{}", x),
                     None => String::new(),
                 };
-                let label = format!("({}{})", record.data, value_information);
+                let label = format!("({}{}", record.data, value_information);
                 out.push_str(&format!("        R{}[\"{}\"]\n", i, mermaid_escape(&label)));
                 let (fill, text) = RECORD_COLORS
                     .get(i % RECORD_COLORS.len())
@@ -1633,7 +1633,7 @@ mod tests {
         let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
         let csv_output = parse_to_csv(input, None);
 
-        let expected = "FrameType,Function,Address,Identification Number,Manufacturer,Access Number,Status,Security Mode,Version,Device Type,DataPoint1_Value,DataPoint1_Info,DataPoint2_Value,DataPoint2_Info,DataPoint3_Value,DataPoint3_Info,DataPoint4_Value,DataPoint4_Info,DataPoint5_Value,DataPoint5_Info,DataPoint6_Value,DataPoint6_Info,DataPoint7_Value,DataPoint7_Info,DataPoint8_Value,DataPoint8_Info,DataPoint9_Value,DataPoint9_Info,DataPoint10_Value,DataPoint10_Info\nLongFrame,\"RspUd (ACD: false, DFC: false)\",Primary (1),02205100,SLB,0,\"Permanent error, Manufacturer specific 3\",No encryption used,2,Heat Meter (Return),(0)e4[Wh],\"0,Inst,32-bit Integer\",(3)e-1[m³](Volume),\"0,Inst,BCD 8-digit\",(0)e3[W],\"0,Inst,BCD 6-digit\",(0)e-3[m³h⁻¹],\"0,Inst,BCD 6-digit\",(1288)e-1[°C],\"0,Inst,BCD 4-digit\",(516)e-1[°C],\"0,Inst,BCD 4-digit\",(7723)e-2[°K],\"0,Inst,BCD 6-digit\",(12/Jan/12)(Date),\"0,Inst,Date Type G\",(3383)[day],\"0,Inst,16-bit Integer\",\"(Manufacturer Specific: [15, 96, 0]None\",None\n";
+        let expected = "FrameType,Function,Address,Identification Number,Manufacturer,Access Number,Status,Security Mode,Version,Device Type,DataPoint1_Value,DataPoint1_Info,DataPoint2_Value,DataPoint2_Info,DataPoint3_Value,DataPoint3_Info,DataPoint4_Value,DataPoint4_Info,DataPoint5_Value,DataPoint5_Info,DataPoint6_Value,DataPoint6_Info,DataPoint7_Value,DataPoint7_Info,DataPoint8_Value,DataPoint8_Info,DataPoint9_Value,DataPoint9_Info,DataPoint10_Value,DataPoint10_Info\nLongFrame,\"RspUd (ACD: false, DFC: false)\",Primary (1),02205100,SLB,0,\"Permanent error, Manufacturer specific 3\",No encryption used,2,Heat Meter (Return),(0)e4[Wh],\"0,Inst,32-bit Integer\",(3)e-1[m³](Volume),\"0,Inst,BCD 8-digit\",(0)e3[W],\"0,Inst,BCD 6-digit\",(0)e-3[m³h⁻¹],\"0,Inst,BCD 6-digit\",(1288)e-1[°C],\"0,Inst,BCD 4-digit\",(516)e-1[°C],\"0,Inst,BCD 4-digit\",(7723)e-2[°K],\"0,Inst,BCD 6-digit\",(12/Jan/12)(Date),\"0,Inst,Date Type G\",(3383)[day],\"0,Inst,16-bit Integer\",\"(Manufacturer Specific: [15, 96, 0])\",None\n";
 
         assert_eq!(csv_output, expected);
     }
