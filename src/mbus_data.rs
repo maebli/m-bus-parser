@@ -581,7 +581,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                             None => "None".to_string(),
                         };
                         value_table.add_row(row![
-                            format!("({}{}", record.data, value_information),
+                            format!("({}{})", record.data, value_information),
                             data_information,
                             record.data_record_header_hex(),
                             record.data_hex()
@@ -786,7 +786,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                                         None => "None".to_string(),
                                     };
                                     value_table.add_row(row![
-                                        format!("({}{}", record.data, value_information),
+                                        format!("({}{})", record.data, value_information),
                                         data_information,
                                         record.data_record_header_hex(),
                                         record.data_hex()
@@ -850,7 +850,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                             None => "None".to_string(),
                         };
                         value_table.add_row(row![
-                            format!("({}{}", record.data, value_information),
+                            format!("({}{})", record.data, value_information),
                             data_information,
                             record.data_record_header_hex(),
                             record.data_hex()
@@ -1027,7 +1027,7 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
                         };
 
                         // Format the value similar to the table output with units
-                        let formatted_value = format!("({}{}", parsed_value, value_information);
+                        let formatted_value = format!("({}{})", parsed_value, value_information);
 
                         let data_information = match record
                             .data_record_header
@@ -1220,7 +1220,7 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
                     Some(x) => format!("{}", x),
                     None => "None".to_string(),
                 };
-                let formatted_value = format!("({}{}", parsed_value, value_information);
+                let formatted_value = format!("({}{})", parsed_value, value_information);
                 let data_information = match record
                     .data_record_header
                     .processed_data_record_header
@@ -1398,7 +1398,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
                             Some(ref x) => format!("{}", x),
                             None => String::new(),
                         };
-                        let label = format!("({}{}", record.data, value_information);
+                        let label = format!("({}{})", record.data, value_information);
                         out.push_str(&format!("        R{}[\"{}\"]\n", i, mermaid_escape(&label)));
                         let (fill, text) = RECORD_COLORS
                             .get(i % RECORD_COLORS.len())
@@ -1529,7 +1529,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
                     Some(ref x) => format!("{}", x),
                     None => String::new(),
                 };
-                let label = format!("({}{}", record.data, value_information);
+                let label = format!("({}{})", record.data, value_information);
                 out.push_str(&format!("        R{}[\"{}\"]\n", i, mermaid_escape(&label)));
                 let (fill, text) = RECORD_COLORS
                     .get(i % RECORD_COLORS.len())
