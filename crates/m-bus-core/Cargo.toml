@@ -2,6 +2,9 @@
 name = "m-bus-core"
 version = "0.1.0"
 edition = "2024"
+description = "Core types for the m-bus-parser M-Bus protocol library"
+license = "MIT"
+repository = "https://github.com/maebli/m-bus-parser"
 
 [features]
 default = []

@@ -2,6 +2,9 @@
 name = "m-bus-application-layer"
 version = "0.1.0"
 edition = "2021"
+description = "M-Bus application layer parser (DIF/VIF, data records)"
+license = "MIT"
+repository = "https://github.com/maebli/m-bus-parser"
 
 [features]
 default = []
