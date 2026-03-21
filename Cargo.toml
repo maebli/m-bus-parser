@@ -47,10 +47,10 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 bitflags = "2.8.0"
 arrayvec = { version = "0.7.4", default-features = false }
 defmt = { version = "1.0.1", optional = true }
-wired-mbus-link-layer = {path = "crates/wired-mbus-link-layer"}
-wireless-mbus-link-layer = {path = "crates/wireless-mbus-link-layer"}
-m-bus-core = {path = "crates/m-bus-core"}
-m-bus-application-layer = {path = "crates/m-bus-application-layer"}
+wired-mbus-link-layer = { version = "0.1.0", path = "crates/wired-mbus-link-layer" }
+wireless-mbus-link-layer = { version = "0.1.0", path = "crates/wireless-mbus-link-layer" }
+m-bus-core = { version = "0.1.0", path = "crates/m-bus-core" }
+m-bus-application-layer = { version = "0.1.0", path = "crates/m-bus-application-layer" }
 aes = { version = "0.8", optional = true, default-features = false }
 cbc = { version = "0.1", optional = true, default-features = false }
 cipher = { version = "0.4", optional = true, default-features = false, features = ["block-padding"] }
