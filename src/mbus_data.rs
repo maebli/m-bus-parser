@@ -175,7 +175,35 @@ pub fn parse_to_json(input: &str, key: Option<&[u8; 16]>) -> String {
             }
         }
 
-        return serde_json::to_string_pretty(&parsed_data)
+        let mfr_code_str = parsed_data.user_data.as_ref().and_then(|ud| {
+            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header, ..
+            } = ud
+            {
+                long_tpl_header
+                    .manufacturer
+                    .as_ref()
+                    .ok()
+                    .map(|m| format!("{}", m))
+            } else {
+                None
+            }
+        });
+        let mut json_val = serde_json::to_value(&parsed_data).unwrap_or_default();
+        if let (Some(code), serde_json::Value::Object(ref mut map)) = (mfr_code_str, &mut json_val)
+        {
+            if let Some(info) = crate::manufacturers::lookup_manufacturer(&code) {
+                map.insert(
+                    "manufacturer_info".to_string(),
+                    serde_json::json!({
+                        "name": info.name,
+                        "website": info.website,
+                        "description": info.description,
+                    }),
+                );
+            }
+        }
+        return serde_json::to_string_pretty(&json_val)
             .unwrap_or_default()
             .to_string();
     }
@@ -260,7 +288,21 @@ pub fn parse_to_json(input: &str, key: Option<&[u8; 16]>) -> String {
         #[cfg(not(feature = "decryption"))]
         let _ = key;
 
-        return serde_json::to_string_pretty(&parsed_data)
+        let mfr_code_str = format!("{}", parsed_data.frame.manufacturer_id.manufacturer_code);
+        let mut json_val = serde_json::to_value(&parsed_data).unwrap_or_default();
+        if let serde_json::Value::Object(ref mut map) = json_val {
+            if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_code_str) {
+                map.insert(
+                    "manufacturer_info".to_string(),
+                    serde_json::json!({
+                        "name": info.name,
+                        "website": info.website,
+                        "description": info.description,
+                    }),
+                );
+            }
+        }
+        return serde_json::to_string_pretty(&json_val)
             .unwrap_or_default()
             .to_string();
     }
@@ -324,9 +366,33 @@ fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
             }
         }
 
-        return serde_yaml::to_string(&parsed_data)
-            .unwrap_or_default()
-            .to_string();
+        let mfr_code_str = parsed_data.user_data.as_ref().and_then(|ud| {
+            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header, ..
+            } = ud
+            {
+                long_tpl_header
+                    .manufacturer
+                    .as_ref()
+                    .ok()
+                    .map(|m| format!("{}", m))
+            } else {
+                None
+            }
+        });
+        let base = serde_yaml::to_string(&parsed_data).unwrap_or_default();
+        return if let Some(code) = mfr_code_str {
+            if let Some(info) = crate::manufacturers::lookup_manufacturer(&code) {
+                format!(
+                    "{}manufacturer_info:\n  name: {}\n  website: {}\n  description: {}\n",
+                    base, info.name, info.website, info.description
+                )
+            } else {
+                base
+            }
+        } else {
+            base
+        };
     }
 
     // If wired fails, try wireless - strip Format A CRCs if present
@@ -408,9 +474,16 @@ fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
         #[cfg(not(feature = "decryption"))]
         let _ = key;
 
-        return serde_yaml::to_string(&parsed_data)
-            .unwrap_or_default()
-            .to_string();
+        let mfr_code_str = format!("{}", parsed_data.frame.manufacturer_id.manufacturer_code);
+        let base = serde_yaml::to_string(&parsed_data).unwrap_or_default();
+        return if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_code_str) {
+            format!(
+                "{}manufacturer_info:\n  name: {}\n  website: {}\n  description: {}\n",
+                base, info.name, info.website, info.description
+            )
+        } else {
+            base
+        };
     }
 
     // If both fail, return error
@@ -457,13 +530,18 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                         "Identification Number",
                         long_tpl_header.identification_number
                     ]);
-                    info_table.add_row(row![
-                        "Manufacturer",
-                        long_tpl_header
+                    {
+                        let mfr_str = long_tpl_header
                             .manufacturer
                             .as_ref()
-                            .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m))
-                    ]);
+                            .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m));
+                        info_table.add_row(row!["Manufacturer", &mfr_str]);
+                        if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_str) {
+                            info_table.add_row(row!["Manufacturer Name", info.name]);
+                            info_table.add_row(row!["Website", info.website]);
+                            info_table.add_row(row!["Description", info.description]);
+                        }
+                    }
                     info_table.add_row(row![
                         "Access Number",
                         long_tpl_header.short_tpl_header.access_number
@@ -545,10 +623,15 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
             table.set_format(*format::consts::FORMAT_BOX_CHARS);
             table.set_titles(row!["Field", "Value"]);
             table.add_row(row!["Function", format!("{:?}", function)]);
-            table.add_row(row![
-                "Manufacturer Code",
-                format!("{:?}", manufacturer_id.manufacturer_code)
-            ]);
+            {
+                let mfr_str = format!("{}", manufacturer_id.manufacturer_code);
+                table.add_row(row!["Manufacturer Code", &mfr_str]);
+                if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_str) {
+                    table.add_row(row!["Manufacturer Name", info.name]);
+                    table.add_row(row!["Website", info.website]);
+                    table.add_row(row!["Description", info.description]);
+                }
+            }
             table.add_row(row![
                 "Identification Number",
                 format!("{:?}", manufacturer_id.identification_number)
@@ -577,13 +660,18 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                         "Identification Number",
                         long_tpl_header.identification_number
                     ]);
-                    info_table.add_row(row![
-                        "Manufacturer",
-                        long_tpl_header
+                    {
+                        let mfr_str = long_tpl_header
                             .manufacturer
                             .as_ref()
-                            .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m))
-                    ]);
+                            .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m));
+                        info_table.add_row(row!["Manufacturer", &mfr_str]);
+                        if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_str) {
+                            info_table.add_row(row!["Manufacturer Name", info.name]);
+                            info_table.add_row(row!["Website", info.website]);
+                            info_table.add_row(row!["Description", info.description]);
+                        }
+                    }
                     info_table.add_row(row![
                         "Access Number",
                         long_tpl_header.short_tpl_header.access_number
@@ -1231,6 +1319,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
                         .as_ref()
                         .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m));
 
+                    let mfr_info = crate::manufacturers::lookup_manufacturer(&mfr);
                     out.push_str("    subgraph DEV_SG[\"Device Info\"]\n");
                     out.push_str("");
                     out.push_str(&format!(
@@ -1257,16 +1346,36 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
                         "        DEV6[\"Status: {}\"]\n",
                         mermaid_escape(&format!("{}", long_tpl_header.short_tpl_header.status))
                     ));
-                    let (chains, pads) = mermaid_centered_chains(
-                        &["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"],
-                        MAX_PER_ROW,
-                        "DP",
-                    );
+                    let mut dev_node_count = 6usize;
+                    if let Some(ref info) = mfr_info {
+                        dev_node_count += 1;
+                        out.push_str(&format!(
+                            "        DEV{}[\"Name: {}\"]\n",
+                            dev_node_count,
+                            mermaid_escape(info.name)
+                        ));
+                        dev_node_count += 1;
+                        out.push_str(&format!(
+                            "        DEV{}[\"Website: {}\"]\n",
+                            dev_node_count,
+                            mermaid_escape(info.website)
+                        ));
+                        dev_node_count += 1;
+                        out.push_str(&format!(
+                            "        DEV{}[\"{}\"]\n",
+                            dev_node_count,
+                            mermaid_escape(info.description)
+                        ));
+                    }
+                    let dev_ids: Vec<String> =
+                        (1..=dev_node_count).map(|i| format!("DEV{}", i)).collect();
+                    let dev_id_refs: Vec<&str> = dev_ids.iter().map(|s| s.as_str()).collect();
+                    let (chains, pads) = mermaid_centered_chains(&dev_id_refs, MAX_PER_ROW, "DP");
                     out.push_str(&chains);
                     out.push_str("    end\n");
                     styles.push_str(&pads);
                     styles.push_str("    style DEV_SG fill:#1e8449,color:#fff,stroke:#145a32\n");
-                    for i in 1..=6 {
+                    for i in 1..=dev_node_count {
                         styles.push_str(&format!(
                             "    style DEV{} fill:#27ae60,color:#fff,stroke:#145a32\n",
                             i
@@ -1363,11 +1472,13 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
         let mut out = String::from("flowchart TD\n");
         let mut styles = String::new();
 
+        let wmfr_str = format!("{}", manufacturer_id.manufacturer_code);
+        let wmfr_info = crate::manufacturers::lookup_manufacturer(&wmfr_str);
         out.push_str("    subgraph FRAME_SG[\"Wireless Frame\"]\n");
         out.push_str(&format!("        FUNC[\"Function: {:?}\"]\n", function));
         out.push_str(&format!(
-            "        MFR[\"Manufacturer: {:?}\"]\n",
-            manufacturer_id.manufacturer_code
+            "        MFR[\"Manufacturer: {}\"]\n",
+            mermaid_escape(&wmfr_str)
         ));
         out.push_str(&format!(
             "        ID[\"ID: {:?}\"]\n",
@@ -1381,9 +1492,25 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
             "        VER[\"Version: {:?}\"]\n",
             manufacturer_id.version
         ));
+        let mut wframe_nodes: Vec<&str> = vec!["FUNC", "MFR", "ID", "DEVT", "VER"];
+        if let Some(ref info) = wmfr_info {
+            out.push_str(&format!(
+                "        MFRNAME[\"Name: {}\"]\n",
+                mermaid_escape(info.name)
+            ));
+            out.push_str(&format!(
+                "        MFRWEB[\"Website: {}\"]\n",
+                mermaid_escape(info.website)
+            ));
+            out.push_str(&format!(
+                "        MFRDESC[\"{}\"]\n",
+                mermaid_escape(info.description)
+            ));
+            wframe_nodes.extend_from_slice(&["MFRNAME", "MFRWEB", "MFRDESC"]);
+        }
         out.push_str("    end\n");
         styles.push_str("    style FRAME_SG fill:#2e86c1,color:#fff,stroke:#1a5276\n");
-        for node in &["FUNC", "MFR", "ID", "DEVT", "VER"] {
+        for node in &wframe_nodes {
             styles.push_str(&format!(
                 "    style {} fill:#2980b9,color:#fff,stroke:#1a5276\n",
                 node
