@@ -24,7 +24,6 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 
 - Parses **wired M-Bus** (EN 13757-2/-3) and **wireless M-Bus** (wMBus) frames
 - **Five output formats**: `table`, `json`, `yaml`, `csv`, `mermaid`
-- **Manufacturer lookup**: resolves 3-letter FLAG codes to full company name, website and description (110+ manufacturers)
 - **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
 - Available as a **Rust library**, **CLI**, **WebAssembly (npm)** and **Python bindings**
@@ -149,18 +148,6 @@ m-bus-parser-cli parse -d "..." -t mermaid
 m-bus-parser-cli parse -d "..." -k "000102030405060708090A0B0C0D0E0F"
 ```
 
-JSON output includes a `manufacturer_info` block for known FLAG codes:
-
-```json
-{
-  "manufacturer_info": {
-    "name": "Schlumberger Industries",
-    "website": "slb.com",
-    "description": "Energy and water metering"
-  }
-}
-```
-
 ---
 
 ## Library Usage
@@ -237,28 +224,11 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 
 | Format    | Flag    | Description                                      |
 |-----------|---------|--------------------------------------------------|
-| `table`   | default | Human-readable ASCII table                      |
-| `json`    | `-t json`   | JSON with `manufacturer_info` block          |
-| `yaml`    | `-t yaml`   | YAML with `manufacturer_info` block          |
-| `csv`     | `-t csv`    | Comma-separated values                       |
-| `mermaid` | `-t mermaid`| Mermaid flowchart source (renders in web app)|
-
----
-
-## Manufacturer Lookup
-
-The 3-letter [FLAG/DLMS manufacturer code](https://www.dlms.com/flag-id/) is automatically resolved to a full name, website, and description for 110+ registered M-Bus manufacturers (Kamstrup, Landis+Gyr, Itron, Diehl, Siemens, Zenner, Techem, etc.).
-
-This lookup is available in all output formats and in the Rust API:
-
-```rust
-use m_bus_parser::manufacturers::lookup_manufacturer;
-
-if let Some(info) = lookup_manufacturer("KAM") {
-    println!("{} — {}", info.name, info.website);
-    // Kamstrup A/S — kamstrup.com
-}
-```
+| `table`   | default      | Human-readable ASCII table                   |
+| `json`    | `-t json`    | JSON                                         |
+| `yaml`    | `-t yaml`    | YAML                                         |
+| `csv`     | `-t csv`     | Comma-separated values                       |
+| `mermaid` | `-t mermaid` | Mermaid flowchart source (renders in web app)|
 
 ---
 
