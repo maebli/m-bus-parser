@@ -46,6 +46,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+pub mod manufacturers;
 pub mod mbus_data;
 pub use m_bus_application_layer as user_data;
 
