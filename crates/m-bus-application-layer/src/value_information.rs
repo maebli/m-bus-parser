@@ -294,7 +294,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             (value_information_block.value_information.data & 0b111) as isize - 9;
                     }
                     0x50..=0x57 => {
-                        units.push(unit!(Kilogram ^ 3));
+                        units.push(unit!(Kilogram));
                         units.push(unit!(Hour ^ -1));
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 3;
@@ -673,7 +673,17 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
             }
             // we need to check if the next byte is equivalent to the length of the rest of the
             // the data. In this case it is very likely that, this is how the payload is built up.
-            ValueInformationCoding::PlainText => labels.push(ValueLabel::PlainText),
+            ValueInformationCoding::PlainText => {
+                labels.push(ValueLabel::PlainText);
+                consume_orthhogonal_vife(
+                    value_information_block,
+                    &mut labels,
+                    &mut units,
+                    &mut decimal_scale_exponent,
+                    &mut decimal_offset_exponent,
+                    false,
+                );
+            }
             ValueInformationCoding::ManufacturerSpecific => {
                 labels.push(ValueLabel::ManufacturerSpecific)
             }
@@ -906,6 +916,10 @@ fn consume_orthhogonal_vife(
                         units.push(unit!(Minute));
                     }
                     0x66 => {
+                        labels.push(ValueLabel::DurationOfLast);
+                        units.push(unit!(Hour));
+                    }
+                    0x67 => {
                         labels.push(ValueLabel::DurationOfLast);
                         units.push(unit!(Day));
                     }
@@ -1552,7 +1566,7 @@ mod tests {
             ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 decimal_offset_exponent: 0,
-                decimal_scale_exponent: 0,
+                decimal_scale_exponent: -2,
                 units: { ArrayVec::<Unit, 10>::new() },
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();
