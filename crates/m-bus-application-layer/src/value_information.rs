@@ -52,19 +52,7 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
             let mut offset = 1;
             while offset < data.len() {
                 let vife_data = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
-                let current_vife = ValueInformationFieldExtension {
-                    data: vife_data,
-                    coding: match (offset, vife_data) {
-                        (0, 0xFB) => ValueInformationFieldExtensionCoding::MainVIFCodeExtension,
-                        (0, 0xFC) => {
-                            ValueInformationFieldExtensionCoding::AlternateVIFCodeExtension
-                        }
-                        (0, 0xEF) => {
-                            ValueInformationFieldExtensionCoding::ReservedAlternateVIFCodeExtension
-                        }
-                        _ => ValueInformationFieldExtensionCoding::ComninableOrthogonalVIFECodeExtension,
-                    },
-                };
+                let current_vife = ValueInformationFieldExtension { data: vife_data };
                 let has_extension = current_vife.has_extension();
                 vife.push(current_vife);
                 offset += 1;
@@ -151,12 +139,12 @@ impl ValueInformationField {
         self.data == 0x7C || self.data == 0xFC
     }
 }
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationFieldExtension {
     pub data: u8,
-    pub coding: ValueInformationFieldExtensionCoding,
 }
 
 impl From<&ValueInformationField> for ValueInformationCoding {
@@ -197,16 +185,6 @@ pub enum ValueInformationCoding {
     AlternateVIFExtension,
     ManufacturerSpecific,
 }
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
-pub enum ValueInformationFieldExtensionCoding {
-    MainVIFCodeExtension,
-    AlternateVIFCodeExtension,
-    ReservedAlternateVIFCodeExtension,
-    ComninableOrthogonalVIFECodeExtension,
-}
 
 impl ValueInformationBlock {
     #[must_use]
@@ -233,6 +211,10 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
         let mut labels = ArrayVec::<ValueLabel, 10>::new();
         let mut decimal_scale_exponent: isize = 0;
         let mut decimal_offset_exponent = 0;
+        let vife_slice = match &value_information_block.value_information_extension {
+            Some(v) => v.as_slice(),
+            None => &[],
+        };
         match ValueInformationCoding::from(&value_information_block.value_information) {
             ValueInformationCoding::Primary => {
                 match value_information_block.value_information.data & 0x7F {
@@ -316,7 +298,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             (value_information_block.value_information.data & 0b111) as isize - 9;
                     }
                     0x50..=0x57 => {
-                        units.push(unit!(Kilogram ^ 3));
+                        units.push(unit!(Kilogram));
                         units.push(unit!(Hour ^ -1));
                         labels.push(ValueLabel::MassFlow);
                         decimal_scale_exponent +=
@@ -368,9 +350,8 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         })
                     }
                 };
-                /* consume orthogonal vife */
                 consume_orthhogonal_vife(
-                    value_information_block,
+                    vife_slice,
                     &mut labels,
                     &mut units,
                     &mut decimal_scale_exponent,
@@ -378,13 +359,11 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                 );
             }
             ValueInformationCoding::MainVIFExtension => {
-                let vife = value_information_block
-                    .value_information_extension
-                    .as_ref()
-                    .ok_or(Self::Error::InvalidValueInformation)?;
-
-                let first_vife_data = vife.first().ok_or(DataInformationError::DataTooShort)?.data;
-                let second_vife_data = vife.get(1).map(|s| s.data);
+                let first_vife_data = vife_slice
+                    .first()
+                    .ok_or(DataInformationError::DataTooShort)?
+                    .data;
+                let second_vife_data = vife_slice.get(1).map(|v| v.data);
                 match first_vife_data & 0x7F {
                     0x00..=0x03 => {
                         units.push(unit!(LocalMoneyCurrency));
@@ -479,6 +458,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         units.push(unit!(Day));
                         labels.push(ValueLabel::PeriodOfNormalDataTransmission);
                     }
+                    0x3A => labels.push(ValueLabel::Dimensionless),
                     0x40..=0x4F => {
                         units.push(unit!(Volt));
                         labels.push(ValueLabel::Voltage);
@@ -552,10 +532,22 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                             units.push(unit!(Year));
                             labels.push(ValueLabel::RemainingBatteryLifeTime);
                         }
+                        Some(0x3E) => {
+                            units.push(unit!(Percent));
+                            labels.push(ValueLabel::MoistureLevel);
+                        }
                         _ => labels.push(ValueLabel::Reserved),
                     },
                     _ => labels.push(ValueLabel::Reserved),
                 }
+                // Skip vife_slice[0] — it's the true VIF (already consumed above)
+                consume_orthhogonal_vife(
+                    vife_slice.get(1..).unwrap_or(&[]),
+                    &mut labels,
+                    &mut units,
+                    &mut decimal_scale_exponent,
+                    &mut decimal_offset_exponent,
+                );
             }
             ValueInformationCoding::AlternateVIFExtension => {
                 use UnitName::*;
@@ -588,11 +580,10 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         populate!(@snd $($rem)*)
                     }};
                 }
-                let vife = value_information_block
-                    .value_information_extension
-                    .as_ref()
-                    .ok_or(Self::Error::InvalidValueInformation)?;
-                let first_vife_data = vife.first().ok_or(DataInformationError::DataTooShort)?.data;
+                let first_vife_data = vife_slice
+                    .first()
+                    .ok_or(DataInformationError::DataTooShort)?
+                    .data;
                 match first_vife_data & 0x7F {
                     0b0 => populate!(Watt / h, 3, dec: 5, Energy),
                     0b000_0001 => populate!(Watt / h, 3, dec: 6, Energy),
@@ -613,6 +604,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b001_1000 => populate!(Tonne, 1, dec: 2),
                     0b001_1001 => populate!(Tonne, 1, dec: 3),
                     0b001_1010 => populate!(Percent, 1, dec: -1, RelativeHumidity),
+                    0b001_1011 => populate!(Percent, 1, dec: 0, RelativeHumidity),
                     0b010_0001 => populate!(Feet, 3, dec: -1),
                     0b010_0010 => populate!(AmericanGallon, 1, dec: -1),
                     0b010_0011 => populate!(AmericanGallon, 1, dec: 0),
@@ -677,10 +669,27 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
 
                     _ => labels.push(ValueLabel::Reserved),
                 };
+                // Skip vife_slice[0] — it's the true VIF (already consumed above)
+                consume_orthhogonal_vife(
+                    vife_slice.get(1..).unwrap_or(&[]),
+                    &mut labels,
+                    &mut units,
+                    &mut decimal_scale_exponent,
+                    &mut decimal_offset_exponent,
+                );
             }
             // we need to check if the next byte is equivalent to the length of the rest of the
             // the data. In this case it is very likely that, this is how the payload is built up.
-            ValueInformationCoding::PlainText => labels.push(ValueLabel::PlainText),
+            ValueInformationCoding::PlainText => {
+                labels.push(ValueLabel::PlainText);
+                consume_orthhogonal_vife(
+                    vife_slice,
+                    &mut labels,
+                    &mut units,
+                    &mut decimal_scale_exponent,
+                    &mut decimal_offset_exponent,
+                );
+            }
             ValueInformationCoding::ManufacturerSpecific => {
                 labels.push(ValueLabel::ManufacturerSpecific)
             }
@@ -696,244 +705,244 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
 }
 
 fn consume_orthhogonal_vife(
-    value_information_block: &ValueInformationBlock,
+    vife: &[ValueInformationFieldExtension],
     labels: &mut ArrayVec<ValueLabel, 10>,
     units: &mut ArrayVec<Unit, 10>,
     decimal_scale_exponent: &mut isize,
     decimal_offset_exponent: &mut isize,
 ) {
-    if let Some(vife) = &value_information_block.value_information_extension {
-        let mut is_extension_of_combinable_orthogonal_vife = false;
-        for v in vife {
-            if v.data == 0xFC {
-                is_extension_of_combinable_orthogonal_vife = true;
-                continue;
+    let mut is_extension_of_combinable_orthogonal_vife = false;
+    for v in vife {
+        if v.data == 0xFC {
+            is_extension_of_combinable_orthogonal_vife = true;
+            continue;
+        }
+        if is_extension_of_combinable_orthogonal_vife {
+            is_extension_of_combinable_orthogonal_vife = false;
+            match v.data & 0x7F {
+                0x00 => labels.push(ValueLabel::Reserved),
+                0x01 => labels.push(ValueLabel::AtPhaseL1),
+                0x02 => labels.push(ValueLabel::AtPhaseL2),
+                0x03 => labels.push(ValueLabel::AtPhaseL3),
+                0x04 => labels.push(ValueLabel::AtNeutral),
+                0x05 => labels.push(ValueLabel::BetweenPhasesL1L2),
+                0x06 => labels.push(ValueLabel::BetweenPhasesL2L3),
+                0x07 => labels.push(ValueLabel::BetweenPhasesL3L1),
+                0x08 => labels.push(ValueLabel::AtQuadrant1),
+                0x09 => labels.push(ValueLabel::AtQuadrant2),
+                0x0A => labels.push(ValueLabel::AtQuadrant3),
+                0x0B => labels.push(ValueLabel::AtQuadrant4),
+                0x0C => labels.push(ValueLabel::DeltaBetweenImportAndExport),
+                0x0F => labels.push(
+                    ValueLabel::AccumulationOfAbsoluteValueBothPositiveAndNegativeContribution,
+                ),
+                0x11 => labels.push(ValueLabel::DataPresentedWithTypeC),
+                0x12 => labels.push(ValueLabel::DataPresentedWithTypeD),
+                0x13 => labels.push(ValueLabel::DirectionFromCommunicationPartnerToMeter),
+                0x14 => labels.push(ValueLabel::DirectionFromMeterToCommunicationPartner),
+                _ => labels.push(ValueLabel::Reserved),
             }
-            if is_extension_of_combinable_orthogonal_vife {
-                is_extension_of_combinable_orthogonal_vife = false;
-                match v.data & 0x7F {
-                    0x00 => labels.push(ValueLabel::Reserved),
-                    0x01 => labels.push(ValueLabel::AtPhaseL1),
-                    0x02 => labels.push(ValueLabel::AtPhaseL2),
-                    0x03 => labels.push(ValueLabel::AtPhaseL3),
-                    0x04 => labels.push(ValueLabel::AtNeutral),
-                    0x05 => labels.push(ValueLabel::BetweenPhasesL1L2),
-                    0x06 => labels.push(ValueLabel::BetweenPhasesL2L3),
-                    0x07 => labels.push(ValueLabel::BetweenPhasesL3L1),
-                    0x08 => labels.push(ValueLabel::AtQuadrant1),
-                    0x09 => labels.push(ValueLabel::AtQuadrant2),
-                    0x0A => labels.push(ValueLabel::AtQuadrant3),
-                    0x0B => labels.push(ValueLabel::AtQuadrant4),
-                    0x0C => labels.push(ValueLabel::DeltaBetweenImportAndExport),
-                    0x0F => labels.push(
-                        ValueLabel::AccumulationOfAbsoluteValueBothPositiveAndNegativeContribution,
-                    ),
-                    0x11 => labels.push(ValueLabel::DataPresentedWithTypeC),
-                    0x12 => labels.push(ValueLabel::DataPresentedWithTypeD),
-                    0x13 => labels.push(ValueLabel::DirectionFromCommunicationPartnerToMeter),
-                    0x14 => labels.push(ValueLabel::DirectionFromMeterToCommunicationPartner),
-                    _ => labels.push(ValueLabel::Reserved),
+        } else {
+            match v.data & 0x7F {
+                0x00..=0x0F => labels.push(ValueLabel::ReservedForObjectActions),
+                0x10..=0x11 => labels.push(ValueLabel::Reserved),
+                0x12 => labels.push(ValueLabel::Averaged),
+                0x13 => labels.push(ValueLabel::InverseCompactProfile),
+                0x14 => labels.push(ValueLabel::RelativeDeviation),
+                0x15..=0x1C => labels.push(ValueLabel::RecordErrorCodes),
+                0x1D => labels.push(ValueLabel::StandardConformDataContent),
+                0x1E => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
+                0x1F => labels.push(ValueLabel::CompactProfile),
+                0x20 => units.push(unit!(Second ^ -1)),
+                0x21 => units.push(unit!(Minute ^ -1)),
+                0x22 => units.push(unit!(Hour ^ -1)),
+                0x23 => units.push(unit!(Day ^ -1)),
+                0x24 => units.push(unit!(Week ^ -1)),
+                0x25 => units.push(unit!(Month ^ -1)),
+                0x26 => units.push(unit!(Year ^ -1)),
+                0x27 => units.push(unit!(Revolution ^ -1)),
+                0x28 => {
+                    units.push(unit!(Increment));
+                    units.push(unit!(InputPulseOnChannel0 ^ -1));
                 }
-            } else {
-                match v.data & 0x7F {
-                    0x00..=0x0F => labels.push(ValueLabel::ReservedForObjectActions),
-                    0x10..=0x11 => labels.push(ValueLabel::Reserved),
-                    0x12 => labels.push(ValueLabel::Averaged),
-                    0x13 => labels.push(ValueLabel::InverseCompactProfile),
-                    0x14 => labels.push(ValueLabel::RelativeDeviation),
-                    0x15..=0x1C => labels.push(ValueLabel::RecordErrorCodes),
-                    0x1D => labels.push(ValueLabel::StandardConformDataContent),
-                    0x1E => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
-                    0x1F => labels.push(ValueLabel::CompactProfile),
-                    0x20 => units.push(unit!(Second ^ -1)),
-                    0x21 => units.push(unit!(Minute ^ -1)),
-                    0x22 => units.push(unit!(Hour ^ -1)),
-                    0x23 => units.push(unit!(Day ^ -1)),
-                    0x24 => units.push(unit!(Week ^ -1)),
-                    0x25 => units.push(unit!(Month ^ -1)),
-                    0x26 => units.push(unit!(Year ^ -1)),
-                    0x27 => units.push(unit!(Revolution ^ -1)),
-                    0x28 => {
-                        units.push(unit!(Increment));
-                        units.push(unit!(InputPulseOnChannel0 ^ -1));
-                    }
-                    0x29 => {
-                        units.push(unit!(Increment));
-                        units.push(unit!(OutputPulseOnChannel0 ^ -1));
-                    }
-                    0x2A => {
-                        units.push(unit!(Increment));
-                        units.push(unit!(InputPulseOnChannel1 ^ -1));
-                    }
-                    0x2B => {
-                        units.push(unit!(Increment));
-                        units.push(unit!(OutputPulseOnChannel1 ^ -1));
-                    }
-                    0x2C => units.push(unit!(Liter)),
-                    0x2D => units.push(unit!(Meter ^ -3)),
-                    0x2E => units.push(unit!(Kilogram ^ -1)),
-                    0x2F => units.push(unit!(Kelvin ^ -1)),
-                    0x30 => {
-                        units.push(unit!(Watt ^ -1));
-                        units.push(unit!(Hour ^ -1));
-                        *decimal_scale_exponent -= 3;
-                    }
-                    0x31 => {
-                        units.push(unit!(Joul ^ -1));
-                        *decimal_scale_exponent += -9;
-                    }
-                    0x32 => {
-                        units.push(unit!(Watt ^ -1));
-                        *decimal_scale_exponent += -3;
-                    }
-                    0x33 => {
-                        units.push(unit!(Kelvin ^ -1));
-                        units.push(unit!(Liter ^ -1));
-                    }
-                    0x34 => units.push(unit!(Volt ^ -1)),
-                    0x35 => units.push(unit!(Ampere ^ -1)),
-                    0x36 => units.push(unit!(Second ^ 1)),
-                    0x37 => {
-                        units.push(unit!(Second ^ 1));
-                        units.push(unit!(Volt ^ -1));
-                    }
-                    0x38 => {
-                        units.push(unit!(Second ^ 1));
-                        units.push(unit!(Ampere ^ -1));
-                    }
-                    0x39 => labels.push(ValueLabel::StartDateOf),
-                    0x3A => labels.push(ValueLabel::VifContainsUncorrectedUnitOrValue),
-                    0x3B => labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive),
-                    0x3C => labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative),
-                    0x3D => labels.push(ValueLabel::NoneMetricUnits),
-                    0x3E => labels.push(ValueLabel::ValueAtBaseConditions),
-                    0x3F => labels.push(ValueLabel::ObisDeclaration),
-                    0x40 => labels.push(ValueLabel::UpperLimitValue),
-                    0x48 => labels.push(ValueLabel::LowerLimitValue),
-                    0x41 => labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue),
-                    0x49 => labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue),
-                    0x42 => labels.push(ValueLabel::DateOfBeginFirstLowerLimitExceed),
-                    0x43 => labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed),
-                    0x46 => labels.push(ValueLabel::DateOfBeginLastLowerLimitExceed),
-                    0x47 => labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed),
-                    0x4A => labels.push(ValueLabel::DateOfEndLastLowerLimitExceed),
-                    0x4B => labels.push(ValueLabel::DateOfEndLastUpperLimitExceed),
-                    0x4E => labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed),
-                    0x4F => labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed),
-                    0x50 => {
-                        labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                        units.push(unit!(Second));
-                    }
-                    0x51 => {
-                        labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                        units.push(unit!(Minute));
-                    }
-                    0x52 => {
-                        labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                        units.push(unit!(Hour));
-                    }
-                    0x53 => {
-                        labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                        units.push(unit!(Day));
-                    }
-                    0x54 => {
-                        labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                        units.push(unit!(Second));
-                    }
-                    0x55 => {
-                        labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                        units.push(unit!(Minute));
-                    }
-                    0x56 => {
-                        labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                        units.push(unit!(Hour));
-                    }
-                    0x57 => {
-                        labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                        units.push(unit!(Day));
-                    }
-                    0x58 => {
-                        labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                        units.push(unit!(Second));
-                    }
-                    0x59 => {
-                        labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                        units.push(unit!(Minute));
-                    }
-                    0x5A => {
-                        labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                        units.push(unit!(Hour));
-                    }
-                    0x5B => {
-                        labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                        units.push(unit!(Day));
-                    }
-                    0x5C => {
-                        labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                        units.push(unit!(Second));
-                    }
-                    0x5D => {
-                        labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                        units.push(unit!(Minute));
-                    }
-                    0x5E => {
-                        labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                        units.push(unit!(Hour));
-                    }
-                    0x5F => {
-                        labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                        units.push(unit!(Day));
-                    }
-                    0x60 => {
-                        labels.push(ValueLabel::DurationOfFirst);
-                        units.push(unit!(Second));
-                    }
-                    0x61 => {
-                        labels.push(ValueLabel::DurationOfFirst);
-                        units.push(unit!(Minute));
-                    }
-                    0x62 => {
-                        labels.push(ValueLabel::DurationOfFirst);
-                        units.push(unit!(Hour));
-                    }
-                    0x63 => {
-                        labels.push(ValueLabel::DurationOfFirst);
-                        units.push(unit!(Day));
-                    }
-                    0x64 => {
-                        labels.push(ValueLabel::DurationOfLast);
-                        units.push(unit!(Second));
-                    }
-                    0x65 => {
-                        labels.push(ValueLabel::DurationOfLast);
-                        units.push(unit!(Minute));
-                    }
-                    0x66 => {
-                        labels.push(ValueLabel::DurationOfLast);
-                        units.push(unit!(Day));
-                    }
-                    0x68 => labels.push(ValueLabel::ValueDuringLowerValueExceed),
-                    0x6C => labels.push(ValueLabel::ValueDuringUpperValueExceed),
-                    0x69 => labels.push(ValueLabel::LeakageValues),
-                    0x6D => labels.push(ValueLabel::OverflowValues),
-                    0x6A => labels.push(ValueLabel::DateOfBeginFirst),
-                    0x6B => labels.push(ValueLabel::DateOfBeginLast),
-                    0x6E => labels.push(ValueLabel::DateOfEndLast),
-                    0x6F => labels.push(ValueLabel::DateOfEndFirst),
-                    0x70..=0x77 => {
-                        *decimal_scale_exponent += (v.data & 0b111) as isize - 6;
-                    }
-                    0x78..=0x7B => {
-                        *decimal_offset_exponent += (v.data & 0b11) as isize - 3;
-                    }
-                    0x7D => labels.push(ValueLabel::MultiplicativeCorrectionFactor103),
-                    0x7E => labels.push(ValueLabel::FutureValue),
-                    0x7F => {
-                        labels.push(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific)
-                    }
-                    _ => labels.push(ValueLabel::Reserved),
-                };
-            }
+                0x29 => {
+                    units.push(unit!(Increment));
+                    units.push(unit!(OutputPulseOnChannel0 ^ -1));
+                }
+                0x2A => {
+                    units.push(unit!(Increment));
+                    units.push(unit!(InputPulseOnChannel1 ^ -1));
+                }
+                0x2B => {
+                    units.push(unit!(Increment));
+                    units.push(unit!(OutputPulseOnChannel1 ^ -1));
+                }
+                0x2C => units.push(unit!(Liter)),
+                0x2D => units.push(unit!(Meter ^ -3)),
+                0x2E => units.push(unit!(Kilogram ^ -1)),
+                0x2F => units.push(unit!(Kelvin ^ -1)),
+                0x30 => {
+                    units.push(unit!(Watt ^ -1));
+                    units.push(unit!(Hour ^ -1));
+                    *decimal_scale_exponent -= 3;
+                }
+                0x31 => {
+                    units.push(unit!(Joul ^ -1));
+                    *decimal_scale_exponent += -9;
+                }
+                0x32 => {
+                    units.push(unit!(Watt ^ -1));
+                    *decimal_scale_exponent += -3;
+                }
+                0x33 => {
+                    units.push(unit!(Kelvin ^ -1));
+                    units.push(unit!(Liter ^ -1));
+                }
+                0x34 => units.push(unit!(Volt ^ -1)),
+                0x35 => units.push(unit!(Ampere ^ -1)),
+                0x36 => units.push(unit!(Second ^ 1)),
+                0x37 => {
+                    units.push(unit!(Second ^ 1));
+                    units.push(unit!(Volt ^ -1));
+                }
+                0x38 => {
+                    units.push(unit!(Second ^ 1));
+                    units.push(unit!(Ampere ^ -1));
+                }
+                0x39 => labels.push(ValueLabel::StartDateOf),
+                0x3A => labels.push(ValueLabel::VifContainsUncorrectedUnitOrValue),
+                0x3B => labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive),
+                0x3C => labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative),
+                0x3D => labels.push(ValueLabel::NoneMetricUnits),
+                0x3E => labels.push(ValueLabel::ValueAtBaseConditions),
+                0x3F => labels.push(ValueLabel::ObisDeclaration),
+                0x40 => labels.push(ValueLabel::UpperLimitValue),
+                0x48 => labels.push(ValueLabel::LowerLimitValue),
+                0x41 => labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue),
+                0x49 => labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue),
+                0x42 => labels.push(ValueLabel::DateOfBeginFirstLowerLimitExceed),
+                0x43 => labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed),
+                0x46 => labels.push(ValueLabel::DateOfBeginLastLowerLimitExceed),
+                0x47 => labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed),
+                0x4A => labels.push(ValueLabel::DateOfEndLastLowerLimitExceed),
+                0x4B => labels.push(ValueLabel::DateOfEndLastUpperLimitExceed),
+                0x4E => labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed),
+                0x4F => labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed),
+                0x50 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(unit!(Second));
+                }
+                0x51 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(unit!(Minute));
+                }
+                0x52 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(unit!(Hour));
+                }
+                0x53 => {
+                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
+                    units.push(unit!(Day));
+                }
+                0x54 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(unit!(Second));
+                }
+                0x55 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(unit!(Minute));
+                }
+                0x56 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(unit!(Hour));
+                }
+                0x57 => {
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    units.push(unit!(Day));
+                }
+                0x58 => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(unit!(Second));
+                }
+                0x59 => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(unit!(Minute));
+                }
+                0x5A => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(unit!(Hour));
+                }
+                0x5B => {
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    units.push(unit!(Day));
+                }
+                0x5C => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(unit!(Second));
+                }
+                0x5D => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(unit!(Minute));
+                }
+                0x5E => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(unit!(Hour));
+                }
+                0x5F => {
+                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
+                    units.push(unit!(Day));
+                }
+                0x60 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(unit!(Second));
+                }
+                0x61 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(unit!(Minute));
+                }
+                0x62 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(unit!(Hour));
+                }
+                0x63 => {
+                    labels.push(ValueLabel::DurationOfFirst);
+                    units.push(unit!(Day));
+                }
+                0x64 => {
+                    labels.push(ValueLabel::DurationOfLast);
+                    units.push(unit!(Second));
+                }
+                0x65 => {
+                    labels.push(ValueLabel::DurationOfLast);
+                    units.push(unit!(Minute));
+                }
+                0x66 => {
+                    labels.push(ValueLabel::DurationOfLast);
+                    units.push(unit!(Hour));
+                }
+                0x67 => {
+                    labels.push(ValueLabel::DurationOfLast);
+                    units.push(unit!(Day));
+                }
+                0x68 => labels.push(ValueLabel::ValueDuringLowerValueExceed),
+                0x6C => labels.push(ValueLabel::ValueDuringUpperValueExceed),
+                0x69 => labels.push(ValueLabel::LeakageValues),
+                0x6D => labels.push(ValueLabel::OverflowValues),
+                0x6A => labels.push(ValueLabel::DateOfBeginFirst),
+                0x6B => labels.push(ValueLabel::DateOfBeginLast),
+                0x6E => labels.push(ValueLabel::DateOfEndLast),
+                0x6F => labels.push(ValueLabel::DateOfEndFirst),
+                0x70..=0x77 => {
+                    *decimal_scale_exponent += (v.data & 0b111) as isize - 6;
+                }
+                0x78..=0x7B => {
+                    *decimal_offset_exponent += (v.data & 0b11) as isize - 3;
+                }
+                0x7D => labels.push(ValueLabel::MultiplicativeCorrectionFactor103),
+                0x7E => labels.push(ValueLabel::FutureValue),
+                0x7F => labels.push(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific),
+                _ => labels.push(ValueLabel::Reserved),
+            };
         }
     }
 }
@@ -1128,6 +1137,7 @@ pub enum ValueLabel {
     SizeOfStorageBlock,
     DescriptionOfTariffAndSubunit,
     StorageInterval,
+    Dimensionless,
     DimensionlessHCA,
     DataContainerForWmbusProtocol,
     PeriodOfNormalDataTransmission,
@@ -1168,6 +1178,7 @@ pub enum ValueLabel {
     DirectionFromCommunicationPartnerToMeter,
     DirectionFromMeterToCommunicationPartner,
     RelativeHumidity,
+    MoistureLevel,
     PhaseUtoU,
     PhaseUtoI,
     ColdWarmTemperatureLimit,
@@ -1546,16 +1557,16 @@ mod tests {
 
         use crate::value_information::ValueInformationBlock;
         // This is the ascii conform method of encoding the VIF
-        // VIF  VIFE  LEN(3) 'R'   'H'  '%'
-        // 0xFC, 0x74, 0x03, 0x52, 0x48, 0x25,
+        // VIF  VIFE  LEN(3) 'H'   'R'  '%'
+        // 0xFC, 0x74, 0x03, 0x48, 0x52, 0x25,
         // %RH
         // Combinable (orthogonal) VIFE-Code extension table
         // VIFE = 0x74 => E111 0nnn Multiplicative correction factor for value (not unit): 10nnn–6 => 10^-2
         //
-        // according to the Norm the LEN and ASCII is not part tof the VIB however this makes parsing
+        // according to the Norm the LEN and ASCII is not part of the VIB however this makes parsing
         // cumbersome so we include it in the VIB
 
-        let data = [0xFC, 0x74, 0x03, 0x52, 0x48, 0x25];
+        let data = [0xFC, 0x74, 0x03, 0x48, 0x52, 0x25];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 6);
         assert_eq!(result.value_information.data, 0xFC);
@@ -1563,7 +1574,7 @@ mod tests {
             ValueInformation::try_from(&result).unwrap(),
             ValueInformation {
                 decimal_offset_exponent: 0,
-                decimal_scale_exponent: 0,
+                decimal_scale_exponent: -2,
                 units: { ArrayVec::<Unit, 10>::new() },
                 labels: {
                     let mut x = ArrayVec::<ValueLabel, 10>::new();
@@ -1682,5 +1693,116 @@ mod tests {
             .contains(&ValueLabel::CumulativeMaximumOfActivePower));
         assert_eq!(vi.units[0].name, UnitName::Watt);
         assert_eq!(vi.decimal_scale_exponent, -3);
+    }
+
+    #[test]
+    fn test_fb_humidity_with_combinatorial_scale() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        // VIF=0xFB, VIFE=0x9B (0x1B + extension bit), VIFE2=0x74 (multiplicative 10^(4-6) = 10^-2)
+        // OMS RH01: relative humidity 10^0 %, shifted to 10^-2 by combinatorial.
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFB, 0x9B, 0x74].as_slice()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(vi.labels.contains(&ValueLabel::RelativeHumidity));
+        assert_eq!(vi.units[0].name, UnitName::Percent);
+        assert_eq!(vi.decimal_scale_exponent, -2);
+    }
+
+    #[test]
+    fn test_fd_ampere_with_phase_combinatorial() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        // VIF=0xFD, VIFE=0xD9 (0x59 + extension bit = Ampere 10^-3),
+        // VIFE2=0xFC (combinatorial extension), VIFE3=0x01 (AtPhaseL1)
+        // OMS CA01: per-phase current.
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFD, 0xD9, 0xFC, 0x01].as_slice()).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(vi.units[0].name, UnitName::Ampere);
+        assert_eq!(vi.decimal_scale_exponent, -3);
+        assert!(vi.labels.contains(&ValueLabel::AtPhaseL1));
+    }
+
+    #[test]
+    fn test_primary_vif_combinatorial_not_skipped() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        // VIF=0xE5 (0x65 + extension bit = External temperature 10^-2),
+        // VIFE=0x74 (multiplicative 10^(4-6) = 10^-2)
+        // First VIFE must NOT be skipped for primary VIFs — total should be 10^-4.
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xE5, 0x74].as_slice()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(vi.labels.contains(&ValueLabel::ExternalTemperature));
+        assert_eq!(vi.units[0].name, UnitName::Celsius);
+        assert_eq!(vi.decimal_scale_exponent, -4);
+    }
+
+    #[test]
+    fn test_fd_moisture_level() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        // OMS RH03: VIF=0xFD, VIFE1=0xFD (0x7D + extension bit), VIFE2=0x3E
+        // Moisture Level, % 10^0
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFD, 0xFD, 0x3E].as_slice()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(vi.labels.contains(&ValueLabel::MoistureLevel));
+        assert_eq!(vi.units[0].name, UnitName::Percent);
+        assert_eq!(vi.decimal_scale_exponent, 0);
+    }
+
+    #[test]
+    fn test_vib_struct_layout() {
+        use crate::value_information::ValueInformationBlock;
+
+        // FD extension with orthogonal VIFEs: Ampere 10^-3, AtPhaseL1
+        // VIF=0xFD, VIFE[0]=0xD9 (true VIF), VIFE[1]=0xFC, VIFE[2]=0x01
+        let vib = ValueInformationBlock::try_from([0xFD, 0xD9, 0xFC, 0x01].as_slice()).unwrap();
+
+        assert_eq!(vib.value_information.data, 0xFD);
+        assert_eq!(vib.get_size(), 4);
+        assert!(vib.plaintext_vife.is_none());
+
+        let ext = vib.value_information_extension.as_ref().unwrap();
+        assert_eq!(ext.len(), 3);
+        assert_eq!(ext[0].data, 0xD9);
+        assert_eq!(ext[1].data, 0xFC);
+        assert_eq!(ext[2].data, 0x01);
+
+        // Primary VIF with one orthogonal VIFE
+        // VIF=0x96 (Volume + extension bit), VIFE=0x12 (Averaged)
+        let vib = ValueInformationBlock::try_from([0x96, 0x12].as_slice()).unwrap();
+
+        assert_eq!(vib.value_information.data, 0x96);
+        assert_eq!(vib.get_size(), 2);
+
+        let ext = vib.value_information_extension.as_ref().unwrap();
+        assert_eq!(ext.len(), 1);
+        assert_eq!(ext[0].data, 0x12);
+
+        // Single primary VIF, no extension
+        let vib = ValueInformationBlock::try_from([0x13].as_slice()).unwrap();
+
+        assert_eq!(vib.value_information.data, 0x13);
+        assert_eq!(vib.get_size(), 1);
+        assert!(vib.value_information_extension.is_none());
     }
 }
