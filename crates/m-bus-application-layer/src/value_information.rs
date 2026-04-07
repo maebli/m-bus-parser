@@ -239,11 +239,13 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x00..=0x07 => {
                         units.push(unit!(Watt));
                         units.push(unit!(Hour));
+                        labels.push(ValueLabel::Energy);
                         decimal_scale_exponent =
                             (value_information_block.value_information.data & 0b111) as isize - 3;
                     }
                     0x08..=0x0F => {
                         units.push(unit!(Joul));
+                        labels.push(ValueLabel::Energy);
                         decimal_scale_exponent =
                             (value_information_block.value_information.data & 0b111) as isize;
                     }
@@ -255,47 +257,68 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     }
                     0x18..=0x1F => {
                         units.push(unit!(Kilogram));
+                        labels.push(ValueLabel::Mass);
                         decimal_scale_exponent =
                             (value_information_block.value_information.data & 0b111) as isize - 3;
                     }
-                    0x20 | 0x24 => {
-                        units.push(unit!(Second));
+                    0x20..=0x23 => {
+                        labels.push(ValueLabel::OnTime);
+                        match value_information_block.value_information.data & 0x03 {
+                            0x00 => units.push(unit!(Second)),
+                            0x01 => units.push(unit!(Minute)),
+                            0x02 => units.push(unit!(Hour)),
+                            0x03 => units.push(unit!(Day)),
+                            _ => unreachable!(),
+                        }
                     }
-                    0x21 | 0x25 => units.push(unit!(Meter)),
-                    0x22 | 0x26 => units.push(unit!(Hour)),
-                    0x23 | 0x27 => units.push(unit!(Day)),
+                    0x24..=0x27 => {
+                        labels.push(ValueLabel::OperatingTime);
+                        match value_information_block.value_information.data & 0x03 {
+                            0x00 => units.push(unit!(Second)),
+                            0x01 => units.push(unit!(Minute)),
+                            0x02 => units.push(unit!(Hour)),
+                            0x03 => units.push(unit!(Day)),
+                            _ => unreachable!(),
+                        }
+                    }
                     0x28..=0x2F => {
                         units.push(unit!(Watt));
+                        labels.push(ValueLabel::Power);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 3;
                     }
                     0x30..=0x37 => {
                         units.push(unit!(Joul));
                         units.push(unit!(Hour ^ -1));
+                        labels.push(ValueLabel::EnergyRate);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize;
                     }
                     0x38..=0x3F => {
                         units.push(unit!(Meter ^ 3));
                         units.push(unit!(Hour ^ -1));
+                        labels.push(ValueLabel::VolumeFlow);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 6;
                     }
                     0x40..=0x47 => {
                         units.push(unit!(Meter ^ 3));
                         units.push(unit!(Minute ^ -1));
+                        labels.push(ValueLabel::VolumeFlow);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 7;
                     }
                     0x48..=0x4F => {
                         units.push(unit!(Meter ^ 3));
                         units.push(unit!(Second ^ -1));
+                        labels.push(ValueLabel::VolumeFlow);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 9;
                     }
                     0x50..=0x57 => {
                         units.push(unit!(Kilogram ^ 3));
                         units.push(unit!(Hour ^ -1));
+                        labels.push(ValueLabel::MassFlow);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 3;
                     }
@@ -325,6 +348,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     }
                     0x68..=0x6B => {
                         units.push(unit!(Bar));
+                        labels.push(ValueLabel::Pressure);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b11) as isize - 3;
                     }
@@ -412,7 +436,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x20 => labels.push(ValueLabel::FirstStorageForCycleStorage),
                     0x21 => labels.push(ValueLabel::LastStorageForCycleStorage),
                     0x22 => labels.push(ValueLabel::SizeOfStorageBlock),
-                    0x23 => labels.push(ValueLabel::DescripitonOfTariffAndSubunit),
+                    0x23 => labels.push(ValueLabel::DescriptionOfTariffAndSubunit),
                     0x24 => {
                         units.push(unit!(Second));
                         labels.push(ValueLabel::StorageInterval);
@@ -441,26 +465,28 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x31 => labels.push(ValueLabel::DataContainerForWmbusProtocol),
                     0x32 => {
                         units.push(unit!(Second));
-                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmission);
                     }
                     0x33 => {
                         units.push(unit!(Meter));
-                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmission);
                     }
                     0x34 => {
                         units.push(unit!(Hour));
-                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmission);
                     }
                     0x35 => {
                         units.push(unit!(Day));
-                        labels.push(ValueLabel::PeriodOfNormalDataTransmition);
+                        labels.push(ValueLabel::PeriodOfNormalDataTransmission);
                     }
                     0x40..=0x4F => {
                         units.push(unit!(Volt));
+                        labels.push(ValueLabel::Voltage);
                         decimal_scale_exponent = (first_vife_data & 0b1111) as isize - 9;
                     }
                     0x50..=0x5F => {
                         units.push(unit!(Ampere));
+                        labels.push(ValueLabel::Current);
                         decimal_scale_exponent = (first_vife_data & 0b1111) as isize - 12;
                     }
                     0x60 => labels.push(ValueLabel::ResetCounter),
@@ -631,14 +657,14 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b111_0101 => populate!(Celsius, 1, dec: -2, ColdWarmTemperatureLimit),
                     0b111_0110 => populate!(Celsius, 1, dec: -1, ColdWarmTemperatureLimit),
                     0b111_0111 => populate!(Celsius, 1, dec: 0, ColdWarmTemperatureLimit),
-                    0b111_1000 => populate!(Watt, 1, dec: -3, CumaltiveMaximumOfActivePower),
-                    0b111_1001 => populate!(Watt, 1, dec: -2, CumaltiveMaximumOfActivePower),
-                    0b111_1010 => populate!(Watt, 1, dec: -1, CumaltiveMaximumOfActivePower),
-                    0b111_1011 => populate!(Watt, 1, dec: 0, CumaltiveMaximumOfActivePower),
-                    0b111_1100 => populate!(Watt, 1, dec: 1, CumaltiveMaximumOfActivePower),
-                    0b111_1101 => populate!(Watt, 1, dec: 2, CumaltiveMaximumOfActivePower),
-                    0b111_1110 => populate!(Watt, 1, dec: 3, CumaltiveMaximumOfActivePower),
-                    0b111_1111 => populate!(Watt, 1, dec: 4, CumaltiveMaximumOfActivePower),
+                    0b111_1000 => populate!(Watt, 1, dec: -3, CumulativeMaximumOfActivePower),
+                    0b111_1001 => populate!(Watt, 1, dec: -2, CumulativeMaximumOfActivePower),
+                    0b111_1010 => populate!(Watt, 1, dec: -1, CumulativeMaximumOfActivePower),
+                    0b111_1011 => populate!(Watt, 1, dec: 0, CumulativeMaximumOfActivePower),
+                    0b111_1100 => populate!(Watt, 1, dec: 1, CumulativeMaximumOfActivePower),
+                    0b111_1101 => populate!(Watt, 1, dec: 2, CumulativeMaximumOfActivePower),
+                    0b111_1110 => populate!(Watt, 1, dec: 3, CumulativeMaximumOfActivePower),
+                    0b111_1111 => populate!(Watt, 1, dec: 4, CumulativeMaximumOfActivePower),
                     0b110_1000 => populate!(HCAUnit, 1,dec: 0, ResultingRatingFactor),
                     0b110_1001 => populate!(HCAUnit, 1,dec: 0, ThermalOutputRatingFactor),
                     0b110_1010 => populate!(HCAUnit, 1,dec: 0, ThermalCouplingRatingFactorOverall),
@@ -715,7 +741,7 @@ fn consume_orthhogonal_vife(
                     0x12 => labels.push(ValueLabel::Averaged),
                     0x13 => labels.push(ValueLabel::InverseCompactProfile),
                     0x14 => labels.push(ValueLabel::RelativeDeviation),
-                    0x15..=0x1C => labels.push(ValueLabel::RecoordErrorCodes),
+                    0x15..=0x1C => labels.push(ValueLabel::RecordErrorCodes),
                     0x1D => labels.push(ValueLabel::StandardConformDataContent),
                     0x1E => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
                     0x1F => labels.push(ValueLabel::CompactProfile),
@@ -776,12 +802,12 @@ fn consume_orthhogonal_vife(
                         units.push(unit!(Ampere ^ -1));
                     }
                     0x39 => labels.push(ValueLabel::StartDateOf),
-                    0x3A => labels.push(ValueLabel::VifContinsUncorrectedUnitOrValue),
+                    0x3A => labels.push(ValueLabel::VifContainsUncorrectedUnitOrValue),
                     0x3B => labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive),
                     0x3C => labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative),
                     0x3D => labels.push(ValueLabel::NoneMetricUnits),
                     0x3E => labels.push(ValueLabel::ValueAtBaseConditions),
-                    0x3F => labels.push(ValueLabel::ObisDecleration),
+                    0x3F => labels.push(ValueLabel::ObisDeclaration),
                     0x40 => labels.push(ValueLabel::UpperLimitValue),
                     0x48 => labels.push(ValueLabel::LowerLimitValue),
                     0x41 => labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue),
@@ -886,7 +912,7 @@ fn consume_orthhogonal_vife(
                         labels.push(ValueLabel::DurationOfLast);
                         units.push(unit!(Day));
                     }
-                    0x68 => labels.push(ValueLabel::ValueDuringLowerValueExeed),
+                    0x68 => labels.push(ValueLabel::ValueDuringLowerValueExceed),
                     0x6C => labels.push(ValueLabel::ValueDuringUpperValueExceed),
                     0x69 => labels.push(ValueLabel::LeakageValues),
                     0x6D => labels.push(ValueLabel::OverflowValues),
@@ -1014,7 +1040,7 @@ pub enum ValueLabel {
     Parameter,
     InverseCompactProfile,
     RelativeDeviation,
-    RecoordErrorCodes,
+    RecordErrorCodes,
     StandardConformDataContent,
     CompactProfileWithRegisterNumbers,
     CompactProfile,
@@ -1034,12 +1060,12 @@ pub enum ValueLabel {
     HourMinuteSecond,
     DayMonthYear,
     StartDateOf,
-    VifContinsUncorrectedUnitOrValue,
+    VifContainsUncorrectedUnitOrValue,
     AccumulationOnlyIfValueIsPositive,
     AccumulationOnlyIfValueIsNegative,
     NoneMetricUnits,
     ValueAtBaseConditions,
-    ObisDecleration,
+    ObisDeclaration,
     UpperLimitValue,
     LowerLimitValue,
     NumberOfExceedsOfUpperLimitValue,
@@ -1058,7 +1084,7 @@ pub enum ValueLabel {
     DurationOfLastUpperLimitExceed,
     DurationOfFirst,
     DurationOfLast,
-    ValueDuringLowerValueExeed,
+    ValueDuringLowerValueExceed,
     ValueDuringUpperValueExceed,
     LeakageValues,
     OverflowValues,
@@ -1100,11 +1126,11 @@ pub enum ValueLabel {
     FirstStorageForCycleStorage,
     LastStorageForCycleStorage,
     SizeOfStorageBlock,
-    DescripitonOfTariffAndSubunit,
+    DescriptionOfTariffAndSubunit,
     StorageInterval,
     DimensionlessHCA,
     DataContainerForWmbusProtocol,
-    PeriodOfNormalDataTransmition,
+    PeriodOfNormalDataTransmission,
     ResetCounter,
     CumulationCounter,
     ControlSignal,
@@ -1145,7 +1171,7 @@ pub enum ValueLabel {
     PhaseUtoU,
     PhaseUtoI,
     ColdWarmTemperatureLimit,
-    CumaltiveMaximumOfActivePower,
+    CumulativeMaximumOfActivePower,
     ResultingRatingFactor,
     ThermalOutputRatingFactor,
     ThermalCouplingRatingFactorOverall,
@@ -1154,7 +1180,17 @@ pub enum ValueLabel {
     LowTemperatureRatingFactor,
     DisplayOutputScalingFactor,
     ManufacturerSpecific,
+    OnTime,
+    OperatingTime,
     Volume,
+    Mass,
+    Power,
+    EnergyRate,
+    VolumeFlow,
+    MassFlow,
+    Pressure,
+    Voltage,
+    Current,
     FlowTemperature,
     ReturnTemperature,
     TemperatureDifference,
@@ -1606,5 +1642,46 @@ mod tests {
         )
         .unwrap();
         assert!(vi.labels.contains(&ValueLabel::Reserved));
+    }
+
+    #[test]
+    fn test_primary_vif_on_time_and_operating_time_labels() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        // VIF 0x21 = 0010 0001 = On time (0x20-0x23), nn=01 => minutes
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0x21].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert!(vi.labels.contains(&ValueLabel::OnTime));
+        assert_eq!(vi.units[0].name, UnitName::Minute);
+
+        // VIF 0x27 = 0010 0111 = Operating time (0x24-0x27), nn=11 => days
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0x27].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert!(vi.labels.contains(&ValueLabel::OperatingTime));
+        assert_eq!(vi.units[0].name, UnitName::Day);
+    }
+
+    #[test]
+    fn test_fb_cumulative_maximum_of_active_power() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        // VIF=0xFB VIFE=0x78 (0b0111_1000): CumulativeMaximumOfActivePower, W 10^-3
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFB, 0x78].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert!(vi
+            .labels
+            .contains(&ValueLabel::CumulativeMaximumOfActivePower));
+        assert_eq!(vi.units[0].name, UnitName::Watt);
+        assert_eq!(vi.decimal_scale_exponent, -3);
     }
 }
