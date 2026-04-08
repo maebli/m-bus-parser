@@ -1714,5 +1714,4 @@ mod tests {
         assert!(table_output.contains("(12/Jan/12)(Date)"));
         assert!(table_output.contains("(3383)[day]"));
     }
-
 }
