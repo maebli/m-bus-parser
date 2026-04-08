@@ -299,13 +299,27 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize - 3;
                     }
-                    0x58..=0x5F | 0x64..=0x67 => {
+                    0x58..=0x5B => {
                         units.push(unit!(Celsius));
+                        labels.push(ValueLabel::FlowTemperature);
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b11) as isize - 3;
+                    }
+                    0x5C..=0x5F => {
+                        units.push(unit!(Celsius));
+                        labels.push(ValueLabel::ReturnTemperature);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b11) as isize - 3;
                     }
                     0x60..=0x63 => {
                         units.push(unit!(Kelvin));
+                        labels.push(ValueLabel::TemperatureDifference);
+                        decimal_scale_exponent +=
+                            (value_information_block.value_information.data & 0b11) as isize - 3;
+                    }
+                    0x64..=0x67 => {
+                        units.push(unit!(Celsius));
+                        labels.push(ValueLabel::ExternalTemperature);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b11) as isize - 3;
                     }
@@ -441,9 +455,13 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         units.push(unit!(Day));
                         labels.push(ValueLabel::PeriodOfNormalDataTransmition);
                     }
-                    0x50..=0x5F => {
+                    0x40..=0x4F => {
                         units.push(unit!(Volt));
                         decimal_scale_exponent = (first_vife_data & 0b1111) as isize - 9;
+                    }
+                    0x50..=0x5F => {
+                        units.push(unit!(Ampere));
+                        decimal_scale_exponent = (first_vife_data & 0b1111) as isize - 12;
                     }
                     0x60 => labels.push(ValueLabel::ResetCounter),
                     0x61 => labels.push(ValueLabel::CumulationCounter),
@@ -529,6 +547,11 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                         units.push(mk_unit(Hour, -1));
                         populate!(@snd $($rem)*)
                     }};
+                    ($name:ident / min, $exponent:expr, $($rem:tt)*) => {{
+                        units.push(mk_unit($name, $exponent));
+                        units.push(mk_unit(Minute, -1));
+                        populate!(@snd $($rem)*)
+                    }};
                     ($name:ident * h, $exponent:expr, $($rem:tt)*) => {{
                         units.push(mk_unit($name, $exponent));
                         units.push(mk_unit(Hour, 1));
@@ -564,8 +587,12 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b001_1000 => populate!(Tonne, 1, dec: 2),
                     0b001_1001 => populate!(Tonne, 1, dec: 3),
                     0b001_1010 => populate!(Percent, 1, dec: -1, RelativeHumidity),
-                    0b010_0000 => populate!(Feet, 3, dec: 0),
-                    0b010_0001 => populate!(Feet, 3, dec: 1),
+                    0b010_0001 => populate!(Feet, 3, dec: -1),
+                    0b010_0010 => populate!(AmericanGallon, 1, dec: -1),
+                    0b010_0011 => populate!(AmericanGallon, 1, dec: 0),
+                    0b010_0100 => populate!(AmericanGallon / min, 1, dec: -3),
+                    0b010_0101 => populate!(AmericanGallon / min, 1, dec: 0),
+                    0b010_0110 => populate!(AmericanGallon / h, 1, dec: 0),
                     0b010_1000 => populate!(Watt, 1, dec: 5),
                     0b010_1001 => populate!(Watt, 1, dec: 6),
                     0b010_1010 => populate!(Degree, 1, dec: -1, PhaseUtoU),
@@ -580,6 +607,26 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b011_0101 => populate!(ApparentWatt / h, 1, dec: 1),
                     0b011_0110 => populate!(ApparentWatt / h, 1, dec: 2),
                     0b011_0111 => populate!(ApparentWatt / h, 1, dec: 3),
+                    0b101_1000 => populate!(Fahrenheit, 1, dec: -3, FlowTemperature),
+                    0b101_1001 => populate!(Fahrenheit, 1, dec: -2, FlowTemperature),
+                    0b101_1010 => populate!(Fahrenheit, 1, dec: -1, FlowTemperature),
+                    0b101_1011 => populate!(Fahrenheit, 1, dec: 0, FlowTemperature),
+                    0b101_1100 => populate!(Fahrenheit, 1, dec: -3, ReturnTemperature),
+                    0b101_1101 => populate!(Fahrenheit, 1, dec: -2, ReturnTemperature),
+                    0b101_1110 => populate!(Fahrenheit, 1, dec: -1, ReturnTemperature),
+                    0b101_1111 => populate!(Fahrenheit, 1, dec: 0, ReturnTemperature),
+                    0b110_0000 => populate!(Fahrenheit, 1, dec: -3, TemperatureDifference),
+                    0b110_0001 => populate!(Fahrenheit, 1, dec: -2, TemperatureDifference),
+                    0b110_0010 => populate!(Fahrenheit, 1, dec: -1, TemperatureDifference),
+                    0b110_0011 => populate!(Fahrenheit, 1, dec: 0, TemperatureDifference),
+                    0b110_0100 => populate!(Fahrenheit, 1, dec: -3, ExternalTemperature),
+                    0b110_0101 => populate!(Fahrenheit, 1, dec: -2, ExternalTemperature),
+                    0b110_0110 => populate!(Fahrenheit, 1, dec: -1, ExternalTemperature),
+                    0b110_0111 => populate!(Fahrenheit, 1, dec: 0, ExternalTemperature),
+                    0b111_0000 => populate!(Fahrenheit, 1, dec: -3, ColdWarmTemperatureLimit),
+                    0b111_0001 => populate!(Fahrenheit, 1, dec: -2, ColdWarmTemperatureLimit),
+                    0b111_0010 => populate!(Fahrenheit, 1, dec: -1, ColdWarmTemperatureLimit),
+                    0b111_0011 => populate!(Fahrenheit, 1, dec: 0, ColdWarmTemperatureLimit),
                     0b111_0100 => populate!(Celsius, 1, dec: -3, ColdWarmTemperatureLimit),
                     0b111_0101 => populate!(Celsius, 1, dec: -2, ColdWarmTemperatureLimit),
                     0b111_0110 => populate!(Celsius, 1, dec: -1, ColdWarmTemperatureLimit),
@@ -602,11 +649,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0b110_1101 => populate!(HCAUnit, 1,dec: 0, LowTemperatureRatingFactor),
                     0b110_1110 => populate!(HCAUnit, 1,dec: 0, DisplayOutputScalingFactor),
 
-                    _ => {
-                        return Err(DataInformationError::Unimplemented {
-                            feature: "Extended value information unit codes (partial)",
-                        })
-                    }
+                    _ => labels.push(ValueLabel::Reserved),
                 };
             }
             // we need to check if the next byte is equivalent to the length of the rest of the
@@ -1114,6 +1157,8 @@ pub enum ValueLabel {
     Volume,
     FlowTemperature,
     ReturnTemperature,
+    TemperatureDifference,
+    ExternalTemperature,
 }
 
 #[cfg(feature = "std")]
@@ -1206,6 +1251,8 @@ pub enum UnitName {
     Degree,
     Hertz,
     HCAUnit,
+    Fahrenheit,
+    AmericanGallon,
 }
 
 #[cfg(feature = "std")]
@@ -1240,7 +1287,7 @@ impl fmt::Display for UnitName {
             UnitName::InputPulseOnChannel1 => write!(f, "InputPulseOnChannel1"),
             UnitName::OutputPulseOnChannel1 => write!(f, "OutputPulseOnChannel1"),
             UnitName::Liter => write!(f, "l"),
-            UnitName::Volt => write!(f, "A"),
+            UnitName::Volt => write!(f, "V"),
             UnitName::Ampere => write!(f, "A"),
             UnitName::LocalMoneyCurrency => write!(f, "$ (local)"),
             UnitName::Symbol => write!(f, "Symbol"),
@@ -1250,6 +1297,8 @@ impl fmt::Display for UnitName {
             UnitName::Degree => write!(f, "°"),
             UnitName::Hertz => write!(f, "Hz"),
             UnitName::HCAUnit => write!(f, "HCAUnit"),
+            UnitName::Fahrenheit => write!(f, "°F"),
+            UnitName::AmericanGallon => write!(f, "UsGal"),
         }
     }
 }
@@ -1506,5 +1555,56 @@ mod tests {
         let data = [253, 27];
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
+    }
+
+    #[test]
+    fn test_vif_fd_voltage_and_ampere() {
+        use crate::value_information::UnitName;
+        use crate::value_information::{ValueInformation, ValueInformationBlock};
+
+        // VIF=0xFD VIFE=0x48: Voltage 10^(8-9) = 0.1 V
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFD, 0x48].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vi.units[0].name, UnitName::Volt);
+        assert_eq!(vi.decimal_scale_exponent, -1);
+
+        // VIF=0xFD VIFE=0x59: Ampere 10^(9-12) = 0.001 A
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFD, 0x59].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vi.units[0].name, UnitName::Ampere);
+        assert_eq!(vi.decimal_scale_exponent, -3);
+    }
+
+    #[test]
+    fn test_vif_fb_added_codes_and_reserved_fallback() {
+        use crate::value_information::UnitName;
+        use crate::value_information::{ValueInformation, ValueInformationBlock, ValueLabel};
+
+        // VIF=0xFB VIFE=0x22: US gallon, 10^-1
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFB, 0x22].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vi.units[0].name, UnitName::AmericanGallon);
+        assert_eq!(vi.decimal_scale_exponent, -1);
+
+        // VIF=0xFB VIFE=0x70: °F cold/warm temp limit, 10^-3
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFB, 0x70].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vi.units[0].name, UnitName::Fahrenheit);
+        assert_eq!(vi.decimal_scale_exponent, -3);
+
+        // VIF=0xFB VIFE=0x20 (E010 0000): Reserved per EN 13757-3 — should not error
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFB, 0x20].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert!(vi.labels.contains(&ValueLabel::Reserved));
     }
 }
