@@ -290,7 +290,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                     0x30..=0x37 => {
                         units.push(unit!(Joul));
                         units.push(unit!(Hour ^ -1));
-                        labels.push(ValueLabel::EnergyRate);
+                        labels.push(ValueLabel::Power);
                         decimal_scale_exponent +=
                             (value_information_block.value_information.data & 0b111) as isize;
                     }
@@ -1185,7 +1185,6 @@ pub enum ValueLabel {
     Volume,
     Mass,
     Power,
-    EnergyRate,
     VolumeFlow,
     MassFlow,
     Pressure,
