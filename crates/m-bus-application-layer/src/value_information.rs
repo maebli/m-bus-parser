@@ -587,44 +587,47 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
                 match first_vife_data & 0x7F {
                     0b0 => populate!(Watt / h, 3, dec: 5, Energy),
                     0b000_0001 => populate!(Watt / h, 3, dec: 6, Energy),
-                    0b000_0010 => populate!(ReactiveWatt * h, 1, dec: 3, Energy),
-                    0b000_0011 => populate!(ReactiveWatt * h, 1, dec: 4, Energy),
+                    0b000_0010 => populate!(ReactiveWatt * h, 1, dec: 3, ReactiveEnergy),
+                    0b000_0011 => populate!(ReactiveWatt * h, 1, dec: 4, ReactiveEnergy),
+                    0b000_0100 => populate!(ApparentWatt * h, 1, dec: 3, ApparentEnergy),
+                    0b000_0101 => populate!(ApparentWatt * h, 1, dec: 4, ApparentEnergy),
+                    0b000_0110 => {
+                        labels.push(CoefficientOfPerformance);
+                        decimal_scale_exponent = -1;
+                    }
                     0b000_1000 => populate!(Joul, 1, dec: 8, Energy),
                     0b000_1001 => populate!(Joul, 1, dec: 9, Energy),
-                    0b000_1100 => populate!(Joul, 1, dec: 5, Energy),
-                    0b000_1101 => populate!(Joul, 1, dec: 6, Energy),
-                    0b000_1110 => populate!(Joul, 1, dec: 7, Energy),
-                    0b000_1111 => populate!(Joul, 1, dec: 8, Energy),
-                    0b001_0000 => populate!(Meter, 3, dec: 2),
-                    0b001_0001 => populate!(Meter, 3, dec: 3),
-                    0b001_0100 => populate!(ReactiveWatt, 1, dec: -3),
-                    0b001_0101 => populate!(ReactiveWatt, 1, dec: -2),
-                    0b001_0110 => populate!(ReactiveWatt, 1, dec: -1),
-                    0b001_0111 => populate!(ReactiveWatt, 1, dec: 0),
-                    0b001_1000 => populate!(Tonne, 1, dec: 2),
-                    0b001_1001 => populate!(Tonne, 1, dec: 3),
+                    0b000_1100 => populate!(Calorie, 1, dec: 5, Energy),
+                    0b000_1101 => populate!(Calorie, 1, dec: 6, Energy),
+                    0b000_1110 => populate!(Calorie, 1, dec: 7, Energy),
+                    0b000_1111 => populate!(Calorie, 1, dec: 8, Energy),
+                    0b001_0000 => populate!(Meter, 3, dec: 2, Volume),
+                    0b001_0001 => populate!(Meter, 3, dec: 3, Volume),
+                    0b001_0100 => populate!(ReactiveWatt, 1, dec: 0, ReactivePower),
+                    0b001_0101 => populate!(ReactiveWatt, 1, dec: 1, ReactivePower),
+                    0b001_0110 => populate!(ReactiveWatt, 1, dec: 2, ReactivePower),
+                    0b001_0111 => populate!(ReactiveWatt, 1, dec: 3, ReactivePower),
+                    0b001_1000 => populate!(Tonne, 1, dec: 2, Mass),
+                    0b001_1001 => populate!(Tonne, 1, dec: 3, Mass),
                     0b001_1010 => populate!(Percent, 1, dec: -1, RelativeHumidity),
                     0b001_1011 => populate!(Percent, 1, dec: 0, RelativeHumidity),
-                    0b010_0001 => populate!(Feet, 3, dec: -1),
-                    0b010_0010 => populate!(AmericanGallon, 1, dec: -1),
-                    0b010_0011 => populate!(AmericanGallon, 1, dec: 0),
-                    0b010_0100 => populate!(AmericanGallon / min, 1, dec: -3),
-                    0b010_0101 => populate!(AmericanGallon / min, 1, dec: 0),
-                    0b010_0110 => populate!(AmericanGallon / h, 1, dec: 0),
-                    0b010_1000 => populate!(Watt, 1, dec: 5),
-                    0b010_1001 => populate!(Watt, 1, dec: 6),
+                    0b010_0000 => populate!(Feet, 3, dec: 0, Volume),
+                    0b010_0001 => populate!(Feet, 3, dec: -1, Volume),
+                    0b010_0011 => populate!(Degree, 1, dec: -1, PhaseItoU),
+                    0b010_1000 => populate!(Watt, 1, dec: 5, Power),
+                    0b010_1001 => populate!(Watt, 1, dec: 6, Power),
                     0b010_1010 => populate!(Degree, 1, dec: -1, PhaseUtoU),
                     0b010_1011 => populate!(Degree, 1, dec: -1, PhaseUtoI),
-                    0b010_1100 => populate!(Hertz, 1, dec: -3),
-                    0b010_1101 => populate!(Hertz, 1, dec: -2),
-                    0b010_1110 => populate!(Hertz, 1, dec: -1),
-                    0b010_1111 => populate!(Hertz, 1, dec: 0),
-                    0b011_0000 => populate!(Joul / h, 1, dec: -8),
-                    0b011_0001 => populate!(Joul / h, 1, dec: -7),
-                    0b011_0100 => populate!(ApparentWatt / h, 1, dec: 0),
-                    0b011_0101 => populate!(ApparentWatt / h, 1, dec: 1),
-                    0b011_0110 => populate!(ApparentWatt / h, 1, dec: 2),
-                    0b011_0111 => populate!(ApparentWatt / h, 1, dec: 3),
+                    0b010_1100 => populate!(Hertz, 1, dec: -3, Frequency),
+                    0b010_1101 => populate!(Hertz, 1, dec: -2, Frequency),
+                    0b010_1110 => populate!(Hertz, 1, dec: -1, Frequency),
+                    0b010_1111 => populate!(Hertz, 1, dec: 0, Frequency),
+                    0b011_0000 => populate!(Joul / h, 1, dec: 8, Power),
+                    0b011_0001 => populate!(Joul / h, 1, dec: 9, Power),
+                    0b011_0100 => populate!(ApparentWatt, 1, dec: 0, ApparentPower),
+                    0b011_0101 => populate!(ApparentWatt, 1, dec: 1, ApparentPower),
+                    0b011_0110 => populate!(ApparentWatt, 1, dec: 2, ApparentPower),
+                    0b011_0111 => populate!(ApparentWatt, 1, dec: 3, ApparentPower),
                     0b101_1000 => populate!(Fahrenheit, 1, dec: -3, FlowTemperature),
                     0b101_1001 => populate!(Fahrenheit, 1, dec: -2, FlowTemperature),
                     0b101_1010 => populate!(Fahrenheit, 1, dec: -1, FlowTemperature),
@@ -1160,6 +1163,12 @@ pub enum ValueLabel {
     DataContainerForManufacturerSpecificProtocol,
     CurrentlySelectedApplication,
     Energy,
+    ReactiveEnergy,
+    ApparentEnergy,
+    CoefficientOfPerformance,
+    ReactivePower,
+    Frequency,
+    ApparentPower,
     AtPhaseL1,
     AtPhaseL2,
     AtPhaseL3,
@@ -1181,6 +1190,7 @@ pub enum ValueLabel {
     MoistureLevel,
     PhaseUtoU,
     PhaseUtoI,
+    PhaseItoU,
     ColdWarmTemperatureLimit,
     CumulativeMaximumOfActivePower,
     ResultingRatingFactor,
@@ -1299,6 +1309,7 @@ pub enum UnitName {
     HCAUnit,
     Fahrenheit,
     AmericanGallon,
+    Calorie,
 }
 
 #[cfg(feature = "std")]
@@ -1345,6 +1356,7 @@ impl fmt::Display for UnitName {
             UnitName::HCAUnit => write!(f, "HCAUnit"),
             UnitName::Fahrenheit => write!(f, "°F"),
             UnitName::AmericanGallon => write!(f, "UsGal"),
+            UnitName::Calorie => write!(f, "cal"),
         }
     }
 }
@@ -1630,13 +1642,24 @@ mod tests {
         use crate::value_information::UnitName;
         use crate::value_information::{ValueInformation, ValueInformationBlock, ValueLabel};
 
-        // VIF=0xFB VIFE=0x22: US gallon, 10^-1
+        // VIF=0xFB VIFE=0x20 (E010 0000): ft³, dec: 0
         let vi = ValueInformation::try_from(
-            &ValueInformationBlock::try_from([0xFB, 0x22].as_slice()).unwrap(),
+            &ValueInformationBlock::try_from([0xFB, 0x20].as_slice()).unwrap(),
         )
         .unwrap();
-        assert_eq!(vi.units[0].name, UnitName::AmericanGallon);
+        assert_eq!(vi.units[0].name, UnitName::Feet);
+        assert_eq!(vi.units[0].exponent, 3);
+        assert_eq!(vi.decimal_scale_exponent, 0);
+        assert!(vi.labels.contains(&ValueLabel::Volume));
+
+        // VIF=0xFB VIFE=0x23 (E010 0011): Phase angle I-U, 0.1°
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0xFB, 0x23].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vi.units[0].name, UnitName::Degree);
         assert_eq!(vi.decimal_scale_exponent, -1);
+        assert!(vi.labels.contains(&ValueLabel::PhaseItoU));
 
         // VIF=0xFB VIFE=0x70: °F cold/warm temp limit, 10^-3
         let vi = ValueInformation::try_from(
@@ -1646,9 +1669,9 @@ mod tests {
         assert_eq!(vi.units[0].name, UnitName::Fahrenheit);
         assert_eq!(vi.decimal_scale_exponent, -3);
 
-        // VIF=0xFB VIFE=0x20 (E010 0000): Reserved per EN 13757-3 — should not error
+        // VIF=0xFB VIFE=0x22 (E010 0010): Reserved — should not error
         let vi = ValueInformation::try_from(
-            &ValueInformationBlock::try_from([0xFB, 0x20].as_slice()).unwrap(),
+            &ValueInformationBlock::try_from([0xFB, 0x22].as_slice()).unwrap(),
         )
         .unwrap();
         assert!(vi.labels.contains(&ValueLabel::Reserved));
