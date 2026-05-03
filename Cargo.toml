@@ -52,7 +52,7 @@ wireless-mbus-link-layer = { version = "0.1.0", path = "crates/wireless-mbus-lin
 m-bus-core = { version = "0.1.0", path = "crates/m-bus-core" }
 m-bus-application-layer = { version = "0.1.0", path = "crates/m-bus-application-layer" }
 aes = { version = "0.8", optional = true, default-features = false }
-cbc = { version = "0.1", optional = true, default-features = false }
+cbc = { version = "0.2", optional = true, default-features = false }
 cipher = { version = "0.4", optional = true, default-features = false, features = ["block-padding"] }
 aes-gcm = { version = "0.10", optional = true, default-features = false, features = ["aes"] }
 ccm = { version = "0.5", optional = true, default-features = false }
