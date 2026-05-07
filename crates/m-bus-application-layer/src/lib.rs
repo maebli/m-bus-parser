@@ -46,30 +46,50 @@ impl<'a> Iterator for DataRecords<'a> {
     type Item = Result<DataRecord<'a>, DataRecordError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut _more_records_follow = false;
-
         while self.offset < self.data.len() {
-            match self.data.get(self.offset)? {
-                0x1F => {
-                    /* TODO: parse manufacturer specific */
-                    _more_records_follow = true;
-                    self.offset = self.data.len();
-                }
-                0x2F => {
-                    self.offset += 1;
-                }
-                _ => {
-                    let record = if let Some(long_tpl_header) = self.long_tpl_header {
-                        DataRecord::try_from((self.data.get(self.offset..)?, long_tpl_header))
-                    } else {
-                        DataRecord::try_from(self.data.get(self.offset..)?)
-                    };
-                    if let Ok(record) = record {
-                        self.offset += record.get_size();
-                        return Some(Ok(record));
-                    } else {
-                        self.offset = self.data.len();
+            let dif = data_information::DataInformationField::from(*self.data.get(self.offset)?);
+
+            if dif.is_special_function() {
+                match dif.special_function() {
+                    data_information::SpecialFunctions::IdleFiller => {
+                        self.offset += 1;
                     }
+                    data_information::SpecialFunctions::ManufacturerSpecific
+                    | data_information::SpecialFunctions::MoreRecordsFollow => {
+                        let remaining = self.data.get(self.offset..)?;
+                        self.offset = self.data.len();
+                        let record = if let Some(long_tpl_header) = self.long_tpl_header {
+                            DataRecord::try_from((remaining, long_tpl_header))
+                        } else {
+                            DataRecord::try_from(remaining)
+                        };
+                        return Some(record);
+                    }
+                    data_information::SpecialFunctions::GlobalReadoutRequest => {
+                        let remaining = self.data.get(self.offset..)?;
+                        self.offset += 1;
+                        let record = if let Some(long_tpl_header) = self.long_tpl_header {
+                            DataRecord::try_from((remaining, long_tpl_header))
+                        } else {
+                            DataRecord::try_from(remaining)
+                        };
+                        return Some(record);
+                    }
+                    data_information::SpecialFunctions::Reserved => {
+                        self.offset += 1;
+                    }
+                }
+            } else {
+                let record = if let Some(long_tpl_header) = self.long_tpl_header {
+                    DataRecord::try_from((self.data.get(self.offset..)?, long_tpl_header))
+                } else {
+                    DataRecord::try_from(self.data.get(self.offset..)?)
+                };
+                if let Ok(record) = record {
+                    self.offset += record.get_size();
+                    return Some(Ok(record));
+                } else {
+                    self.offset = self.data.len();
                 }
             }
         }
@@ -1484,5 +1504,13 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn global_readout_request_does_not_consume_following_records() {
+        // 0x7F followed by a valid 8-bit integer record: DIF=0x01, VIF=0x13, data=0x05
+        let data: &[u8] = &[0x7F, 0x01, 0x13, 0x05];
+        let records: Vec<_> = DataRecords::new(data, None).flatten().collect();
+        assert_eq!(records.len(), 2);
     }
 }

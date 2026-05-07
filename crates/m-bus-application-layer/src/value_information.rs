@@ -736,13 +736,17 @@ fn consume_orthhogonal_vife(
                 0x0A => labels.push(ValueLabel::AtQuadrant3),
                 0x0B => labels.push(ValueLabel::AtQuadrant4),
                 0x0C => labels.push(ValueLabel::DeltaBetweenImportAndExport),
-                0x0F => labels.push(
+                0x0D => labels.push(ValueLabel::AlternativeNonMetricUnits),
+                0x0E => labels.push(ValueLabel::SecondarySensorMeasurement),
+                0x0F => labels.push(ValueLabel::HigherResolutionRegister),
+                0x10 => labels.push(
                     ValueLabel::AccumulationOfAbsoluteValueBothPositiveAndNegativeContribution,
                 ),
                 0x11 => labels.push(ValueLabel::DataPresentedWithTypeC),
                 0x12 => labels.push(ValueLabel::DataPresentedWithTypeD),
-                0x13 => labels.push(ValueLabel::DirectionFromCommunicationPartnerToMeter),
-                0x14 => labels.push(ValueLabel::DirectionFromMeterToCommunicationPartner),
+                0x13 => labels.push(ValueLabel::EndDate),
+                0x14 => labels.push(ValueLabel::DirectionFromCommunicationPartnerToMeter),
+                0x15 => labels.push(ValueLabel::DirectionFromMeterToCommunicationPartner),
                 _ => labels.push(ValueLabel::Reserved),
             }
         } else {
@@ -770,11 +774,11 @@ fn consume_orthhogonal_vife(
                 }
                 0x29 => {
                     units.push(unit!(Increment));
-                    units.push(unit!(OutputPulseOnChannel0 ^ -1));
+                    units.push(unit!(InputPulseOnChannel1 ^ -1));
                 }
                 0x2A => {
                     units.push(unit!(Increment));
-                    units.push(unit!(InputPulseOnChannel1 ^ -1));
+                    units.push(unit!(OutputPulseOnChannel0 ^ -1));
                 }
                 0x2B => {
                     units.push(unit!(Increment));
@@ -816,21 +820,28 @@ fn consume_orthhogonal_vife(
                 0x3A => labels.push(ValueLabel::VifContainsUncorrectedUnitOrValue),
                 0x3B => labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive),
                 0x3C => labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative),
-                0x3D => labels.push(ValueLabel::NoneMetricUnits),
+                0x3D => labels.push(ValueLabel::NonMetricUnits),
                 0x3E => labels.push(ValueLabel::ValueAtBaseConditions),
                 0x3F => labels.push(ValueLabel::ObisDeclaration),
-                0x40 => labels.push(ValueLabel::UpperLimitValue),
-                0x48 => labels.push(ValueLabel::LowerLimitValue),
-                0x41 => labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue),
-                0x49 => labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue),
+                // E100 u000 where u = 0: Lower; u = 1: Upper
+                0x40 => labels.push(ValueLabel::LowerLimitValue),
+                0x48 => labels.push(ValueLabel::UpperLimitValue),
+                // E100 u001 where u = 0: Lower; u = 1: Upper
+                0x41 => labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue),
+                0x49 => labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue),
+                /* E100 uf1b where
+                b = 0: Begin; b = 1: End
+                f = 0: First; b = 1: Last
+                u = 0: Lower; u = 1: Upper
+                */
                 0x42 => labels.push(ValueLabel::DateOfBeginFirstLowerLimitExceed),
-                0x43 => labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed),
+                0x43 => labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed),
                 0x46 => labels.push(ValueLabel::DateOfBeginLastLowerLimitExceed),
-                0x47 => labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed),
-                0x4A => labels.push(ValueLabel::DateOfEndLastLowerLimitExceed),
-                0x4B => labels.push(ValueLabel::DateOfEndLastUpperLimitExceed),
-                0x4E => labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed),
-                0x4F => labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed),
+                0x47 => labels.push(ValueLabel::DateOfEndLastLowerLimitExceed),
+                0x4A => labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed),
+                0x4B => labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed),
+                0x4E => labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed),
+                0x4F => labels.push(ValueLabel::DateOfEndLastUpperLimitExceed),
                 0x50 => {
                     labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
                     units.push(unit!(Second));
@@ -848,35 +859,35 @@ fn consume_orthhogonal_vife(
                     units.push(unit!(Day));
                 }
                 0x54 => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
                     units.push(unit!(Second));
                 }
                 0x55 => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
                     units.push(unit!(Minute));
                 }
                 0x56 => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
                     units.push(unit!(Hour));
                 }
                 0x57 => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
+                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
                     units.push(unit!(Day));
                 }
                 0x58 => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
                     units.push(unit!(Second));
                 }
                 0x59 => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
                     units.push(unit!(Minute));
                 }
                 0x5A => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
                     units.push(unit!(Hour));
                 }
                 0x5B => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
+                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
                     units.push(unit!(Day));
                 }
                 0x5C => {
@@ -941,7 +952,9 @@ fn consume_orthhogonal_vife(
                 0x78..=0x7B => {
                     *decimal_offset_exponent += (v.data & 0b11) as isize - 3;
                 }
-                0x7D => labels.push(ValueLabel::MultiplicativeCorrectionFactor103),
+                0x7D => {
+                    *decimal_scale_exponent += 3;
+                }
                 0x7E => labels.push(ValueLabel::FutureValue),
                 0x7F => labels.push(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific),
                 _ => labels.push(ValueLabel::Reserved),
@@ -1075,7 +1088,8 @@ pub enum ValueLabel {
     VifContainsUncorrectedUnitOrValue,
     AccumulationOnlyIfValueIsPositive,
     AccumulationOnlyIfValueIsNegative,
-    NoneMetricUnits,
+    NonMetricUnits,
+    AlternativeNonMetricUnits,
     ValueAtBaseConditions,
     ObisDeclaration,
     UpperLimitValue,
@@ -1105,7 +1119,6 @@ pub enum ValueLabel {
     DateOfEndLast,
     DateOfEndFirst,
     ExtensionOfCombinableOrthogonalVIFE,
-    MultiplicativeCorrectionFactor103,
     FutureValue,
     NextVIFEAndDataOfThisBlockAreManufacturerSpecific,
     Credit,
@@ -1182,8 +1195,11 @@ pub enum ValueLabel {
     AtQuadrant4,
     DeltaBetweenImportAndExport,
     AccumulationOfAbsoluteValueBothPositiveAndNegativeContribution,
+    SecondarySensorMeasurement,
+    HigherResolutionRegister,
     DataPresentedWithTypeC,
     DataPresentedWithTypeD,
+    EndDate,
     DirectionFromCommunicationPartnerToMeter,
     DirectionFromMeterToCommunicationPartner,
     RelativeHumidity,
@@ -1827,5 +1843,162 @@ mod tests {
         assert_eq!(vib.value_information.data, 0x13);
         assert_eq!(vib.get_size(), 1);
         assert!(vib.value_information_extension.is_none());
+    }
+
+    #[test]
+    fn test_combinable_orthogonal_vife_limit_exceed_mappings() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        let parse_orthogonal_vife = |vife_byte: u8| -> ValueInformation {
+            let data = [0x93, vife_byte];
+            let vib = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+            ValueInformation::try_from(&vib).unwrap()
+        };
+
+        // (vife_byte, expected_label, optional expected unit name)
+        let cases: &[(u8, ValueLabel, Option<UnitName>)] = &[
+            (0x40, ValueLabel::LowerLimitValue, None),
+            (0x48, ValueLabel::UpperLimitValue, None),
+            (0x41, ValueLabel::NumberOfExceedsOfLowerLimitValue, None),
+            (0x49, ValueLabel::NumberOfExceedsOfUpperLimitValue, None),
+            // E100 uf1b: b=Begin/End, f=First/Last, u=Lower/Upper
+            (0x42, ValueLabel::DateOfBeginFirstLowerLimitExceed, None),
+            (0x43, ValueLabel::DateOfEndFirstLowerLimitExceed, None),
+            (0x46, ValueLabel::DateOfBeginLastLowerLimitExceed, None),
+            (0x47, ValueLabel::DateOfEndLastLowerLimitExceed, None),
+            (0x4A, ValueLabel::DateOfBeginFirstUpperLimitExceed, None),
+            (0x4B, ValueLabel::DateOfEndFirstUpperLimitExceed, None),
+            (0x4E, ValueLabel::DateOfBeginLastUpperLimitExceed, None),
+            (0x4F, ValueLabel::DateOfEndLastUpperLimitExceed, None),
+            // Duration of first lower (0x50-0x53)
+            (
+                0x50,
+                ValueLabel::DurationOfFirstLowerLimitExceed,
+                Some(UnitName::Second),
+            ),
+            (
+                0x51,
+                ValueLabel::DurationOfFirstLowerLimitExceed,
+                Some(UnitName::Minute),
+            ),
+            (
+                0x52,
+                ValueLabel::DurationOfFirstLowerLimitExceed,
+                Some(UnitName::Hour),
+            ),
+            (
+                0x53,
+                ValueLabel::DurationOfFirstLowerLimitExceed,
+                Some(UnitName::Day),
+            ),
+            // Duration of last lower (0x54-0x57)
+            (
+                0x54,
+                ValueLabel::DurationOfLastLowerLimitExceed,
+                Some(UnitName::Second),
+            ),
+            (
+                0x55,
+                ValueLabel::DurationOfLastLowerLimitExceed,
+                Some(UnitName::Minute),
+            ),
+            (
+                0x56,
+                ValueLabel::DurationOfLastLowerLimitExceed,
+                Some(UnitName::Hour),
+            ),
+            (
+                0x57,
+                ValueLabel::DurationOfLastLowerLimitExceed,
+                Some(UnitName::Day),
+            ),
+            // Duration of first upper (0x58-0x5B)
+            (
+                0x58,
+                ValueLabel::DurationOfFirstUpperLimitExceed,
+                Some(UnitName::Second),
+            ),
+            (
+                0x59,
+                ValueLabel::DurationOfFirstUpperLimitExceed,
+                Some(UnitName::Minute),
+            ),
+            (
+                0x5A,
+                ValueLabel::DurationOfFirstUpperLimitExceed,
+                Some(UnitName::Hour),
+            ),
+            (
+                0x5B,
+                ValueLabel::DurationOfFirstUpperLimitExceed,
+                Some(UnitName::Day),
+            ),
+            // Duration of last upper (0x5C-0x5F)
+            (
+                0x5C,
+                ValueLabel::DurationOfLastUpperLimitExceed,
+                Some(UnitName::Second),
+            ),
+            (
+                0x5D,
+                ValueLabel::DurationOfLastUpperLimitExceed,
+                Some(UnitName::Minute),
+            ),
+            (
+                0x5E,
+                ValueLabel::DurationOfLastUpperLimitExceed,
+                Some(UnitName::Hour),
+            ),
+            (
+                0x5F,
+                ValueLabel::DurationOfLastUpperLimitExceed,
+                Some(UnitName::Day),
+            ),
+        ];
+
+        for (vife_byte, expected_label, expected_unit) in cases {
+            let vi = parse_orthogonal_vife(*vife_byte);
+            assert!(
+                vi.labels.contains(expected_label),
+                "VIFE 0x{vife_byte:02X}: expected label {expected_label:?}, got {:?}",
+                vi.labels
+            );
+            if let Some(unit_name) = expected_unit {
+                assert!(
+                    vi.units.iter().any(|u| u.name == *unit_name),
+                    "VIFE 0x{vife_byte:02X}: expected unit {unit_name:?}, got {:?}",
+                    vi.units
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_combinable_orthogonal_vife_fc_extension_mappings() {
+        use crate::value_information::{ValueInformation, ValueInformationBlock, ValueLabel};
+
+        let parse_fc_vife = |vife_byte: u8| -> ValueInformation {
+            let data = [0x93, 0xFC, vife_byte];
+            let vib = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+            ValueInformation::try_from(&vib).unwrap()
+        };
+
+        let cases: &[(u8, ValueLabel)] = &[
+            (0x02, ValueLabel::AtPhaseL2),
+            (0x0D, ValueLabel::AlternativeNonMetricUnits),
+            (0x0E, ValueLabel::SecondarySensorMeasurement),
+            (0x13, ValueLabel::EndDate),
+        ];
+
+        for (vife_byte, expected_label) in cases {
+            let vi = parse_fc_vife(*vife_byte);
+            assert!(
+                vi.labels.contains(expected_label),
+                "FC VIFE 0x{vife_byte:02X}: expected {expected_label:?}, got {:?}",
+                vi.labels
+            );
+        }
     }
 }

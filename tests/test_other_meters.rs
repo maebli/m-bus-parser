@@ -35,7 +35,7 @@ mod tests {
         assert_eq!(header["short_tpl_header"]["access_number"], 42);
 
         let records = json["data_records"].as_array().unwrap();
-        assert_eq!(records.len(), 11);
+        assert_eq!(records.len(), 12);
 
         // (label, units, scale_exp, value, storage, tariff, device)
         let expected: &[(&str, &[(&str, i64)], i64, f64, u64, u64, u64)] = &[
@@ -110,5 +110,28 @@ mod tests {
                 );
             }
         }
+
+        // Record 11: 0x1F = MoreRecordsFollow (manufacturer specific, more records follow)
+        let rec = &records[11];
+        let di = &rec["data_record_header"]["processed_data_record_header"]["data_information"];
+        assert_eq!(
+            di["data_field_coding"]["SpecialFunctions"]
+                .as_str()
+                .unwrap(),
+            "MoreRecordsFollow"
+        );
+        assert!(
+            rec["data_record_header"]["processed_data_record_header"]["value_information"]
+                .is_null()
+        );
+        assert_eq!(
+            rec["data_record_header"]["raw_data_record_header"]["data_information_block"]
+                ["data_information_field"]["data"],
+            0x1F
+        );
+        assert!(rec["data"]["value"]["ManufacturerSpecific"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 }

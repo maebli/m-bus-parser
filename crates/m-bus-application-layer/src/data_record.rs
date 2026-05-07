@@ -69,43 +69,29 @@ impl<'a> DataRecord<'a> {
         fixed_data_header: Option<&'a LongTplHeader>,
     ) -> Result<Self, DataRecordError> {
         let data_record_header = DataRecordHeader::try_from(data)?;
-        let mut header_size = data_record_header.get_size();
-        if data_record_header
-            .raw_data_record_header
-            .data_information_block
-            .data_information_field
-            .data
-            == 0x0F
-        {
-            header_size = 0;
-        }
+        let header_size = data_record_header.get_size();
         if data.len() < header_size {
             return Err(DataRecordError::InsufficientData);
         }
         let offset = header_size;
-        let mut data_out = Data {
-            value: Some(DataType::ManufacturerSpecific(
+        let data_out = if let Some(data_info) = &data_record_header
+            .processed_data_record_header
+            .data_information
+        {
+            data_info.data_field_coding.parse(
                 data.get(offset..)
                     .ok_or(DataRecordError::InsufficientData)?,
-            )),
-            size: data.len() - offset,
-        };
-        if data_record_header
-            .raw_data_record_header
-            .value_information_block
-            .is_some()
-        {
-            if let Some(data_info) = &data_record_header
-                .processed_data_record_header
-                .data_information
-            {
-                data_out = data_info.data_field_coding.parse(
+                fixed_data_header,
+            )?
+        } else {
+            Data {
+                value: Some(DataType::ManufacturerSpecific(
                     data.get(offset..)
                         .ok_or(DataRecordError::InsufficientData)?,
-                    fixed_data_header,
-                )?;
+                )),
+                size: data.len() - offset,
             }
-        }
+        };
 
         let mut record_size = data_record_header.get_size() + data_out.get_size();
         if record_size > data.len() {
@@ -154,7 +140,7 @@ impl<'a> TryFrom<&'a [u8]> for RawDataRecordHeader<'a> {
 
         let mut vifb = None;
 
-        if difb.data_information_field.data != 0x0F {
+        if !difb.data_information_field.is_special_function() {
             vifb = Some(ValueInformationBlock::try_from(
                 data.get(offset..)
                     .ok_or(DataRecordError::InsufficientData)?,
@@ -194,6 +180,14 @@ impl TryFrom<&RawDataRecordHeader<'_>> for ProcessedDataRecordHeader {
 
             value_information = Some(v);
             data_information = Some(d);
+        } else if raw_data_record_header
+            .data_information_block
+            .data_information_field
+            .is_special_function()
+        {
+            data_information = Some(DataInformation::try_from(
+                &raw_data_record_header.data_information_block,
+            )?);
         }
 
         Ok(Self {
