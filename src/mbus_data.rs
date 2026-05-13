@@ -115,6 +115,7 @@ pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> 
         "yaml" => parse_to_yaml(data, key),
         "csv" => parse_to_csv(data, key).to_string(),
         "mermaid" => parse_to_mermaid(data, key),
+        "annotated" => parse_to_annotated(data),
         _ => parse_to_table(data, key).to_string(),
     }
 }
@@ -1602,6 +1603,16 @@ fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -
 }
 
 #[cfg(feature = "std")]
+#[must_use]
+fn parse_to_annotated(input: &str) -> String {
+    let data = clean_and_convert(input);
+    match crate::annotate::annotate_frame(&data) {
+        Ok(segments) => serde_json::to_string_pretty(&segments).unwrap_or_default(),
+        Err(e) => format!("{{\"error\": \"{}\"}}", e),
+    }
+}
+
+#[cfg(feature = "std")]
 fn mermaid_escape(s: &str) -> String {
     s.replace('"', "#quot;")
         .replace('[', "#91;")
@@ -1713,5 +1724,40 @@ mod tests {
         assert!(table_output.contains("(1288)e-1[°C](FlowTemperature)"));
         assert!(table_output.contains("(12/Jan/12)(Date)"));
         assert!(table_output.contains("(3383)[day]"));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_annotated_output() {
+        let input = "68 4D 4D 68 08 01 72 01 00 00 00 96 15 01 00 18 00 00 00 0C 78 56 00 00 00 01 FD 1B 00 02 FC 03 48 52 25 74 44 0D 22 FC 03 48 52 25 74 F1 0C 12 FC 03 48 52 25 74 63 11 02 65 B4 09 22 65 86 09 12 65 B7 09 01 72 00 72 65 00 00 B2 01 65 00 00 1F B3 16";
+        let output = super::serialize_mbus_data(input, "annotated", None);
+
+        // Should be valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(&output)
+            .unwrap_or_else(|e| panic!("annotated output should be valid JSON: {}\nOutput: {}", e, output));
+
+        // Should be an array
+        assert!(parsed.is_array(), "annotated output should be a JSON array");
+        let segments = parsed.as_array().expect("array");
+
+        // Should cover all 83 bytes
+        assert!(!segments.is_empty());
+
+        // First segment should start at 0
+        assert_eq!(
+            segments[0].get("start").and_then(|v| v.as_u64()),
+            Some(0)
+        );
+
+        // Last segment should end at 83
+        let last = segments.last().expect("non-empty");
+        assert_eq!(last.get("end").and_then(|v| v.as_u64()), Some(83));
+
+        // Check contiguity
+        for window in segments.windows(2) {
+            let end = window[0].get("end").and_then(|v| v.as_u64());
+            let start = window[1].get("start").and_then(|v| v.as_u64());
+            assert_eq!(end, start, "segments should be contiguous");
+        }
     }
 }
