@@ -88,7 +88,8 @@
             font-family: monospace;
         }
 
-        input[type="text"] {
+        input[type="text"],
+        input[type="password"] {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -96,6 +97,7 @@
             box-sizing: border-box;
             margin-bottom: 10px;
             font-family: monospace;
+            font-size: 14px;
         }
 
         .key-input-container {
@@ -240,7 +242,8 @@
             border: 1px solid #444;
         }
 
-        body.dark-mode input[type="text"] {
+        body.dark-mode input[type="text"],
+        body.dark-mode input[type="password"] {
             background: #23272a;
             color: #e0e0e0;
             border: 1px solid #444;
@@ -340,8 +343,8 @@
             padding: 40px 12px 12px;
         }
         .hex-viewer-right {
-            width: 320px;
-            min-width: 260px;
+            width: 420px;
+            min-width: 340px;
             border-left: 1px solid #ddd;
             overflow-y: auto;
             max-height: 600px;

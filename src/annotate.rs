@@ -276,9 +276,17 @@ fn annotate_long_or_control_frame(
     });
     segments.push(ByteSegment {
         start: 1,
-        end: 4,
+        end: 3,
         kind: SegmentKind::Length,
-        detail: Cow::Owned(format!("Length: {} (repeated + start)", l)),
+        detail: Cow::Owned(format!("Length: {} (repeated)", l)),
+        group: None,
+        layer: Layer::Frame,
+    });
+    segments.push(ByteSegment {
+        start: 3,
+        end: 4,
+        kind: SegmentKind::StartByte,
+        detail: Cow::Borrowed("Start: 0x68 (repeated)"),
         group: None,
         layer: Layer::Frame,
     });
@@ -1494,13 +1502,19 @@ mod tests {
 
         // Check frame layer fields
         assert_eq!(segments[0].kind, SegmentKind::StartByte);
+        assert_eq!(segments[0].end, 1);
         assert_eq!(segments[1].kind, SegmentKind::Length);
-        assert_eq!(segments[2].kind, SegmentKind::CField);
-        assert_eq!(segments[3].kind, SegmentKind::AField);
+        assert_eq!(segments[1].start, 1);
+        assert_eq!(segments[1].end, 3);
+        assert_eq!(segments[2].kind, SegmentKind::StartByte); // repeated start
+        assert_eq!(segments[2].start, 3);
+        assert_eq!(segments[2].end, 4);
+        assert_eq!(segments[3].kind, SegmentKind::CField);
+        assert_eq!(segments[4].kind, SegmentKind::AField);
 
         // Check CI field
-        assert_eq!(segments[4].kind, SegmentKind::CiField);
-        assert_eq!(segments[4].start, 6);
+        assert_eq!(segments[5].kind, SegmentKind::CiField);
+        assert_eq!(segments[5].start, 6);
 
         // Check last segments are checksum + stop byte
         let last = segments.last().expect("non-empty");
