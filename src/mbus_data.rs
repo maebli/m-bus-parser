@@ -116,6 +116,7 @@ pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> 
         "csv" => parse_to_csv(data, key).to_string(),
         "mermaid" => parse_to_mermaid(data, key),
         "annotated" => parse_to_annotated(data),
+        "annotated-text" => parse_to_annotated_text(data),
         _ => parse_to_table(data, key).to_string(),
     }
 }
@@ -1609,6 +1610,16 @@ fn parse_to_annotated(input: &str) -> String {
     match crate::annotate::annotate_frame(&data) {
         Ok(segments) => serde_json::to_string_pretty(&segments).unwrap_or_default(),
         Err(e) => format!("{{\"error\": \"{}\"}}", e),
+    }
+}
+
+#[cfg(feature = "std")]
+#[must_use]
+fn parse_to_annotated_text(input: &str) -> String {
+    let data = clean_and_convert(input);
+    match crate::annotate::annotate_and_render(&data) {
+        Ok(text) => text,
+        Err(e) => format!("Error: {}", e),
     }
 }
 

@@ -1307,6 +1307,135 @@ fn is_short_tpl_encrypted(app_data: &[u8], skip_count: usize) -> bool {
     )
 }
 
+/// Render annotated segments as a human-readable text visualization.
+///
+/// Produces a table with hex bytes, segment kinds, and detail labels,
+/// grouped by protocol layer and data record index. Suitable for
+/// CLI output and WASM text rendering.
+pub fn render_annotations(segments: &[ByteSegment], data: &[u8]) -> String {
+    use std::fmt::Write;
+
+    let mut out = String::new();
+
+    // Hex dump header
+    let _ = writeln!(out, "Hex Dump:");
+    let _ = writeln!(out, "────────────────────────────────────────────────────────────────────");
+    for (i, chunk) in data.chunks(16).enumerate() {
+        let offset = i * 16;
+        let _ = write!(out, "  {:04X}  ", offset);
+        for (j, byte) in chunk.iter().enumerate() {
+            if j == 8 {
+                let _ = write!(out, " ");
+            }
+            let _ = write!(out, "{:02X} ", byte);
+        }
+        // Pad if short row
+        let pad = 16 - chunk.len();
+        for _ in 0..pad {
+            let _ = write!(out, "   ");
+        }
+        if chunk.len() <= 8 {
+            let _ = write!(out, " ");
+        }
+        let _ = write!(out, " ");
+        for byte in chunk {
+            let ch = if byte.is_ascii_graphic() || *byte == b' ' {
+                *byte as char
+            } else {
+                '·'
+            };
+            let _ = write!(out, "{}", ch);
+        }
+        let _ = writeln!(out);
+    }
+    let _ = writeln!(out);
+
+    // Segment table
+    let _ = writeln!(
+        out,
+        "{:<12} {:<24} {:<22} {}",
+        "Offset", "Hex", "Kind", "Detail"
+    );
+    let _ = writeln!(
+        out,
+        "{:<12} {:<24} {:<22} {}",
+        "────────────", "────────────────────────", "──────────────────────", "──────────────────────────"
+    );
+
+    let mut current_layer = None;
+    let mut current_group: Option<usize> = None;
+
+    for seg in segments {
+        // Section headers on layer/group transitions
+        let layer_changed = current_layer != Some(seg.layer);
+        let group_changed = seg.group != current_group;
+
+        if layer_changed {
+            let header = match seg.layer {
+                Layer::Frame => "Frame",
+                Layer::AppHeader => "Application Header",
+                Layer::RecordField => "Data Records",
+            };
+            let _ = writeln!(out, "┌─ {} ────────────────────────────────────────────────────────", header);
+            current_layer = Some(seg.layer);
+            current_group = None;
+        }
+
+        if seg.layer == Layer::RecordField && group_changed {
+            if let Some(g) = seg.group {
+                let _ = writeln!(out, "│  ── Record {} ──", g);
+            }
+            current_group = seg.group;
+        }
+
+        // Offset column
+        let offset_str = if seg.end - seg.start == 1 {
+            format!("[{:02X}]", seg.start)
+        } else {
+            format!("[{:02X}..{:02X}]", seg.start, seg.end)
+        };
+
+        // Hex bytes column (truncate if too many bytes)
+        let max_hex_bytes = 8;
+        let byte_count = seg.end - seg.start;
+        let hex_str = if seg.start < data.len() {
+            let end = seg.end.min(data.len());
+            let show = (end - seg.start).min(max_hex_bytes);
+            let mut h: String = data[seg.start..seg.start + show]
+                .iter()
+                .map(|b| format!("{:02X} ", b))
+                .collect();
+            if byte_count > max_hex_bytes {
+                h.push_str("...");
+            } else {
+                // Remove trailing space
+                h.pop();
+            }
+            h
+        } else {
+            String::new()
+        };
+
+        let kind_str = format!("{}", seg.kind);
+
+        let _ = writeln!(
+            out,
+            "│  {:<10} {:<24} {:<22} {}",
+            offset_str, hex_str, kind_str, seg.detail
+        );
+    }
+
+    out
+}
+
+/// Annotate and render a raw M-Bus frame as human-readable text.
+///
+/// Convenience wrapper that calls [`annotate_frame`] and then [`render_annotations`].
+pub fn annotate_and_render(data: &[u8]) -> Result<String, MbusError> {
+    let segments = annotate_frame(data)?;
+    Ok(render_annotations(&segments, data))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
