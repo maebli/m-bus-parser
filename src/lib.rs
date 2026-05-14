@@ -47,6 +47,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
+#[allow(clippy::indexing_slicing)]
 pub mod annotate;
 #[cfg(feature = "std")]
 pub mod manufacturers;

@@ -794,11 +794,7 @@ fn annotate_data_records(segments: &mut Vec<ByteSegment>, base: usize, data: &[u
                 }
                 0x0F | 0x1F => {
                     // Manufacturer specific / more records follow - consumes all remaining
-                    let kind = if dif_byte == 0x0F {
-                        SegmentKind::ManufacturerSpecific
-                    } else {
-                        SegmentKind::ManufacturerSpecific // 0x1F also treated as opaque tail
-                    };
+                    let kind = SegmentKind::ManufacturerSpecific;
                     segments.push(ByteSegment {
                         start: base + offset,
                         end: base + data.len(),
@@ -1114,7 +1110,6 @@ fn annotate_wireless_format_a(
 }
 
 /// Annotate a wireless frame directly (already stripped or Format B).
-
 fn annotate_wireless_inner(data: &[u8]) -> Result<Vec<ByteSegment>, MbusError> {
     // Validate it parses as wireless
     let _frame = wireless_mbus_link_layer::WirelessFrame::try_from(data)?;
@@ -1358,16 +1353,15 @@ pub fn render_annotations(segments: &[ByteSegment], data: &[u8]) -> String {
     // Segment table
     let _ = writeln!(
         out,
-        "{:<12} {:<24} {:<22} {}",
-        "Offset", "Hex", "Kind", "Detail"
+        "{:<12} {:<24} {:<22} Detail",
+        "Offset", "Hex", "Kind"
     );
     let _ = writeln!(
         out,
-        "{:<12} {:<24} {:<22} {}",
+        "{:<12} {:<24} {:<22} ──────────────────────────",
         "────────────",
         "────────────────────────",
-        "──────────────────────",
-        "──────────────────────────"
+        "──────────────────────"
     );
 
     let mut current_layer = None;

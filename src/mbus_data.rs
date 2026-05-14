@@ -521,7 +521,6 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
                 let mut _is_encyrpted = false;
                 if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
                     long_tpl_header,
-                    variable_data_block: _,
                     ..
                 }) = &parsed_data.user_data
                 {
