@@ -1744,8 +1744,12 @@ mod tests {
         let output = super::serialize_mbus_data(input, "annotated", None);
 
         // Should be valid JSON
-        let parsed: serde_json::Value = serde_json::from_str(&output)
-            .unwrap_or_else(|e| panic!("annotated output should be valid JSON: {}\nOutput: {}", e, output));
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap_or_else(|e| {
+            panic!(
+                "annotated output should be valid JSON: {}\nOutput: {}",
+                e, output
+            )
+        });
 
         // Should be an array
         assert!(parsed.is_array(), "annotated output should be a JSON array");
@@ -1755,10 +1759,7 @@ mod tests {
         assert!(!segments.is_empty());
 
         // First segment should start at 0
-        assert_eq!(
-            segments[0].get("start").and_then(|v| v.as_u64()),
-            Some(0)
-        );
+        assert_eq!(segments[0].get("start").and_then(|v| v.as_u64()), Some(0));
 
         // Last segment should end at 83
         let last = segments.last().expect("non-empty");

@@ -197,7 +197,10 @@ fn annotate_wired(data: &[u8]) -> Result<Vec<ByteSegment>, MbusError> {
                 start: 3,
                 end: 4,
                 kind: SegmentKind::Checksum,
-                detail: Cow::Owned(format!("Checksum: 0x{:02X}", data.get(3).copied().unwrap_or(0))),
+                detail: Cow::Owned(format!(
+                    "Checksum: 0x{:02X}",
+                    data.get(3).copied().unwrap_or(0)
+                )),
                 group: None,
                 layer: Layer::Frame,
             });
@@ -984,10 +987,7 @@ fn annotate_wireless_format_a(
 
     // Map stripped segments back to original offsets
     for seg in &stripped_segments {
-        let orig_start = offset_map
-            .get(seg.start)
-            .copied()
-            .unwrap_or(seg.start);
+        let orig_start = offset_map.get(seg.start).copied().unwrap_or(seg.start);
         let orig_end = if seg.end <= offset_map.len() {
             // end is exclusive, so we want the offset of the byte *at* seg.end
             // or the end of the last byte in the segment
@@ -995,16 +995,10 @@ fn annotate_wireless_format_a(
                 offset_map[seg.end]
             } else {
                 // Last byte's original position + 1
-                offset_map
-                    .last()
-                    .map(|&o| o + 1)
-                    .unwrap_or(seg.end)
+                offset_map.last().map(|&o| o + 1).unwrap_or(seg.end)
             }
         } else {
-            offset_map
-                .last()
-                .map(|&o| o + 1)
-                .unwrap_or(seg.end)
+            offset_map.last().map(|&o| o + 1).unwrap_or(seg.end)
         };
 
         segments.push(ByteSegment {
@@ -1142,7 +1136,10 @@ fn annotate_wireless_inner(data: &[u8]) -> Result<Vec<ByteSegment>, MbusError> {
         start: 1,
         end: 2,
         kind: SegmentKind::CField,
-        detail: Cow::Owned(format!("C Field: 0x{:02X}", data.get(1).copied().unwrap_or(0))),
+        detail: Cow::Owned(format!(
+            "C Field: 0x{:02X}",
+            data.get(1).copied().unwrap_or(0)
+        )),
         group: None,
         layer: Layer::Frame,
     });
@@ -1178,10 +1175,7 @@ fn annotate_wireless_inner(data: &[u8]) -> Result<Vec<ByteSegment>, MbusError> {
         start: 8,
         end: 9,
         kind: SegmentKind::Version,
-        detail: Cow::Owned(format!(
-            "Version: {}",
-            data.get(8).copied().unwrap_or(0)
-        )),
+        detail: Cow::Owned(format!("Version: {}", data.get(8).copied().unwrap_or(0))),
         group: None,
         layer: Layer::Frame,
     });
@@ -1327,7 +1321,10 @@ pub fn render_annotations(segments: &[ByteSegment], data: &[u8]) -> String {
 
     // Hex dump header
     let _ = writeln!(out, "Hex Dump:");
-    let _ = writeln!(out, "────────────────────────────────────────────────────────────────────");
+    let _ = writeln!(
+        out,
+        "────────────────────────────────────────────────────────────────────"
+    );
     for (i, chunk) in data.chunks(16).enumerate() {
         let offset = i * 16;
         let _ = write!(out, "  {:04X}  ", offset);
@@ -1367,7 +1364,10 @@ pub fn render_annotations(segments: &[ByteSegment], data: &[u8]) -> String {
     let _ = writeln!(
         out,
         "{:<12} {:<24} {:<22} {}",
-        "────────────", "────────────────────────", "──────────────────────", "──────────────────────────"
+        "────────────",
+        "────────────────────────",
+        "──────────────────────",
+        "──────────────────────────"
     );
 
     let mut current_layer = None;
@@ -1384,7 +1384,11 @@ pub fn render_annotations(segments: &[ByteSegment], data: &[u8]) -> String {
                 Layer::AppHeader => "Application Header",
                 Layer::RecordField => "Data Records",
             };
-            let _ = writeln!(out, "┌─ {} ────────────────────────────────────────────────────────", header);
+            let _ = writeln!(
+                out,
+                "┌─ {} ────────────────────────────────────────────────────────",
+                header
+            );
             current_layer = Some(seg.layer);
             current_group = None;
         }
@@ -1477,11 +1481,7 @@ mod tests {
             );
         }
         for seg in segments {
-            assert!(
-                seg.start < seg.end,
-                "zero-width segment at {}",
-                seg.start
-            );
+            assert!(seg.start < seg.end, "zero-width segment at {}", seg.start);
         }
     }
 
@@ -1648,7 +1648,10 @@ mod tests {
         let mfr_seg = segments
             .iter()
             .find(|s| s.kind == SegmentKind::ManufacturerSpecific);
-        assert!(mfr_seg.is_some(), "should have manufacturer specific segment");
+        assert!(
+            mfr_seg.is_some(),
+            "should have manufacturer specific segment"
+        );
         let mfr_seg = mfr_seg.expect("manufacturer specific");
         // Should consume all remaining data bytes (0x0F, 0x60, 0x00)
         assert_eq!(mfr_seg.start, 19);
@@ -1719,11 +1722,7 @@ mod tests {
 
         // Verify the wireless parser actually works on this data
         let wf = wireless_mbus_link_layer::WirelessFrame::try_from(data.as_slice());
-        assert!(
-            wf.is_ok(),
-            "wireless parse should succeed: {:?}",
-            wf.err()
-        );
+        assert!(wf.is_ok(), "wireless parse should succeed: {:?}", wf.err());
 
         // Now test annotation
         let segments = annotate_frame(&data).expect("should parse");
