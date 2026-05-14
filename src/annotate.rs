@@ -1351,17 +1351,11 @@ pub fn render_annotations(segments: &[ByteSegment], data: &[u8]) -> String {
     let _ = writeln!(out);
 
     // Segment table
-    let _ = writeln!(
-        out,
-        "{:<12} {:<24} {:<22} Detail",
-        "Offset", "Hex", "Kind"
-    );
+    let _ = writeln!(out, "{:<12} {:<24} {:<22} Detail", "Offset", "Hex", "Kind");
     let _ = writeln!(
         out,
         "{:<12} {:<24} {:<22} ──────────────────────────",
-        "────────────",
-        "────────────────────────",
-        "──────────────────────"
+        "────────────", "────────────────────────", "──────────────────────"
     );
 
     let mut current_layer = None;
