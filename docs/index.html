@@ -323,6 +323,215 @@
         body.dark-mode .hljs-meta {
             color: #82aaff !important;
         }
+
+        /* ── Interactive Hex Viewer ─────────────────────────── */
+        .hex-viewer {
+            display: flex;
+            gap: 0;
+            font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            min-height: 200px;
+        }
+        .hex-viewer-left {
+            flex: 1;
+            min-width: 0;
+            overflow-x: auto;
+            padding: 40px 12px 12px;
+        }
+        .hex-viewer-right {
+            width: 320px;
+            min-width: 260px;
+            border-left: 1px solid #ddd;
+            overflow-y: auto;
+            max-height: 600px;
+            padding: 40px 0 8px;
+        }
+        body.dark-mode .hex-viewer-right {
+            border-left-color: #444;
+        }
+
+        /* Hex grid */
+        .hex-header {
+            color: #888;
+            margin-bottom: 4px;
+            white-space: pre;
+            user-select: none;
+        }
+        .hex-row {
+            white-space: pre;
+            margin: 0;
+            padding: 0;
+        }
+        .hex-offset {
+            color: #888;
+            user-select: none;
+        }
+        .hex-byte {
+            display: inline-block;
+            width: 26px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: outline 0.1s;
+        }
+        .hex-byte:hover {
+            outline: 2px solid #666;
+            outline-offset: -1px;
+        }
+        .hex-gap {
+            display: inline-block;
+            width: 8px;
+        }
+        .hex-ascii-sep {
+            display: inline-block;
+            width: 16px;
+        }
+        .hex-ascii {
+            display: inline-block;
+            width: 9px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+        .hex-byte.highlight, .hex-ascii.highlight {
+            outline: 2px solid #1565c0 !important;
+            outline-offset: -1px;
+        }
+        body.dark-mode .hex-byte.highlight, body.dark-mode .hex-ascii.highlight {
+            outline-color: #64b5f6 !important;
+        }
+
+        /* Layer colors */
+        .hex-layer-frame      { background: #bbdefb; color: #0d47a1; }
+        .hex-layer-appheader  { background: #c8e6c9; color: #1b5e20; }
+        .hex-layer-record     { background: #fff9c4; color: #f57f17; }
+        body.dark-mode .hex-layer-frame     { background: #1a3a5c; color: #90caf9; }
+        body.dark-mode .hex-layer-appheader { background: #1b3d1f; color: #a5d6a7; }
+        body.dark-mode .hex-layer-record    { background: #3e3510; color: #fff176; }
+
+        /* Segment tooltip */
+        .hex-tooltip {
+            position: fixed;
+            background: #333;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 350px;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: none;
+        }
+
+        /* Tree panel */
+        .hex-tree-section {
+            padding: 0;
+            margin: 0;
+        }
+        .hex-tree-layer {
+            font-weight: bold;
+            font-size: 12px;
+            padding: 6px 12px 4px;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            user-select: none;
+        }
+        body.dark-mode .hex-tree-layer {
+            color: #aaa;
+        }
+        .hex-tree-group {
+            margin: 0;
+            padding: 0;
+        }
+        .hex-tree-group-header {
+            padding: 4px 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+            border-radius: 4px;
+            margin: 0 4px;
+        }
+        .hex-tree-group-header:hover {
+            background: #e3f2fd;
+        }
+        body.dark-mode .hex-tree-group-header:hover {
+            background: #1a3a5c;
+        }
+        .hex-tree-group-header .arrow {
+            display: inline-block;
+            transition: transform 0.15s;
+            font-size: 10px;
+            width: 12px;
+        }
+        .hex-tree-group-header.collapsed .arrow {
+            transform: rotate(-90deg);
+        }
+        .hex-tree-group-body {
+            padding: 0;
+            margin: 0;
+        }
+        .hex-tree-group-body.hidden {
+            display: none;
+        }
+        .hex-tree-item {
+            padding: 2px 12px 2px 30px;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 4px;
+            margin: 0 4px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .hex-tree-item:hover,
+        .hex-tree-item.active {
+            background: #e3f2fd;
+        }
+        body.dark-mode .hex-tree-item:hover,
+        body.dark-mode .hex-tree-item.active {
+            background: #1a3a5c;
+        }
+        .hex-tree-item .tree-kind {
+            color: #666;
+            flex-shrink: 0;
+        }
+        .hex-tree-item .tree-detail {
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        body.dark-mode .hex-tree-item .tree-kind {
+            color: #aaa;
+        }
+        body.dark-mode .hex-tree-item .tree-detail {
+            color: #e0e0e0;
+        }
+        .hex-tree-item .tree-offset {
+            color: #999;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 800px) {
+            .hex-viewer {
+                flex-direction: column;
+            }
+            .hex-viewer-right {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid #ddd;
+                max-height: 400px;
+            }
+        }
     </style>
 </head>
 
@@ -379,6 +588,7 @@
         <input id="parse_table" type="button" value="Parse to Table" />
         <input id="parse_csv" type="button" value="Parse to CSV" />
         <input id="parse_mermaid" type="button" value="Parse to Diagram" />
+        <input id="parse_hexview" type="button" value="Hex View" />
     </form>
     <div id="output-container">
         <button id="copy_output" title="Copy Output">
@@ -472,6 +682,10 @@
                 parseInput("mermaid");
             });
 
+            document.getElementById('parse_hexview').addEventListener('click', () => {
+                parseInput("hexview");
+            });
+
             document.getElementById('copy_output').addEventListener('click', () => {
                 let text;
                 if (currentFormat === 'mermaid' && window._mermaidSource) {
@@ -506,17 +720,21 @@
                 const params = new URLSearchParams({ data: inputString, format });
                 history.replaceState(null, '', `?${params}`);
 
-                // Use the appropriate parsing function based on whether a key is provided
-                let formattedResult;
+                // Validate key if provided
                 if (aesKey && aesKey.length > 0) {
-                    // Validate key format (32 hex characters)
                     if (!/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
                         alert('Invalid AES key format. Please enter exactly 32 hexadecimal characters (0-9, A-F).');
                         return;
                     }
-                    formattedResult = m_bus_parse_with_key(inputString, format, aesKey);
-                } else {
-                    formattedResult = m_bus_parse(inputString, format);
+                }
+
+                // Use the appropriate parsing function based on whether a key is provided
+                // (hexview handles its own WASM call below)
+                let formattedResult;
+                if (format !== 'hexview') {
+                    formattedResult = (aesKey && aesKey.length > 0)
+                        ? m_bus_parse_with_key(inputString, format, aesKey)
+                        : m_bus_parse(inputString, format);
                 }
 
                 const outputContainer = document.getElementById('output');
@@ -531,7 +749,18 @@
                 outputContainer.style.background = '';
                 outputContainer.style.whiteSpace = '';
 
-                if (format === 'csv') {
+                if (format === 'hexview') {
+                    // Hex view: get annotated JSON from WASM, then render interactive viewer
+                    const annotatedJson = (aesKey && aesKey.length > 0)
+                        ? m_bus_parse_with_key(inputString, "annotated", aesKey)
+                        : m_bus_parse(inputString, "annotated");
+                    window._lastAnnotatedJson = annotatedJson;
+                    extension = 'json'; mimeType = 'application/json';
+                    outputContainer.style.background = 'none';
+                    outputContainer.style.whiteSpace = 'normal';
+                    outputContainer.innerHTML = '';
+                    renderHexViewer(outputContainer, annotatedJson, inputString);
+                } else if (format === 'csv') {
                     outputContainer.innerHTML = formattedResult;
                 } else if (format === 'mermaid') {
                     window._mermaidSource = formattedResult;
@@ -553,13 +782,297 @@
 
                 // Update download link
                 if (window._lastDownloadUrl) URL.revokeObjectURL(window._lastDownloadUrl);
-                const blob = new Blob([formattedResult], { type: mimeType });
+                const downloadContent = format === 'hexview' ? (window._lastAnnotatedJson || '') : (formattedResult || '');
+                const blob = new Blob([downloadContent], { type: mimeType });
                 const url = URL.createObjectURL(blob);
                 const downloadLink = document.getElementById('download_output');
                 downloadLink.href = url;
                 downloadLink.download = `m-bus-output.${extension}`;
                 window._lastDownloadUrl = url;
             }
+        }
+
+        function renderHexViewer(container, annotatedJson, inputString) {
+            let segments;
+            try {
+                segments = JSON.parse(annotatedJson);
+            } catch (e) {
+                container.innerHTML = '<pre style="color:red;">Error parsing annotation data: ' + e.message + '</pre>';
+                return;
+            }
+            if (!Array.isArray(segments) || segments.length === 0) {
+                container.innerHTML = '<pre style="color:red;">No annotation segments returned. Check input.</pre>';
+                return;
+            }
+
+            // Parse raw bytes from input string
+            const rawBytes = inputString.replace(/\s+/g, '').match(/.{1,2}/g).map(h => parseInt(h, 16));
+
+            // Build byte-to-segment lookup
+            const byteToSeg = new Array(rawBytes.length).fill(null);
+            segments.forEach((seg, idx) => {
+                for (let i = seg.start; i < seg.end && i < rawBytes.length; i++) {
+                    byteToSeg[i] = idx;
+                }
+            });
+
+            // Layer CSS class
+            function layerClass(layer) {
+                if (layer === 'Frame') return 'hex-layer-frame';
+                if (layer === 'AppHeader') return 'hex-layer-appheader';
+                return 'hex-layer-record';
+            }
+
+            // Create viewer structure
+            const viewer = document.createElement('div');
+            viewer.className = 'hex-viewer';
+
+            const leftPanel = document.createElement('div');
+            leftPanel.className = 'hex-viewer-left';
+
+            const rightPanel = document.createElement('div');
+            rightPanel.className = 'hex-viewer-right';
+
+            viewer.appendChild(leftPanel);
+            viewer.appendChild(rightPanel);
+            container.appendChild(viewer);
+
+            // Tooltip
+            const tooltip = document.createElement('div');
+            tooltip.className = 'hex-tooltip';
+            document.body.appendChild(tooltip);
+
+            // Render hex grid
+            const header = document.createElement('div');
+            header.className = 'hex-header';
+            let hdrText = '  Offset  ';
+            for (let i = 0; i < 16; i++) {
+                hdrText += i.toString(16).toUpperCase().padStart(2, '0') + ' ';
+                if (i === 7) hdrText += ' ';
+            }
+            hdrText += '  ASCII';
+            header.textContent = hdrText;
+            leftPanel.appendChild(header);
+
+            const byteElements = [];
+            const asciiElements = [];
+
+            for (let row = 0; row * 16 < rawBytes.length; row++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'hex-row';
+
+                // Offset
+                const offsetSpan = document.createElement('span');
+                offsetSpan.className = 'hex-offset';
+                offsetSpan.textContent = '  ' + (row * 16).toString(16).toUpperCase().padStart(4, '0') + '  ';
+                rowDiv.appendChild(offsetSpan);
+
+                const rowAsciiSpans = [];
+
+                for (let col = 0; col < 16; col++) {
+                    const byteIdx = row * 16 + col;
+                    if (byteIdx >= rawBytes.length) {
+                        // Pad
+                        const pad = document.createElement('span');
+                        pad.style.display = 'inline-block';
+                        pad.style.width = '26px';
+                        rowDiv.appendChild(pad);
+                        if (col === 7) {
+                            const gap = document.createElement('span');
+                            gap.className = 'hex-gap';
+                            rowDiv.appendChild(gap);
+                        }
+                        continue;
+                    }
+
+                    const b = rawBytes[byteIdx];
+                    const segIdx = byteToSeg[byteIdx];
+                    const seg = segIdx !== null ? segments[segIdx] : null;
+
+                    const span = document.createElement('span');
+                    span.className = 'hex-byte ' + (seg ? layerClass(seg.layer) : '');
+                    span.textContent = b.toString(16).toUpperCase().padStart(2, '0') + ' ';
+                    span.dataset.byteIdx = byteIdx;
+                    if (segIdx !== null) span.dataset.segIdx = segIdx;
+                    byteElements[byteIdx] = span;
+                    rowDiv.appendChild(span);
+
+                    if (col === 7) {
+                        const gap = document.createElement('span');
+                        gap.className = 'hex-gap';
+                        rowDiv.appendChild(gap);
+                    }
+
+                    // ASCII
+                    const aSpan = document.createElement('span');
+                    const ch = (b >= 0x21 && b <= 0x7e) ? String.fromCharCode(b) : '\u00b7';
+                    aSpan.className = 'hex-ascii ' + (seg ? layerClass(seg.layer) : '');
+                    aSpan.textContent = ch;
+                    aSpan.dataset.byteIdx = byteIdx;
+                    if (segIdx !== null) aSpan.dataset.segIdx = segIdx;
+                    asciiElements[byteIdx] = aSpan;
+                    rowAsciiSpans.push(aSpan);
+                }
+
+                // ASCII separator
+                const sep = document.createElement('span');
+                sep.className = 'hex-ascii-sep';
+                rowDiv.appendChild(sep);
+
+                rowAsciiSpans.forEach(s => rowDiv.appendChild(s));
+
+                leftPanel.appendChild(rowDiv);
+            }
+
+            // Highlight helpers
+            let activeSegIdx = null;
+            function highlightSegment(segIdx) {
+                clearHighlight();
+                if (segIdx === null || segIdx === undefined) return;
+                activeSegIdx = segIdx;
+                const seg = segments[segIdx];
+                for (let i = seg.start; i < seg.end; i++) {
+                    if (byteElements[i]) byteElements[i].classList.add('highlight');
+                    if (asciiElements[i]) asciiElements[i].classList.add('highlight');
+                }
+                // Highlight tree item
+                const treeItem = rightPanel.querySelector(`[data-seg-idx="${segIdx}"]`);
+                if (treeItem) {
+                    treeItem.classList.add('active');
+                    treeItem.scrollIntoView({ block: 'nearest' });
+                    // Expand parent group if collapsed
+                    const groupBody = treeItem.closest('.hex-tree-group-body');
+                    if (groupBody && groupBody.classList.contains('hidden')) {
+                        groupBody.classList.remove('hidden');
+                        const groupHeader = groupBody.previousElementSibling;
+                        if (groupHeader) groupHeader.classList.remove('collapsed');
+                    }
+                }
+            }
+            function clearHighlight() {
+                activeSegIdx = null;
+                byteElements.forEach(el => { if (el) el.classList.remove('highlight'); });
+                asciiElements.forEach(el => { if (el) el.classList.remove('highlight'); });
+                rightPanel.querySelectorAll('.hex-tree-item.active').forEach(el => el.classList.remove('active'));
+            }
+
+            // Hex grid events
+            leftPanel.addEventListener('mouseover', e => {
+                const el = e.target.closest('[data-seg-idx]');
+                if (!el) return;
+                const segIdx = parseInt(el.dataset.segIdx);
+                const seg = segments[segIdx];
+                tooltip.textContent = seg.kind + ': ' + seg.detail;
+                tooltip.style.display = 'block';
+            });
+            leftPanel.addEventListener('mousemove', e => {
+                tooltip.style.left = (e.clientX + 12) + 'px';
+                tooltip.style.top = (e.clientY - 30) + 'px';
+            });
+            leftPanel.addEventListener('mouseout', e => {
+                const el = e.target.closest('[data-seg-idx]');
+                if (el) tooltip.style.display = 'none';
+            });
+            leftPanel.addEventListener('click', e => {
+                const el = e.target.closest('[data-seg-idx]');
+                if (!el) { clearHighlight(); return; }
+                const segIdx = parseInt(el.dataset.segIdx);
+                if (activeSegIdx === segIdx) { clearHighlight(); }
+                else { highlightSegment(segIdx); }
+            });
+
+            // Build tree panel
+            // Group segments by layer, then by record group
+            let currentLayer = null;
+            let currentGroup = null;
+            let groupBody = null;
+
+            segments.forEach((seg, segIdx) => {
+                if (seg.layer !== currentLayer) {
+                    currentLayer = seg.layer;
+                    currentGroup = null;
+                    const layerLabel = document.createElement('div');
+                    layerLabel.className = 'hex-tree-layer';
+                    const layerNames = { 'Frame': 'Frame', 'AppHeader': 'Application Header', 'RecordField': 'Data Records' };
+                    layerLabel.textContent = layerNames[seg.layer] || seg.layer;
+                    rightPanel.appendChild(layerLabel);
+                    groupBody = null;
+                }
+
+                // Record grouping
+                if (seg.layer === 'RecordField' && seg.group !== null && seg.group !== currentGroup) {
+                    currentGroup = seg.group;
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'hex-tree-group';
+
+                    const groupHeader = document.createElement('div');
+                    groupHeader.className = 'hex-tree-group-header';
+                    groupHeader.innerHTML = '<span class="arrow">\u25BC</span> Record ' + seg.group;
+                    groupDiv.appendChild(groupHeader);
+
+                    groupBody = document.createElement('div');
+                    groupBody.className = 'hex-tree-group-body';
+                    groupDiv.appendChild(groupBody);
+
+                    groupHeader.addEventListener('click', () => {
+                        groupBody.classList.toggle('hidden');
+                        groupHeader.classList.toggle('collapsed');
+                    });
+
+                    rightPanel.appendChild(groupDiv);
+                }
+
+                const item = document.createElement('div');
+                item.className = 'hex-tree-item';
+                item.dataset.segIdx = segIdx;
+
+                const offsetStr = seg.end - seg.start === 1
+                    ? '[' + seg.start.toString(16).toUpperCase().padStart(2, '0') + ']'
+                    : '[' + seg.start.toString(16).toUpperCase().padStart(2, '0') + '..' + seg.end.toString(16).toUpperCase().padStart(2, '0') + ']';
+
+                item.innerHTML =
+                    '<span class="tree-kind">' + escHtml(seg.kind) + '</span>' +
+                    '<span class="tree-detail">' + escHtml(seg.detail) + '</span>' +
+                    '<span class="tree-offset">' + offsetStr + '</span>';
+
+                item.addEventListener('click', () => {
+                    if (activeSegIdx === segIdx) { clearHighlight(); }
+                    else { highlightSegment(segIdx); }
+                });
+                item.addEventListener('mouseover', () => {
+                    if (activeSegIdx === null) {
+                        const s = segments[segIdx];
+                        for (let i = s.start; i < s.end; i++) {
+                            if (byteElements[i]) byteElements[i].classList.add('highlight');
+                            if (asciiElements[i]) asciiElements[i].classList.add('highlight');
+                        }
+                    }
+                });
+                item.addEventListener('mouseout', () => {
+                    if (activeSegIdx === null) {
+                        clearHighlight();
+                    }
+                });
+
+                if (groupBody && seg.group !== null) {
+                    groupBody.appendChild(item);
+                } else {
+                    rightPanel.appendChild(item);
+                }
+            });
+
+            // Cleanup tooltip on viewer removal
+            const observer = new MutationObserver(() => {
+                if (!document.body.contains(viewer)) {
+                    tooltip.remove();
+                    observer.disconnect();
+                }
+            });
+            observer.observe(container, { childList: true });
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
         setup(); // Set up the event listeners after the page is loaded
