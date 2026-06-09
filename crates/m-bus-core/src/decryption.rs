@@ -5,7 +5,7 @@ use aes::Aes128;
 #[cfg(feature = "decryption")]
 use cbc::{
     Decryptor,
-    cipher::{BlockDecryptMut, KeyIvInit},
+    cipher::{BlockModeDecrypt, KeyIvInit},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -233,7 +233,7 @@ fn decrypt_aes_cbc_into(
         .get_mut(..encrypted_len)
         .ok_or(DecryptionError::InvalidDataLength)?;
     decryptor
-        .decrypt_padded_mut::<cipher::block_padding::NoPadding>(decrypt_buf)
+        .decrypt_padded::<cipher::block_padding::NoPadding>(decrypt_buf)
         .map_err(|_| DecryptionError::DecryptionFailed)?;
 
     // Return total length (decrypted blocks + trailing plaintext)
