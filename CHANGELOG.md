@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-14
+
+- Added byte-level frame annotations and interactive hex view support for the WASM site.
+- Added and corrected VIF/VIFE labels, units, extension handling, and special-function parsing.
+- Improved LVAR text decoding with ISO/IEC 8859-1 handling.
+- Added package metadata and versioned path dependencies for crate publishing.
 
 ## [0.1.0]
 
