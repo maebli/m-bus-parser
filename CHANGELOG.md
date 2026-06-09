@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-09
+
+- Added support for CI 0x78 frames without a transport layer header.
+- Improved WASM docs hex view alignment and ASCII column spacing.
+- Deduplicated byte hover labels in the WASM docs hex view.
+- Updated RustCrypto and serde XML dependencies.
+
 ## [0.1.1] - 2026-05-14
 
 - Added byte-level frame annotations and interactive hex view support for the WASM site.
