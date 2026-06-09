@@ -503,6 +503,12 @@ pub enum UserDataBlock<'a> {
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
     },
+
+    VariableDataStructureWithoutTplHeader {
+        extended_link_layer: Option<ExtendedLinkLayer>,
+        #[cfg_attr(feature = "serde", serde(skip_serializing))]
+        variable_data_block: &'a [u8],
+    },
 }
 
 impl<'a> UserDataBlock<'a> {
@@ -525,6 +531,10 @@ impl<'a> UserDataBlock<'a> {
                 ..
             } => variable_data_block.len(),
             Self::VariableDataStructureWithShortTplHeader {
+                variable_data_block,
+                ..
+            } => variable_data_block.len(),
+            Self::VariableDataStructureWithoutTplHeader {
                 variable_data_block,
                 ..
             } => variable_data_block.len(),
@@ -920,8 +930,11 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 feature: "AlarmLongTransport control information",
             }),
             ControlInformation::ApplicationLayerNoTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationLayerNoTransport control information",
+                Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                    extended_link_layer: None,
+                    variable_data_block: data
+                        .get(1..data.len())
+                        .ok_or(ApplicationLayerError::InsufficientData)?,
                 })
             }
             ControlInformation::ApplicationLayerCompactFrameNoTransport => {
@@ -1038,23 +1051,24 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     receiver_address: None,
                     encryption: None,
                 });
-                let user_block = UserDataBlock::try_from(iter.as_slice());
-                if let Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
-                    extended_link_layer: _,
-                    short_tpl_header,
-                    variable_data_block: _,
-                }) = user_block
-                {
+                match UserDataBlock::try_from(iter.as_slice()) {
                     Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
+                        short_tpl_header,
+                        variable_data_block,
+                        ..
+                    }) => Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                         extended_link_layer,
                         short_tpl_header,
-                        variable_data_block: {
-                            data.get(8..data.len())
-                                .ok_or(ApplicationLayerError::InsufficientData)?
-                        },
-                    })
-                } else {
-                    Err(ApplicationLayerError::MissingControlInformation)
+                        variable_data_block,
+                    }),
+                    Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                        variable_data_block,
+                        ..
+                    }) => Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                        extended_link_layer,
+                        variable_data_block,
+                    }),
+                    _ => Err(ApplicationLayerError::MissingControlInformation),
                 }
             }
             ControlInformation::ExtendedLinkLayerII => {
@@ -1208,6 +1222,38 @@ mod tests {
                 subcode: ApplicationResetSubcode::All(0x10)
             })
         );
+    }
+
+    #[test]
+    fn test_application_layer_no_transport() {
+        let data = [0x78, 0x0B, 0x13, 0x43, 0x65, 0x87];
+        let result = UserDataBlock::try_from(data.as_slice());
+
+        assert_eq!(
+            result,
+            Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                extended_link_layer: None,
+                variable_data_block: &data[1..],
+            })
+        );
+    }
+
+    #[test]
+    fn test_ell_i_with_application_layer_no_transport() {
+        let data = [0x8C, 0x20, 0x27, 0x78, 0x0B, 0x13, 0x43, 0x65, 0x87];
+        let result = UserDataBlock::try_from(data.as_slice());
+
+        match result {
+            Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                extended_link_layer: Some(ell),
+                variable_data_block,
+            }) => {
+                assert_eq!(ell.communication_control, 0x20);
+                assert_eq!(ell.access_number, 0x27);
+                assert_eq!(variable_data_block, &data[4..]);
+            }
+            other => panic!("expected no-TPL user data after ELL I, got {other:?}"),
+        }
     }
 
     #[test]

@@ -67,6 +67,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_ci_78_wireless_frame_without_tpl_header() {
+        let bytes = hex::decode("1244AE0C7856341201078C2027780B13436587").unwrap();
+        let mbus_data = MbusData::<WirelessFrame>::try_from(bytes.as_slice()).unwrap();
+
+        match mbus_data.user_data.as_ref() {
+            Some(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                extended_link_layer: Some(ell),
+                variable_data_block,
+            }) => {
+                assert_eq!(ell.communication_control, 0x20);
+                assert_eq!(ell.access_number, 0x27);
+                assert_eq!(*variable_data_block, &bytes[14..]);
+            }
+            other => panic!("expected no-TPL user data, got {other:?}"),
+        }
+
+        let data_records: Vec<_> = mbus_data
+            .data_records
+            .as_ref()
+            .expect("data records should be available")
+            .clone()
+            .flatten()
+            .collect();
+        assert_eq!(data_records.len(), 1);
+    }
+
+    #[test]
     fn test_wireless_telegram_vectors() {
         let contents = fs::read_to_string("./tests/wmbusmeters/test_vectors.json")
             .expect("Failed to read test vectors file");

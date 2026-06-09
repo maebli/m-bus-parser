@@ -29,15 +29,24 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
         match &frame {
             frames::WiredFrame::LongFrame { data, .. } => {
                 if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
-                    user_data = Some(x);
-                    if let Ok(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                        long_tpl_header: _,
-                        variable_data_block,
-                        ..
-                    }) = user_data::UserDataBlock::try_from(*data)
-                    {
-                        data_records = Some(variable_data_block.into());
+                    match &x {
+                        user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                            variable_data_block,
+                            ..
+                        }
+                        | user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                            variable_data_block,
+                            ..
+                        }
+                        | user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                            variable_data_block,
+                            ..
+                        } => {
+                            data_records = Some((*variable_data_block).into());
+                        }
+                        _ => {}
                     }
+                    user_data = Some(x);
                 }
             }
             frames::WiredFrame::SingleCharacter { .. } => (),
@@ -73,6 +82,12 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, WirelessFrame<'a>> {
                     data_records = Some((*variable_data_block).into());
                 }
                 user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                    variable_data_block,
+                    ..
+                } => {
+                    data_records = Some((*variable_data_block).into());
+                }
+                user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
                     variable_data_block,
                     ..
                 } => {
