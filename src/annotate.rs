@@ -516,7 +516,24 @@ fn annotate_application_layer(
             }
         }
 
-        // Extended Link Layer I (CI=0x8C): CI + 2 ELL bytes, then nested short TPL
+        // Application layer without TPL header (CI=0x78)
+        0x78 => {
+            segments.push(ByteSegment {
+                start: base,
+                end: base + 1,
+                kind: SegmentKind::CiField,
+                detail: Cow::Borrowed("CI: 0x78 (Application Layer, no TPL header)"),
+                group: None,
+                layer: Layer::AppHeader,
+            });
+
+            let records_data = &app_data[1..];
+            if !records_data.is_empty() {
+                annotate_data_records(segments, base + 1, records_data);
+            }
+        }
+
+        // Extended Link Layer I (CI=0x8C): CI + 2 ELL bytes, then nested application data
         0x8C => {
             let ell_size = 2;
             let total_header = 1 + ell_size; // CI + ELL
@@ -552,7 +569,7 @@ fn annotate_application_layer(
                 layer: Layer::AppHeader,
             });
 
-            // The rest is a nested short TPL header parsed by the application layer
+            // The rest is nested application data parsed by the application layer
             let inner_data = &app_data[total_header..];
             let inner_base = base + total_header;
             if !inner_data.is_empty() {
@@ -1722,5 +1739,23 @@ mod tests {
         assert_eq!(segments[3].kind, SegmentKind::IdentificationNumber);
         assert_eq!(segments[4].kind, SegmentKind::Version);
         assert_eq!(segments[5].kind, SegmentKind::DeviceType);
+    }
+
+    #[test]
+    fn test_wireless_ell_i_application_layer_no_transport_annotation() {
+        let data: Vec<u8> = vec![
+            0x12, 0x44, 0xAE, 0x0C, 0x78, 0x56, 0x34, 0x12, 0x01, 0x07, 0x8C, 0x20, 0x27, 0x78,
+            0x0B, 0x13, 0x43, 0x65, 0x87,
+        ];
+
+        let segments = annotate_frame(&data).expect("should parse");
+        assert_contiguous(&segments, data.len());
+
+        assert!(segments.iter().any(|s| {
+            s.kind == SegmentKind::CiField
+                && s.start == 13
+                && s.detail.contains("Application Layer, no TPL header")
+        }));
+        assert!(!segments.iter().any(|s| s.kind == SegmentKind::Unknown));
     }
 }
