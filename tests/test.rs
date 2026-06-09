@@ -47,7 +47,7 @@ pub struct SlaveInformation {
 
 #[derive(Debug, Deserialize)]
 pub struct DataRecord {
-    #[serde(rename = "id")]
+    #[serde(rename = "@id")]
     _id: String,
 
     #[serde(rename = "Function")]
