@@ -335,14 +335,18 @@
             font-size: 13px;
             line-height: 1.5;
             min-height: 200px;
+            overflow: hidden;
         }
         .hex-viewer-left {
+            box-sizing: border-box;
             flex: 1;
             min-width: 0;
+            max-width: 100%;
             overflow-x: auto;
             padding: 40px 12px 12px;
         }
         .hex-viewer-right {
+            box-sizing: border-box;
             width: 420px;
             min-width: 340px;
             border-left: 1px solid #ddd;
@@ -355,24 +359,33 @@
         }
 
         /* Hex grid */
+        .hex-grid {
+            display: inline-block;
+            min-width: max-content;
+        }
         .hex-header {
             color: #888;
             margin-bottom: 4px;
-            white-space: pre;
             user-select: none;
         }
+        .hex-header,
         .hex-row {
-            white-space: pre;
+            display: grid;
+            grid-template-columns: 64px repeat(8, 28px) 10px repeat(8, 28px) 18px repeat(16, 11px);
+            align-items: center;
             margin: 0;
             padding: 0;
+            white-space: normal;
         }
         .hex-offset {
             color: #888;
+            padding-right: 8px;
+            text-align: right;
             user-select: none;
         }
         .hex-byte {
-            display: inline-block;
-            width: 26px;
+            display: block;
+            box-sizing: border-box;
             text-align: center;
             cursor: pointer;
             border-radius: 2px;
@@ -383,19 +396,21 @@
             outline-offset: -1px;
         }
         .hex-gap {
-            display: inline-block;
-            width: 8px;
+            display: block;
         }
         .hex-ascii-sep {
-            display: inline-block;
-            width: 16px;
+            display: block;
         }
         .hex-ascii {
-            display: inline-block;
-            width: 9px;
+            display: block;
+            box-sizing: border-box;
             text-align: center;
             cursor: pointer;
             border-radius: 2px;
+        }
+        .hex-ascii-label {
+            grid-column: span 16;
+            text-align: left;
         }
         .hex-byte.highlight, .hex-ascii.highlight {
             outline: 2px solid #1565c0 !important;
@@ -846,16 +861,35 @@
             document.body.appendChild(tooltip);
 
             // Render hex grid
+            const grid = document.createElement('div');
+            grid.className = 'hex-grid';
+            leftPanel.appendChild(grid);
+
             const header = document.createElement('div');
             header.className = 'hex-header';
-            let hdrText = '  Offset  ';
+            const offsetHeader = document.createElement('span');
+            offsetHeader.className = 'hex-offset';
+            offsetHeader.textContent = 'Offset';
+            header.appendChild(offsetHeader);
             for (let i = 0; i < 16; i++) {
-                hdrText += i.toString(16).toUpperCase().padStart(2, '0') + ' ';
-                if (i === 7) hdrText += ' ';
+                const colHeader = document.createElement('span');
+                colHeader.className = 'hex-byte';
+                colHeader.textContent = i.toString(16).toUpperCase().padStart(2, '0');
+                header.appendChild(colHeader);
+                if (i === 7) {
+                    const gap = document.createElement('span');
+                    gap.className = 'hex-gap';
+                    header.appendChild(gap);
+                }
             }
-            hdrText += '  ASCII';
-            header.textContent = hdrText;
-            leftPanel.appendChild(header);
+            const sepHeader = document.createElement('span');
+            sepHeader.className = 'hex-ascii-sep';
+            header.appendChild(sepHeader);
+            const asciiHeader = document.createElement('span');
+            asciiHeader.className = 'hex-ascii-label';
+            asciiHeader.textContent = 'ASCII';
+            header.appendChild(asciiHeader);
+            grid.appendChild(header);
 
             const byteElements = [];
             const asciiElements = [];
@@ -867,7 +901,7 @@
                 // Offset
                 const offsetSpan = document.createElement('span');
                 offsetSpan.className = 'hex-offset';
-                offsetSpan.textContent = '  ' + (row * 16).toString(16).toUpperCase().padStart(4, '0') + '  ';
+                offsetSpan.textContent = (row * 16).toString(16).toUpperCase().padStart(4, '0');
                 rowDiv.appendChild(offsetSpan);
 
                 const rowAsciiSpans = [];
@@ -877,8 +911,7 @@
                     if (byteIdx >= rawBytes.length) {
                         // Pad
                         const pad = document.createElement('span');
-                        pad.style.display = 'inline-block';
-                        pad.style.width = '26px';
+                        pad.className = 'hex-byte';
                         rowDiv.appendChild(pad);
                         if (col === 7) {
                             const gap = document.createElement('span');
@@ -894,7 +927,7 @@
 
                     const span = document.createElement('span');
                     span.className = 'hex-byte ' + (seg ? layerClass(seg.layer) : '');
-                    span.textContent = b.toString(16).toUpperCase().padStart(2, '0') + ' ';
+                    span.textContent = b.toString(16).toUpperCase().padStart(2, '0');
                     span.dataset.byteIdx = byteIdx;
                     if (segIdx !== null) span.dataset.segIdx = segIdx;
                     byteElements[byteIdx] = span;
@@ -924,7 +957,7 @@
 
                 rowAsciiSpans.forEach(s => rowDiv.appendChild(s));
 
-                leftPanel.appendChild(rowDiv);
+                grid.appendChild(rowDiv);
             }
 
             // Highlight helpers
@@ -965,7 +998,7 @@
                 if (!el) return;
                 const segIdx = parseInt(el.dataset.segIdx);
                 const seg = segments[segIdx];
-                tooltip.textContent = seg.kind + ': ' + seg.detail;
+                tooltip.textContent = segmentTooltip(seg);
                 tooltip.style.display = 'block';
             });
             leftPanel.addEventListener('mousemove', e => {
@@ -1076,6 +1109,65 @@
 
         function escHtml(s) {
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function segmentTooltip(seg) {
+            const kind = segmentKindLabel(seg.kind);
+            const detail = String(seg.detail || '');
+            if (!detail) return kind;
+
+            const colon = detail.indexOf(':');
+            if (colon !== -1) {
+                const detailPrefix = detail.slice(0, colon);
+                if (sameSegmentLabel(detailPrefix, kind) || sameSegmentLabel(detailPrefix, seg.kind)) {
+                    return detail;
+                }
+            }
+
+            return kind + ': ' + detail;
+        }
+
+        function sameSegmentLabel(a, b) {
+            return normalizeSegmentLabel(a) === normalizeSegmentLabel(b);
+        }
+
+        function normalizeSegmentLabel(value) {
+            return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+
+        function segmentKindLabel(kind) {
+            const labels = {
+                StartByte: 'Start Byte',
+                Length: 'Length',
+                CField: 'C Field',
+                AField: 'A Field',
+                Checksum: 'Checksum',
+                StopByte: 'Stop Byte',
+                CiField: 'CI Field',
+                IdentificationNumber: 'Identification Number',
+                ManufacturerCode: 'Manufacturer Code',
+                Version: 'Version',
+                DeviceType: 'Device Type',
+                AccessNumber: 'Access Number',
+                Status: 'Status',
+                ConfigurationField: 'Configuration Field',
+                EncryptionConfigByte: 'Encryption Config Byte',
+                Dif: 'DIF',
+                Dife: 'DIFE',
+                Vif: 'VIF',
+                Vife: 'VIFE',
+                PlaintextVif: 'Plaintext VIF',
+                DataPayload: 'Data',
+                LField: 'L Field',
+                WirelessManufacturerId: 'Manufacturer ID',
+                Crc: 'CRC',
+                ExtendedLinkLayer: 'Extended Link Layer',
+                EncryptedPayload: 'Encrypted Payload',
+                ManufacturerSpecific: 'Manufacturer Specific',
+                IdleFiller: 'Idle Filler',
+                Unknown: 'Unknown',
+            };
+            return labels[kind] || String(kind || '').replace(/([a-z])([A-Z])/g, '$1 $2');
         }
 
         setup(); // Set up the event listeners after the page is loaded
