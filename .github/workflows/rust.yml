@@ -219,11 +219,11 @@ jobs:
         run: |
           cd wasm
           wasm-pack build --target bundler
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: '20.x'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-          token: ${{ secrets.NPM_TOKEN }}
+          package-manager-cache: false
       - name: Install npm dependencies
         run: |
           cd wasm/pkg
@@ -236,10 +236,8 @@ jobs:
           if npm view "m-bus-parser-wasm-pack@$VERSION" version >/dev/null 2>&1; then
             echo "m-bus-parser-wasm-pack $VERSION is already published"
           else
-            npm publish --provenance --access public
+            npm publish --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Create new artifacts for website
         run: |
           rm -rf wasm/pkg

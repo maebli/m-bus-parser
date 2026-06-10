@@ -9,7 +9,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/maebli/m-bus-parser"
+    "url": "git+https://github.com/maebli/m-bus-parser.git"
   },
   "files": [
     "m_bus_parser_wasm_pack_bg.wasm",
