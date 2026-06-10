@@ -99,6 +99,9 @@ jobs:
   publish-library:
     needs: build-library
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
@@ -106,9 +109,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
       - name: Publish Library to crates.io
         env:
-          CRATES_TOKEN: ${{ secrets.CRATESTOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
           RELEASE_REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -141,7 +146,7 @@ jobs:
               return 0
             fi
 
-            cargo publish --manifest-path "$manifest" --token "$CRATES_TOKEN"
+            cargo publish --manifest-path "$manifest"
             wait_for_crate "$crate"
           }
 
@@ -154,6 +159,9 @@ jobs:
   publish-cli:
     needs: build-cli
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     if: startsWith(github.ref, 'refs/tags/cli-v')
     steps:
       - uses: actions/checkout@v4
@@ -161,9 +169,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
       - name: Publish CLI to crates.io
         env:
-          CRATES_TOKEN: ${{ secrets.CRATESTOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
           RELEASE_REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -195,7 +205,7 @@ jobs:
           fi
 
           cd cli
-          cargo publish --token "$CRATES_TOKEN"
+          cargo publish
 
   publish-wasm:
     needs: build-wasm
