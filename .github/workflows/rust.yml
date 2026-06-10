@@ -246,9 +246,11 @@ jobs:
       - name: Copy wasm artifacts to docs
         run: |
           cp wasm/pkg/m_bus_parser_wasm_pack.js docs/
-          cp wasm/pkg/m_bus_parser_wasm_pack_bg.js docs/
           cp wasm/pkg/m_bus_parser_wasm_pack_bg.wasm docs/
           cp wasm/pkg/package.json docs/
+          if [ -f wasm/pkg/m_bus_parser_wasm_pack_bg.js ]; then
+            cp wasm/pkg/m_bus_parser_wasm_pack_bg.js docs/
+          fi
       - name: Commit updated wasm artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
