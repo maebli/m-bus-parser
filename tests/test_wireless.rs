@@ -94,6 +94,55 @@ mod tests {
     }
 
     #[test]
+    fn test_ci_78_wireless_frame_with_trailing_crc() {
+        let bytes = hex::decode("1444AE0C7856341201078C2027780B134365877AC5").unwrap();
+        let mbus_data = MbusData::<WirelessFrame>::try_from(bytes.as_slice()).unwrap();
+
+        match mbus_data.user_data.as_ref() {
+            Some(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                extended_link_layer: Some(ell),
+                variable_data_block,
+            }) => {
+                assert_eq!(ell.communication_control, 0x20);
+                assert_eq!(ell.access_number, 0x27);
+                assert_eq!(*variable_data_block, &bytes[14..19]);
+            }
+            other => panic!("expected no-TPL user data, got {other:?}"),
+        }
+
+        let data_records: Vec<_> = mbus_data
+            .data_records
+            .as_ref()
+            .expect("data records should be available")
+            .clone()
+            .flatten()
+            .collect();
+        assert_eq!(data_records.len(), 1);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_ci_78_wireless_frame_with_trailing_crc_annotations() {
+        use m_bus_parser::annotate::{annotate_frame, SegmentKind};
+
+        let bytes = hex::decode("1444AE0C7856341201078C2027780B134365877AC5").unwrap();
+
+        let segments = annotate_frame(bytes.as_slice()).expect("frame should annotate");
+        assert_eq!(
+            segments.last().map(|seg| &seg.kind),
+            Some(&SegmentKind::Crc)
+        );
+        assert_eq!(
+            segments.last().map(|seg| (seg.start, seg.end)),
+            Some((19, 21))
+        );
+
+        for pair in segments.windows(2) {
+            assert_eq!(pair[0].end, pair[1].start);
+        }
+    }
+
+    #[test]
     fn test_wireless_telegram_vectors() {
         let contents = fs::read_to_string("./tests/wmbusmeters/test_vectors.json")
             .expect("Failed to read test vectors file");
