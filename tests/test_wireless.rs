@@ -94,6 +94,77 @@ mod tests {
     }
 
     #[test]
+    fn test_ci_78_wireless_frame_with_trailing_crc() {
+        let bytes = hex::decode("1444AE0C7856341201078C2027780B134365877AC5").unwrap();
+        let mbus_data = MbusData::<WirelessFrame>::try_from(bytes.as_slice()).unwrap();
+
+        match mbus_data.user_data.as_ref() {
+            Some(UserDataBlock::VariableDataStructureWithoutTplHeader {
+                extended_link_layer: Some(ell),
+                variable_data_block,
+            }) => {
+                assert_eq!(ell.communication_control, 0x20);
+                assert_eq!(ell.access_number, 0x27);
+                assert_eq!(*variable_data_block, &bytes[14..19]);
+            }
+            other => panic!("expected no-TPL user data, got {other:?}"),
+        }
+
+        let data_records: Vec<_> = mbus_data
+            .data_records
+            .as_ref()
+            .expect("data records should be available")
+            .clone()
+            .flatten()
+            .collect();
+        assert_eq!(data_records.len(), 1);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_ci_78_wireless_frame_with_trailing_crc_annotations() {
+        use m_bus_parser::annotate::{annotate_frame, SegmentKind};
+
+        let bytes = hex::decode("1444AE0C7856341201078C2027780B134365877AC5").unwrap();
+
+        let segments = annotate_frame(bytes.as_slice()).expect("frame should annotate");
+        assert!(
+            segments.iter().any(|seg| {
+                seg.kind == SegmentKind::CiField && seg.start == 13 && seg.detail.contains("0x78")
+            }),
+            "CI 0x78 should be annotated as an application layer without a TPL header"
+        );
+        assert!(
+            segments.iter().any(|seg| {
+                seg.kind == SegmentKind::DataPayload
+                    && seg.start == 16
+                    && seg.end == 19
+                    && seg.detail == "876543"
+            }),
+            "data record payload should be parsed instead of marked unparseable"
+        );
+        assert_eq!(
+            segments.last().map(|seg| &seg.kind),
+            Some(&SegmentKind::Crc)
+        );
+        assert_eq!(
+            segments.last().map(|seg| (seg.start, seg.end)),
+            Some((19, 21))
+        );
+
+        for pair in segments.windows(2) {
+            assert_eq!(pair[0].end, pair[1].start);
+        }
+        assert!(
+            !segments.iter().any(|seg| {
+                seg.kind == SegmentKind::Unknown
+                    || seg.detail.contains("Unparseable data record bytes")
+            }),
+            "hex view annotations should not include unknown or unparseable segments: {segments:?}"
+        );
+    }
+
+    #[test]
     fn test_wireless_telegram_vectors() {
         let contents = fs::read_to_string("./tests/wmbusmeters/test_vectors.json")
             .expect("Failed to read test vectors file");

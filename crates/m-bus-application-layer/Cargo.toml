@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-application-layer"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "M-Bus application layer parser (DIF/VIF, data records)"
 license = "MIT"
@@ -19,7 +19,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 defmt = { version = "1.0.1", optional = true }
 bitflags = "2.8.0"
 arrayvec = { version = "0.7.4", default-features = false }
-m-bus-core = { version = "0.1.2", path = "../m-bus-core" }
+m-bus-core = { version = "0.1.3", path = "../m-bus-core" }
 
 [dev-dependencies]
 wired-mbus-link-layer = { path = "../wired-mbus-link-layer" }

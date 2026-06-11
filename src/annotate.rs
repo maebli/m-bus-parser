@@ -1203,10 +1203,28 @@ fn annotate_wireless_inner(data: &[u8]) -> Result<Vec<ByteSegment>, MbusError> {
         layer: Layer::Frame,
     });
 
+    let crc_start = wireless_mbus_link_layer::trailing_frame_crc_start(data);
+    let app_end = crc_start.unwrap_or(data.len());
+
     // Application layer starts at byte 10
-    if data.len() > 10 {
-        let app_data = &data[10..];
+    if app_end > 10 {
+        let app_data = &data[10..app_end];
         annotate_application_layer(&mut segments, data, 10, app_data);
+    }
+
+    if let Some(start) = crc_start {
+        segments.push(ByteSegment {
+            start,
+            end: data.len(),
+            kind: SegmentKind::Crc,
+            detail: Cow::Owned(format!(
+                "CRC: 0x{:02X}{:02X}",
+                data.get(start).copied().unwrap_or(0),
+                data.get(start + 1).copied().unwrap_or(0),
+            )),
+            group: None,
+            layer: Layer::Frame,
+        });
     }
 
     Ok(segments)

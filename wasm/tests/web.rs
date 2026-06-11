@@ -21,3 +21,31 @@ fn test_m_bus_parse_table() {
     assert!(output.contains("02205100"));
     assert!(output.contains("[Wh]"));
 }
+
+#[wasm_bindgen_test]
+fn test_m_bus_parse_hexview_ci_78_annotations() {
+    let input = "1444AE0C7856341201078C2027780B134365877AC5";
+    let output = m_bus_parser_wasm_pack::m_bus_parse(input, "hexview");
+    let segments: serde_json::Value =
+        serde_json::from_str(&output).expect("hexview should return annotated JSON");
+    let segments = segments.as_array().expect("hexview should return an array");
+
+    assert!(segments.iter().any(|seg| {
+        seg.get("kind").and_then(|v| v.as_str()) == Some("CiField")
+            && seg
+                .get("detail")
+                .and_then(|v| v.as_str())
+                .is_some_and(|detail| detail.contains("0x78"))
+    }));
+    assert!(segments.iter().any(|seg| {
+        seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+            && seg.get("detail").and_then(|v| v.as_str()) == Some("876543")
+    }));
+    assert!(!segments.iter().any(|seg| {
+        seg.get("kind").and_then(|v| v.as_str()) == Some("Unknown")
+            || seg
+                .get("detail")
+                .and_then(|v| v.as_str())
+                .is_some_and(|detail| detail.contains("Unparseable data record bytes"))
+    }));
+}

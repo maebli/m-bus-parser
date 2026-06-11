@@ -1,6 +1,6 @@
 [project]
 name = "pymbusparser"
-version = "0.1.2"
+version = "0.1.3"
 description = "Python bindings for m-bus-parser written in Rust"
 authors = [{name = "Michael Aebli"}] 
 license = { text = "MIT" }

@@ -17,6 +17,18 @@ fn crc16_en13757(data: &[u8]) -> u16 {
     crc ^ 0xFFFF
 }
 
+/// Return the start offset of a trailing frame CRC when the final two bytes
+/// validate against every preceding byte.
+pub fn trailing_frame_crc_start(data: &[u8]) -> Option<usize> {
+    let crc_start = data.len().checked_sub(2)?;
+    if crc_start < 10 {
+        return None;
+    }
+
+    let expected = u16::from_be_bytes([data[crc_start], data[crc_start + 1]]);
+    (crc16_en13757(&data[..crc_start]) == expected).then_some(crc_start)
+}
+
 /// Strip Format A CRCs from a wireless M-Bus frame.
 ///
 /// Format A frames have CRC-16 checksums embedded in the data:
@@ -156,10 +168,11 @@ impl<'a> TryFrom<&'a [u8]> for WirelessFrame<'a> {
 
         // In wireless M-Bus, the L-field contains the number of bytes following the L-field
         if length_byte + 1 == length {
+            let data_end = trailing_frame_crc_start(data).unwrap_or(length);
             return Ok(WirelessFrame {
                 function: Function::SndNk { prm: false },
                 manufacturer_id,
-                data: &data[10..],
+                data: &data[10..data_end],
             });
         }
 
@@ -186,5 +199,21 @@ mod test {
         ];
         let parsed = WirelessFrame::try_from(frame);
         println!("{:#?}", parsed);
+    }
+
+    #[test]
+    fn test_trailing_frame_crc_is_not_payload() {
+        let frame = [
+            0x14, 0x44, 0xAE, 0x0C, 0x78, 0x56, 0x34, 0x12, 0x01, 0x07, 0x8C, 0x20, 0x27, 0x78,
+            0x0B, 0x13, 0x43, 0x65, 0x87, 0x7A, 0xC5,
+        ];
+
+        assert_eq!(trailing_frame_crc_start(&frame), Some(19));
+
+        let parsed = WirelessFrame::try_from(frame.as_slice()).expect("valid wireless frame");
+        assert_eq!(
+            parsed.data,
+            &[0x8C, 0x20, 0x27, 0x78, 0x0B, 0x13, 0x43, 0x65, 0x87]
+        );
     }
 }
