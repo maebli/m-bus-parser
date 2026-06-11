@@ -128,6 +128,21 @@ mod tests {
         let bytes = hex::decode("1444AE0C7856341201078C2027780B134365877AC5").unwrap();
 
         let segments = annotate_frame(bytes.as_slice()).expect("frame should annotate");
+        assert!(
+            segments.iter().any(|seg| {
+                seg.kind == SegmentKind::CiField && seg.start == 13 && seg.detail.contains("0x78")
+            }),
+            "CI 0x78 should be annotated as an application layer without a TPL header"
+        );
+        assert!(
+            segments.iter().any(|seg| {
+                seg.kind == SegmentKind::DataPayload
+                    && seg.start == 16
+                    && seg.end == 19
+                    && seg.detail == "876543"
+            }),
+            "data record payload should be parsed instead of marked unparseable"
+        );
         assert_eq!(
             segments.last().map(|seg| &seg.kind),
             Some(&SegmentKind::Crc)
@@ -140,6 +155,13 @@ mod tests {
         for pair in segments.windows(2) {
             assert_eq!(pair[0].end, pair[1].start);
         }
+        assert!(
+            !segments.iter().any(|seg| {
+                seg.kind == SegmentKind::Unknown
+                    || seg.detail.contains("Unparseable data record bytes")
+            }),
+            "hex view annotations should not include unknown or unparseable segments: {segments:?}"
+        );
     }
 
     #[test]

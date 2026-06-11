@@ -371,7 +371,7 @@
         .hex-header,
         .hex-row {
             display: grid;
-            grid-template-columns: 64px repeat(8, 28px) 10px repeat(8, 28px) 18px repeat(16, 11px);
+            grid-template-columns: 56px repeat(8, 21px) 8px repeat(8, 21px) 14px repeat(16, 10px);
             align-items: center;
             margin: 0;
             padding: 0;
@@ -427,6 +427,26 @@
         body.dark-mode .hex-layer-frame     { background: #1a3a5c; color: #90caf9; }
         body.dark-mode .hex-layer-appheader { background: #1b3d1f; color: #a5d6a7; }
         body.dark-mode .hex-layer-record    { background: #3e3510; color: #fff176; }
+
+        /* Record field text colors */
+        .hex-kind-dif {
+            color: #b71c1c;
+        }
+        .hex-kind-vif {
+            color: #0b5cad;
+        }
+        .hex-kind-data {
+            color: #4a148c;
+        }
+        body.dark-mode .hex-kind-dif {
+            color: #ff8a80;
+        }
+        body.dark-mode .hex-kind-vif {
+            color: #82b1ff;
+        }
+        body.dark-mode .hex-kind-data {
+            color: #ce93d8;
+        }
 
         /* Segment tooltip */
         .hex-tooltip {
@@ -506,7 +526,7 @@
             border-radius: 4px;
             margin: 0 4px;
             display: flex;
-            justify-content: space-between;
+            align-items: center;
             gap: 8px;
         }
         .hex-tree-item:hover,
@@ -523,6 +543,8 @@
         }
         .hex-tree-item .tree-detail {
             color: #333;
+            flex: 1;
+            min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -533,10 +555,51 @@
         body.dark-mode .hex-tree-item .tree-detail {
             color: #e0e0e0;
         }
+        .hex-tree-item.hex-kind-dif .tree-kind,
+        .hex-tree-item.hex-kind-dif .tree-detail,
+        .hex-tree-item.hex-kind-vif .tree-kind,
+        .hex-tree-item.hex-kind-vif .tree-detail,
+        .hex-tree-item.hex-kind-data .tree-kind,
+        .hex-tree-item.hex-kind-data .tree-detail {
+            color: inherit;
+        }
         .hex-tree-item .tree-offset {
             color: #999;
             font-size: 11px;
             flex-shrink: 0;
+        }
+        .hex-tree-copy {
+            width: 20px;
+            height: 20px;
+            padding: 2px;
+            border: none;
+            border-radius: 4px;
+            background: transparent;
+            color: #777;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .hex-tree-copy:hover,
+        .hex-tree-copy.copied {
+            background: #d7ecff;
+            color: #1565c0;
+        }
+        body.dark-mode .hex-tree-copy {
+            color: #aaa;
+        }
+        body.dark-mode .hex-tree-copy:hover,
+        body.dark-mode .hex-tree-copy.copied {
+            background: #1a3a5c;
+            color: #90caf9;
+        }
+        .hex-tree-copy svg {
+            width: 14px;
+            height: 14px;
+            display: block;
+            pointer-events: none;
         }
 
         @media (max-width: 800px) {
@@ -625,7 +688,7 @@
         <pre id="output"></pre>
     </div>
     <script type="module">
-        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js?v=0.1.2";
+        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js?v=0.1.3";
 
         let currentFormat = "json"; // Keep track of the last used format
 
@@ -668,7 +731,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.1.2", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.1.3", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             // Load data and format from URL params and auto-parse if present
@@ -818,13 +881,30 @@
                 container.innerHTML = '<pre style="color:red;">Error parsing annotation data: ' + e.message + '</pre>';
                 return;
             }
-            if (!Array.isArray(segments) || segments.length === 0) {
+            if (!Array.isArray(segments)) {
+                const message = segments && typeof segments === 'object' && typeof segments.error === 'string'
+                    ? segments.error
+                    : 'No annotation segments returned. Check input.';
+                container.innerHTML = '<pre style="color:red;">' + escHtml(message) + '</pre>';
+                return;
+            }
+            if (segments.length === 0) {
                 container.innerHTML = '<pre style="color:red;">No annotation segments returned. Check input.</pre>';
                 return;
             }
 
             // Parse raw bytes from input string
-            const rawBytes = inputString.replace(/\s+/g, '').match(/.{1,2}/g).map(h => parseInt(h, 16));
+            let rawBytes;
+            try {
+                rawBytes = parseHexInputBytes(inputString);
+            } catch (e) {
+                container.innerHTML = '<pre style="color:red;">' + escHtml(e.message) + '</pre>';
+                return;
+            }
+            if (rawBytes.length === 0) {
+                container.innerHTML = '<pre style="color:red;">No input bytes found. Check input.</pre>';
+                return;
+            }
 
             // Build byte-to-segment lookup
             const byteToSeg = new Array(rawBytes.length).fill(null);
@@ -839,6 +919,12 @@
                 if (layer === 'Frame') return 'hex-layer-frame';
                 if (layer === 'AppHeader') return 'hex-layer-appheader';
                 return 'hex-layer-record';
+            }
+            function segmentKindClass(kind) {
+                if (kind === 'Dif' || kind === 'Dife') return 'hex-kind-dif';
+                if (kind === 'Vif' || kind === 'Vife' || kind === 'PlaintextVif') return 'hex-kind-vif';
+                if (kind === 'DataPayload') return 'hex-kind-data';
+                return '';
             }
 
             // Create viewer structure
@@ -926,7 +1012,7 @@
                     const seg = segIdx !== null ? segments[segIdx] : null;
 
                     const span = document.createElement('span');
-                    span.className = 'hex-byte ' + (seg ? layerClass(seg.layer) : '');
+                    span.className = 'hex-byte ' + (seg ? [layerClass(seg.layer), segmentKindClass(seg.kind)].filter(Boolean).join(' ') : '');
                     span.textContent = b.toString(16).toUpperCase().padStart(2, '0');
                     span.dataset.byteIdx = byteIdx;
                     if (segIdx !== null) span.dataset.segIdx = segIdx;
@@ -942,7 +1028,7 @@
                     // ASCII
                     const aSpan = document.createElement('span');
                     const ch = (b >= 0x21 && b <= 0x7e) ? String.fromCharCode(b) : '\u00b7';
-                    aSpan.className = 'hex-ascii ' + (seg ? layerClass(seg.layer) : '');
+                    aSpan.className = 'hex-ascii ' + (seg ? [layerClass(seg.layer), segmentKindClass(seg.kind)].filter(Boolean).join(' ') : '');
                     aSpan.textContent = ch;
                     aSpan.dataset.byteIdx = byteIdx;
                     if (segIdx !== null) aSpan.dataset.segIdx = segIdx;
@@ -1059,17 +1145,37 @@
                 }
 
                 const item = document.createElement('div');
-                item.className = 'hex-tree-item';
+                item.className = ['hex-tree-item', segmentKindClass(seg.kind)].filter(Boolean).join(' ');
                 item.dataset.segIdx = segIdx;
 
                 const offsetStr = seg.end - seg.start === 1
                     ? '[' + seg.start.toString(16).toUpperCase().padStart(2, '0') + ']'
                     : '[' + seg.start.toString(16).toUpperCase().padStart(2, '0') + '..' + seg.end.toString(16).toUpperCase().padStart(2, '0') + ']';
 
-                item.innerHTML =
-                    '<span class="tree-kind">' + escHtml(seg.kind) + '</span>' +
-                    '<span class="tree-detail">' + escHtml(seg.detail) + '</span>' +
-                    '<span class="tree-offset">' + offsetStr + '</span>';
+                const kindSpan = document.createElement('span');
+                kindSpan.className = 'tree-kind';
+                kindSpan.textContent = seg.kind;
+
+                const detailSpan = document.createElement('span');
+                detailSpan.className = 'tree-detail';
+                detailSpan.textContent = seg.detail;
+
+                const offsetSpan = document.createElement('span');
+                offsetSpan.className = 'tree-offset';
+                offsetSpan.textContent = offsetStr;
+
+                const copyButton = document.createElement('button');
+                copyButton.type = 'button';
+                copyButton.className = 'hex-tree-copy';
+                copyButton.title = 'Copy field hex';
+                copyButton.setAttribute('aria-label', 'Copy field hex');
+                copyButton.innerHTML = copyIconSvg();
+                copyButton.addEventListener('click', e => {
+                    e.stopPropagation();
+                    copySegmentBytes(seg, rawBytes, copyButton);
+                });
+
+                item.append(kindSpan, detailSpan, offsetSpan, copyButton);
 
                 item.addEventListener('click', () => {
                     if (activeSegIdx === segIdx) { clearHighlight(); }
@@ -1105,6 +1211,67 @@
                 }
             });
             observer.observe(container, { childList: true });
+        }
+
+        function parseHexInputBytes(inputString) {
+            const cleaned = String(inputString || '')
+                .trim()
+                .replace(/0x/gi, '')
+                .replace(/[^0-9a-fA-F]/g, '');
+            if (cleaned.length === 0) return [];
+            if (cleaned.length % 2 !== 0) {
+                throw new Error('Hex input has an odd number of digits.');
+            }
+
+            const bytes = [];
+            for (let i = 0; i < cleaned.length; i += 2) {
+                bytes.push(parseInt(cleaned.slice(i, i + 2), 16));
+            }
+            return bytes;
+        }
+
+        function copySegmentBytes(seg, rawBytes, button) {
+            const hex = rawBytes
+                .slice(seg.start, seg.end)
+                .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+                .join(' ');
+
+            writeClipboard(hex).then(() => {
+                button.classList.add('copied');
+                button.title = 'Copied';
+                setTimeout(() => {
+                    button.classList.remove('copied');
+                    button.title = 'Copy field hex';
+                }, 1000);
+            }).catch(() => {
+                button.title = 'Copy failed';
+                setTimeout(() => {
+                    button.title = 'Copy field hex';
+                }, 1000);
+            });
+        }
+
+        function writeClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(text);
+            }
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            const copied = document.execCommand('copy');
+            textarea.remove();
+            return copied
+                ? Promise.resolve()
+                : Promise.reject(new Error('Copy failed'));
+        }
+
+        function copyIconSvg() {
+            return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
         }
 
         function escHtml(s) {

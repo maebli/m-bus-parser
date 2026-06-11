@@ -130,7 +130,7 @@ pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> 
         "yaml" => parse_to_yaml(data, key),
         "csv" => parse_to_csv(data, key).to_string(),
         "mermaid" => parse_to_mermaid(data, key),
-        "annotated" => parse_to_annotated(data),
+        "annotated" | "hexview" => parse_to_annotated(data),
         "annotated-text" => parse_to_annotated_text(data),
         _ => parse_to_table(data, key).to_string(),
     }
@@ -1785,5 +1785,41 @@ mod tests {
             let start = window[1].get("start").and_then(|v| v.as_u64());
             assert_eq!(end, start, "segments should be contiguous");
         }
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_hexview_output_for_ci_78_frame_is_annotated_json() {
+        let input = "1444AE0C7856341201078C2027780B134365877AC5";
+        let output = super::serialize_mbus_data(input, "hexview", None);
+
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap_or_else(|e| {
+            panic!(
+                "hexview output should be valid annotated JSON: {}\nOutput: {}",
+                e, output
+            )
+        });
+        let segments = parsed
+            .as_array()
+            .expect("hexview output should be a JSON array");
+
+        assert!(segments.iter().any(|seg| {
+            seg.get("kind").and_then(|v| v.as_str()) == Some("CiField")
+                && seg
+                    .get("detail")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|detail| detail.contains("0x78"))
+        }));
+        assert!(segments.iter().any(|seg| {
+            seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+                && seg.get("detail").and_then(|v| v.as_str()) == Some("876543")
+        }));
+        assert!(!segments.iter().any(|seg| {
+            seg.get("kind").and_then(|v| v.as_str()) == Some("Unknown")
+                || seg
+                    .get("detail")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|detail| detail.contains("Unparseable data record bytes"))
+        }));
     }
 }

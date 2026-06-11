@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-11
+
+- Added robust WASM docs hex view support for CI 0x78 frames with trailing CRC bytes.
+- Improved the hex view renderer for common hex input forms, ASCII column alignment, and record field coloring.
+- Added per-field copy buttons for the interactive hex view.
+
 ## [0.1.2] - 2026-06-09
 
 - Added support for CI 0x78 frames without a transport layer header.
