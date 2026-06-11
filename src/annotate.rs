@@ -784,7 +784,7 @@ fn annotate_long_tpl_header(
 
 // ── Data record annotation ──────────────────────────────────────────────────
 
-fn annotate_data_records(segments: &mut Vec<ByteSegment>, base: usize, data: &[u8]) {
+pub(crate) fn annotate_data_records(segments: &mut Vec<ByteSegment>, base: usize, data: &[u8]) {
     let mut offset = 0usize;
     let mut record_index = 0usize;
 

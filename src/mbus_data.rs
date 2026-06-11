@@ -130,7 +130,8 @@ pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> 
         "yaml" => parse_to_yaml(data, key),
         "csv" => parse_to_csv(data, key).to_string(),
         "mermaid" => parse_to_mermaid(data, key),
-        "annotated" | "hexview" => parse_to_annotated(data),
+        "annotated" => parse_to_annotated(data),
+        "hexview" => parse_to_hexview(data, key),
         "annotated-text" => parse_to_annotated_text(data),
         _ => parse_to_table(data, key).to_string(),
     }
@@ -1621,9 +1622,218 @@ fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -
 #[must_use]
 fn parse_to_annotated(input: &str) -> String {
     let data = clean_and_convert(input);
-    match crate::annotate::annotate_frame(&data) {
+    annotated_segments_to_json(&data)
+}
+
+#[cfg(feature = "std")]
+#[must_use]
+fn parse_to_hexview(input: &str, key: Option<&[u8; 16]>) -> String {
+    let data = clean_and_convert(input);
+
+    #[cfg(feature = "decryption")]
+    if let Some(key_bytes) = key {
+        if let Some(display_data) = decrypted_hexview_data(&data, key_bytes) {
+            return match crate::annotate::annotate_frame(&display_data) {
+                Ok(mut segments) => {
+                    replace_encrypted_payload_segments(&mut segments, &display_data);
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "bytes": display_data,
+                        "segments": segments,
+                        "decrypted": true,
+                    }))
+                    .unwrap_or_default()
+                }
+                Err(e) => format!("{{\"error\": \"{}\"}}", e),
+            };
+        }
+    }
+
+    #[cfg(not(feature = "decryption"))]
+    let _ = key;
+
+    annotated_segments_to_json(&data)
+}
+
+#[cfg(feature = "std")]
+#[must_use]
+fn annotated_segments_to_json(data: &[u8]) -> String {
+    match crate::annotate::annotate_frame(data) {
         Ok(segments) => serde_json::to_string_pretty(&segments).unwrap_or_default(),
         Err(e) => format!("{{\"error\": \"{}\"}}", e),
+    }
+}
+
+#[cfg(all(feature = "std", feature = "decryption"))]
+fn decrypted_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
+    decrypted_wired_hexview_data(data, key).or_else(|| decrypted_wireless_hexview_data(data, key))
+}
+
+#[cfg(all(feature = "std", feature = "decryption"))]
+fn replace_encrypted_payload_segments(
+    segments: &mut Vec<crate::annotate::ByteSegment>,
+    display_data: &[u8],
+) {
+    let mut rewritten = Vec::with_capacity(segments.len());
+
+    for segment in segments.drain(..) {
+        if segment.kind == crate::annotate::SegmentKind::EncryptedPayload {
+            let before_len = rewritten.len();
+            if let Some(data) = display_data.get(segment.start..segment.end) {
+                crate::annotate::annotate_data_records(&mut rewritten, segment.start, data);
+            }
+            if rewritten.len() == before_len {
+                rewritten.push(segment);
+            }
+        } else {
+            rewritten.push(segment);
+        }
+    }
+
+    *segments = rewritten;
+}
+
+#[cfg(all(feature = "std", feature = "decryption"))]
+fn decrypted_wired_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
+    let parsed_data = MbusData::<frames::WiredFrame>::try_from(data).ok()?;
+    let user_data = parsed_data.user_data.as_ref()?;
+    let variable_data_len = user_data.variable_data_len();
+    if variable_data_len == 0 {
+        return None;
+    }
+
+    let mut decrypted_buffer = [0u8; 256];
+    let decrypted_len =
+        decrypt_variable_data_for_hexview(user_data, None, key, &mut decrypted_buffer)?;
+
+    let user_data_len = match parsed_data.frame {
+        frames::WiredFrame::LongFrame {
+            data: user_data_slice,
+            ..
+        }
+        | frames::WiredFrame::ControlFrame {
+            data: user_data_slice,
+            ..
+        } => user_data_slice.len(),
+        _ => return None,
+    };
+
+    let payload_start = 6 + user_data_len.checked_sub(variable_data_len)?;
+    let payload_end = payload_start + variable_data_len;
+    let mut display_data = data.to_vec();
+    let decrypted_data = decrypted_buffer.get(..decrypted_len)?;
+    display_data.splice(payload_start..payload_end, decrypted_data.iter().copied());
+
+    let length = display_data.len().checked_sub(6)?;
+    if length > u8::MAX as usize || display_data.len() < 6 {
+        return None;
+    }
+    *display_data.get_mut(1)? = length as u8;
+    *display_data.get_mut(2)? = length as u8;
+
+    let checksum_index = display_data.len().checked_sub(2)?;
+    let checksum = display_data
+        .get(4..checksum_index)?
+        .iter()
+        .fold(0u8, |acc, byte| acc.wrapping_add(*byte));
+    *display_data.get_mut(checksum_index)? = checksum;
+
+    Some(display_data)
+}
+
+#[cfg(all(feature = "std", feature = "decryption"))]
+fn decrypted_wireless_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
+    let mut crc_buf = [0u8; 512];
+    let wireless_data =
+        wireless_mbus_link_layer::strip_format_a_crcs(data, &mut crc_buf).unwrap_or(data);
+    let parsed_data =
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data).ok()?;
+    let user_data = parsed_data.user_data.as_ref()?;
+    let variable_data_len = user_data.variable_data_len();
+    if variable_data_len == 0 {
+        return None;
+    }
+
+    let mut decrypted_buffer = [0u8; 256];
+    let manufacturer_id = &parsed_data.frame.manufacturer_id;
+    let decrypted_len = decrypt_variable_data_for_hexview(
+        user_data,
+        Some(manufacturer_id),
+        key,
+        &mut decrypted_buffer,
+    )?;
+
+    let app_data_len = parsed_data.frame.data.len();
+    let app_start = wireless_data.len().checked_sub(app_data_len)?;
+    let payload_start = app_start + app_data_len.checked_sub(variable_data_len)?;
+    let payload_end = payload_start + variable_data_len;
+
+    let mut display_data = wireless_data.to_vec();
+    let decrypted_data = decrypted_buffer.get(..decrypted_len)?;
+    display_data.splice(payload_start..payload_end, decrypted_data.iter().copied());
+    if let Some(length) = display_data.len().checked_sub(1) {
+        if length <= u8::MAX as usize {
+            if let Some(length_byte) = display_data.get_mut(0) {
+                *length_byte = length as u8;
+            }
+        }
+    }
+
+    Some(display_data)
+}
+
+#[cfg(all(feature = "std", feature = "decryption"))]
+fn decrypt_variable_data_for_hexview(
+    user_data: &user_data::UserDataBlock<'_>,
+    wireless_manufacturer_id: Option<&wireless_mbus_link_layer::ManufacturerId>,
+    key: &[u8; 16],
+    output: &mut [u8],
+) -> Option<usize> {
+    use user_data::UserDataBlock;
+
+    let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
+    match user_data {
+        UserDataBlock::VariableDataStructureWithLongTplHeader {
+            long_tpl_header, ..
+        } => {
+            if !long_tpl_header.is_encrypted() {
+                return None;
+            }
+            let manufacturer = long_tpl_header.manufacturer.as_ref().ok()?;
+            provider
+                .add_key(
+                    manufacturer.to_id(),
+                    long_tpl_header.identification_number.number,
+                    *key,
+                )
+                .ok()?;
+            user_data.decrypt_variable_data(&provider, output).ok()
+        }
+        UserDataBlock::VariableDataStructureWithShortTplHeader {
+            short_tpl_header, ..
+        } => {
+            if !short_tpl_header.is_encrypted() {
+                return None;
+            }
+            let manufacturer_id = wireless_manufacturer_id?;
+            provider
+                .add_key(
+                    manufacturer_id.manufacturer_code.to_id(),
+                    manufacturer_id.identification_number.number,
+                    *key,
+                )
+                .ok()?;
+            user_data
+                .decrypt_variable_data_with_context(
+                    &provider,
+                    manufacturer_id.manufacturer_code,
+                    manufacturer_id.identification_number.number,
+                    manufacturer_id.version,
+                    manufacturer_id.device_type,
+                    output,
+                )
+                .ok()
+        }
+        _ => None,
     }
 }
 
@@ -1821,5 +2031,58 @@ mod tests {
                     .and_then(|v| v.as_str())
                     .is_some_and(|detail| detail.contains("Unparseable data record bytes"))
         }));
+    }
+
+    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[test]
+    fn test_hexview_with_key_displays_decrypted_wireless_payload() {
+        let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
+        let key = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x11,
+        ];
+        let output = super::serialize_mbus_data(input, "hexview", Some(&key));
+
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap_or_else(|e| {
+            panic!(
+                "decrypted hexview output should be valid JSON: {}\nOutput: {}",
+                e, output
+            )
+        });
+        assert_eq!(
+            parsed.get("decrypted").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+
+        let bytes = parsed
+            .get("bytes")
+            .and_then(|v| v.as_array())
+            .expect("decrypted hexview should include display bytes");
+        let display_hex = bytes
+            .iter()
+            .map(|byte| format!("{:02X}", byte.as_u64().unwrap_or_default()))
+            .collect::<String>();
+        assert!(
+            display_hex.contains("0C1427048502046D32371F1502FD170000"),
+            "display bytes should contain decrypted record bytes: {display_hex}"
+        );
+
+        let segments = parsed
+            .get("segments")
+            .and_then(|v| v.as_array())
+            .expect("decrypted hexview should include annotation segments");
+        assert!(segments.iter().any(|seg| {
+            seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+                && seg
+                    .get("detail")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|detail| detail.contains("2850427"))
+        }));
+        assert!(
+            !segments
+                .iter()
+                .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("EncryptedPayload")),
+            "decrypted hexview should annotate decrypted records, not ciphertext payloads"
+        );
     }
 }
