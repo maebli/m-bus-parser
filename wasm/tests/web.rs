@@ -49,3 +49,41 @@ fn test_m_bus_parse_hexview_ci_78_annotations() {
                 .is_some_and(|detail| detail.contains("Unparseable data record bytes"))
     }));
 }
+
+#[wasm_bindgen_test]
+fn test_m_bus_parse_hexview_with_key_displays_decrypted_payload() {
+    let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
+    let key = "0102030405060708090A0B0C0D0E0F11";
+    let output = m_bus_parser_wasm_pack::m_bus_parse_with_key(input, "hexview", key);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&output).expect("decrypted hexview should return JSON");
+
+    assert_eq!(
+        parsed.get("decrypted").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    let bytes = parsed
+        .get("bytes")
+        .and_then(|v| v.as_array())
+        .expect("decrypted hexview should include display bytes");
+    let display_hex = bytes
+        .iter()
+        .map(|byte| format!("{:02X}", byte.as_u64().unwrap_or_default()))
+        .collect::<String>();
+    assert!(display_hex.contains("0C1427048502046D32371F1502FD170000"));
+
+    let segments = parsed
+        .get("segments")
+        .and_then(|v| v.as_array())
+        .expect("decrypted hexview should include annotation segments");
+    assert!(segments.iter().any(|seg| {
+        seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+            && seg
+                .get("detail")
+                .and_then(|v| v.as_str())
+                .is_some_and(|detail| detail.contains("2850427"))
+    }));
+    assert!(!segments
+        .iter()
+        .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("EncryptedPayload")));
+}

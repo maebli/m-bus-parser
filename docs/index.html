@@ -833,8 +833,8 @@
                 if (format === 'hexview') {
                     // Hex view: get annotated JSON from WASM, then render interactive viewer
                     const annotatedJson = (aesKey && aesKey.length > 0)
-                        ? m_bus_parse_with_key(inputString, "annotated", aesKey)
-                        : m_bus_parse(inputString, "annotated");
+                        ? m_bus_parse_with_key(inputString, "hexview", aesKey)
+                        : m_bus_parse(inputString, "hexview");
                     window._lastAnnotatedJson = annotatedJson;
                     extension = 'json'; mimeType = 'application/json';
                     outputContainer.style.background = 'none';
@@ -875,16 +875,29 @@
 
         function renderHexViewer(container, annotatedJson, inputString) {
             let segments;
+            let displayBytes = null;
+            let errorMessage = null;
             try {
-                segments = JSON.parse(annotatedJson);
+                const parsed = JSON.parse(annotatedJson);
+                if (Array.isArray(parsed)) {
+                    segments = parsed;
+                } else if (parsed && typeof parsed === 'object') {
+                    segments = parsed.segments;
+                    if (typeof parsed.error === 'string') {
+                        errorMessage = parsed.error;
+                    }
+                    if (Array.isArray(parsed.bytes)) {
+                        displayBytes = parsed.bytes.map(b => Number(b) & 0xFF);
+                    }
+                } else {
+                    segments = parsed;
+                }
             } catch (e) {
                 container.innerHTML = '<pre style="color:red;">Error parsing annotation data: ' + e.message + '</pre>';
                 return;
             }
             if (!Array.isArray(segments)) {
-                const message = segments && typeof segments === 'object' && typeof segments.error === 'string'
-                    ? segments.error
-                    : 'No annotation segments returned. Check input.';
+                const message = errorMessage || 'No annotation segments returned. Check input.';
                 container.innerHTML = '<pre style="color:red;">' + escHtml(message) + '</pre>';
                 return;
             }
@@ -895,11 +908,15 @@
 
             // Parse raw bytes from input string
             let rawBytes;
-            try {
-                rawBytes = parseHexInputBytes(inputString);
-            } catch (e) {
-                container.innerHTML = '<pre style="color:red;">' + escHtml(e.message) + '</pre>';
-                return;
+            if (displayBytes) {
+                rawBytes = displayBytes;
+            } else {
+                try {
+                    rawBytes = parseHexInputBytes(inputString);
+                } catch (e) {
+                    container.innerHTML = '<pre style="color:red;">' + escHtml(e.message) + '</pre>';
+                    return;
+                }
             }
             if (rawBytes.length === 0) {
                 container.innerHTML = '<pre style="color:red;">No input bytes found. Check input.</pre>';
