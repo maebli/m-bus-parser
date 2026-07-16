@@ -5,6 +5,19 @@ description = "Python bindings for m-bus-parser written in Rust"
 authors = [{name = "Michael Aebli"}] 
 license = { text = "MIT" }
 readme = "README_python.md"
+requires-python = ">=3.9"
+keywords = ["m-bus", "wmbus", "parser", "metering"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://maebli.github.io/"
+Repository = "https://github.com/maebli/m-bus-parser"
+Issues = "https://github.com/maebli/m-bus-parser/issues"
 
 
 [build-system]
