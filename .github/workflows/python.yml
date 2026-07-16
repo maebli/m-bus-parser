@@ -2,15 +2,78 @@ name: Python Bindings CI
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'python-v*'
+    paths:
+      - 'python/**'
+      - 'src/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/python.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'python/**'
+      - 'src/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/python.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  test:
+    name: Test Python API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate package versions and release tag
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          cargo_version = tomllib.loads(Path("Cargo.toml").read_text())["package"]["version"]
+          project_version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          if cargo_version != project_version:
+              raise SystemExit(
+                  f"Cargo.toml ({cargo_version}) and pyproject.toml ({project_version}) versions differ"
+              )
+
+          if os.environ.get("GITHUB_REF_TYPE") == "tag":
+              expected_tag = f"python-v{project_version}"
+              actual_tag = os.environ["GITHUB_REF_NAME"]
+              if actual_tag != expected_tag:
+                  raise SystemExit(f"release tag {actual_tag!r} must be {expected_tag!r}")
+          PY
+      - name: Build test wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          args: --release --out dist --find-interpreter
+          working-directory: ./python
+      - name: Install test wheel
+        run: python -m pip install --force-reinstall dist/*.whl
+      - name: Run Python API tests
+        run: python -m unittest discover -s tests -v
+
   linux:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/python-v')
     runs-on: ${{ matrix.platform.runner }}
     defaults:
       run:
@@ -50,6 +113,8 @@ jobs:
           path: ./python/dist
 
   musllinux:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/python-v')
     runs-on: ${{ matrix.platform.runner }}
     defaults:
       run:
@@ -85,6 +150,8 @@ jobs:
           path: ./python/dist
 
   windows:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/python-v')
     runs-on: ${{ matrix.platform.runner }}
     defaults:
       run:
@@ -116,6 +183,8 @@ jobs:
           path: ./python/dist
 
   macos:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/python-v')
     runs-on: ${{ matrix.platform.runner }}
     defaults:
       run:
@@ -146,6 +215,8 @@ jobs:
           path: ./python/dist
 
   sdist:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/python-v')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -167,19 +238,18 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./python
+    if: startsWith(github.ref, 'refs/tags/python-v')
     needs: [linux, musllinux, windows, macos, sdist]
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: ./python
+          path: ./python/dist
+          merge-multiple: true
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         with:
           command: upload
-          args: --non-interactive --skip-existing wheels-*/*
+          args: --non-interactive --skip-existing dist/*
           working-directory: ./python
