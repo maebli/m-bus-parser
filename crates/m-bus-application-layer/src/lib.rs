@@ -1,4 +1,28 @@
-//! is a part of the application layer
+//! Parser for the M-Bus application layer defined by EN 13757-3.
+//!
+//! Use [`parse_application_layer`] when the input starts with a control
+//! information (CI) field. Use [`parse_data_records`] when the transport
+//! header has already been removed and the input starts with a DIF/VIF data
+//! record.
+//!
+//! # Parse data records directly
+//!
+//! ```rust
+//! use m_bus_application_layer::{
+//!     data_information::DataType, parse_data_records, DataRecordError,
+//! };
+//!
+//! fn main() -> Result<(), DataRecordError> {
+//!     // 24-bit integer, volume in m³ with a 10^-3 scale.
+//!     let data = [0x03, 0x13, 0x15, 0x31, 0x00];
+//!     let mut records = parse_data_records(&data);
+//!     let record = records.next().expect("one data record")?;
+//!
+//!     assert_eq!(record.value(), Some(&DataType::Number(12_565.0)));
+//!     assert_eq!(record.raw_bytes(), &data);
+//!     Ok(())
+//! }
+//! ```
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
@@ -9,12 +33,12 @@ pub use m_bus_core::decryption;
 use m_bus_core::{
     bcd_hex_digits_to_u32, ConfigurationField, DeviceType, IdentificationNumber, ManufacturerCode,
 };
-use variable_user_data::DataRecordError;
+pub use variable_user_data::DataRecordError;
 
-use self::data_record::DataRecord;
+pub use self::data_record::DataRecord;
 #[cfg(feature = "decryption")]
 use m_bus_core::decryption::DecryptionError::{NotEncrypted, UnknownEncryptionState};
-use m_bus_core::ApplicationLayerError;
+pub use m_bus_core::ApplicationLayerError;
 
 pub mod data_information;
 pub mod data_record;
@@ -23,6 +47,31 @@ pub mod value_information;
 pub mod variable_user_data;
 
 use extended_link_layer::ExtendedLinkLayer;
+
+/// Parses an application-layer user data block beginning with a CI field.
+pub fn parse_application_layer(data: &[u8]) -> Result<UserDataBlock<'_>, ApplicationLayerError> {
+    UserDataBlock::try_from(data)
+}
+
+/// Parses DIF/VIF data records after any CI and transport headers were removed.
+///
+/// The returned iterator yields one result per record and does not allocate.
+#[must_use]
+pub const fn parse_data_records(data: &[u8]) -> DataRecords<'_> {
+    DataRecords::new(data, None)
+}
+
+/// Parses DIF/VIF data records using context from a long transport header.
+///
+/// Header context is needed for data encodings whose interpretation depends on
+/// transport-layer metadata, such as two-digit years.
+#[must_use]
+pub const fn parse_data_records_with_header<'a>(
+    data: &'a [u8],
+    header: &'a LongTplHeader,
+) -> DataRecords<'a> {
+    DataRecords::new(data, Some(header))
+}
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(into = "Vec<DataRecord>"))]
@@ -85,11 +134,15 @@ impl<'a> Iterator for DataRecords<'a> {
                 } else {
                     DataRecord::try_from(self.data.get(self.offset..)?)
                 };
-                if let Ok(record) = record {
-                    self.offset += record.get_size();
-                    return Some(Ok(record));
-                } else {
-                    self.offset = self.data.len();
+                match record {
+                    Ok(record) => {
+                        self.offset += record.get_size();
+                        return Some(Ok(record));
+                    }
+                    Err(error) => {
+                        self.offset = self.data.len();
+                        return Some(Err(error));
+                    }
                 }
             }
         }
@@ -512,6 +565,34 @@ pub enum UserDataBlock<'a> {
 }
 
 impl<'a> UserDataBlock<'a> {
+    /// Returns an iterator over the variable data records in this block.
+    ///
+    /// Fixed data structures, control messages, and encrypted payloads do not
+    /// expose records. Decrypt an encrypted payload before parsing its records.
+    #[must_use]
+    pub fn data_records(&self) -> Option<DataRecords<'_>> {
+        match self {
+            Self::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                variable_data_block,
+                ..
+            } if !long_tpl_header.is_encrypted() => Some(parse_data_records_with_header(
+                variable_data_block,
+                long_tpl_header,
+            )),
+            Self::VariableDataStructureWithShortTplHeader {
+                short_tpl_header,
+                variable_data_block,
+                ..
+            } if !short_tpl_header.is_encrypted() => Some(parse_data_records(variable_data_block)),
+            Self::VariableDataStructureWithoutTplHeader {
+                variable_data_block,
+                ..
+            } => Some(parse_data_records(variable_data_block)),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub fn is_encrypted(&self) -> Option<bool> {
         match self {
@@ -1366,197 +1447,42 @@ mod tests {
     }
 
     #[test]
-    fn test_lsb_frame() {
-        use crate::data_information::DataType;
-        use wired_mbus_link_layer::WiredFrame;
-
-        let lsb_frame: &[u8] = &[
-            0x68, 0x64, 0x64, 0x68, 0x8, 0x7f, 0x76, 0x9, 0x67, 0x1, 0x6, 0x0, 0x0, 0x51, 0x4,
-            0x50, 0x0, 0x0, 0x0, 0x2, 0x6c, 0x38, 0x1c, 0xc, 0xf, 0x0, 0x80, 0x87, 0x32, 0x8c,
-            0x20, 0xf, 0x0, 0x0, 0x0, 0x0, 0xc, 0x14, 0x13, 0x32, 0x82, 0x58, 0xbc, 0x10, 0x15,
-            0x0, 0x25, 0x81, 0x25, 0x8c, 0x20, 0x13, 0x0, 0x0, 0x0, 0x0, 0x8c, 0x30, 0x13, 0x0,
-            0x0, 0x1, 0x61, 0x8c, 0x40, 0x13, 0x0, 0x0, 0x16, 0x88, 0xa, 0x3c, 0x1, 0x10, 0xa,
-            0x2d, 0x0, 0x80, 0xa, 0x5a, 0x7, 0x18, 0xa, 0x5e, 0x6, 0x53, 0xc, 0x22, 0x0, 0x16, 0x7,
-            0x26, 0x3c, 0x22, 0x0, 0x0, 0x33, 0x81, 0x4, 0x7e, 0x0, 0x0, 0x67, 0xc, 0xc, 0x16,
-        ];
-        let non_lsb_frame: &[u8] = &[
-            0x68, 0xc7, 0xc7, 0x68, 0x8, 0x38, 0x72, 0x56, 0x73, 0x23, 0x72, 0x2d, 0x2c, 0x34, 0x4,
-            0x87, 0x0, 0x0, 0x0, 0x4, 0xf, 0x7f, 0x1c, 0x1, 0x0, 0x4, 0xff, 0x7, 0x8a, 0xad, 0x8,
-            0x0, 0x4, 0xff, 0x8, 0x6, 0xfe, 0x5, 0x0, 0x4, 0x14, 0x4e, 0x55, 0xb, 0x0, 0x84, 0x40,
-            0x14, 0x0, 0x0, 0x0, 0x0, 0x84, 0x80, 0x40, 0x14, 0x0, 0x0, 0x0, 0x0, 0x4, 0x22, 0x76,
-            0x7f, 0x0, 0x0, 0x34, 0x22, 0x8b, 0x2c, 0x0, 0x0, 0x2, 0x59, 0x61, 0x1b, 0x2, 0x5d,
-            0x5f, 0x10, 0x2, 0x61, 0x2, 0xb, 0x4, 0x2d, 0x55, 0x0, 0x0, 0x0, 0x14, 0x2d, 0x83, 0x0,
-            0x0, 0x0, 0x4, 0x3b, 0x6, 0x1, 0x0, 0x0, 0x14, 0x3b, 0xaa, 0x1, 0x0, 0x0, 0x4, 0xff,
-            0x22, 0x0, 0x0, 0x0, 0x0, 0x4, 0x6d, 0x6, 0x2c, 0x1f, 0x3a, 0x44, 0xf, 0xcf, 0x11, 0x1,
-            0x0, 0x44, 0xff, 0x7, 0xb, 0x69, 0x8, 0x0, 0x44, 0xff, 0x8, 0x54, 0xd3, 0x5, 0x0, 0x44,
-            0x14, 0x11, 0xf3, 0xa, 0x0, 0xc4, 0x40, 0x14, 0x0, 0x0, 0x0, 0x0, 0xc4, 0x80, 0x40,
-            0x14, 0x0, 0x0, 0x0, 0x0, 0x54, 0x2d, 0x3a, 0x0, 0x0, 0x0, 0x54, 0x3b, 0x28, 0x1, 0x0,
-            0x0, 0x42, 0x6c, 0x1, 0x3a, 0x2, 0xff, 0x1a, 0x1, 0x1a, 0xc, 0x78, 0x56, 0x73, 0x23,
-            0x72, 0x4, 0xff, 0x16, 0xe6, 0x84, 0x1e, 0x0, 0x4, 0xff, 0x17, 0xc1, 0xd5, 0xb4, 0x0,
-            0x12, 0x16,
-        ];
-
-        let frames = [
-            (lsb_frame, 9670106, Some(DataType::Number(808732.0))),
-            (non_lsb_frame, 72237356, Some(DataType::Number(568714.0))),
-        ];
-
-        for (frame, expected_iden_nr, data_record_value) in frames {
-            let frame = WiredFrame::try_from(frame).unwrap();
-
-            if let WiredFrame::LongFrame {
-                function: _,
-                address: _,
-                data,
-            } = frame
-            {
-                let user_data_block = UserDataBlock::try_from(data).unwrap();
-                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header: fixed_data_header,
-                    variable_data_block,
-                    ..
-                } = user_data_block
-                {
-                    assert_eq!(
-                        fixed_data_header.identification_number.number,
-                        expected_iden_nr
-                    );
-
-                    let mut data_records =
-                        DataRecords::from((variable_data_block, &fixed_data_header)).flatten();
-                    data_records.next().unwrap();
-                    assert_eq!(data_records.next().unwrap().data.value, data_record_value);
-                } else {
-                    panic!("UserDataBlock is not a variable data structure");
-                }
-            } else {
-                panic!("Frame is not a long frame");
-            }
-        }
-    }
-
-    #[test]
-    fn test_manufacturer_specific_data() {
-        use crate::data_information::DataType;
-        use wired_mbus_link_layer::WiredFrame;
-
-        let manufacturer_specific_data_frame: &[u8] = &[
-            0x68, 0x55, 0x55, 0x68, 0x8, 0x1e, 0x72, 0x34, 0x35, 0x58, 0x12, 0x92, 0x26, 0x18, 0x4,
-            0x14, 0x0, 0x0, 0x0, 0xc, 0x78, 0x34, 0x35, 0x58, 0x12, 0x4, 0xe, 0x57, 0x64, 0x3, 0x0,
-            0xc, 0x14, 0x73, 0x58, 0x44, 0x0, 0xb, 0x2d, 0x6, 0x0, 0x0, 0xb, 0x3b, 0x55, 0x0, 0x0,
-            0xa, 0x5a, 0x87, 0x6, 0xa, 0x5e, 0x77, 0x5, 0xb, 0x61, 0x1, 0x11, 0x0, 0x4, 0x6d, 0x10,
-            0x2, 0x4, 0x3c, 0x2, 0x27, 0x79, 0x11, 0x9, 0xfd, 0xe, 0x6, 0x9, 0xfd, 0xf, 0x6, 0x8c,
-            0xc0, 0x0, 0x15, 0x71, 0x25, 0x0, 0x0, 0xf, 0x0, 0x0, 0x86, 0x16,
-        ];
-
-        let frame = WiredFrame::try_from(manufacturer_specific_data_frame).unwrap();
-
-        if let WiredFrame::LongFrame {
-            function: _,
-            address: _,
-            data,
-        } = frame
-        {
-            let user_data_block = UserDataBlock::try_from(data).unwrap();
-            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header: fixed_data_header,
-                variable_data_block,
-                ..
-            } = user_data_block
-            {
-                let mut data_records: Vec<_> =
-                    DataRecords::from((variable_data_block, &fixed_data_header))
-                        .flatten()
-                        .collect();
-
-                assert_eq!(data_records.len(), 14);
-
-                assert_eq!(
-                    data_records.pop().unwrap().data.value,
-                    Some(DataType::ManufacturerSpecific(&[15, 0, 0]))
-                );
-                assert_eq!(
-                    data_records.pop().unwrap().data.value,
-                    Some(DataType::Number(2571.0))
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn real32bit() {
-        use crate::data_information::DataType;
-        use crate::value_information::ValueLabel;
-        use wired_mbus_link_layer::WiredFrame;
-
-        let real32bit: &[u8] = &[
-            0x68, 0xa7, 0xa7, 0x68, 0x8, 0x4d, 0x72, 0x82, 0x4, 0x75, 0x30, 0xee, 0x4d, 0x19, 0x4,
-            0xc2, 0x0, 0x0, 0x0, 0x4, 0xe, 0x1b, 0xe, 0x0, 0x0, 0x84, 0xa, 0xe, 0x4c, 0x6, 0x0,
-            0x0, 0x4, 0x13, 0x7, 0x81, 0x0, 0x0, 0x84, 0xa, 0x13, 0x9d, 0x37, 0x0, 0x0, 0xb, 0xfd,
-            0xf, 0x0, 0x7, 0x1, 0xa, 0xfd, 0xd, 0x0, 0x11, 0x8c, 0x40, 0x79, 0x1, 0x0, 0x0, 0x0,
-            0x84, 0x40, 0x14, 0x31, 0x5, 0x0, 0x0, 0x84, 0x4a, 0x14, 0xfd, 0x4, 0x0, 0x0, 0x8c,
-            0x80, 0x40, 0x79, 0x2, 0x0, 0x0, 0x0, 0x84, 0x80, 0x40, 0x14, 0x27, 0x50, 0x0, 0x0,
-            0x84, 0x8a, 0x40, 0x14, 0x8, 0x31, 0x0, 0x0, 0x5, 0xff, 0x1, 0xdf, 0xa3, 0xb1, 0x3e,
-            0x5, 0xff, 0x2, 0xa8, 0x59, 0x6b, 0x3f, 0xc, 0x78, 0x82, 0x4, 0x75, 0x30, 0x4, 0x6d,
-            0x5, 0xb, 0x2f, 0x31, 0x82, 0xa, 0x6c, 0xe1, 0xf1, 0x5, 0x5b, 0x40, 0x7a, 0x63, 0x42,
-            0x5, 0x5f, 0x80, 0xc3, 0x25, 0x42, 0x5, 0x3e, 0x0, 0x0, 0x0, 0x0, 0x5, 0x2b, 0x0, 0x0,
-            0x0, 0x0, 0x1, 0xff, 0x2b, 0x0, 0x3, 0x22, 0x17, 0x3b, 0x0, 0x2, 0xff, 0x2c, 0x0, 0x0,
-            0x1f, 0xa4, 0x16,
-        ];
-
-        let frame = WiredFrame::try_from(real32bit).unwrap();
-
-        if let WiredFrame::LongFrame {
-            function: _,
-            address: _,
-            data,
-        } = frame
-        {
-            let user_data_block = UserDataBlock::try_from(data).unwrap();
-            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header: fixed_data_header,
-                variable_data_block,
-                ..
-            } = user_data_block
-            {
-                let data_records: Vec<DataRecord> =
-                    DataRecords::from((variable_data_block, &fixed_data_header))
-                        .flatten()
-                        .collect();
-
-                assert_eq!(data_records.len(), 24);
-
-                for data_record in data_records {
-                    let labels = data_record
-                        .data_record_header
-                        .processed_data_record_header
-                        .value_information
-                        .as_ref()
-                        .unwrap()
-                        .labels
-                        .clone();
-                    if labels.contains(&ValueLabel::ReturnTemperature) {
-                        assert_eq!(
-                            data_record.data.value,
-                            Some(DataType::Number(41.44091796875))
-                        );
-                    }
-                    if labels.contains(&ValueLabel::FlowTemperature) {
-                        assert_eq!(
-                            data_record.data.value,
-                            Some(DataType::Number(56.869384765625))
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
     fn global_readout_request_does_not_consume_following_records() {
         // 0x7F followed by a valid 8-bit integer record: DIF=0x01, VIF=0x13, data=0x05
         let data: &[u8] = &[0x7F, 0x01, 0x13, 0x05];
         let records: Vec<_> = DataRecords::new(data, None).flatten().collect();
         assert_eq!(records.len(), 2);
+    }
+
+    #[test]
+    fn parse_data_records_api_returns_record_values() {
+        use crate::data_information::DataType;
+
+        let data = [0x03, 0x13, 0x15, 0x31, 0x00];
+        let mut records = parse_data_records(&data);
+        let record = records.next().unwrap().unwrap();
+
+        assert_eq!(record.value(), Some(&DataType::Number(12_565.0)));
+        assert_eq!(record.raw_bytes(), &data);
+        assert!(record.data_information().is_some());
+        assert!(record.value_information().is_some());
+        assert!(records.next().is_none());
+    }
+
+    #[test]
+    fn parse_application_layer_api_exposes_records() {
+        let data = [0x78, 0x03, 0x13, 0x15, 0x31, 0x00];
+        let application_layer = parse_application_layer(&data).unwrap();
+        let records: Result<Vec<_>, _> = application_layer.data_records().unwrap().collect();
+
+        assert_eq!(records.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn data_record_iterator_reports_parse_errors() {
+        let mut records = parse_data_records(&[0x04]);
+
+        assert!(records.next().unwrap().is_err());
+        assert!(records.next().is_none());
     }
 }

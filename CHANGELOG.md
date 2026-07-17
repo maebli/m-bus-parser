@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Added direct application-layer parsing APIs, record accessors, and a crate-local data-record example.
+- Moved full-frame application-layer coverage to the top-level crate.
+- Fixed data-record iteration to report malformed records instead of silently stopping.
+
 ## [0.1.3] - 2026-06-11
 
 - Added robust WASM docs hex view support for CI 0x78 frames with trailing CRC bytes.

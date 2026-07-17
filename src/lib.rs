@@ -7,7 +7,7 @@
 //!
 //! use m_bus_core::{FrameError, Function};
 //! use wired_mbus_link_layer::{Address, WiredFrame};
-//! use m_bus_parser::user_data::{DataRecords, UserDataBlock};
+//! use m_bus_parser::user_data::parse_application_layer;
 //! use m_bus_parser::mbus_data::MbusData;
 //!
 //! fn try_parse() -> Result<(), m_bus_parser::MbusError> {
@@ -31,8 +31,8 @@
 //!     if let WiredFrame::LongFrame { function, address, data } = frame {
 //!         assert_eq!(function, Function::RspUd { acd: false, dfc: false });
 //!         assert_eq!(address, Address::Primary(1));
-//!         if let Ok(UserDataBlock::VariableDataStructureWithLongTplHeader { long_tpl_header, variable_data_block, .. }) = UserDataBlock::try_from(data) {
-//!             let data_records = DataRecords::from((variable_data_block, &long_tpl_header));
+//!         let application_layer = parse_application_layer(data)?;
+//!         if let Some(data_records) = application_layer.data_records() {
 //!             println!("data_records: {:#?}", data_records.collect::<Result<Vec<_>, _>>()?);
 //!         }
 //!     }

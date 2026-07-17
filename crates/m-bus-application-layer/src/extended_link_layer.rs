@@ -30,9 +30,9 @@ pub struct EncryptionFields {
 pub enum EllFormat {
     /// Extended Link Layer I (2 bytes: CC, ACC)
     FormatI,
-    /// Extended Link Layer II (8 bytes: CC, ACC, SN[4], CRC[2])
+    /// Extended Link Layer II (8 bytes: CC, ACC, `SN[4]`, `CRC[2]`)
     FormatII,
-    /// Extended Link Layer III (16 bytes: CC, ACC, MFR[2], ADDR[6], SN[4], CRC[2])
+    /// Extended Link Layer III (16 bytes: CC, ACC, `MFR[2]`, `ADDR[6]`, `SN[4]`, `CRC[2]`)
     FormatIII,
 }
 
