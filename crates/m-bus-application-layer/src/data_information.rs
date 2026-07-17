@@ -292,15 +292,23 @@ impl PartialEq<str> for TextUnit<'_> {
 #[cfg(feature = "std")]
 impl std::fmt::Display for TextUnit<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let value: String = self.0.iter().rev().map(|&b| b as char).collect();
-        write!(f, "{}", value)
+        write!(f, "{}", decode_text_unit(self.0))
     }
 }
 
 #[cfg(feature = "std")]
 impl From<TextUnit<'_>> for String {
     fn from(value: TextUnit<'_>) -> Self {
-        value.0.iter().rev().map(|&b| b as char).collect()
+        decode_text_unit(value.0)
+    }
+}
+
+#[cfg(feature = "std")]
+fn decode_text_unit(input: &[u8]) -> String {
+    let bytes: Vec<u8> = input.iter().copied().rev().collect();
+    match String::from_utf8(bytes) {
+        Ok(value) => value,
+        Err(error) => error.into_bytes().into_iter().map(char::from).collect(),
     }
 }
 
@@ -1026,6 +1034,15 @@ mod tests {
     fn text_unit_latin1_superscript_three() {
         // "m³/h" in Latin-1 (reversed byte order per M-Bus)
         let bytes = [0x68, 0x2F, 0xB3, 0x6D]; // h / ³ m
+        let text = TextUnit::new(&bytes);
+        assert_eq!(String::from(text), "m³/h");
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn text_unit_utf8_superscript_three() {
+        // "m³/h" in UTF-8 (reversed byte order per M-Bus)
+        let bytes = [0x68, 0x2F, 0xB3, 0xC2, 0x6D]; // h / UTF-8(³) m
         let text = TextUnit::new(&bytes);
         assert_eq!(String::from(text), "m³/h");
     }
