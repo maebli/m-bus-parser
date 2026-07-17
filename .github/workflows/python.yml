@@ -49,14 +49,17 @@ jobs:
           from pathlib import Path
 
           cargo_version = tomllib.loads(Path("Cargo.toml").read_text())["package"]["version"]
-          project_version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
-          if cargo_version != project_version:
+          project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
+          project_version = project.get("version")
+          if project_version is not None and cargo_version != project_version:
               raise SystemExit(
                   f"Cargo.toml ({cargo_version}) and pyproject.toml ({project_version}) versions differ"
               )
+          if project_version is None and "version" not in project.get("dynamic", []):
+              raise SystemExit("pyproject.toml must define or dynamically source the package version")
 
           if os.environ.get("GITHUB_REF_TYPE") == "tag":
-              expected_tag = f"python-v{project_version}"
+              expected_tag = f"python-v{cargo_version}"
               actual_tag = os.environ["GITHUB_REF_NAME"]
               if actual_tag != expected_tag:
                   raise SystemExit(f"release tag {actual_tag!r} must be {expected_tag!r}")

@@ -192,16 +192,16 @@ docs: improve contributing guide
 
 ## Releasing
 
-Releases bump the version in all four crates:
+Release all workspace crates and bindings with one version command:
 
 ```bash
-cargo release version patch --execute
-cd python  && cargo release version patch --execute && cd ..
-cd wasm    && cargo release version patch --execute && cd ..
-cd cli     && cargo release version patch --execute && cd ..
+cargo release version patch --workspace --execute
 ```
 
-Then push the tags and let CI publish to crates.io / npm / PyPI.
+The Python package dynamically reads its version from `python/Cargo.toml`, so no separate
+`pyproject.toml` edit is needed. Commit and push the version bump, then create and push
+the library, CLI, WASM, and Python tags. CI publishes to crates.io, npm, and PyPI; the
+WASM release also rebuilds the website artifacts.
 
 ---
 
