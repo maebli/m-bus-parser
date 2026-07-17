@@ -1961,6 +1961,28 @@ mod tests {
         assert!(table_output.contains("(3383)[day]"));
     }
 
+    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[test]
+    fn decrypted_utf8_text_is_not_rendered_as_latin1() {
+        let input = "2E44931578563412330333637A2A00202557FB8016CA78E1243700B52E981E1918233AFE5E826DD0D4AD7854C697E7C8EB";
+        let key = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x11,
+        ];
+
+        for format in ["table", "json", "yaml", "csv"] {
+            let output = super::serialize_mbus_data(input, format, Some(&key));
+            assert!(
+                output.contains("m³"),
+                "{format} output should contain the decoded UTF-8 text: {output}"
+            );
+            assert!(
+                !output.contains("mÂ³"),
+                "{format} output contains mojibake: {output}"
+            );
+        }
+    }
+
     #[cfg(feature = "std")]
     #[test]
     fn test_annotated_output() {

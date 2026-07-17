@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fixed mojibake in decrypted variable-length UTF-8 text while preserving ISO-8859-1 fallback decoding.
+
 ## [0.1.3] - 2026-06-11
 
 - Added robust WASM docs hex view support for CI 0x78 frames with trailing CRC bytes.

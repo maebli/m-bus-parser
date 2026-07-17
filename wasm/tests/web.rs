@@ -87,3 +87,13 @@ fn test_m_bus_parse_hexview_with_key_displays_decrypted_payload() {
         .iter()
         .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("EncryptedPayload")));
 }
+
+#[wasm_bindgen_test]
+fn test_m_bus_parse_with_key_preserves_utf8_text() {
+    let input = "2E44931578563412330333637A2A00202557FB8016CA78E1243700B52E981E1918233AFE5E826DD0D4AD7854C697E7C8EB";
+    let key = "0102030405060708090A0B0C0D0E0F11";
+    let output = m_bus_parser_wasm_pack::m_bus_parse_with_key(input, "json", key);
+
+    assert!(output.contains("\"Text\": \"m³\""), "{output}");
+    assert!(!output.contains("mÂ³"), "{output}");
+}
