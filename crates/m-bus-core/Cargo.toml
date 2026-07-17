@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-core"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 description = "Core types for the m-bus-parser M-Bus protocol library"
 license = "MIT"
