@@ -195,13 +195,29 @@ docs: improve contributing guide
 Release all workspace crates and bindings with one version command:
 
 ```bash
-cargo release version patch --workspace --execute
+VERSION=0.1.4
+cargo release version "$VERSION" --workspace --execute
 ```
 
 The Python package dynamically reads its version from `python/Cargo.toml`, so no separate
-`pyproject.toml` edit is needed. Commit and push the version bump, then create and push
-the library, CLI, WASM, and Python tags. CI publishes to crates.io, npm, and PyPI; the
-WASM release also rebuilds the website artifacts.
+`pyproject.toml` edit is needed. Commit and push the version bump, then create the library,
+CLI, WASM, and Python tags:
+
+```bash
+git tag -a "v$VERSION" -m "Release $VERSION"
+git tag -a "cli-v$VERSION" -m "Release $VERSION"
+git tag -a "wasm-v$VERSION" -m "Release $VERSION"
+git tag -a "python-v$VERSION" -m "Release $VERSION"
+
+git push origin "v$VERSION"
+git push origin "cli-v$VERSION"
+git push origin "wasm-v$VERSION"
+git push origin "python-v$VERSION"
+```
+
+Push the tags separately: GitHub does not create tag events when more than three tags are
+pushed at once. CI publishes to crates.io, npm, and PyPI; the WASM release also rebuilds
+the website artifacts.
 
 ---
 
