@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added direct application-layer parsing APIs, record accessors, and a crate-local data-record example.
 - Moved full-frame application-layer coverage to the top-level crate.
 - Fixed data-record iteration to report malformed records instead of silently stopping.
+- Fixed mojibake in decrypted variable-length UTF-8 text while preserving ISO-8859-1 fallback decoding.
 
 ## [0.1.3] - 2026-06-11
 
