@@ -239,10 +239,10 @@ mod tests {
     #[cfg(feature = "plaintext-before-extension")]
     #[test]
     fn test_parse_variable_data3() {
-        use crate::DataRecords;
+        use crate::parse_data_records;
         /* Data block 3: unit 1, storage No 0, tariff 2, instantaneous energy, 218,37 kWh (6 digit BCD) */
         let data = &[0x02, 0xFC, 0x03, 0x48, 0x52, 0x25, 0x74, 0x44, 0x0D];
-        let _data = DataRecords::try_from(data.as_slice());
+        let _data = parse_data_records(data);
     }
 
     /*  Out: PlainText : Unit "%RH"  Value:   33.96

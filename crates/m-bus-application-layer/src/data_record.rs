@@ -29,6 +29,36 @@ pub struct DataRecord<'a> {
 }
 
 impl DataRecord<'_> {
+    /// Returns the parsed value carried by this record.
+    #[must_use]
+    pub fn value(&self) -> Option<&DataType<'_>> {
+        self.data.value.as_ref()
+    }
+
+    /// Returns the processed data information (DIF and DIFE fields).
+    #[must_use]
+    pub fn data_information(&self) -> Option<&DataInformation> {
+        self.data_record_header
+            .processed_data_record_header
+            .data_information
+            .as_ref()
+    }
+
+    /// Returns the processed value information (VIF and VIFE fields).
+    #[must_use]
+    pub fn value_information(&self) -> Option<&ValueInformation> {
+        self.data_record_header
+            .processed_data_record_header
+            .value_information
+            .as_ref()
+    }
+
+    /// Returns all raw bytes consumed by this record.
+    #[must_use]
+    pub fn raw_bytes(&self) -> &[u8] {
+        self.raw_bytes
+    }
+
     #[must_use]
     pub fn get_size(&self) -> usize {
         self.raw_bytes.len()

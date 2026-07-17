@@ -164,7 +164,7 @@ m-bus-parser = "0.1"
 ```rust
 use m_bus_parser::{Address, WiredFrame, Function};
 use m_bus_parser::mbus_data::MbusData;
-use m_bus_parser::user_data::{DataRecords, UserDataBlock};
+use m_bus_parser::user_data::parse_application_layer;
 
 let frame_bytes: Vec<u8> = vec![
     0x68, 0x4D, 0x4D, 0x68, 0x08, 0x01, 0x72, 0x01,
@@ -174,18 +174,28 @@ let frame_bytes: Vec<u8> = vec![
 let frame = WiredFrame::try_from(frame_bytes.as_slice())?;
 
 if let WiredFrame::LongFrame { function, address, data } = frame {
-    if let Ok(user_data) = UserDataBlock::try_from(data) {
-        if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-            long_tpl_header,
-            variable_data_block,
-            ..
-        } = user_data {
-            let records = DataRecords::from((variable_data_block, &long_tpl_header));
-            for record in records.flatten() {
-                println!("{}", record.data);
-            }
+    let application_layer = parse_application_layer(data)?;
+    if let Some(records) = application_layer.data_records() {
+        for record in records {
+            println!("{:?}", record?.value());
         }
     }
+}
+```
+
+### Parse application-layer data records
+
+When the link and transport headers have already been removed, parse the DIF/VIF
+records directly:
+
+```rust
+use m_bus_parser::user_data::parse_data_records;
+
+let data = [0x03, 0x13, 0x15, 0x31, 0x00];
+for record in parse_data_records(&data) {
+    let record = record?;
+    println!("value: {:?}", record.value());
+    println!("value information: {:?}", record.value_information());
 }
 ```
 
