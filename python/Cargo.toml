@@ -1,6 +1,6 @@
 [package]
 name = "pymbusparser"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 homepage = "https://maebli.github.io/"
 repository = "https://github.com/maebli/m-bus-parser"
@@ -8,7 +8,7 @@ description = "A Python binding for the M-Bus parser"
 license = "MIT"
 
 [dependencies]
-m-bus-parser = { path = "..", version = "0.1.4", features = ["std", "serde", "decryption"] }
+m-bus-parser = { path = "..", version = "0.2.0", features = ["std", "serde", "decryption"] }
 serde_json = "1.0"
 pyo3 = { version = "0.29.0", features = ["extension-module", "generate-import-lib"] }
 hex = "0.4"

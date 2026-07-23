@@ -25,6 +25,10 @@ pub struct DataRecord<'a> {
     pub data_record_header: DataRecordHeader<'a>,
     pub data: Data<'a>,
     /// Raw bytes encompassing this data record
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "m_bus_core::serde_hex::serialize")
+    )]
     pub raw_bytes: &'a [u8],
 }
 

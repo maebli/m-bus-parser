@@ -400,7 +400,13 @@ pub enum DataType<'a> {
         SingleEveryOrInvalid<Minute>,
         SingleEveryOrInvalid<Second>,
     ),
-    ManufacturerSpecific(&'a [u8]),
+    ManufacturerSpecific(
+        #[cfg_attr(
+            feature = "serde",
+            serde(serialize_with = "m_bus_core::serde_hex::serialize")
+        )]
+        &'a [u8],
+    ),
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug, Clone)]

@@ -130,7 +130,7 @@ mod tests {
             0x1F
         );
         assert!(rec["data"]["value"]["ManufacturerSpecific"]
-            .as_array()
+            .as_str()
             .unwrap()
             .is_empty());
     }

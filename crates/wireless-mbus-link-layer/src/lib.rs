@@ -96,6 +96,10 @@ pub fn strip_format_a_crcs<'a>(data: &[u8], output: &'a mut [u8]) -> Option<&'a 
 pub struct WirelessFrame<'a> {
     pub function: Function,
     pub manufacturer_id: ManufacturerId,
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "m_bus_core::serde_hex::serialize")
+    )]
     pub data: &'a [u8],
 }
 
