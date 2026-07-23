@@ -23,7 +23,7 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 ## Features
 
 - Parses **wired M-Bus** (EN 13757-2/-3) and **wireless M-Bus** (wMBus) frames
-- **Five output formats**: `table`, `json`, `yaml`, `csv`, `mermaid`
+- **Six output formats**: `table`, `json`, `yaml`, `csv`, `mermaid`, `xml`
 - **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
 - Available as a **Rust library**, **CLI**, **WebAssembly (npm)** and **Python bindings**
@@ -69,7 +69,7 @@ m-bus-parser-cli parse [OPTIONS]
 Options:
   -d, --data <DATA>      Raw M-Bus frame as a hex string
   -f, --file <FILE>      File containing a hex frame
-  -t, --format <FORMAT>  Output format: table (default), json, yaml, csv, mermaid
+  -t, --format <FORMAT>  Output format: table (default), json, yaml, csv, mermaid, xml
   -k, --key <KEY>        AES-128 decryption key (32 hex characters)
 ```
 
@@ -144,6 +144,9 @@ m-bus-parser-cli parse -d "..." -t csv
 # Mermaid diagram source (renders in the web app)
 m-bus-parser-cli parse -d "..." -t mermaid
 
+# Legacy libmbus normalized XML (drop-in for rSCADA/libmbus consumers)
+m-bus-parser-cli parse -d "..." -t xml
+
 # With AES-128 decryption key
 m-bus-parser-cli parse -d "..." -k "000102030405060708090A0B0C0D0E0F"
 ```
@@ -211,6 +214,7 @@ let json   = serialize_mbus_data(hex, "json",    None);
 let yaml   = serialize_mbus_data(hex, "yaml",    None);
 let csv    = serialize_mbus_data(hex, "csv",     None);
 let mermaid = serialize_mbus_data(hex, "mermaid", None);
+let xml    = serialize_mbus_data(hex, "xml",     None);
 
 // With decryption key
 let key: [u8; 16] = [0x00, 0x01, ..., 0x0F];
@@ -239,6 +243,7 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 | `yaml`    | `-t yaml`    | YAML                                         |
 | `csv`     | `-t csv`     | Comma-separated values                       |
 | `mermaid` | `-t mermaid` | Mermaid flowchart source (renders in web app)|
+| `xml`     | `-t xml`     | Legacy libmbus normalized XML (rSCADA-compatible)|
 
 ---
 

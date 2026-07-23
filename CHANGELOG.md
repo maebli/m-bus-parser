@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New `xml` output format that reproduces the legacy rSCADA/libmbus
+  `mbus_frame_data_xml_normalized()` output byte for byte, as a drop-in
+  replacement for consumers of libmbus's normalized XML. Available through
+  `serialize_mbus_data(hex, "xml", None)`, the CLI (`-t xml`), and the Python
+  bindings.
+- Parity test (`tests/rscada_xml.rs`) diffing the `xml` output against the
+  reference `.norm.xml` files in `tests/rscada`.
+
+### Fixed
+
+- VIF plaintext extension chains are now walked from the correct offset when
+  the plaintext VIF precedes the VIFE bytes (`plaintext-before-extension`),
+  so records that previously aborted with `InvalidValueInformation` now parse.
+- A 6-byte data field carrying a date/time VIF (0x6D) is now decoded as a
+  type I (CP48) timestamp instead of type F, matching EN 13757-3.
+
 ## [0.2.0]
 
 Breaking changes for JSON/YAML consumers:
