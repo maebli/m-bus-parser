@@ -128,1147 +128,659 @@ pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> 
     match format {
         "json" => parse_to_json(data, key),
         "yaml" => parse_to_yaml(data, key),
-        "csv" => parse_to_csv(data, key).to_string(),
+        "csv" => parse_to_csv(data, key),
         "mermaid" => parse_to_mermaid(data, key),
         "annotated" => parse_to_annotated(data),
         "hexview" => parse_to_hexview(data, key),
         "annotated-text" => parse_to_annotated_text(data),
-        _ => parse_to_table(data, key).to_string(),
+        _ => parse_to_table(data, key),
     }
+}
+
+/// Normalized, human-readable interpretation of a parsed frame.
+///
+/// This is the single source of truth for the table and CSV renderers and is
+/// embedded as `summary` in the JSON and YAML outputs, so every output format
+/// exposes the same header information regardless of whether it comes from a
+/// long TPL header, a short TPL header or the wireless link layer.
+#[cfg(feature = "std")]
+#[derive(serde::Serialize)]
+struct FrameSummary {
+    frame_type: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    identification_number: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manufacturer: Option<ManufacturerSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    access_number: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    security_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_type: Option<String>,
+    encrypted: bool,
+    decrypted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    encrypted_payload_hex: Option<String>,
+    records: Vec<RecordSummary>,
+}
+
+#[cfg(feature = "std")]
+#[derive(serde::Serialize)]
+struct ManufacturerSummary {
+    code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    website: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+}
+
+#[cfg(feature = "std")]
+#[derive(serde::Serialize)]
+struct RecordSummary {
+    value: String,
+    data_information: String,
+    header_hex: String,
+    data_hex: String,
+}
+
+#[cfg(feature = "std")]
+#[derive(serde::Serialize)]
+struct SummarySection<'a> {
+    summary: &'a FrameSummary,
+}
+
+#[cfg(feature = "std")]
+struct ParsedOutput {
+    summary: FrameSummary,
+    json: serde_json::Value,
+    yaml: String,
+}
+
+#[cfg(feature = "std")]
+impl FrameSummary {
+    fn new(frame_type: &'static str) -> Self {
+        Self {
+            frame_type,
+            function: None,
+            address: None,
+            identification_number: None,
+            manufacturer: None,
+            access_number: None,
+            status: None,
+            security_mode: None,
+            version: None,
+            device_type: None,
+            encrypted: false,
+            decrypted: false,
+            encrypted_payload_hex: None,
+            records: Vec::new(),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+fn manufacturer_summary(code: String) -> ManufacturerSummary {
+    let info = crate::manufacturers::lookup_manufacturer(&code);
+    ManufacturerSummary {
+        code,
+        name: info.as_ref().map(|i| i.name.to_string()),
+        website: info.as_ref().map(|i| i.website.to_string()),
+        description: info.as_ref().map(|i| i.description.to_string()),
+    }
+}
+
+#[cfg(feature = "std")]
+fn hex_string(data: &[u8]) -> String {
+    data.iter().map(|b| format!("{:02X}", b)).collect()
+}
+
+#[cfg(feature = "std")]
+fn user_data_is_encrypted(user_data: Option<&user_data::UserDataBlock>) -> bool {
+    use user_data::UserDataBlock;
+    match user_data {
+        Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+            long_tpl_header, ..
+        }) => long_tpl_header.is_encrypted(),
+        Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
+            short_tpl_header, ..
+        }) => short_tpl_header.is_encrypted(),
+        _ => false,
+    }
+}
+
+#[cfg(feature = "std")]
+fn variable_data_block<'a>(user_data: Option<&user_data::UserDataBlock<'a>>) -> Option<&'a [u8]> {
+    use user_data::UserDataBlock;
+    match user_data {
+        Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+            variable_data_block,
+            ..
+        })
+        | Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
+            variable_data_block,
+            ..
+        })
+        | Some(UserDataBlock::VariableDataStructureWithoutTplHeader {
+            variable_data_block,
+            ..
+        }) => Some(variable_data_block),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "std")]
+fn record_summaries(records: &user_data::DataRecords) -> Vec<RecordSummary> {
+    records
+        .clone()
+        .flatten()
+        .map(|record| {
+            let value_information = match record
+                .data_record_header
+                .processed_data_record_header
+                .value_information
+            {
+                Some(ref x) => format!("{}", x),
+                None => ")".to_string(),
+            };
+            let data_information = match record
+                .data_record_header
+                .processed_data_record_header
+                .data_information
+            {
+                Some(ref x) => format!("{}", x),
+                None => "None".to_string(),
+            };
+            RecordSummary {
+                value: format!("({}{}", record.data, value_information),
+                data_information,
+                header_hex: record.data_record_header_hex(),
+                data_hex: record.data_hex(),
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "std")]
+fn apply_user_data_summary(
+    summary: &mut FrameSummary,
+    user_data: Option<&user_data::UserDataBlock>,
+) {
+    use user_data::UserDataBlock;
+    match user_data {
+        Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+            long_tpl_header, ..
+        }) => {
+            summary.identification_number = Some(long_tpl_header.identification_number.to_string());
+            summary.manufacturer = Some(manufacturer_summary(
+                long_tpl_header
+                    .manufacturer
+                    .as_ref()
+                    .map_or_else(|e| format!("Error: {}", e), |m| m.to_string()),
+            ));
+            summary.access_number = Some(long_tpl_header.short_tpl_header.access_number);
+            summary.status = Some(long_tpl_header.short_tpl_header.status.to_string());
+            summary.security_mode = Some(
+                long_tpl_header
+                    .short_tpl_header
+                    .configuration_field
+                    .security_mode()
+                    .to_string(),
+            );
+            summary.version = Some(long_tpl_header.version);
+            summary.device_type = Some(long_tpl_header.device_type.to_string());
+        }
+        Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
+            short_tpl_header, ..
+        }) => {
+            summary.access_number = Some(short_tpl_header.access_number);
+            summary.status = Some(short_tpl_header.status.to_string());
+            summary.security_mode = Some(
+                short_tpl_header
+                    .configuration_field
+                    .security_mode()
+                    .to_string(),
+            );
+        }
+        Some(UserDataBlock::FixedDataStructure {
+            identification_number,
+            access_number,
+            status,
+            ..
+        }) => {
+            summary.identification_number = Some(identification_number.to_string());
+            summary.access_number = Some(*access_number);
+            summary.status = Some(status.to_string());
+        }
+        _ => {}
+    }
+}
+
+#[cfg(feature = "std")]
+fn finalize_summary(
+    summary: &mut FrameSummary,
+    data_records: Option<&user_data::DataRecords>,
+    user_data: Option<&user_data::UserDataBlock>,
+    encrypted: bool,
+    decrypted: bool,
+) {
+    summary.encrypted = encrypted;
+    summary.decrypted = decrypted;
+    if encrypted && !decrypted {
+        summary.encrypted_payload_hex = variable_data_block(user_data).map(hex_string);
+    } else if let Some(records) = data_records {
+        summary.records = record_summaries(records);
+    }
+}
+
+#[cfg(feature = "std")]
+fn summarize_wired(
+    parsed: &MbusData<frames::WiredFrame>,
+    encrypted: bool,
+    decrypted: bool,
+) -> FrameSummary {
+    let mut summary = match &parsed.frame {
+        frames::WiredFrame::LongFrame { .. } => FrameSummary::new("LongFrame"),
+        frames::WiredFrame::ShortFrame { .. } => FrameSummary::new("ShortFrame"),
+        frames::WiredFrame::ControlFrame { .. } => FrameSummary::new("ControlFrame"),
+        frames::WiredFrame::SingleCharacter { .. } => FrameSummary::new("SingleCharacter"),
+        _ => FrameSummary::new("Unknown"),
+    };
+    match &parsed.frame {
+        frames::WiredFrame::LongFrame {
+            function, address, ..
+        }
+        | frames::WiredFrame::ControlFrame {
+            function, address, ..
+        }
+        | frames::WiredFrame::ShortFrame { function, address } => {
+            summary.function = Some(function.to_string());
+            summary.address = Some(address.to_string());
+        }
+        _ => {}
+    }
+    apply_user_data_summary(&mut summary, parsed.user_data.as_ref());
+    finalize_summary(
+        &mut summary,
+        parsed.data_records.as_ref(),
+        parsed.user_data.as_ref(),
+        encrypted,
+        decrypted,
+    );
+    summary
+}
+
+#[cfg(feature = "std")]
+fn summarize_wireless(
+    parsed: &MbusData<WirelessFrame>,
+    encrypted: bool,
+    decrypted: bool,
+) -> FrameSummary {
+    let manufacturer_id = &parsed.frame.manufacturer_id;
+    let mut summary = FrameSummary::new("Wireless");
+    summary.function = Some(parsed.frame.function.to_string());
+    summary.identification_number = Some(manufacturer_id.identification_number.to_string());
+    summary.manufacturer = Some(manufacturer_summary(
+        manufacturer_id.manufacturer_code.to_string(),
+    ));
+    summary.version = Some(manufacturer_id.version);
+    summary.device_type = Some(manufacturer_id.device_type.to_string());
+    // A long TPL header overrides the link-layer addressing where present.
+    apply_user_data_summary(&mut summary, parsed.user_data.as_ref());
+    finalize_summary(
+        &mut summary,
+        parsed.data_records.as_ref(),
+        parsed.user_data.as_ref(),
+        encrypted,
+        decrypted,
+    );
+    summary
+}
+
+#[cfg(feature = "std")]
+fn build_output<T: serde::Serialize>(parsed: &T, summary: FrameSummary) -> ParsedOutput {
+    let mut json = serde_json::to_value(parsed).unwrap_or_default();
+    if let serde_json::Value::Object(ref mut map) = json {
+        if let Some(mfr) = &summary.manufacturer {
+            if let (Some(name), Some(website), Some(description)) =
+                (&mfr.name, &mfr.website, &mfr.description)
+            {
+                map.insert(
+                    "manufacturer_info".to_string(),
+                    serde_json::json!({
+                        "name": name,
+                        "website": website,
+                        "description": description,
+                    }),
+                );
+            }
+        }
+        map.insert(
+            "summary".to_string(),
+            serde_json::to_value(&summary).unwrap_or_default(),
+        );
+    }
+
+    let mut yaml = serde_yaml::to_string(parsed).unwrap_or_default();
+    if let Some(mfr) = &summary.manufacturer {
+        if let (Some(name), Some(website), Some(description)) =
+            (&mfr.name, &mfr.website, &mfr.description)
+        {
+            yaml.push_str(&format!(
+                "manufacturer_info:\n  name: {}\n  website: {}\n  description: {}\n",
+                name, website, description
+            ));
+        }
+    }
+    yaml.push_str(
+        &serde_yaml::to_string(&SummarySection { summary: &summary }).unwrap_or_default(),
+    );
+
+    ParsedOutput {
+        summary,
+        json,
+        yaml,
+    }
+}
+
+/// Parses a frame (wired first, wireless as fallback), applies decryption when
+/// a key is provided, and produces the shared output model every text format
+/// renders from.
+#[cfg(feature = "std")]
+#[cfg_attr(not(feature = "decryption"), allow(unused_mut))]
+fn parse_frame_output(input: &str, key: Option<&[u8; 16]>) -> Option<ParsedOutput> {
+    let data = clean_and_convert(input);
+    #[cfg(feature = "decryption")]
+    let mut decrypted_buffer = [0u8; 256];
+    #[cfg(not(feature = "decryption"))]
+    let _ = key;
+
+    // Try wired first
+    if let Ok(mut parsed) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
+        let encrypted = user_data_is_encrypted(parsed.user_data.as_ref());
+        let mut decrypted = false;
+        #[cfg(feature = "decryption")]
+        if encrypted {
+            if let (Some(key_bytes), Some(user_data)) = (key, parsed.user_data.as_ref()) {
+                if let Some(len) = decrypt_variable_data_with_key(
+                    user_data,
+                    None,
+                    key_bytes,
+                    &mut decrypted_buffer,
+                ) {
+                    if let (
+                        Some(decrypted_data),
+                        Some(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                            long_tpl_header,
+                            ..
+                        }),
+                    ) = (decrypted_buffer.get(..len), &parsed.user_data)
+                    {
+                        parsed.data_records = Some(user_data::DataRecords::new(
+                            decrypted_data,
+                            Some(long_tpl_header),
+                        ));
+                        decrypted = true;
+                    }
+                }
+            }
+        }
+        let summary = summarize_wired(&parsed, encrypted, decrypted);
+        return Some(build_output(&parsed, summary));
+    }
+
+    // If wired fails, try wireless - strip Format A CRCs if present
+    let mut crc_buf = [0u8; 512];
+    let wireless_data =
+        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
+    if let Ok(mut parsed) =
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
+    {
+        let encrypted = user_data_is_encrypted(parsed.user_data.as_ref());
+        let mut decrypted = false;
+        #[cfg(feature = "decryption")]
+        if encrypted {
+            if let (Some(key_bytes), Some(user_data)) = (key, parsed.user_data.as_ref()) {
+                if let Some(len) = decrypt_variable_data_with_key(
+                    user_data,
+                    Some(&parsed.frame.manufacturer_id),
+                    key_bytes,
+                    &mut decrypted_buffer,
+                ) {
+                    if let Some(decrypted_data) = decrypted_buffer.get(..len) {
+                        let long_header = match &parsed.user_data {
+                            Some(
+                                user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                                    long_tpl_header,
+                                    ..
+                                },
+                            ) => Some(long_tpl_header),
+                            _ => None,
+                        };
+                        parsed.data_records =
+                            Some(user_data::DataRecords::new(decrypted_data, long_header));
+                        decrypted = true;
+                    }
+                }
+            }
+        }
+        let summary = summarize_wireless(&parsed, encrypted, decrypted);
+        return Some(build_output(&parsed, summary));
+    }
+
+    None
 }
 
 #[cfg(feature = "std")]
 #[must_use]
 pub fn parse_to_json(input: &str, key: Option<&[u8; 16]>) -> String {
-    use user_data::UserDataBlock;
-
-    let data = clean_and_convert(input);
-    // Buffer for decrypted data - M-Bus user data max ~252 bytes, 256 is safe
-    let mut decrypted_buffer = [0u8; 256];
-    let mut decrypted_len = 0usize;
-
-    // Try wired first
-    if let Ok(mut parsed_data) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
-        #[cfg(feature = "decryption")]
-        if let Some(key_bytes) = key {
-            if let Some(user_data) = &parsed_data.user_data {
-                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    ..
-                } = user_data
-                {
-                    if long_tpl_header.is_encrypted() {
-                        if let Ok(mfr) = &long_tpl_header.manufacturer {
-                            let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-                            let mfr_id = mfr.to_id();
-                            let id_num = long_tpl_header.identification_number.number;
-                            let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                            if let Ok(len) =
-                                user_data.decrypt_variable_data(&provider, &mut decrypted_buffer)
-                            {
-                                decrypted_len = len;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        #[cfg(not(feature = "decryption"))]
-        let _ = key;
-
-        // Apply decrypted data records if decryption succeeded
-        #[cfg(feature = "decryption")]
-        if decrypted_len > 0 {
-            if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header,
-                ..
-            }) = &parsed_data.user_data
-            {
-                if let Some(decrypted_data) = decrypted_buffer.get(..decrypted_len) {
-                    parsed_data.data_records = Some(user_data::DataRecords::new(
-                        decrypted_data,
-                        Some(long_tpl_header),
-                    ));
-                }
-            }
-        }
-
-        let mfr_code_str = parsed_data.user_data.as_ref().and_then(|ud| {
-            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header, ..
-            } = ud
-            {
-                long_tpl_header
-                    .manufacturer
-                    .as_ref()
-                    .ok()
-                    .map(|m| format!("{}", m))
-            } else {
-                None
-            }
-        });
-        let mut json_val = serde_json::to_value(&parsed_data).unwrap_or_default();
-        if let (Some(code), serde_json::Value::Object(ref mut map)) = (mfr_code_str, &mut json_val)
-        {
-            if let Some(info) = crate::manufacturers::lookup_manufacturer(&code) {
-                map.insert(
-                    "manufacturer_info".to_string(),
-                    serde_json::json!({
-                        "name": info.name,
-                        "website": info.website,
-                        "description": info.description,
-                    }),
-                );
-            }
-        }
-        return serde_json::to_string_pretty(&json_val)
-            .unwrap_or_default()
-            .to_string();
+    match parse_frame_output(input, key) {
+        Some(output) => serde_json::to_string_pretty(&output.json).unwrap_or_default(),
+        None => "{}".to_string(),
     }
-
-    // If wired fails, try wireless - strip Format A CRCs if present
-    let mut crc_buf = [0u8; 512];
-    let wireless_data =
-        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
-    if let Ok(mut parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
-    {
-        #[cfg(feature = "decryption")]
-        {
-            let mut long_header_for_records: Option<&user_data::LongTplHeader> = None;
-            if let Some(key_bytes) = key {
-                let manufacturer_id = &parsed_data.frame.manufacturer_id;
-                if let Some(user_data) = &parsed_data.user_data {
-                    let (is_encrypted, long_header) = match user_data {
-                        UserDataBlock::VariableDataStructureWithLongTplHeader {
-                            long_tpl_header,
-                            ..
-                        } => (long_tpl_header.is_encrypted(), Some(long_tpl_header)),
-                        UserDataBlock::VariableDataStructureWithShortTplHeader {
-                            short_tpl_header,
-                            ..
-                        } => (short_tpl_header.is_encrypted(), None),
-                        _ => (false, None),
-                    };
-                    long_header_for_records = long_header;
-
-                    if is_encrypted {
-                        let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-
-                        let decrypt_result = match user_data {
-                            UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                long_tpl_header,
-                                ..
-                            } => {
-                                if let Ok(mfr) = &long_tpl_header.manufacturer {
-                                    let mfr_id = mfr.to_id();
-                                    let id_num = long_tpl_header.identification_number.number;
-                                    let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                    user_data
-                                        .decrypt_variable_data(&provider, &mut decrypted_buffer)
-                                } else {
-                                    Err(crate::decryption::DecryptionError::DecryptionFailed)
-                                }
-                            }
-                            UserDataBlock::VariableDataStructureWithShortTplHeader { .. } => {
-                                let mfr_id = manufacturer_id.manufacturer_code.to_id();
-                                let id_num = manufacturer_id.identification_number.number;
-                                let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                user_data.decrypt_variable_data_with_context(
-                                    &provider,
-                                    manufacturer_id.manufacturer_code,
-                                    id_num,
-                                    manufacturer_id.version,
-                                    manufacturer_id.device_type,
-                                    &mut decrypted_buffer,
-                                )
-                            }
-                            _ => Err(crate::decryption::DecryptionError::UnknownEncryptionState),
-                        };
-
-                        if let Ok(len) = decrypt_result {
-                            decrypted_len = len;
-                        }
-                    }
-                }
-            }
-
-            // Apply decrypted data records if decryption succeeded
-            if let Some(decrypted_data) = decrypted_buffer.get(..decrypted_len) {
-                if !decrypted_data.is_empty() {
-                    parsed_data.data_records = Some(user_data::DataRecords::new(
-                        decrypted_data,
-                        long_header_for_records,
-                    ));
-                }
-            }
-        }
-        #[cfg(not(feature = "decryption"))]
-        let _ = key;
-
-        let mfr_code_str = format!("{}", parsed_data.frame.manufacturer_id.manufacturer_code);
-        let mut json_val = serde_json::to_value(&parsed_data).unwrap_or_default();
-        if let serde_json::Value::Object(ref mut map) = json_val {
-            if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_code_str) {
-                map.insert(
-                    "manufacturer_info".to_string(),
-                    serde_json::json!({
-                        "name": info.name,
-                        "website": info.website,
-                        "description": info.description,
-                    }),
-                );
-            }
-        }
-        return serde_json::to_string_pretty(&json_val)
-            .unwrap_or_default()
-            .to_string();
-    }
-
-    // If both fail, return error
-    "{}".to_string()
 }
 
 #[cfg(feature = "std")]
 #[must_use]
 fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
-    use user_data::UserDataBlock;
-
-    let data = clean_and_convert(input);
-    // Buffer for decrypted data - must live as long as data_records
-    let mut decrypted_buffer = [0u8; 256];
-    let mut decrypted_len = 0usize;
-
-    // Try wired first
-    if let Ok(mut parsed_data) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
-        #[cfg(feature = "decryption")]
-        if let Some(key_bytes) = key {
-            if let Some(user_data) = &parsed_data.user_data {
-                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    ..
-                } = user_data
-                {
-                    if long_tpl_header.is_encrypted() {
-                        if let Ok(mfr) = &long_tpl_header.manufacturer {
-                            let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-                            let mfr_id = mfr.to_id();
-                            let id_num = long_tpl_header.identification_number.number;
-                            let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                            if let Ok(len) =
-                                user_data.decrypt_variable_data(&provider, &mut decrypted_buffer)
-                            {
-                                decrypted_len = len;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        #[cfg(not(feature = "decryption"))]
-        let _ = key;
-
-        // Apply decrypted data records if decryption succeeded
-        #[cfg(feature = "decryption")]
-        if decrypted_len > 0 {
-            if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header,
-                ..
-            }) = &parsed_data.user_data
-            {
-                let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
-                parsed_data.data_records = Some(user_data::DataRecords::new(
-                    decrypted_data,
-                    Some(long_tpl_header),
-                ));
-            }
-        }
-
-        let mfr_code_str = parsed_data.user_data.as_ref().and_then(|ud| {
-            if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header, ..
-            } = ud
-            {
-                long_tpl_header
-                    .manufacturer
-                    .as_ref()
-                    .ok()
-                    .map(|m| format!("{}", m))
-            } else {
-                None
-            }
-        });
-        let base = serde_yaml::to_string(&parsed_data).unwrap_or_default();
-        return if let Some(code) = mfr_code_str {
-            if let Some(info) = crate::manufacturers::lookup_manufacturer(&code) {
-                format!(
-                    "{}manufacturer_info:\n  name: {}\n  website: {}\n  description: {}\n",
-                    base, info.name, info.website, info.description
-                )
-            } else {
-                base
-            }
-        } else {
-            base
-        };
+    match parse_frame_output(input, key) {
+        Some(output) => output.yaml,
+        None => "---\nerror: Could not parse data\n".to_string(),
     }
-
-    // If wired fails, try wireless - strip Format A CRCs if present
-    let mut crc_buf = [0u8; 512];
-    let wireless_data =
-        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
-    if let Ok(mut parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
-    {
-        #[cfg(feature = "decryption")]
-        {
-            let mut long_header_for_records: Option<&user_data::LongTplHeader> = None;
-            if let Some(key_bytes) = key {
-                let manufacturer_id = &parsed_data.frame.manufacturer_id;
-                if let Some(user_data) = &parsed_data.user_data {
-                    let (is_encrypted, long_header) = match user_data {
-                        UserDataBlock::VariableDataStructureWithLongTplHeader {
-                            long_tpl_header,
-                            ..
-                        } => (long_tpl_header.is_encrypted(), Some(long_tpl_header)),
-                        UserDataBlock::VariableDataStructureWithShortTplHeader {
-                            short_tpl_header,
-                            ..
-                        } => (short_tpl_header.is_encrypted(), None),
-                        _ => (false, None),
-                    };
-                    long_header_for_records = long_header;
-
-                    if is_encrypted {
-                        let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-
-                        let decrypt_result = match user_data {
-                            UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                long_tpl_header,
-                                ..
-                            } => {
-                                if let Ok(mfr) = &long_tpl_header.manufacturer {
-                                    let mfr_id = mfr.to_id();
-                                    let id_num = long_tpl_header.identification_number.number;
-                                    let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                    user_data
-                                        .decrypt_variable_data(&provider, &mut decrypted_buffer)
-                                } else {
-                                    Err(crate::decryption::DecryptionError::DecryptionFailed)
-                                }
-                            }
-                            UserDataBlock::VariableDataStructureWithShortTplHeader { .. } => {
-                                let mfr_id = manufacturer_id.manufacturer_code.to_id();
-                                let id_num = manufacturer_id.identification_number.number;
-                                let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                user_data.decrypt_variable_data_with_context(
-                                    &provider,
-                                    manufacturer_id.manufacturer_code,
-                                    id_num,
-                                    manufacturer_id.version,
-                                    manufacturer_id.device_type,
-                                    &mut decrypted_buffer,
-                                )
-                            }
-                            _ => Err(crate::decryption::DecryptionError::UnknownEncryptionState),
-                        };
-
-                        if let Ok(len) = decrypt_result {
-                            decrypted_len = len;
-                        }
-                    }
-                }
-            }
-
-            // Apply decrypted data records if decryption succeeded
-            if decrypted_len > 0 {
-                let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
-                parsed_data.data_records = Some(user_data::DataRecords::new(
-                    decrypted_data,
-                    long_header_for_records,
-                ));
-            }
-        }
-        #[cfg(not(feature = "decryption"))]
-        let _ = key;
-
-        let mfr_code_str = format!("{}", parsed_data.frame.manufacturer_id.manufacturer_code);
-        let base = serde_yaml::to_string(&parsed_data).unwrap_or_default();
-        return if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_code_str) {
-            format!(
-                "{}manufacturer_info:\n  name: {}\n  website: {}\n  description: {}\n",
-                base, info.name, info.website, info.description
-            )
-        } else {
-            base
-        };
-    }
-
-    // If both fail, return error
-    "---\nerror: Could not parse data\n".to_string()
 }
 
 #[cfg(feature = "std")]
 #[must_use]
 fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
-    use user_data::UserDataBlock;
+    match parse_frame_output(input, key) {
+        Some(output) => render_table(&output.summary, key.is_some()),
+        None => "Error: Could not parse data as wired or wireless M-Bus".to_string(),
+    }
+}
 
-    let data = clean_and_convert(input);
+#[cfg(feature = "std")]
+fn render_table(summary: &FrameSummary, key_provided: bool) -> String {
+    let mut out = String::new();
+    let title = match summary.frame_type {
+        "LongFrame" => "Long Frame",
+        "ShortFrame" => "Short Frame",
+        "ControlFrame" => "Control Frame",
+        "SingleCharacter" => "Single Character Frame",
+        "Wireless" => "Wireless Frame",
+        other => other,
+    };
+    out.push_str(title);
+    out.push('\n');
 
-    let mut table_output = String::new();
-
-    // Try wired first
-    if let Ok(parsed_data) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
+    // Wired frames carry link-layer function and address in their own table.
+    if let (Some(function), Some(address)) = (&summary.function, &summary.address) {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_BOX_CHARS);
-
-        match parsed_data.frame {
-            frames::WiredFrame::LongFrame {
-                function,
-                address,
-                data: _,
-            } => {
-                table_output.push_str("Long Frame \n");
-
-                table.set_titles(row!["Function", "Address"]);
-                table.add_row(row![function, address]);
-
-                table_output.push_str(&table.to_string());
-                let mut _is_encyrpted = false;
-                if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    ..
-                }) = &parsed_data.user_data
-                {
-                    let mut info_table = Table::new();
-                    info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                    info_table.set_titles(row!["Field", "Value"]);
-                    info_table.add_row(row![
-                        "Identification Number",
-                        long_tpl_header.identification_number
-                    ]);
-                    {
-                        let mfr_str = long_tpl_header
-                            .manufacturer
-                            .as_ref()
-                            .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m));
-                        info_table.add_row(row!["Manufacturer", &mfr_str]);
-                        if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_str) {
-                            info_table.add_row(row!["Manufacturer Name", info.name]);
-                            info_table.add_row(row!["Website", info.website]);
-                            info_table.add_row(row!["Description", info.description]);
-                        }
-                    }
-                    info_table.add_row(row![
-                        "Access Number",
-                        long_tpl_header.short_tpl_header.access_number
-                    ]);
-                    info_table.add_row(row!["Status", long_tpl_header.short_tpl_header.status]);
-                    info_table.add_row(row![
-                        "Security Mode",
-                        long_tpl_header
-                            .short_tpl_header
-                            .configuration_field
-                            .security_mode()
-                    ]);
-                    info_table.add_row(row!["Version", long_tpl_header.version]);
-                    info_table.add_row(row!["DeviceType", long_tpl_header.device_type]);
-                    table_output.push_str(&info_table.to_string());
-                    _is_encyrpted = long_tpl_header.is_encrypted();
-                }
-                let mut value_table = Table::new();
-                value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
-                if let Some(data_records) = parsed_data.data_records {
-                    for record in data_records.flatten() {
-                        let value_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .value_information
-                        {
-                            Some(ref x) => format!("{}", x),
-                            None => ")".to_string(),
-                        };
-                        let data_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .data_information
-                        {
-                            Some(ref x) => format!("{}", x),
-                            None => "None".to_string(),
-                        };
-                        value_table.add_row(row![
-                            format!("({}{}", record.data, value_information),
-                            data_information,
-                            record.data_record_header_hex(),
-                            record.data_hex()
-                        ]);
-                    }
-                }
-                table_output.push_str(&value_table.to_string());
-            }
-            frames::WiredFrame::ShortFrame { .. } => {
-                table_output.push_str("Short Frame\n");
-            }
-            frames::WiredFrame::SingleCharacter { .. } => {
-                table_output.push_str("Single Character Frame\n");
-            }
-            frames::WiredFrame::ControlFrame { .. } => {
-                table_output.push_str("Control Frame\n");
-            }
-            _ => {
-                table_output.push_str("Unknown Frame\n");
-            }
-        }
-        return table_output;
+        table.set_titles(row!["Function", "Address"]);
+        table.add_row(row![function, address]);
+        out.push_str(&table.to_string());
     }
 
-    // If wired fails, try wireless - strip Format A CRCs if present
-    let mut crc_buf = [0u8; 512];
-    let wireless_data =
-        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
-    if let Ok(parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
-    {
-        let wireless_mbus_link_layer::WirelessFrame {
-            function,
-            manufacturer_id,
-            data,
-        } = &parsed_data.frame;
-        {
-            let mut table = Table::new();
-            table.set_format(*format::consts::FORMAT_BOX_CHARS);
-            table.set_titles(row!["Field", "Value"]);
-            table.add_row(row!["Function", format!("{:?}", function)]);
-            {
-                let mfr_str = format!("{}", manufacturer_id.manufacturer_code);
-                table.add_row(row!["Manufacturer Code", &mfr_str]);
-                if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_str) {
-                    table.add_row(row!["Manufacturer Name", info.name]);
-                    table.add_row(row!["Website", info.website]);
-                    table.add_row(row!["Description", info.description]);
-                }
-            }
-            table.add_row(row![
-                "Identification Number",
-                format!("{:?}", manufacturer_id.identification_number)
-            ]);
-            table.add_row(row![
-                "Device Type",
-                format!("{:?}", manufacturer_id.device_type)
-            ]);
-            table.add_row(row!["Version", format!("{:?}", manufacturer_id.version)]);
-            table.add_row(row![
-                "Is globally Unique Id",
-                format!("{:?}", manufacturer_id.is_unique_globally)
-            ]);
-            table_output.push_str(&table.to_string());
-            let mut is_encrypted = false;
-            match &parsed_data.user_data {
-                Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    variable_data_block: _,
-                    extended_link_layer: _,
-                }) => {
-                    let mut info_table = Table::new();
-                    info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                    info_table.set_titles(row!["Field", "Value"]);
-                    info_table.add_row(row![
-                        "Identification Number",
-                        long_tpl_header.identification_number
-                    ]);
-                    {
-                        let mfr_str = long_tpl_header
-                            .manufacturer
-                            .as_ref()
-                            .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m));
-                        info_table.add_row(row!["Manufacturer", &mfr_str]);
-                        if let Some(info) = crate::manufacturers::lookup_manufacturer(&mfr_str) {
-                            info_table.add_row(row!["Manufacturer Name", info.name]);
-                            info_table.add_row(row!["Website", info.website]);
-                            info_table.add_row(row!["Description", info.description]);
-                        }
-                    }
-                    info_table.add_row(row![
-                        "Access Number",
-                        long_tpl_header.short_tpl_header.access_number
-                    ]);
-                    info_table.add_row(row!["Status", long_tpl_header.short_tpl_header.status]);
-                    info_table.add_row(row![
-                        "Security Mode",
-                        long_tpl_header
-                            .short_tpl_header
-                            .configuration_field
-                            .security_mode()
-                    ]);
-                    info_table.add_row(row!["Version", long_tpl_header.version]);
-                    info_table.add_row(row!["Device Type", long_tpl_header.device_type]);
-                    table_output.push_str(&info_table.to_string());
-                    is_encrypted = long_tpl_header.is_encrypted();
-                }
-                Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
-                    short_tpl_header,
-                    variable_data_block: _,
-                    extended_link_layer: _,
-                }) => {
-                    let mut info_table = Table::new();
-                    info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-                    info_table.set_titles(row!["Field", "Value"]);
-                    info_table.add_row(row!["Access Number", short_tpl_header.access_number]);
-                    info_table.add_row(row!["Status", short_tpl_header.status]);
-                    info_table.add_row(row![
-                        "Security Mode",
-                        short_tpl_header.configuration_field.security_mode()
-                    ]);
-                    table_output.push_str(&info_table.to_string());
-                    is_encrypted = short_tpl_header.is_encrypted();
-                }
-                _ => (),
-            }
-
-            let mut value_table = Table::new();
-            value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
-            value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
-
-            if is_encrypted {
-                #[cfg(feature = "decryption")]
-                if let Some(key_bytes) = key {
-                    // Try to decrypt
-                    if let Some(user_data) = &parsed_data.user_data {
-                        let mut decrypted = [0u8; 256];
-                        let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-
-                        // Get manufacturer info from user_data or frame
-                        let decrypt_result = match user_data {
-                            UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                long_tpl_header,
-                                ..
-                            } => {
-                                if let Ok(mfr) = &long_tpl_header.manufacturer {
-                                    let mfr_id = mfr.to_id();
-                                    let id_num = long_tpl_header.identification_number.number;
-                                    let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                    user_data.decrypt_variable_data(&provider, &mut decrypted)
-                                } else {
-                                    Err(crate::decryption::DecryptionError::DecryptionFailed)
-                                }
-                            }
-                            UserDataBlock::VariableDataStructureWithShortTplHeader { .. } => {
-                                // For short TPL, use link layer manufacturer info
-                                let mfr_id = manufacturer_id.manufacturer_code.to_id();
-                                let id_num = manufacturer_id.identification_number.number;
-                                let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                user_data.decrypt_variable_data_with_context(
-                                    &provider,
-                                    manufacturer_id.manufacturer_code,
-                                    id_num,
-                                    manufacturer_id.version,
-                                    manufacturer_id.device_type,
-                                    &mut decrypted,
-                                )
-                            }
-                            _ => Err(crate::decryption::DecryptionError::UnknownEncryptionState),
-                        };
-
-                        match decrypt_result {
-                            Ok(len) => {
-                                table_output.push_str("Decrypted successfully\n");
-                                // Parse decrypted data records
-                                let decrypted_data = decrypted.get(..len).unwrap_or(&[]);
-                                // Get long_tpl_header if available for proper data record parsing
-                                let long_header = match user_data {
-                                    UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                        long_tpl_header,
-                                        ..
-                                    } => Some(long_tpl_header),
-                                    _ => None,
-                                };
-                                let data_records =
-                                    user_data::DataRecords::new(decrypted_data, long_header);
-                                for record in data_records.flatten() {
-                                    let value_information = match record
-                                        .data_record_header
-                                        .processed_data_record_header
-                                        .value_information
-                                    {
-                                        Some(ref x) => format!("{}", x),
-                                        None => ")".to_string(),
-                                    };
-                                    let data_information = match record
-                                        .data_record_header
-                                        .processed_data_record_header
-                                        .data_information
-                                    {
-                                        Some(ref x) => format!("{}", x),
-                                        None => "None".to_string(),
-                                    };
-                                    value_table.add_row(row![
-                                        format!("({}{}", record.data, value_information),
-                                        data_information,
-                                        record.data_record_header_hex(),
-                                        record.data_hex()
-                                    ]);
-                                }
-                                table_output.push_str(&value_table.to_string());
-                            }
-                            Err(e) => {
-                                table_output.push_str(&format!("Decryption failed: {:?}\n", e));
-                                table_output.push_str("Encrypted Payload : ");
-                                table_output.push_str(
-                                    &data
-                                        .iter()
-                                        .map(|b| format!("{:02X}", b))
-                                        .collect::<String>(),
-                                );
-                                table_output.push('\n');
-                            }
-                        }
-                    }
-                } else {
-                    table_output.push_str("Encrypted Payload : ");
-                    table_output.push_str(
-                        &data
-                            .iter()
-                            .map(|b| format!("{:02X}", b))
-                            .collect::<String>(),
-                    );
-                    table_output.push('\n');
-                }
-
-                #[cfg(not(feature = "decryption"))]
-                {
-                    let _ = key; // Suppress unused warning
-                    table_output.push_str("Encrypted Payload : ");
-                    table_output.push_str(
-                        &data
-                            .iter()
-                            .map(|b| format!("{:02X}", b))
-                            .collect::<String>(),
-                    );
-                    table_output.push('\n');
-                }
-            } else {
-                if let Some(data_records) = &parsed_data.data_records {
-                    for record in data_records.clone().flatten() {
-                        let value_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .value_information
-                        {
-                            Some(ref x) => format!("{}", x),
-                            None => ")".to_string(),
-                        };
-                        let data_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .data_information
-                        {
-                            Some(ref x) => format!("{}", x),
-                            None => "None".to_string(),
-                        };
-                        value_table.add_row(row![
-                            format!("({}{}", record.data, value_information),
-                            data_information,
-                            record.data_record_header_hex(),
-                            record.data_hex()
-                        ]);
-                    }
-                }
-                table_output.push_str(&value_table.to_string());
-            }
+    let mut info_table = Table::new();
+    info_table.set_format(*format::consts::FORMAT_BOX_CHARS);
+    info_table.set_titles(row!["Field", "Value"]);
+    if summary.address.is_none() {
+        if let Some(function) = &summary.function {
+            info_table.add_row(row!["Function", function]);
         }
-        return table_output;
+    }
+    if let Some(identification_number) = &summary.identification_number {
+        info_table.add_row(row!["Identification Number", identification_number]);
+    }
+    if let Some(manufacturer) = &summary.manufacturer {
+        info_table.add_row(row!["Manufacturer", manufacturer.code]);
+        if let Some(name) = &manufacturer.name {
+            info_table.add_row(row!["Manufacturer Name", name]);
+        }
+        if let Some(website) = &manufacturer.website {
+            info_table.add_row(row!["Website", website]);
+        }
+        if let Some(description) = &manufacturer.description {
+            info_table.add_row(row!["Description", description]);
+        }
+    }
+    if let Some(access_number) = summary.access_number {
+        info_table.add_row(row!["Access Number", access_number]);
+    }
+    if let Some(status) = &summary.status {
+        info_table.add_row(row!["Status", status]);
+    }
+    if let Some(security_mode) = &summary.security_mode {
+        info_table.add_row(row!["Security Mode", security_mode]);
+    }
+    if let Some(version) = summary.version {
+        info_table.add_row(row!["Version", version]);
+    }
+    if let Some(device_type) = &summary.device_type {
+        info_table.add_row(row!["Device Type", device_type]);
+    }
+    if !info_table.is_empty() {
+        out.push_str(&info_table.to_string());
     }
 
-    // If both fail, return error
-    "Error: Could not parse data as wired or wireless M-Bus".to_string()
+    if summary.encrypted && !summary.decrypted {
+        if key_provided {
+            out.push_str("Decryption failed\n");
+        }
+        if let Some(payload_hex) = &summary.encrypted_payload_hex {
+            out.push_str("Encrypted Payload : ");
+            out.push_str(payload_hex);
+            out.push('\n');
+        }
+        return out;
+    }
+
+    if summary.decrypted {
+        out.push_str("Decrypted successfully\n");
+    }
+
+    if matches!(summary.frame_type, "LongFrame" | "Wireless") || !summary.records.is_empty() {
+        let mut value_table = Table::new();
+        value_table.set_format(*format::consts::FORMAT_BOX_CHARS);
+        value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
+        for record in &summary.records {
+            value_table.add_row(row![
+                record.value,
+                record.data_information,
+                record.header_hex,
+                record.data_hex
+            ]);
+        }
+        out.push_str(&value_table.to_string());
+    }
+
+    out
 }
 
 #[cfg(feature = "std")]
 #[must_use]
 pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
-    use crate::user_data::UserDataBlock;
     use prettytable::csv;
-
-    let data = clean_and_convert(input);
-    // Buffer for decrypted data - must live as long as data_records
-    let mut decrypted_buffer = [0u8; 256];
-    let mut decrypted_len = 0usize;
 
     let mut writer = csv::Writer::from_writer(vec![]);
 
-    // Try wired first
-    if let Ok(mut parsed_data) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
-        #[cfg(feature = "decryption")]
-        if let Some(key_bytes) = key {
-            if let Some(user_data) = &parsed_data.user_data {
-                if let UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    long_tpl_header,
-                    ..
-                } = user_data
-                {
-                    if long_tpl_header.is_encrypted() {
-                        if let Ok(mfr) = &long_tpl_header.manufacturer {
-                            let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-                            let mfr_id = mfr.to_id();
-                            let id_num = long_tpl_header.identification_number.number;
-                            let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                            if let Ok(len) =
-                                user_data.decrypt_variable_data(&provider, &mut decrypted_buffer)
-                            {
-                                decrypted_len = len;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        #[cfg(not(feature = "decryption"))]
-        let _ = key;
-
-        // Apply decrypted data records if decryption succeeded
-        #[cfg(feature = "decryption")]
-        if decrypted_len > 0 {
-            if let Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header,
-                ..
-            }) = &parsed_data.user_data
-            {
-                let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
-                parsed_data.data_records = Some(user_data::DataRecords::new(
-                    decrypted_data,
-                    Some(long_tpl_header),
-                ));
-            }
-        }
-
-        match parsed_data.frame {
-            frames::WiredFrame::LongFrame {
-                function, address, ..
-            } => {
-                let data_point_count = parsed_data
-                    .data_records
-                    .as_ref()
-                    .map(|records| records.clone().flatten().count())
-                    .unwrap_or(0);
-
-                let mut headers = vec![
-                    "FrameType".to_string(),
-                    "Function".to_string(),
-                    "Address".to_string(),
-                    "Identification Number".to_string(),
-                    "Manufacturer".to_string(),
-                    "Access Number".to_string(),
-                    "Status".to_string(),
-                    "Security Mode".to_string(),
-                    "Version".to_string(),
-                    "Device Type".to_string(),
-                ];
-
-                for i in 1..=data_point_count {
-                    headers.push(format!("DataPoint{}_Value", i));
-                    headers.push(format!("DataPoint{}_Info", i));
-                }
-
-                let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
-                writer
-                    .write_record(header_refs)
-                    .map_err(|_| ())
-                    .unwrap_or_default();
-
-                let mut row = vec![
-                    "LongFrame".to_string(),
-                    function.to_string(),
-                    address.to_string(),
-                ];
-
-                match &parsed_data.user_data {
-                    Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                        long_tpl_header,
-                        ..
-                    }) => {
-                        row.extend_from_slice(&[
-                            long_tpl_header.identification_number.to_string(),
-                            long_tpl_header
-                                .manufacturer
-                                .as_ref()
-                                .map_or_else(|e| format!("Error: {}", e), |m| format!("{}", m)),
-                            long_tpl_header.short_tpl_header.access_number.to_string(),
-                            long_tpl_header.short_tpl_header.status.to_string(),
-                            long_tpl_header
-                                .short_tpl_header
-                                .configuration_field
-                                .security_mode()
-                                .to_string(),
-                            long_tpl_header.version.to_string(),
-                            long_tpl_header.device_type.to_string(),
-                        ]);
-                    }
-                    Some(UserDataBlock::FixedDataStructure {
-                        identification_number,
-                        access_number,
-                        status,
-                        ..
-                    }) => {
-                        row.extend_from_slice(&[
-                            identification_number.to_string(),
-                            "".to_string(), // Manufacturer
-                            access_number.to_string(),
-                            status.to_string(),
-                            "".to_string(), // Security Mode
-                            "".to_string(), // Version
-                            "".to_string(), // Device Type
-                        ]);
-                    }
-                    _ => {
-                        // Fill with empty strings for header info
-                        for _ in 0..7 {
-                            row.push("".to_string());
-                        }
-                    }
-                }
-
-                if let Some(data_records) = parsed_data.data_records {
-                    for record in data_records.flatten() {
-                        // Format the value with units to match the table output
-                        let parsed_value = format!("{}", record.data);
-
-                        // Get value information including units
-                        let value_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .value_information
-                        {
-                            Some(x) => format!("{}", x),
-                            None => ")".to_string(),
-                        };
-
-                        // Format the value similar to the table output with units
-                        let formatted_value = format!("({}{}", parsed_value, value_information);
-
-                        let data_information = match record
-                            .data_record_header
-                            .processed_data_record_header
-                            .data_information
-                        {
-                            Some(x) => format!("{}", x),
-                            None => "None".to_string(),
-                        };
-
-                        row.push(formatted_value);
-                        row.push(data_information);
-                    }
-                }
-
-                let row_refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-                writer
-                    .write_record(row_refs)
-                    .map_err(|_| ())
-                    .unwrap_or_default();
-            }
-            _ => {
-                writer
-                    .write_record(["FrameType"])
-                    .map_err(|_| ())
-                    .unwrap_or_default();
-                writer
-                    .write_record([format!("{:?}", parsed_data.frame).as_str()])
-                    .map_err(|_| ())
-                    .unwrap_or_default();
-            }
-        }
-
+    let Some(output) = parse_frame_output(input, key) else {
+        writer
+            .write_record(["Error"])
+            .map_err(|_| ())
+            .unwrap_or_default();
+        writer
+            .write_record(["Error parsing data as wired or wireless M-Bus"])
+            .map_err(|_| ())
+            .unwrap_or_default();
         let csv_data = writer.into_inner().unwrap_or_default();
         return String::from_utf8(csv_data)
             .unwrap_or_else(|_| "Error converting CSV data to string".to_string());
+    };
+
+    let summary = &output.summary;
+
+    let mut headers = vec![
+        "FrameType".to_string(),
+        "Function".to_string(),
+        "Address".to_string(),
+        "Identification Number".to_string(),
+        "Manufacturer".to_string(),
+        "Manufacturer Name".to_string(),
+        "Access Number".to_string(),
+        "Status".to_string(),
+        "Security Mode".to_string(),
+        "Version".to_string(),
+        "Device Type".to_string(),
+    ];
+    for i in 1..=summary.records.len() {
+        headers.push(format!("DataPoint{}_Value", i));
+        headers.push(format!("DataPoint{}_Info", i));
     }
-
-    // If wired fails, try wireless - strip Format A CRCs if present
-    let mut crc_buf = [0u8; 512];
-    let wireless_data =
-        wireless_mbus_link_layer::strip_format_a_crcs(&data, &mut crc_buf).unwrap_or(&data);
-    if let Ok(mut parsed_data) =
-        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(wireless_data)
-    {
-        // Reset decrypted_len for wireless section
-        decrypted_len = 0;
-
-        #[cfg(feature = "decryption")]
-        {
-            let mut long_header_for_records: Option<&user_data::LongTplHeader> = None;
-            if let Some(key_bytes) = key {
-                let manufacturer_id = &parsed_data.frame.manufacturer_id;
-                if let Some(user_data) = &parsed_data.user_data {
-                    let (is_encrypted, long_header) = match user_data {
-                        UserDataBlock::VariableDataStructureWithLongTplHeader {
-                            long_tpl_header,
-                            ..
-                        } => (long_tpl_header.is_encrypted(), Some(long_tpl_header)),
-                        UserDataBlock::VariableDataStructureWithShortTplHeader {
-                            short_tpl_header,
-                            ..
-                        } => (short_tpl_header.is_encrypted(), None),
-                        _ => (false, None),
-                    };
-                    long_header_for_records = long_header;
-
-                    if is_encrypted {
-                        let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-
-                        let decrypt_result = match user_data {
-                            UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                long_tpl_header,
-                                ..
-                            } => {
-                                if let Ok(mfr) = &long_tpl_header.manufacturer {
-                                    let mfr_id = mfr.to_id();
-                                    let id_num = long_tpl_header.identification_number.number;
-                                    let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                    user_data
-                                        .decrypt_variable_data(&provider, &mut decrypted_buffer)
-                                } else {
-                                    Err(crate::decryption::DecryptionError::DecryptionFailed)
-                                }
-                            }
-                            UserDataBlock::VariableDataStructureWithShortTplHeader { .. } => {
-                                let mfr_id = manufacturer_id.manufacturer_code.to_id();
-                                let id_num = manufacturer_id.identification_number.number;
-                                let _ = provider.add_key(mfr_id, id_num, *key_bytes);
-                                user_data.decrypt_variable_data_with_context(
-                                    &provider,
-                                    manufacturer_id.manufacturer_code,
-                                    id_num,
-                                    manufacturer_id.version,
-                                    manufacturer_id.device_type,
-                                    &mut decrypted_buffer,
-                                )
-                            }
-                            _ => Err(crate::decryption::DecryptionError::UnknownEncryptionState),
-                        };
-
-                        if let Ok(len) = decrypt_result {
-                            decrypted_len = len;
-                        }
-                    }
-                }
-            }
-
-            // Apply decrypted data records if decryption succeeded
-            if decrypted_len > 0 {
-                let decrypted_data = decrypted_buffer.get(..decrypted_len).unwrap_or(&[]);
-                parsed_data.data_records = Some(user_data::DataRecords::new(
-                    decrypted_data,
-                    long_header_for_records,
-                ));
-            }
-        }
-
-        let frame_type = "Wireless";
-
-        let data_point_count = parsed_data
-            .data_records
-            .as_ref()
-            .map(|records| records.clone().flatten().count())
-            .unwrap_or(0);
-
-        let mut headers = vec![
-            "FrameType".to_string(),
-            "Identification Number".to_string(),
-            "Manufacturer".to_string(),
-            "Access Number".to_string(),
-            "Status".to_string(),
-            "Security Mode".to_string(),
-            "Version".to_string(),
-            "Device Type".to_string(),
-        ];
-
-        for i in 1..=data_point_count {
-            headers.push(format!("DataPoint{}_Value", i));
-            headers.push(format!("DataPoint{}_Info", i));
-        }
-
-        let header_refs: Vec<&str> = headers.iter().map(|s| s.as_str()).collect();
-        writer
-            .write_record(header_refs)
-            .map_err(|_| ())
-            .unwrap_or_default();
-
-        let mut row = vec![frame_type.to_string()];
-
-        match &parsed_data.user_data {
-            Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
-                long_tpl_header,
-                variable_data_block: _,
-                extended_link_layer: _,
-            }) => {
-                row.extend_from_slice(&[
-                    long_tpl_header.identification_number.to_string(),
-                    long_tpl_header
-                        .manufacturer
-                        .as_ref()
-                        .map_or_else(|e| format!("Err({:?})", e), |m| format!("{:?}", m)),
-                    long_tpl_header.short_tpl_header.access_number.to_string(),
-                    long_tpl_header.short_tpl_header.status.to_string(),
-                    long_tpl_header
-                        .short_tpl_header
-                        .configuration_field
-                        .security_mode()
-                        .to_string(),
-                    long_tpl_header.version.to_string(),
-                    long_tpl_header.device_type.to_string(),
-                ]);
-            }
-            _ => {
-                // Fill with empty strings for header info
-                for _ in 0..7 {
-                    row.push("".to_string());
-                }
-            }
-        }
-
-        if let Some(data_records) = &parsed_data.data_records {
-            for record in data_records.clone().flatten() {
-                let parsed_value = format!("{}", record.data);
-                let value_information = match record
-                    .data_record_header
-                    .processed_data_record_header
-                    .value_information
-                {
-                    Some(x) => format!("{}", x),
-                    None => ")".to_string(),
-                };
-                let formatted_value = format!("({}{}", parsed_value, value_information);
-                let data_information = match record
-                    .data_record_header
-                    .processed_data_record_header
-                    .data_information
-                {
-                    Some(x) => format!("{}", x),
-                    None => "None".to_string(),
-                };
-                row.push(formatted_value);
-                row.push(data_information);
-            }
-        }
-
-        let row_refs: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
-        writer
-            .write_record(row_refs)
-            .map_err(|_| ())
-            .unwrap_or_default();
-
-        let csv_data = writer.into_inner().unwrap_or_default();
-        return String::from_utf8(csv_data)
-            .unwrap_or_else(|_| "Error converting CSV data to string".to_string());
-    }
-
-    // If both fail, return error
     writer
-        .write_record(["Error"])
+        .write_record(&headers)
         .map_err(|_| ())
         .unwrap_or_default();
+
+    let mut row = vec![
+        summary.frame_type.to_string(),
+        summary.function.clone().unwrap_or_default(),
+        summary.address.clone().unwrap_or_default(),
+        summary.identification_number.clone().unwrap_or_default(),
+        summary
+            .manufacturer
+            .as_ref()
+            .map(|m| m.code.clone())
+            .unwrap_or_default(),
+        summary
+            .manufacturer
+            .as_ref()
+            .and_then(|m| m.name.clone())
+            .unwrap_or_default(),
+        summary
+            .access_number
+            .map(|n| n.to_string())
+            .unwrap_or_default(),
+        summary.status.clone().unwrap_or_default(),
+        summary.security_mode.clone().unwrap_or_default(),
+        summary.version.map(|v| v.to_string()).unwrap_or_default(),
+        summary.device_type.clone().unwrap_or_default(),
+    ];
+    for record in &summary.records {
+        row.push(record.value.clone());
+        row.push(record.data_information.clone());
+    }
     writer
-        .write_record(["Error parsing data as wired or wireless M-Bus"])
+        .write_record(&row)
         .map_err(|_| ())
         .unwrap_or_default();
 
@@ -1703,7 +1215,7 @@ fn decrypted_wired_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> 
 
     let mut decrypted_buffer = [0u8; 256];
     let decrypted_len =
-        decrypt_variable_data_for_hexview(user_data, None, key, &mut decrypted_buffer)?;
+        decrypt_variable_data_with_key(user_data, None, key, &mut decrypted_buffer)?;
 
     let user_data_len = match parsed_data.frame {
         frames::WiredFrame::LongFrame {
@@ -1755,7 +1267,7 @@ fn decrypted_wireless_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8
 
     let mut decrypted_buffer = [0u8; 256];
     let manufacturer_id = &parsed_data.frame.manufacturer_id;
-    let decrypted_len = decrypt_variable_data_for_hexview(
+    let decrypted_len = decrypt_variable_data_with_key(
         user_data,
         Some(manufacturer_id),
         key,
@@ -1782,7 +1294,7 @@ fn decrypted_wireless_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8
 }
 
 #[cfg(all(feature = "std", feature = "decryption"))]
-fn decrypt_variable_data_for_hexview(
+fn decrypt_variable_data_with_key(
     user_data: &user_data::UserDataBlock<'_>,
     wireless_manufacturer_id: Option<&wireless_mbus_link_layer::ManufacturerId>,
     key: &[u8; 16],
@@ -1879,9 +1391,151 @@ mod tests {
         let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
         let csv_output = parse_to_csv(input, None);
 
-        let expected = "FrameType,Function,Address,Identification Number,Manufacturer,Access Number,Status,Security Mode,Version,Device Type,DataPoint1_Value,DataPoint1_Info,DataPoint2_Value,DataPoint2_Info,DataPoint3_Value,DataPoint3_Info,DataPoint4_Value,DataPoint4_Info,DataPoint5_Value,DataPoint5_Info,DataPoint6_Value,DataPoint6_Info,DataPoint7_Value,DataPoint7_Info,DataPoint8_Value,DataPoint8_Info,DataPoint9_Value,DataPoint9_Info,DataPoint10_Value,DataPoint10_Info\nLongFrame,\"RspUd (ACD: false, DFC: false)\",Primary (1),02205100,SLB,0,\"Permanent error, Manufacturer specific 3\",No encryption used,2,Heat Meter (Return),(0)e4[Wh](Energy),\"0,Inst,32-bit Integer\",(3)e-1[m³](Volume),\"0,Inst,BCD 8-digit\",(0)e3[W](Power),\"0,Inst,BCD 6-digit\",(0)e-3[m³h⁻¹](VolumeFlow),\"0,Inst,BCD 6-digit\",(1288)e-1[°C](FlowTemperature),\"0,Inst,BCD 4-digit\",(516)e-1[°C](ReturnTemperature),\"0,Inst,BCD 4-digit\",(7723)e-2[°K](TemperatureDifference),\"0,Inst,BCD 6-digit\",(12/Jan/12)(Date),\"0,Inst,Date Type G\",(3383)[day](OperatingTime),\"0,Inst,16-bit Integer\",\"(Manufacturer Specific: [96, 0])\",\"0,Inst,Special Functions (ManufacturerSpecific)\"\n";
+        let expected = "FrameType,Function,Address,Identification Number,Manufacturer,Manufacturer Name,Access Number,Status,Security Mode,Version,Device Type,DataPoint1_Value,DataPoint1_Info,DataPoint2_Value,DataPoint2_Info,DataPoint3_Value,DataPoint3_Info,DataPoint4_Value,DataPoint4_Info,DataPoint5_Value,DataPoint5_Info,DataPoint6_Value,DataPoint6_Info,DataPoint7_Value,DataPoint7_Info,DataPoint8_Value,DataPoint8_Info,DataPoint9_Value,DataPoint9_Info,DataPoint10_Value,DataPoint10_Info\nLongFrame,\"RspUd (ACD: false, DFC: false)\",Primary (1),02205100,SLB,Schlumberger Industries,0,\"Permanent error, Manufacturer specific 3\",No encryption used,2,Heat Meter (Return),(0)e4[Wh](Energy),\"0,Inst,32-bit Integer\",(3)e-1[m³](Volume),\"0,Inst,BCD 8-digit\",(0)e3[W](Power),\"0,Inst,BCD 6-digit\",(0)e-3[m³h⁻¹](VolumeFlow),\"0,Inst,BCD 6-digit\",(1288)e-1[°C](FlowTemperature),\"0,Inst,BCD 4-digit\",(516)e-1[°C](ReturnTemperature),\"0,Inst,BCD 4-digit\",(7723)e-2[°K](TemperatureDifference),\"0,Inst,BCD 6-digit\",(12/Jan/12)(Date),\"0,Inst,Date Type G\",(3383)[day](OperatingTime),\"0,Inst,16-bit Integer\",\"(Manufacturer Specific: [96, 0])\",\"0,Inst,Special Functions (ManufacturerSpecific)\"\n";
 
         assert_eq!(csv_output, expected);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_wireless_csv_contains_header_info() {
+        // Wireless frame with a short TPL header: the identification number,
+        // manufacturer, version and device type come from the link layer and
+        // must not be missing from the CSV output.
+        let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
+        let csv_output = super::parse_to_csv(input, None);
+
+        let mut lines = csv_output.lines();
+        let header: Vec<&str> = lines.next().expect("header row").split(',').collect();
+        let row = lines.next().expect("data row");
+        // Parse the row respecting quoting via a simple check of key fields
+        assert!(header.starts_with(&[
+            "FrameType",
+            "Function",
+            "Address",
+            "Identification Number",
+            "Manufacturer",
+            "Manufacturer Name",
+            "Access Number",
+            "Status",
+            "Security Mode",
+            "Version",
+            "Device Type"
+        ]));
+        assert!(row.starts_with("Wireless,SndNk,,12345678,ELS,Elster Group,42,No Error(s),"));
+        assert!(row.contains("AES-CBC-128; IV ≠ 0"));
+        assert!(row.contains(",51,Gas Meter"));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_wireless_encrypted_csv_without_key_has_no_garbage_records() {
+        let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
+        let csv_output = super::parse_to_csv(input, None);
+        assert!(!csv_output.contains("DataPoint1_Value"));
+        // Header info must still be present even though the payload is encrypted
+        assert!(csv_output.contains("12345678"));
+    }
+
+    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[test]
+    fn test_wireless_csv_with_key_contains_records() {
+        let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
+        let key = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x11,
+        ];
+        let csv_output = super::parse_to_csv(input, Some(&key));
+        assert!(csv_output.contains("12345678"));
+        assert!(csv_output.contains("(2850427)e-2[m³](Volume)"));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_json_and_yaml_contain_summary() {
+        let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
+        let json_output = super::parse_to_json(input, None);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_output).expect("json output should be valid");
+        let summary = parsed.get("summary").expect("json should contain summary");
+        assert_eq!(
+            summary.get("frame_type").and_then(|v| v.as_str()),
+            Some("Wireless")
+        );
+        assert_eq!(
+            summary
+                .get("identification_number")
+                .and_then(|v| v.as_str()),
+            Some("12345678")
+        );
+        assert_eq!(
+            summary
+                .get("manufacturer")
+                .and_then(|m| m.get("code"))
+                .and_then(|v| v.as_str()),
+            Some("ELS")
+        );
+        assert_eq!(
+            summary.get("security_mode").and_then(|v| v.as_str()),
+            Some("AES-CBC-128; IV ≠ 0")
+        );
+        assert_eq!(
+            summary.get("status").and_then(|v| v.as_str()),
+            Some("No Error(s)")
+        );
+        assert_eq!(
+            summary.get("encrypted").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+
+        let yaml_output = super::parse_to_yaml(input, None);
+        assert!(yaml_output.contains("summary:"));
+        assert!(yaml_output.contains("frame_type: Wireless"));
+        assert!(yaml_output.contains("security_mode: AES-CBC-128; IV ≠ 0"));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_all_formats_agree_on_header_fields() {
+        // The same header information must be present in every output format.
+        let inputs = [
+            // wired long frame
+            "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16",
+            // wireless with short TPL header
+            "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A",
+            // wireless without TPL header (ELL)
+            "1444AE0C7856341201078C2027780B134365877AC5",
+        ];
+        for input in inputs {
+            let output = super::parse_frame_output(input, None).expect("frame should parse");
+            let summary = &output.summary;
+            let table = super::parse_to_table(input, None);
+            let csv = super::parse_to_csv(input, None);
+            let json = super::parse_to_json(input, None);
+            let yaml = super::parse_to_yaml(input, None);
+            for value in [
+                summary.identification_number.clone(),
+                summary.manufacturer.as_ref().map(|m| m.code.clone()),
+                summary.status.clone(),
+                summary.security_mode.clone(),
+                summary.device_type.clone(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                for (format, output) in [
+                    ("table", &table),
+                    ("csv", &csv),
+                    ("json", &json),
+                    ("yaml", &yaml),
+                ] {
+                    assert!(
+                        output.contains(&value),
+                        "{format} output is missing header value {value:?} for input {input}"
+                    );
+                }
+            }
+        }
     }
 
     #[cfg(feature = "std")]
