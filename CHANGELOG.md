@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0]
+
+Breaking changes for JSON/YAML consumers:
+
+- Changed `summary.records[].value` from a table-style string (e.g.
+  `"(2850427)e-2[m³](Volume)"`) to structured fields: `value` (number),
+  `exponent`, `unit` and `quantity`, derived from the processed data record
+  header. The human-readable string is still available as
+  `summary.records[].display`. Table and CSV outputs are unchanged.
+- Removed the top-level `manufacturer_info` key from JSON and YAML output.
+  Migration: use `summary.manufacturer`, which carries `code`, `name`,
+  `website` and `description`.
+- Changed raw byte payloads (`frame.data` of wireless frames,
+  `data_records[].raw_bytes` and manufacturer-specific record data) to
+  serialize as compact uppercase hex strings instead of decimal byte arrays.
+  Migration: decode the hex string instead of reading a JSON/YAML array
+  (e.g. `"2F2F"` instead of `[47, 47]`). Serialize-only: parsing APIs and
+  `Deserialize` implementations are unchanged.
+
 ## [0.1.4] - 2026-07-17
 
 - Added direct application-layer parsing APIs, record accessors, and a crate-local data-record example.

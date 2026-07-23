@@ -1,5 +1,28 @@
 pub mod decryption;
 
+/// Serializes raw byte payloads as compact uppercase hex strings so that
+/// human-facing dumps (JSON/YAML) don't render them as decimal byte arrays.
+/// Serialize-only: deserialization of these fields is unaffected.
+#[cfg(feature = "serde")]
+pub mod serde_hex {
+    use core::fmt;
+
+    struct HexSlice<'a>(&'a [u8]);
+
+    impl fmt::Display for HexSlice<'_> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            for byte in self.0 {
+                write!(f, "{:02X}", byte)?;
+            }
+            Ok(())
+        }
+    }
+
+    pub fn serialize<S: serde::Serializer>(data: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(&HexSlice(data))
+    }
+}
+
 #[cfg(feature = "std")]
 use std::fmt::{self, Display};
 

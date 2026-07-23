@@ -187,7 +187,16 @@ struct ManufacturerSummary {
 #[cfg(feature = "std")]
 #[derive(serde::Serialize)]
 struct RecordSummary {
-    value: String,
+    /// Human-readable rendering (same string the table and CSV outputs use).
+    display: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exponent: Option<isize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quantity: Option<String>,
     data_information: String,
     header_hex: String,
     data_hex: String,
@@ -280,16 +289,19 @@ fn variable_data_block<'a>(user_data: Option<&user_data::UserDataBlock<'a>>) -> 
 
 #[cfg(feature = "std")]
 fn record_summaries(records: &user_data::DataRecords) -> Vec<RecordSummary> {
+    use user_data::data_information::DataType;
+
     records
         .clone()
         .flatten()
         .map(|record| {
-            let value_information = match record
+            let value_information = record
                 .data_record_header
                 .processed_data_record_header
                 .value_information
-            {
-                Some(ref x) => format!("{}", x),
+                .as_ref();
+            let value_information_display = match value_information {
+                Some(x) => format!("{}", x),
                 None => ")".to_string(),
             };
             let data_information = match record
@@ -300,8 +312,28 @@ fn record_summaries(records: &user_data::DataRecords) -> Vec<RecordSummary> {
                 Some(ref x) => format!("{}", x),
                 None => "None".to_string(),
             };
+            let value = match record.data.value {
+                Some(DataType::Number(n)) | Some(DataType::LossyNumber(n)) => Some(n),
+                _ => None,
+            };
+            let unit = value_information
+                .map(|vi| vi.units.iter().map(ToString::to_string).collect::<String>())
+                .filter(|s| !s.is_empty());
+            let quantity = value_information
+                .map(|vi| {
+                    vi.labels
+                        .iter()
+                        .map(|label| format!("{:?}", label))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .filter(|s| !s.is_empty());
             RecordSummary {
-                value: format!("({}{}", record.data, value_information),
+                display: format!("({}{}", record.data, value_information_display),
+                value,
+                exponent: value_information.map(|vi| vi.decimal_scale_exponent),
+                unit,
+                quantity,
                 data_information,
                 header_hex: record.data_record_header_hex(),
                 data_hex: record.data_hex(),
@@ -450,20 +482,6 @@ fn summarize_wireless(
 fn build_output<T: serde::Serialize>(parsed: &T, summary: FrameSummary) -> ParsedOutput {
     let mut json = serde_json::to_value(parsed).unwrap_or_default();
     if let serde_json::Value::Object(ref mut map) = json {
-        if let Some(mfr) = &summary.manufacturer {
-            if let (Some(name), Some(website), Some(description)) =
-                (&mfr.name, &mfr.website, &mfr.description)
-            {
-                map.insert(
-                    "manufacturer_info".to_string(),
-                    serde_json::json!({
-                        "name": name,
-                        "website": website,
-                        "description": description,
-                    }),
-                );
-            }
-        }
         map.insert(
             "summary".to_string(),
             serde_json::to_value(&summary).unwrap_or_default(),
@@ -471,16 +489,6 @@ fn build_output<T: serde::Serialize>(parsed: &T, summary: FrameSummary) -> Parse
     }
 
     let mut yaml = serde_yaml::to_string(parsed).unwrap_or_default();
-    if let Some(mfr) = &summary.manufacturer {
-        if let (Some(name), Some(website), Some(description)) =
-            (&mfr.name, &mfr.website, &mfr.description)
-        {
-            yaml.push_str(&format!(
-                "manufacturer_info:\n  name: {}\n  website: {}\n  description: {}\n",
-                name, website, description
-            ));
-        }
-    }
     yaml.push_str(
         &serde_yaml::to_string(&SummarySection { summary: &summary }).unwrap_or_default(),
     );
@@ -694,7 +702,7 @@ fn render_table(summary: &FrameSummary, key_provided: bool) -> String {
         value_table.set_titles(row!["Value", "Data Information", "Header Hex", "Data Hex"]);
         for record in &summary.records {
             value_table.add_row(row![
-                record.value,
+                record.display,
                 record.data_information,
                 record.header_hex,
                 record.data_hex
@@ -776,7 +784,7 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
         summary.device_type.clone().unwrap_or_default(),
     ];
     for record in &summary.records {
-        row.push(record.value.clone());
+        row.push(record.display.clone());
         row.push(record.data_information.clone());
     }
     writer
@@ -1535,7 +1543,177 @@ mod tests {
                     );
                 }
             }
+
+            // The structured record fields in the JSON summary must agree with
+            // the normalized summary the table and CSV render from.
+            let parsed: serde_json::Value =
+                serde_json::from_str(&json).expect("json output should be valid");
+            let json_records = parsed
+                .get("summary")
+                .and_then(|s| s.get("records"))
+                .and_then(|r| r.as_array())
+                .expect("json summary should contain records");
+            assert_eq!(json_records.len(), summary.records.len());
+            for (json_record, record) in json_records.iter().zip(&summary.records) {
+                assert_eq!(
+                    json_record.get("display").and_then(|v| v.as_str()),
+                    Some(record.display.as_str()),
+                    "json record display mismatch for input {input}"
+                );
+                assert_eq!(
+                    json_record.get("value").and_then(|v| v.as_f64()),
+                    record.value,
+                    "json record value mismatch for input {input}"
+                );
+                assert_eq!(
+                    json_record
+                        .get("exponent")
+                        .and_then(|v| v.as_i64())
+                        .map(|v| v as isize),
+                    record.exponent,
+                    "json record exponent mismatch for input {input}"
+                );
+                assert_eq!(
+                    json_record.get("unit").and_then(|v| v.as_str()),
+                    record.unit.as_deref(),
+                    "json record unit mismatch for input {input}"
+                );
+                assert_eq!(
+                    json_record.get("quantity").and_then(|v| v.as_str()),
+                    record.quantity.as_deref(),
+                    "json record quantity mismatch for input {input}"
+                );
+                // The display string the table/CSV formats use must embed the
+                // same structured information.
+                if let Some(unit) = &record.unit {
+                    assert!(
+                        record.display.contains(unit.as_str()),
+                        "display {:?} should contain unit {unit:?}",
+                        record.display
+                    );
+                }
+                if let Some(exponent) = record.exponent.filter(|e| *e != 0) {
+                    assert!(
+                        record.display.contains(&format!("e{exponent}")),
+                        "display {:?} should contain exponent {exponent}",
+                        record.display
+                    );
+                }
+            }
         }
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_json_records_contain_structured_values() {
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let json_output = super::parse_to_json(input, None);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_output).expect("json output should be valid");
+        let records = parsed
+            .get("summary")
+            .and_then(|s| s.get("records"))
+            .and_then(|r| r.as_array())
+            .expect("summary should contain records");
+
+        // "(3)e-1[m³](Volume)" becomes structured fields.
+        let volume = records
+            .iter()
+            .find(|r| r.get("quantity").and_then(|v| v.as_str()) == Some("Volume"))
+            .expect("volume record");
+        assert_eq!(volume.get("value").and_then(|v| v.as_f64()), Some(3.0));
+        assert_eq!(volume.get("exponent").and_then(|v| v.as_i64()), Some(-1));
+        assert_eq!(volume.get("unit").and_then(|v| v.as_str()), Some("m³"));
+        assert_eq!(
+            volume.get("display").and_then(|v| v.as_str()),
+            Some("(3)e-1[m³](Volume)")
+        );
+
+        // A date record has no numeric value but keeps its display string.
+        let date = records
+            .iter()
+            .find(|r| r.get("quantity").and_then(|v| v.as_str()) == Some("Date"))
+            .expect("date record");
+        assert!(date.get("value").is_none());
+        assert_eq!(
+            date.get("display").and_then(|v| v.as_str()),
+            Some("(12/Jan/12)(Date)")
+        );
+
+        // A manufacturer-specific record has neither value information nor a
+        // numeric value.
+        let manufacturer_specific = records
+            .iter()
+            .find(|r| {
+                r.get("data_information")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|s| s.contains("ManufacturerSpecific"))
+            })
+            .expect("manufacturer specific record");
+        assert!(manufacturer_specific.get("value").is_none());
+        assert!(manufacturer_specific.get("exponent").is_none());
+        assert!(manufacturer_specific.get("unit").is_none());
+        assert!(manufacturer_specific.get("quantity").is_none());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_json_and_yaml_have_no_manufacturer_info() {
+        let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let json_output = super::parse_to_json(input, None);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_output).expect("json output should be valid");
+        assert!(parsed.get("manufacturer_info").is_none());
+        // summary.manufacturer carries the same information instead.
+        assert_eq!(
+            parsed
+                .get("summary")
+                .and_then(|s| s.get("manufacturer"))
+                .and_then(|m| m.get("name"))
+                .and_then(|v| v.as_str()),
+            Some("Schlumberger Industries")
+        );
+
+        let yaml_output = super::parse_to_yaml(input, None);
+        assert!(!yaml_output.contains("manufacturer_info:"));
+        assert!(yaml_output.contains("name: Schlumberger Industries"));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_byte_payloads_serialize_as_hex_strings() {
+        // Wireless frame: frame.data must be a compact uppercase hex string.
+        let wireless_input = "1444AE0C7856341201078C2027780B134365877AC5";
+        let json_output = super::parse_to_json(wireless_input, None);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_output).expect("json output should be valid");
+        let frame_data = parsed
+            .get("frame")
+            .and_then(|f| f.get("data"))
+            .expect("wireless frame should contain data");
+        let hex = frame_data.as_str().expect("frame data should be a string");
+        assert!(!hex.is_empty());
+        assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(hex, hex.to_uppercase());
+
+        // Data records: raw_bytes must be hex strings as well.
+        let wired_input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+        let json_output = super::parse_to_json(wired_input, None);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_output).expect("json output should be valid");
+        let records = parsed
+            .get("data_records")
+            .and_then(|r| r.as_array())
+            .expect("data records");
+        let first_raw_bytes = records
+            .first()
+            .and_then(|r| r.get("raw_bytes"))
+            .and_then(|v| v.as_str())
+            .expect("raw_bytes should be a hex string");
+        assert_eq!(first_raw_bytes, "040700000000");
+
+        // Manufacturer-specific data is a hex string instead of a byte array.
+        assert!(json_output.contains("\"ManufacturerSpecific\": \"6000\""));
     }
 
     #[cfg(feature = "std")]
