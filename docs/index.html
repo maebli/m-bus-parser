@@ -689,7 +689,7 @@
         <pre id="output"></pre>
     </div>
     <script type="module">
-        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js?v=0.2.0";
+        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js?v=0.3.0";
 
         let currentFormat = "json"; // Keep track of the last used format
 
@@ -732,7 +732,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.2.0", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.3.0", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             // Load data and format from URL params and auto-parse if present

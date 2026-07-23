@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-parser"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A library for parsing M-Bus frames"
 license = "MIT"
@@ -47,10 +47,10 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 bitflags = "2.8.0"
 arrayvec = { version = "0.7.4", default-features = false }
 defmt = { version = "1.0.1", optional = true }
-wired-mbus-link-layer = { version = "0.2.0", path = "crates/wired-mbus-link-layer" }
-wireless-mbus-link-layer = { version = "0.2.0", path = "crates/wireless-mbus-link-layer" }
-m-bus-core = { version = "0.2.0", path = "crates/m-bus-core" }
-m-bus-application-layer = { version = "0.2.0", path = "crates/m-bus-application-layer" }
+wired-mbus-link-layer = { version = "0.3.0", path = "crates/wired-mbus-link-layer" }
+wireless-mbus-link-layer = { version = "0.3.0", path = "crates/wireless-mbus-link-layer" }
+m-bus-core = { version = "0.3.0", path = "crates/m-bus-core" }
+m-bus-application-layer = { version = "0.3.0", path = "crates/m-bus-application-layer" }
 aes = { version = "0.9", optional = true, default-features = false }
 cbc = { version = "0.2", optional = true, default-features = false }
 cipher = { version = "0.5", optional = true, default-features = false, features = ["block-padding"] }
