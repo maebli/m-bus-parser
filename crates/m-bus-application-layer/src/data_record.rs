@@ -205,7 +205,13 @@ impl TryFrom<&RawDataRecordHeader<'_>> for ProcessedDataRecordHeader {
             if v.labels.contains(&ValueLabel::Date) {
                 d.data_field_coding = DataFieldCoding::DateTypeG;
             } else if v.labels.contains(&ValueLabel::DateTime) {
-                d.data_field_coding = DataFieldCoding::DateTimeTypeF;
+                // VIF 0x6D with a 6-byte data field is a type I date and time
+                // (EN 13757-3), only the 4-byte variant is type F.
+                d.data_field_coding = if d.data_field_coding == DataFieldCoding::Integer48Bit {
+                    DataFieldCoding::DateTimeTypeI
+                } else {
+                    DataFieldCoding::DateTimeTypeF
+                };
             } else if v.labels.contains(&ValueLabel::Time) {
                 d.data_field_coding = DataFieldCoding::DateTimeTypeJ;
             } else if v.labels.contains(&ValueLabel::DateTimeWithSeconds) {
