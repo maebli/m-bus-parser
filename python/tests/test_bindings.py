@@ -57,6 +57,10 @@ class BindingsTests(unittest.TestCase):
 
         self.assertIsInstance(rendered, str)
         self.assertEqual(json.loads(rendered), json.loads(legacy))
+
+        xml = pymbusparser.render(WIRED_FRAME, "xml")
+        self.assertIsInstance(xml, str)
+        self.assertIn("<MBusData>", xml)
         self.assertIsInstance(
             pymbusparser.parse_application_layer(APPLICATION_RECORDS), str
         )
@@ -69,7 +73,7 @@ class BindingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly 16 bytes"):
             pymbusparser.parse(WIRED_FRAME, key="1234")
         with self.assertRaisesRegex(ValueError, "unsupported format"):
-            pymbusparser.render(WIRED_FRAME, "xml")
+            pymbusparser.render(WIRED_FRAME, "not-a-format")
         with self.assertRaises(TypeError):
             pymbusparser.parse(object())
 
