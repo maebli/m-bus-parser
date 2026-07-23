@@ -669,6 +669,7 @@
         <input id="parse_table" type="button" value="Parse to Table" />
         <input id="parse_csv" type="button" value="Parse to CSV" />
         <input id="parse_mermaid" type="button" value="Parse to Diagram" />
+        <input id="parse_xml" type="button" value="Parse to XML" />
         <input id="parse_hexview" type="button" value="Hex View" />
     </form>
     <div id="output-container">
@@ -688,7 +689,7 @@
         <pre id="output"></pre>
     </div>
     <script type="module">
-        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js?v=0.1.3";
+        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js?v=0.2.0";
 
         let currentFormat = "json"; // Keep track of the last used format
 
@@ -731,7 +732,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.1.3", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.2.0", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             // Load data and format from URL params and auto-parse if present
@@ -761,6 +762,10 @@
 
             document.getElementById('parse_mermaid').addEventListener('click', () => {
                 parseInput("mermaid");
+            });
+
+            document.getElementById('parse_xml').addEventListener('click', () => {
+                parseInput("xml");
             });
 
             document.getElementById('parse_hexview').addEventListener('click', () => {
@@ -826,6 +831,7 @@
                 else if (format === 'csv') { extension = 'csv'; mimeType = 'text/csv'; }
                 else if (format === 'table_format') { lang = 'plaintext'; extension = 'txt'; }
                 else if (format === 'mermaid') { extension = 'mmd'; mimeType = 'text/plain'; }
+                else if (format === 'xml') { lang = 'xml'; extension = 'xml'; mimeType = 'application/xml'; }
 
                 outputContainer.style.background = '';
                 outputContainer.style.whiteSpace = '';
