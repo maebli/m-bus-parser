@@ -52,6 +52,8 @@ pub mod annotate;
 #[cfg(feature = "std")]
 pub mod manufacturers;
 pub mod mbus_data;
+#[cfg(feature = "std")]
+mod rscada_xml;
 pub use m_bus_application_layer as user_data;
 
 pub use m_bus_core::decryption;

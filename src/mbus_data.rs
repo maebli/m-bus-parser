@@ -129,6 +129,7 @@ pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> 
         "json" => parse_to_json(data, key),
         "yaml" => parse_to_yaml(data, key),
         "csv" => parse_to_csv(data, key),
+        "xml" => parse_to_xml(data),
         "mermaid" => parse_to_mermaid(data, key),
         "annotated" => parse_to_annotated(data),
         "hexview" => parse_to_hexview(data, key),
@@ -1136,6 +1137,13 @@ fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -
         }
     }
     (body, styles)
+}
+
+#[cfg(feature = "std")]
+#[must_use]
+fn parse_to_xml(input: &str) -> String {
+    let data = clean_and_convert(input);
+    crate::rscada_xml::render_from_bytes(&data)
 }
 
 #[cfg(feature = "std")]

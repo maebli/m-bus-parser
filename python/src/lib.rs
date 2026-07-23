@@ -10,6 +10,7 @@ const FORMATS: &[&str] = &[
     "csv",
     "table",
     "mermaid",
+    "xml",
     "annotated",
     "annotated-text",
     "hexview",

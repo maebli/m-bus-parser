@@ -49,7 +49,12 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
         }
 
         if vif.has_extension() {
-            let mut offset = 1;
+            // When the plaintext VIF precedes the extensions, the VIFE chain
+            // starts after the ASCII length byte and string, not at offset 1.
+            let mut offset = match &plaintext_vife {
+                Some(chars) if !standard_plaintex_vib => 1 + 1 + chars.len(),
+                _ => 1,
+            };
             while offset < data.len() {
                 let vife_data = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
                 let current_vife = ValueInformationFieldExtension { data: vife_data };

@@ -23,6 +23,7 @@ enum Command {
         #[arg(short = 'd', long)]
         data: Option<String>,
 
+        /// Output format: table (default), json, yaml, csv, mermaid, xml
         #[arg(short = 't', long)]
         format: Option<String>,
 
