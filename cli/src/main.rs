@@ -1,8 +1,12 @@
-use clap::{Parser, Subcommand};
-use m_bus_parser::serialize_mbus_data;
 use std::fs;
+use std::io::{self, IsTerminal};
 use std::path::PathBuf;
-use std::str;
+use std::process::ExitCode;
+use std::str::FromStr;
+
+use clap::{Parser, Subcommand};
+use m_bus_parser::{render_hex, DecodeOptions, OutputFormat, RenderOptions};
+use terminal_size::{terminal_size, Width};
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -15,71 +19,105 @@ struct Cli {
 enum Command {
     /// Parse an M-Bus data file
     Parse {
-        /// The file to parse
-        #[arg(short = 'f', long)]
+        /// File containing a hexadecimal M-Bus frame
+        #[arg(short = 'f', long, conflicts_with = "data")]
         file: Option<PathBuf>,
 
-        /// The raw M-Bus data as a string
-        #[arg(short = 'd', long)]
+        /// Raw hexadecimal M-Bus frame
+        #[arg(short = 'd', long, conflicts_with = "file")]
         data: Option<String>,
 
-        /// Output format: table (default), json, yaml, csv, mermaid, xml
-        #[arg(short = 't', long)]
-        format: Option<String>,
+        /// Output format: table, json, yaml, csv, mermaid, xml, annotated, annotated-text
+        #[arg(short = 't', long, default_value = "table")]
+        format: String,
 
-        /// Decryption key (32 hex characters for AES-128)
+        /// Decryption key (exactly 32 hexadecimal characters)
         #[arg(short = 'k', long)]
         key: Option<String>,
+
+        /// Table width in terminal columns (auto-detected for interactive output)
+        #[arg(long)]
+        width: Option<usize>,
+
+        /// Omit bundled manufacturer enrichment from canonical outputs
+        #[arg(long)]
+        no_enrichment: bool,
     },
 }
 
-fn main() {
-    let cli = Cli::parse();
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("error: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
 
+fn run() -> Result<(), String> {
+    let cli = Cli::parse();
     match cli.command {
         Command::Parse {
             file,
             data,
             format,
             key,
+            width,
+            no_enrichment,
         } => {
-            let key_bytes = parse_key(key.as_deref());
-            let fmt = format.as_deref().unwrap_or("table");
-
-            if let Some(file_path) = file {
-                let file_content = fs::read_to_string(file_path).expect("Failed to read the file");
-                print!(
-                    "{}",
-                    serialize_mbus_data(&file_content, fmt, key_bytes.as_ref())
-                );
-            } else if let Some(data_string) = data {
-                print!(
-                    "{}",
-                    serialize_mbus_data(&data_string, fmt, key_bytes.as_ref())
-                );
-            } else {
-                eprintln!("Either --file or --data must be provided");
-            }
+            let input = match (file, data) {
+                (Some(path), None) => fs::read_to_string(&path).map_err(|error| {
+                    format!("[input.file] failed to read {}: {error}", path.display())
+                })?,
+                (None, Some(data)) => data,
+                (None, None) => {
+                    return Err(
+                        "[option.invalid] either --file or --data must be provided".to_string()
+                    );
+                }
+                (Some(_), Some(_)) => unreachable!("clap enforces conflicts"),
+            };
+            let output_format = OutputFormat::from_str(&format)
+                .map_err(|error| format!("[{}] {error}", error.code()))?;
+            let key = key
+                .as_deref()
+                .map(parse_key)
+                .transpose()
+                .map_err(|error| format!("[option.invalid] {error}"))?;
+            let width = width.or_else(|| {
+                if io::stdout().is_terminal() {
+                    terminal_size().map(|(Width(columns), _)| usize::from(columns))
+                } else {
+                    Some(100)
+                }
+            });
+            let rendered = render_hex(
+                &input,
+                output_format,
+                &RenderOptions {
+                    decode: DecodeOptions {
+                        key,
+                        include_enrichment: !no_enrichment,
+                    },
+                    table_width: width,
+                },
+            )
+            .map_err(|error| format!("[{}] {error}", error.code()))?;
+            print!("{rendered}");
+            Ok(())
         }
     }
 }
 
-fn parse_key(key_hex: Option<&str>) -> Option<[u8; 16]> {
-    key_hex.and_then(|hex_str| {
-        hex::decode(hex_str).ok().and_then(|bytes| {
-            if bytes.len() == 16 {
-                let mut arr = [0u8; 16];
-                arr.copy_from_slice(&bytes);
-                Some(arr)
-            } else {
-                eprintln!(
-                    "Warning: Key must be 16 bytes (32 hex chars), got {} bytes. Ignoring key.",
-                    bytes.len()
-                );
-                None
-            }
-        })
-    })
+fn parse_key(value: &str) -> Result<[u8; 16], String> {
+    if value.len() != 32 || !value.chars().all(|character| character.is_ascii_hexdigit()) {
+        return Err("key must contain exactly 32 hexadecimal characters".to_string());
+    }
+    let bytes = hex::decode(value).map_err(|error| format!("invalid key: {error}"))?;
+    bytes
+        .try_into()
+        .map_err(|_| "key must contain exactly 16 bytes".to_string())
 }
 
 #[cfg(test)]
@@ -87,9 +125,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_data_from_string() {
-        let data_string = "0x68, 0x3C, 0x3C, 0x68, 0x08, 0x08, 0x72, 0x78, 0x03, 0x49, 0x11, 0x77, 0x04, 0x0E, 0x16, 0x0A, 0x00, 0x00, 0x00, 0x0C, 0x78, 0x78, 0x03, 0x49, 0x11, 0x04, 0x13, 0x31, 0xD4, 0x00, 0x00, 0x42, 0x6C, 0x00, 0x00, 0x44, 0x13, 0x00, 0x00, 0x00, 0x00, 0x04, 0x6D, 0x0B, 0x0B, 0xCD, 0x13, 0x02, 0x27, 0x00, 0x00, 0x09, 0xFD, 0x0E, 0x02, 0x09, 0xFD, 0x0F, 0x06, 0x0F, 0x00, 0x01, 0x75, 0x13, 0xD3, 0x16";
-        let output = serialize_mbus_data(data_string, "table", None);
-        assert!(output.contains("Hex"));
+    fn validates_key_exactly() {
+        assert!(parse_key("00112233445566778899AABBCCDDEEFF").is_ok());
+        assert!(parse_key("0011").is_err());
+        assert!(parse_key("00112233445566778899AABBCCDDEEFG").is_err());
     }
 }

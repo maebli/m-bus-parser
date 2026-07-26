@@ -3,6 +3,8 @@
 #![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
+use js_sys::Reflect;
+use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -16,10 +18,34 @@ fn pass() {
 fn test_m_bus_parse_table() {
     let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
     let output = m_bus_parser_wasm_pack::m_bus_parse(input, "table_format");
-    assert!(output.contains("Long Frame"));
-    assert!(output.contains("RspUd (ACD: false, DFC: false)"));
+    assert!(output.contains("wired"));
+    assert!(output.contains("RspUd"));
     assert!(output.contains("02205100"));
-    assert!(output.contains("[Wh]"));
+    assert!(output.lines().all(|line| line.chars().count() <= 100));
+}
+
+#[wasm_bindgen_test]
+fn decode_returns_a_native_versioned_object() {
+    let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+    let decoded =
+        m_bus_parser_wasm_pack::m_bus_decode(input, None, Some(false)).expect("valid frame");
+
+    assert_eq!(
+        Reflect::get(&decoded, &JsValue::from_str("schema_version"))
+            .unwrap()
+            .as_f64(),
+        Some(1.0)
+    );
+    assert_eq!(
+        Reflect::get(&decoded, &JsValue::from_str("protocol"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("wired")
+    );
+    assert!(Reflect::get(&decoded, &JsValue::from_str("enrichment"))
+        .unwrap()
+        .is_undefined());
 }
 
 #[wasm_bindgen_test]
@@ -28,7 +54,10 @@ fn test_m_bus_parse_hexview_ci_78_annotations() {
     let output = m_bus_parser_wasm_pack::m_bus_parse(input, "hexview");
     let segments: serde_json::Value =
         serde_json::from_str(&output).expect("hexview should return annotated JSON");
-    let segments = segments.as_array().expect("hexview should return an array");
+    let segments = segments
+        .get("segments")
+        .and_then(|value| value.as_array())
+        .expect("hexview should return a canonical annotation envelope");
 
     assert!(segments.iter().any(|seg| {
         seg.get("kind").and_then(|v| v.as_str()) == Some("CiField")
@@ -94,6 +123,14 @@ fn test_m_bus_parse_with_key_preserves_utf8_text() {
     let key = "0102030405060708090A0B0C0D0E0F11";
     let output = m_bus_parser_wasm_pack::m_bus_parse_with_key(input, "json", key);
 
-    assert!(output.contains("\"Text\": \"m³\""), "{output}");
+    assert!(output.contains("m³"), "{output}");
     assert!(!output.contains("mÂ³"), "{output}");
+}
+
+#[wasm_bindgen_test]
+fn typed_render_rejects_invalid_keys_without_panicking() {
+    let input = "68 03 03 68 08 01 00 09 16";
+    let result =
+        m_bus_parser_wasm_pack::m_bus_render(input, "json", Some("123".to_string()), None, None);
+    assert!(result.is_err());
 }

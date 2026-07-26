@@ -27,7 +27,7 @@ telegram = """
 
 frame = parse(telegram)
 print(frame["frame"])
-print(frame.get("data_records"))
+print(frame["records"])
 ```
 
 Use `parse_records` when the input contains application-layer records without a
@@ -40,12 +40,14 @@ records = parse_records("2f2f0413fce0f5052f2f2f2f2f2f2f2f")
 ```
 
 Use `render` for text-oriented output. Supported formats are `json`, `yaml`,
-`csv`, `table`, `mermaid`, `annotated`, `annotated-text`, and `hexview`:
+`csv`, `table`, `mermaid`, `xml`, `annotated`, `annotated-text`, and
+`hexview`:
 
 ```python
 from pymbusparser import render
 
 print(render(telegram, "table"))
+print(render(telegram, "table", width=48))
 ```
 
 ## Decryption
@@ -59,8 +61,10 @@ from pymbusparser import parse
 decoded = parse(encrypted_telegram, key=bytes.fromhex("00112233445566778899aabbccddeeff"))
 ```
 
-Malformed frames, keys, and output formats raise `ValueError`; unsupported input
-types raise `TypeError`.
+Malformed frames, keys, and output formats raise `MbusParserError`, a
+`ValueError` subclass whose message starts with a stable error code.
+Unsupported input types raise `TypeError`. Pass `include_enrichment=False` to
+omit manufacturer lookup data.
 
 ## Compatibility
 

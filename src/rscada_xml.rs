@@ -7,37 +7,299 @@
 use crate::mbus_data::MbusData;
 use crate::user_data;
 use wired_mbus_link_layer as frames;
+use wireless_mbus_link_layer as wireless;
 
 const XML_PROCESSING_INSTRUCTION: &str = "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n";
 
-/// Render a raw frame in the legacy libmbus normalized XML format.
-pub(crate) fn render_from_bytes(data: &[u8]) -> String {
-    let Ok(parsed) = MbusData::<frames::WiredFrame>::try_from(data) else {
-        return "Error: Could not parse data as a wired M-Bus frame".to_string();
-    };
+/// Render a raw wired frame in the byte-compatible libmbus vocabulary, or a
+/// wireless frame in the same documented project vocabulary.
+pub(crate) fn render_from_bytes(data: &[u8], key: Option<&[u8; 16]>) -> Result<String, String> {
+    if let Ok(parsed) = MbusData::<frames::WiredFrame>::try_from(data) {
+        return match &parsed.user_data {
+            Some(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                ..
+            }) => {
+                // Keep the established wired byte stream when no key is
+                // requested, including meters whose configuration bits claim
+                // encryption while their records remain parseable.
+                if key.is_none() {
+                    Ok(render_variable(
+                        long_tpl_header,
+                        parsed.data_records.as_ref(),
+                    ))
+                } else {
+                    render_with_optional_decryption(
+                        long_tpl_header,
+                        parsed.user_data.as_ref(),
+                        parsed.data_records.as_ref(),
+                        None,
+                        key,
+                    )
+                }
+            }
+            Some(user_data::UserDataBlock::FixedDataStructure {
+                identification_number,
+                access_number,
+                status,
+                device_type_and_unit,
+                counter1,
+                counter2,
+            }) => Ok(render_fixed(
+                identification_number.number,
+                *access_number,
+                status.bits(),
+                *device_type_and_unit,
+                counter1,
+                counter2,
+            )),
+            _ => Err("unsupported wired frame type for legacy XML output".to_string()),
+        };
+    }
 
+    let mut crc_buffer = [0u8; 512];
+    let normalized = wireless::strip_format_a_crcs(data, &mut crc_buffer).unwrap_or(data);
+    let parsed = MbusData::<wireless::WirelessFrame>::try_from(normalized)
+        .map_err(|error| format!("could not parse data as wired or wireless M-Bus: {error:?}"))?;
+    render_wireless(&parsed, key)
+}
+
+fn render_wireless(
+    parsed: &MbusData<wireless::WirelessFrame<'_>>,
+    key: Option<&[u8; 16]>,
+) -> Result<String, String> {
+    use user_data::UserDataBlock;
     match &parsed.user_data {
-        Some(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+        Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
+            long_tpl_header, ..
+        }) => render_with_optional_decryption(
             long_tpl_header,
+            parsed.user_data.as_ref(),
+            parsed.data_records.as_ref(),
+            Some(&parsed.frame.manufacturer_id),
+            key,
+        ),
+        Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
+            extended_link_layer,
+            short_tpl_header,
             ..
-        }) => render_variable(long_tpl_header, parsed.data_records.as_ref()),
-        Some(user_data::UserDataBlock::FixedDataStructure {
+        }) => {
+            let synthetic = extended_link_layer
+                .as_ref()
+                .is_some_and(|ell| ell.encryption.is_some())
+                && matches!(
+                    short_tpl_header.configuration_field.security_mode(),
+                    m_bus_core::SecurityMode::NoEncryption
+                );
+            let access = if synthetic {
+                extended_link_layer.as_ref().map(|ell| ell.access_number)
+            } else {
+                Some(short_tpl_header.access_number)
+            };
+            let status = (!synthetic).then_some(short_tpl_header.status.bits());
+            let signature = (!synthetic).then_some(short_tpl_header.configuration_field.raw());
+            render_wireless_with_optional_decryption(parsed, access, status, signature, key)
+        }
+        Some(UserDataBlock::VariableDataStructureWithoutTplHeader {
+            extended_link_layer,
+            ..
+        }) => Ok(render_wireless_variable(
+            &parsed.frame.manufacturer_id,
+            extended_link_layer.as_ref().map(|ell| ell.access_number),
+            None,
+            None,
+            parsed.data_records.as_ref(),
+        )),
+        Some(UserDataBlock::FixedDataStructure {
             identification_number,
             access_number,
             status,
             device_type_and_unit,
             counter1,
             counter2,
-        }) => render_fixed(
+        }) => Ok(render_fixed(
             identification_number.number,
             *access_number,
             status.bits(),
             *device_type_and_unit,
             counter1,
             counter2,
-        ),
-        _ => "Error: Unsupported frame type for legacy XML output".to_string(),
+        )),
+        _ => Ok(render_wireless_variable(
+            &parsed.frame.manufacturer_id,
+            None,
+            None,
+            None,
+            None,
+        )),
     }
+}
+
+fn render_with_optional_decryption(
+    header: &user_data::LongTplHeader,
+    user_data: Option<&user_data::UserDataBlock<'_>>,
+    records: Option<&user_data::DataRecords<'_>>,
+    wireless_id: Option<&wireless::ManufacturerId>,
+    key: Option<&[u8; 16]>,
+) -> Result<String, String> {
+    if !header.is_encrypted() {
+        return Ok(render_variable(header, records));
+    }
+    let Some(key) = key else {
+        return Ok(render_variable(header, None));
+    };
+    #[cfg(feature = "decryption")]
+    {
+        let mut decrypted = [0u8; 512];
+        let block = user_data.ok_or_else(|| "encrypted XML frame has no user data".to_string())?;
+        let len = crate::output::decrypt_user_data(block, wireless_id, key, &mut decrypted)
+            .map_err(|error| error.to_string())?;
+        let data = decrypted
+            .get(..len)
+            .ok_or_else(|| "decryption returned an invalid payload length".to_string())?;
+        let records = user_data::DataRecords::new(data, Some(header));
+        Ok(render_variable(header, Some(&records)))
+    }
+    #[cfg(not(feature = "decryption"))]
+    {
+        let _ = (user_data, wireless_id, key);
+        Err("this build does not include decryption support".to_string())
+    }
+}
+
+fn render_wireless_with_optional_decryption(
+    parsed: &MbusData<wireless::WirelessFrame<'_>>,
+    access: Option<u8>,
+    status: Option<u8>,
+    signature: Option<u16>,
+    key: Option<&[u8; 16]>,
+) -> Result<String, String> {
+    let encrypted = match &parsed.user_data {
+        Some(user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+            extended_link_layer,
+            short_tpl_header,
+            ..
+        }) => {
+            extended_link_layer
+                .as_ref()
+                .is_some_and(|ell| ell.encryption.is_some())
+                || short_tpl_header.is_encrypted()
+        }
+        _ => false,
+    };
+    if !encrypted {
+        return Ok(render_wireless_variable(
+            &parsed.frame.manufacturer_id,
+            access,
+            status,
+            signature,
+            parsed.data_records.as_ref(),
+        ));
+    }
+    let Some(key) = key else {
+        return Ok(render_wireless_variable(
+            &parsed.frame.manufacturer_id,
+            access,
+            status,
+            signature,
+            None,
+        ));
+    };
+    #[cfg(feature = "decryption")]
+    {
+        let mut decrypted = [0u8; 512];
+        let block = parsed
+            .user_data
+            .as_ref()
+            .ok_or_else(|| "encrypted XML frame has no user data".to_string())?;
+        let len = crate::output::decrypt_user_data(
+            block,
+            Some(&parsed.frame.manufacturer_id),
+            key,
+            &mut decrypted,
+        )
+        .map_err(|error| error.to_string())?;
+        let data = decrypted
+            .get(..len)
+            .ok_or_else(|| "decryption returned an invalid payload length".to_string())?;
+        let records = user_data::DataRecords::new(data, None);
+        Ok(render_wireless_variable(
+            &parsed.frame.manufacturer_id,
+            access,
+            status,
+            signature,
+            Some(&records),
+        ))
+    }
+    #[cfg(not(feature = "decryption"))]
+    {
+        let _ = key;
+        Err("this build does not include decryption support".to_string())
+    }
+}
+
+fn render_wireless_variable(
+    identity: &wireless::ManufacturerId,
+    access: Option<u8>,
+    status: Option<u8>,
+    signature: Option<u16>,
+    records: Option<&user_data::DataRecords<'_>>,
+) -> String {
+    let manufacturer = identity.manufacturer_code.to_string();
+    let medium = u8::from(identity.device_type);
+    let mut out = String::new();
+    out.push_str(XML_PROCESSING_INSTRUCTION);
+    out.push_str("<MBusData>\n\n");
+    out.push_str("    <SlaveInformation>\n");
+    out.push_str(&format!(
+        "        <Id>{}</Id>\n",
+        identity.identification_number.number
+    ));
+    out.push_str(&format!(
+        "        <Manufacturer>{}</Manufacturer>\n",
+        manufacturer
+    ));
+    out.push_str(&format!(
+        "        <Version>{}</Version>\n",
+        identity.version
+    ));
+    out.push_str(&format!(
+        "        <ProductName>{}</ProductName>\n",
+        xml_encode(&product_name(
+            &manufacturer,
+            identity.version,
+            medium,
+            identity.identification_number.number,
+        ))
+    ));
+    out.push_str(&format!(
+        "        <Medium>{}</Medium>\n",
+        xml_encode(&medium_lookup(medium))
+    ));
+    if let Some(access) = access {
+        out.push_str(&format!(
+            "        <AccessNumber>{}</AccessNumber>\n",
+            access
+        ));
+    }
+    if let Some(status) = status {
+        out.push_str(&format!("        <Status>{status:02X}</Status>\n"));
+    }
+    if let Some(signature) = signature {
+        out.push_str(&format!(
+            "        <Signature>{:02X}{:02X}</Signature>\n",
+            (signature >> 8) as u8,
+            (signature & 0xFF) as u8
+        ));
+    }
+    out.push_str("    </SlaveInformation>\n\n");
+    if let Some(records) = records {
+        for (index, record) in records.clone().flatten().enumerate() {
+            out.push_str(&render_variable_record(index, &record));
+        }
+    }
+    out.push_str("</MBusData>\n");
+    out
 }
 
 fn render_variable(

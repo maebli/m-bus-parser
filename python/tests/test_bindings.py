@@ -27,6 +27,8 @@ class BindingsTests(unittest.TestCase):
         frame_bytes = bytes.fromhex(WIRED_FRAME.replace(" ", ""))
 
         self.assertIsInstance(parsed, dict)
+        self.assertEqual(parsed["schema_version"], 1)
+        self.assertEqual(parsed["protocol"], "wired")
         self.assertIn("frame", parsed)
         self.assertEqual(parsed, pymbusparser.parse(frame_bytes))
         self.assertEqual(parsed, pymbusparser.parse(bytearray(frame_bytes)))
@@ -36,6 +38,7 @@ class BindingsTests(unittest.TestCase):
         self.assertEqual(
             pymbusparser.__all__,
             [
+                "MbusParserError",
                 "parse",
                 "parse_records",
                 "render",
@@ -66,16 +69,25 @@ class BindingsTests(unittest.TestCase):
         )
 
     def test_invalid_inputs_raise_python_exceptions(self):
-        with self.assertRaisesRegex(ValueError, "valid wired or wireless"):
+        with self.assertRaisesRegex(pymbusparser.MbusParserError, r"\[frame.invalid\]"):
             pymbusparser.parse("0102")
-        with self.assertRaisesRegex(ValueError, "valid wired or wireless"):
+        with self.assertRaisesRegex(pymbusparser.MbusParserError, r"\[frame.invalid\]"):
             pymbusparser.render("0102", "table")
-        with self.assertRaisesRegex(ValueError, "exactly 16 bytes"):
+        with self.assertRaisesRegex(pymbusparser.MbusParserError, r"\[option.invalid\]"):
             pymbusparser.parse(WIRED_FRAME, key="1234")
-        with self.assertRaisesRegex(ValueError, "unsupported format"):
+        with self.assertRaisesRegex(pymbusparser.MbusParserError, r"\[format.unsupported\]"):
             pymbusparser.render(WIRED_FRAME, "not-a-format")
+        with self.assertRaisesRegex(pymbusparser.MbusParserError, r"\[input.invalid_hex\]"):
+            pymbusparser.parse("68,3D")
         with self.assertRaises(TypeError):
             pymbusparser.parse(object())
+
+    def test_render_width_and_enrichment_options(self):
+        table = pymbusparser.render(WIRED_FRAME, "table", width=44)
+        self.assertTrue(all(len(line) <= 44 for line in table.splitlines()))
+
+        parsed = pymbusparser.parse(WIRED_FRAME, include_enrichment=False)
+        self.assertNotIn("enrichment", parsed)
 
     def test_decryption_is_compiled_into_the_wheel(self):
         rendered = pymbusparser.render(

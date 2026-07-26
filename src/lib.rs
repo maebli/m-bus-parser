@@ -53,6 +53,8 @@ pub mod annotate;
 pub mod manufacturers;
 pub mod mbus_data;
 #[cfg(feature = "std")]
+pub mod output;
+#[cfg(feature = "std")]
 mod rscada_xml;
 pub use m_bus_application_layer as user_data;
 
@@ -65,6 +67,11 @@ pub use wireless_mbus_link_layer::{ManufacturerId, WirelessFrame};
 
 #[cfg(feature = "std")]
 pub use mbus_data::serialize_mbus_data;
+#[cfg(feature = "std")]
+pub use output::{
+    decode_bytes, decode_hex, decode_hex_bytes, render_bytes, render_hex, DecodeOptions,
+    DecodedOutput, OutputError, OutputFormat, RenderOptions,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
