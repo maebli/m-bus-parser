@@ -204,7 +204,7 @@
 
         .line-gutter span {
             display: block;
-            height: 1.55em;
+            flex: 0 0 auto;
         }
 
         .code-source {
@@ -221,19 +221,54 @@
             font: inherit;
         }
 
-        .code-source code .line {
-            display: block;
-            min-height: 1.55em;
+        .code-source [class*="syn-"] {
+            color: #0d1117;
         }
 
-        .shiki,
-        .shiki span {
-            background-color: var(--shiki-light-bg, #fff) !important;
-            color: var(--shiki-light, #0d1117) !important;
-            font-style: var(--shiki-light-font-style, normal);
-            font-weight: var(--shiki-light-font-weight, normal);
-            text-decoration: var(--shiki-light-text-decoration, none);
+        .code-source .syn-comment {
+            color: #4b5563;
+            font-style: italic;
         }
+
+        .code-source .syn-string,
+        .code-source .syn-quoted {
+            color: #0a3069;
+        }
+
+        .code-source .syn-constant,
+        .code-source .syn-numeric {
+            color: #953800;
+        }
+
+        .code-source .syn-keyword,
+        .code-source .syn-storage {
+            color: #a0111f;
+            font-weight: 600;
+        }
+
+        .code-source .syn-entity,
+        .code-source .syn-tag {
+            color: #0349b4;
+        }
+
+        .code-source .syn-variable,
+        .code-source .syn-attribute {
+            color: #622cbc;
+        }
+
+        .code-source .syn-support,
+        .code-source .syn-type {
+            color: #024c1a;
+        }
+
+        .code-source .syn-csv-column-0 { color: #0349b4; }
+        .code-source .syn-csv-column-1 { color: #024c1a; }
+        .code-source .syn-csv-column-2 { color: #a0111f; }
+        .code-source .syn-csv-column-3 { color: #622cbc; }
+        .code-source .syn-csv-column-4 { color: #953800; }
+        .code-source .syn-csv-column-5 { color: #005a5a; }
+        .code-source .syn-csv-column-6 { color: #704800; }
+        .code-source .syn-csv-column-7 { color: #3b3f99; }
 
         .output-error {
             margin: 0;
@@ -388,14 +423,53 @@
             outline-color: #58a6ff;
         }
 
-        body.dark-mode .shiki,
-        body.dark-mode .shiki span {
-            background-color: var(--shiki-dark-bg, #0d1117) !important;
-            color: var(--shiki-dark, #f0f6fc) !important;
-            font-style: var(--shiki-dark-font-style, normal);
-            font-weight: var(--shiki-dark-font-weight, normal);
-            text-decoration: var(--shiki-dark-text-decoration, none);
+        body.dark-mode .code-source,
+        body.dark-mode .code-source [class*="syn-"] {
+            color: #f0f3f6;
         }
+
+        body.dark-mode .code-source .syn-comment {
+            color: #c7cdd5;
+        }
+
+        body.dark-mode .code-source .syn-string,
+        body.dark-mode .code-source .syn-quoted {
+            color: #a5d6ff;
+        }
+
+        body.dark-mode .code-source .syn-constant,
+        body.dark-mode .code-source .syn-numeric {
+            color: #ffb77c;
+        }
+
+        body.dark-mode .code-source .syn-keyword,
+        body.dark-mode .code-source .syn-storage {
+            color: #ff9492;
+        }
+
+        body.dark-mode .code-source .syn-entity,
+        body.dark-mode .code-source .syn-tag {
+            color: #71b7ff;
+        }
+
+        body.dark-mode .code-source .syn-variable,
+        body.dark-mode .code-source .syn-attribute {
+            color: #cb9eff;
+        }
+
+        body.dark-mode .code-source .syn-support,
+        body.dark-mode .code-source .syn-type {
+            color: #6de080;
+        }
+
+        body.dark-mode .code-source .syn-csv-column-0 { color: #71b7ff; }
+        body.dark-mode .code-source .syn-csv-column-1 { color: #6de080; }
+        body.dark-mode .code-source .syn-csv-column-2 { color: #ff9492; }
+        body.dark-mode .code-source .syn-csv-column-3 { color: #cb9eff; }
+        body.dark-mode .code-source .syn-csv-column-4 { color: #ffb77c; }
+        body.dark-mode .code-source .syn-csv-column-5 { color: #5eead4; }
+        body.dark-mode .code-source .syn-csv-column-6 { color: #f8d866; }
+        body.dark-mode .code-source .syn-csv-column-7 { color: #b6c7ff; }
 
         body.dark-mode .output-error {
             border-top-color: #ff7b72;
@@ -695,8 +769,7 @@
             .code-scroll,
             .code-source,
             .line-gutter,
-            .shiki,
-            .shiki span {
+            .code-source span {
                 background: Canvas !important;
                 color: CanvasText !important;
                 forced-color-adjust: auto;
@@ -786,14 +859,54 @@
         <div id="output" aria-live="polite"></div>
     </div>
     <script type="module">
-        import init, { m_bus_render, version } from "./m_bus_parser_wasm_pack.js?v=0.4.0";
-        import { renderCodeViewer } from "./assets/highlighter.js?v=1";
+        import init, { m_bus_highlight, m_bus_render, version } from "./m_bus_parser_wasm_pack.js?v=0.4.1";
 
         let currentFormat = "json";
         let lastTableWidth = null;
         let tableResizeTimer = null;
 
         mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
+
+        function createLineGutter(source) {
+            const gutter = document.createElement('div');
+            gutter.className = 'line-gutter';
+            gutter.setAttribute('aria-hidden', 'true');
+            const lineCount = Math.max(1, source.split('\n').length);
+            for (let line = 1; line <= lineCount; line += 1) {
+                const number = document.createElement('span');
+                number.textContent = String(line);
+                gutter.appendChild(number);
+            }
+            return gutter;
+        }
+
+        function renderCodeViewer(container, source, language, label) {
+            source = String(source ?? '');
+            const viewer = document.createElement('div');
+            viewer.className = 'code-viewer';
+
+            const scroll = document.createElement('div');
+            scroll.className = 'code-scroll';
+            scroll.setAttribute('role', 'region');
+            scroll.setAttribute('aria-label', label);
+            scroll.tabIndex = 0;
+
+            const pre = document.createElement('pre');
+            pre.className = 'code-source';
+            const code = document.createElement('code');
+            try {
+                // syntect escapes source text before emitting this restricted span-only markup.
+                code.innerHTML = m_bus_highlight(source, language);
+            } catch (error) {
+                console.warn('Syntax highlighting unavailable; using plaintext output.', error);
+                code.textContent = source;
+            }
+            pre.appendChild(code);
+            scroll.append(createLineGutter(source), pre);
+            viewer.appendChild(scroll);
+            container.replaceChildren(viewer);
+            return viewer;
+        }
 
         async function setup() {
             // Dark mode setup
@@ -832,7 +945,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.0", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.1", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             // Load data and format from URL params and auto-parse if present

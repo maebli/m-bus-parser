@@ -15,6 +15,3 @@ Cargo.lock
 
 # Mac
 .DS_Store
-
-# Node build dependencies
-node_modules/

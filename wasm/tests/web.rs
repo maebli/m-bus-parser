@@ -134,3 +134,21 @@ fn typed_render_rejects_invalid_keys_without_panicking() {
         m_bus_parser_wasm_pack::m_bus_render(input, "json", Some("123".to_string()), None, None);
     assert!(result.is_err());
 }
+
+#[wasm_bindgen_test]
+fn rust_highlighter_preserves_lines_in_the_browser_target() {
+    for (language, source) in [
+        ("json", "{\n  \"meter\": \"02205100\"\n}"),
+        ("csv", "meter_id,record_count\n02205100,10"),
+        ("xml", "<MBusData>\n  <SlaveInformation />\n</MBusData>"),
+    ] {
+        let html =
+            m_bus_parser_wasm_pack::m_bus_highlight(source, language).expect("highlighted output");
+        assert_eq!(html.matches('\n').count(), source.matches('\n').count());
+        assert!(html.contains("syn-"));
+        if language == "csv" {
+            assert!(html.contains("syn-csv-column-0"));
+            assert!(html.contains("syn-csv-column-1"));
+        }
+    }
+}
