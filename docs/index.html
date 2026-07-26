@@ -4,9 +4,6 @@
 <head>
     <meta charset="utf-8">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/default.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/languages/json.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
         body {
@@ -142,21 +139,18 @@
         }
 
         pre {
-            background: #f0f0f0;
-            padding: 10px;
-            border-radius: 4px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            margin: 0;
+            white-space: pre;
+            overflow: visible;
+            overflow-wrap: normal;
         }
 
         #output {
-            margin-top: 20px;
-            max-width: 1100px;
-            margin: 20px auto 0;
-            padding: 20px;
+            min-height: 84px;
+            padding-top: 48px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            background: #f0f0f0;
+            overflow: hidden;
+            background: #fff;
             color: #222;
         }
 
@@ -167,6 +161,88 @@
             background: #fff;
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .code-viewer {
+            border-top: 1px solid #d0d7de;
+            background: #fff;
+            color: #0d1117;
+        }
+
+        .code-scroll {
+            display: grid;
+            grid-template-columns: max-content minmax(max-content, 1fr);
+            max-width: 100%;
+            overflow: auto;
+            scrollbar-gutter: stable;
+            background: #fff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .code-scroll:focus-visible {
+            outline: 3px solid #0969da;
+            outline-offset: -3px;
+        }
+
+        .line-gutter {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            min-width: 3ch;
+            padding: 12px 10px;
+            border-right: 1px solid #8c959f;
+            background: #fff;
+            color: #4b5563;
+            text-align: right;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .line-gutter span {
+            display: block;
+            height: 1.55em;
+        }
+
+        .code-source {
+            min-width: max-content;
+            padding: 12px 16px;
+            border-radius: 0;
+            background: #fff;
+            color: #0d1117;
+            font: inherit;
+            line-height: inherit;
+        }
+
+        .code-source code {
+            font: inherit;
+        }
+
+        .code-source code .line {
+            display: block;
+            min-height: 1.55em;
+        }
+
+        .shiki,
+        .shiki span {
+            background-color: var(--shiki-light-bg, #fff) !important;
+            color: var(--shiki-light, #0d1117) !important;
+            font-style: var(--shiki-light-font-style, normal);
+            font-weight: var(--shiki-light-font-weight, normal);
+            text-decoration: var(--shiki-light-text-decoration, none);
+        }
+
+        .output-error {
+            margin: 0;
+            padding: 14px 18px;
+            border-top: 1px solid #cf222e;
+            background: #ffebe9;
+            color: #82071e;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            white-space: pre-wrap;
         }
 
         #copy_output {
@@ -267,7 +343,7 @@
         }
 
         body.dark-mode #output {
-            background: #23272a;
+            background: #0d1117;
             color: #e0e0e0;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
         }
@@ -292,39 +368,39 @@
             background-color: #333;
         }
 
-        body.dark-mode pre code,
-        body.dark-mode .hljs {
-            background: #23272a !important;
-            color: #e0e0e0 !important;
+        body.dark-mode .code-viewer,
+        body.dark-mode .code-scroll,
+        body.dark-mode .code-source,
+        body.dark-mode .line-gutter {
+            background: #0d1117;
         }
 
-        body.dark-mode .hljs-keyword,
-        body.dark-mode .hljs-selector-tag,
-        body.dark-mode .hljs-literal,
-        body.dark-mode .hljs-section,
-        body.dark-mode .hljs-link {
-            color: #ffcb6b !important;
+        body.dark-mode .code-viewer {
+            border-top-color: #6e7681;
         }
 
-        body.dark-mode .hljs-string,
-        body.dark-mode .hljs-title,
-        body.dark-mode .hljs-name,
-        body.dark-mode .hljs-type,
-        body.dark-mode .hljs-attribute,
-        body.dark-mode .hljs-symbol,
-        body.dark-mode .hljs-bullet,
-        body.dark-mode .hljs-addition {
-            color: #c3e88d !important;
+        body.dark-mode .line-gutter {
+            border-right-color: #6e7681;
+            color: #c7cdd5;
         }
 
-        body.dark-mode .hljs-comment,
-        body.dark-mode .hljs-quote,
-        body.dark-mode .hljs-deletion {
-            color: #616161 !important;
+        body.dark-mode .code-scroll:focus-visible {
+            outline-color: #58a6ff;
         }
 
-        body.dark-mode .hljs-meta {
-            color: #82aaff !important;
+        body.dark-mode .shiki,
+        body.dark-mode .shiki span {
+            background-color: var(--shiki-dark-bg, #0d1117) !important;
+            color: var(--shiki-dark, #f0f6fc) !important;
+            font-style: var(--shiki-dark-font-style, normal);
+            font-weight: var(--shiki-dark-font-weight, normal);
+            text-decoration: var(--shiki-dark-text-decoration, none);
+        }
+
+        body.dark-mode .output-error {
+            border-top-color: #ff7b72;
+            background: #490202;
+            color: #ffb3ad;
         }
 
         /* ── Interactive Hex Viewer ─────────────────────────── */
@@ -613,6 +689,27 @@
                 max-height: 400px;
             }
         }
+
+        @media (forced-colors: active) {
+            .code-viewer,
+            .code-scroll,
+            .code-source,
+            .line-gutter,
+            .shiki,
+            .shiki span {
+                background: Canvas !important;
+                color: CanvasText !important;
+                forced-color-adjust: auto;
+            }
+
+            .line-gutter {
+                border-right: 1px solid CanvasText;
+            }
+
+            .code-scroll:focus-visible {
+                outline-color: Highlight;
+            }
+        }
     </style>
 </head>
 
@@ -686,14 +783,17 @@
                 <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
         </a>
-        <pre id="output"></pre>
+        <div id="output" aria-live="polite"></div>
     </div>
     <script type="module">
-        import init, { m_bus_parse, m_bus_parse_with_key, version } from "./m_bus_parser_wasm_pack.js?v=0.3.0";
+        import init, { m_bus_render, version } from "./m_bus_parser_wasm_pack.js?v=0.4.0";
+        import { renderCodeViewer } from "./assets/highlighter.js?v=1";
 
-        let currentFormat = "json"; // Keep track of the last used format
+        let currentFormat = "json";
+        let lastTableWidth = null;
+        let tableResizeTimer = null;
 
-        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
 
         async function setup() {
             // Dark mode setup
@@ -732,7 +832,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.3.0", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.0", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             // Load data and format from URL params and auto-parse if present
@@ -741,7 +841,7 @@
             const urlFormat = urlParams.get('format');
             if (urlData) {
                 document.getElementById('inputstring').value = urlData;
-                parseInput(urlFormat || 'mermaid');
+                parseInput(urlFormat === 'table_format' ? 'table' : (urlFormat || 'mermaid'));
             }
 
             document.getElementById('parse_json').addEventListener('click', () => {
@@ -753,7 +853,7 @@
             });
 
             document.getElementById('parse_table').addEventListener('click', () => {
-                parseInput("table_format");
+                parseInput("table");
             });
 
             document.getElementById('parse_csv').addEventListener('click', () => {
@@ -773,14 +873,7 @@
             });
 
             document.getElementById('copy_output').addEventListener('click', () => {
-                let text;
-                if (currentFormat === 'mermaid' && window._mermaidSource) {
-                    text = window._mermaidSource;
-                } else {
-                    const codeElem = document.getElementById('output_code');
-                    text = codeElem ? codeElem.textContent : document.getElementById('output').textContent;
-                }
-                navigator.clipboard.writeText(text);
+                writeClipboard(window._lastRawOutput || '');
             });
 
             document.getElementById('share_button').addEventListener('click', () => {
@@ -797,86 +890,117 @@
                 window.open('https://github.com/maebli/m-bus-parser/issues/new', '_blank');
             });
 
-            async function parseInput(format) {
-                currentFormat = format; // Update the current format
+            new ResizeObserver(() => {
+                if (currentFormat !== 'table') return;
+                const width = measureTableWidth();
+                if (width === lastTableWidth) return;
+                clearTimeout(tableResizeTimer);
+                tableResizeTimer = setTimeout(() => parseInput('table', false), 120);
+            }).observe(document.getElementById('output-container'));
+
+            async function parseInput(format, updateHistory = true) {
+                format = format === 'table_format' ? 'table' : format;
+                currentFormat = format;
                 const inputString = document.getElementById('inputstring').value;
                 const aesKey = document.getElementById('aeskey').value.trim();
-
-                // Update URL so the current parse can be shared
-                const params = new URLSearchParams({ data: inputString, format });
-                history.replaceState(null, '', `?${params}`);
-
-                // Validate key if provided
-                if (aesKey && aesKey.length > 0) {
-                    if (!/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
-                        alert('Invalid AES key format. Please enter exactly 32 hexadecimal characters (0-9, A-F).');
-                        return;
-                    }
-                }
-
-                // Use the appropriate parsing function based on whether a key is provided
-                // (hexview handles its own WASM call below)
-                let formattedResult;
-                if (format !== 'hexview') {
-                    formattedResult = (aesKey && aesKey.length > 0)
-                        ? m_bus_parse_with_key(inputString, format, aesKey)
-                        : m_bus_parse(inputString, format);
-                }
-
                 const outputContainer = document.getElementById('output');
-                const outputCode = document.getElementById('output_code');
-                let lang = '', extension = 'txt', mimeType = 'text/plain';
-                if (format === 'json') { lang = 'json'; extension = 'json'; mimeType = 'application/json'; }
-                else if (format === 'yaml') { lang = 'yaml'; extension = 'yaml'; mimeType = 'application/x-yaml'; }
-                else if (format === 'csv') { extension = 'csv'; mimeType = 'text/csv'; }
-                else if (format === 'table_format') { lang = 'plaintext'; extension = 'txt'; }
-                else if (format === 'mermaid') { extension = 'mmd'; mimeType = 'text/plain'; }
-                else if (format === 'xml') { lang = 'xml'; extension = 'xml'; mimeType = 'application/xml'; }
 
-                outputContainer.style.background = '';
-                outputContainer.style.whiteSpace = '';
-
-                if (format === 'hexview') {
-                    // Hex view: get annotated JSON from WASM, then render interactive viewer
-                    const annotatedJson = (aesKey && aesKey.length > 0)
-                        ? m_bus_parse_with_key(inputString, "hexview", aesKey)
-                        : m_bus_parse(inputString, "hexview");
-                    window._lastAnnotatedJson = annotatedJson;
-                    extension = 'json'; mimeType = 'application/json';
-                    outputContainer.style.background = 'none';
-                    outputContainer.style.whiteSpace = 'normal';
-                    outputContainer.innerHTML = '';
-                    renderHexViewer(outputContainer, annotatedJson, inputString);
-                } else if (format === 'csv') {
-                    outputContainer.innerHTML = formattedResult;
-                } else if (format === 'mermaid') {
-                    window._mermaidSource = formattedResult;
-                    outputContainer.style.background = 'none';
-                    outputContainer.style.whiteSpace = 'normal';
-                    outputContainer.innerHTML = '';
-                    const mermaidDiv = document.createElement('div');
-                    mermaidDiv.id = 'mermaid_diagram';
-                    mermaidDiv.textContent = formattedResult;
-                    outputContainer.appendChild(mermaidDiv);
-                    await mermaid.run({ nodes: [mermaidDiv] });
-                } else {
-                    outputContainer.innerHTML = '<code id="output_code"></code>';
-                    const newOutputCode = document.getElementById('output_code');
-                    newOutputCode.className = lang ? `language-${lang}` : '';
-                    newOutputCode.textContent = formattedResult;
-                    if (window.hljs && lang) hljs.highlightElement(newOutputCode);
+                if (updateHistory) {
+                    const params = new URLSearchParams({ data: inputString, format });
+                    history.replaceState(null, '', `?${params}`);
                 }
 
-                // Update download link
-                if (window._lastDownloadUrl) URL.revokeObjectURL(window._lastDownloadUrl);
-                const downloadContent = format === 'hexview' ? (window._lastAnnotatedJson || '') : (formattedResult || '');
-                const blob = new Blob([downloadContent], { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                const downloadLink = document.getElementById('download_output');
-                downloadLink.href = url;
-                downloadLink.download = `m-bus-output.${extension}`;
-                window._lastDownloadUrl = url;
+                if (aesKey && !/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
+                    renderOutputError(outputContainer, {
+                        code: 'option.invalid',
+                        message: 'AES key must contain exactly 32 hexadecimal characters.',
+                    });
+                    return;
+                }
+
+                let language = 'plaintext';
+                let extension = 'txt';
+                let mimeType = 'text/plain';
+                if (format === 'json') {
+                    language = 'json'; extension = 'json'; mimeType = 'application/json';
+                } else if (format === 'yaml') {
+                    language = 'yaml'; extension = 'yaml'; mimeType = 'application/yaml';
+                } else if (format === 'csv') {
+                    language = 'csv'; extension = 'csv'; mimeType = 'text/csv';
+                } else if (format === 'mermaid') {
+                    extension = 'mmd';
+                } else if (format === 'xml') {
+                    language = 'xml'; extension = 'xml'; mimeType = 'application/xml';
+                } else if (format === 'hexview') {
+                    extension = 'json'; mimeType = 'application/json';
+                }
+
+                try {
+                    const width = format === 'table' ? measureTableWidth() : undefined;
+                    if (format === 'table') lastTableWidth = width;
+                    const formattedResult = m_bus_render(
+                        inputString,
+                        format,
+                        aesKey || undefined,
+                        width,
+                        true,
+                    );
+                    window._lastRawOutput = formattedResult;
+
+                    if (format === 'hexview') {
+                        outputContainer.replaceChildren();
+                        renderHexViewer(outputContainer, formattedResult, inputString);
+                    } else if (format === 'mermaid') {
+                        const mermaidDiv = document.createElement('div');
+                        mermaidDiv.id = 'mermaid_diagram';
+                        mermaidDiv.textContent = formattedResult;
+                        outputContainer.replaceChildren(mermaidDiv);
+                        await mermaid.run({ nodes: [mermaidDiv] });
+                    } else {
+                        await renderCodeViewer(
+                            outputContainer,
+                            formattedResult,
+                            language,
+                            `${format.toUpperCase()} parser output`,
+                        );
+                    }
+
+                    updateDownload(formattedResult, extension, mimeType);
+                } catch (error) {
+                    window._lastRawOutput = '';
+                    renderOutputError(outputContainer, error);
+                    updateDownload('', extension, mimeType);
+                }
             }
+        }
+
+        function measureTableWidth() {
+            const container = document.getElementById('output-container');
+            const canvas = measureTableWidth.canvas ||= document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = '13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+            const characterWidth = context.measureText('0').width || 8;
+            const availableWidth = Math.max(0, container.clientWidth - 84);
+            return Math.max(32, Math.min(120, Math.floor(availableWidth / characterWidth)));
+        }
+
+        function updateDownload(content, extension, mimeType) {
+            if (window._lastDownloadUrl) URL.revokeObjectURL(window._lastDownloadUrl);
+            const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+            const downloadLink = document.getElementById('download_output');
+            downloadLink.href = url;
+            downloadLink.download = `m-bus-output.${extension}`;
+            window._lastDownloadUrl = url;
+        }
+
+        function renderOutputError(container, error) {
+            const message = error instanceof Error ? error.message : String(error?.message || error);
+            const code = error?.code || 'render.failed';
+            const output = document.createElement('pre');
+            output.className = 'output-error';
+            output.setAttribute('role', 'alert');
+            output.textContent = `[${code}] ${message}`;
+            container.replaceChildren(output);
         }
 
         function renderHexViewer(container, annotatedJson, inputString) {
@@ -899,16 +1023,16 @@
                     segments = parsed;
                 }
             } catch (e) {
-                container.innerHTML = '<pre style="color:red;">Error parsing annotation data: ' + e.message + '</pre>';
+                renderHexViewerError(container, `Error parsing annotation data: ${e.message}`);
                 return;
             }
             if (!Array.isArray(segments)) {
                 const message = errorMessage || 'No annotation segments returned. Check input.';
-                container.innerHTML = '<pre style="color:red;">' + escHtml(message) + '</pre>';
+                renderHexViewerError(container, message);
                 return;
             }
             if (segments.length === 0) {
-                container.innerHTML = '<pre style="color:red;">No annotation segments returned. Check input.</pre>';
+                renderHexViewerError(container, 'No annotation segments returned. Check input.');
                 return;
             }
 
@@ -920,12 +1044,12 @@
                 try {
                     rawBytes = parseHexInputBytes(inputString);
                 } catch (e) {
-                    container.innerHTML = '<pre style="color:red;">' + escHtml(e.message) + '</pre>';
+                    renderHexViewerError(container, e.message);
                     return;
                 }
             }
             if (rawBytes.length === 0) {
-                container.innerHTML = '<pre style="color:red;">No input bytes found. Check input.</pre>';
+                renderHexViewerError(container, 'No input bytes found. Check input.');
                 return;
             }
 
@@ -1297,8 +1421,12 @@
             return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
         }
 
-        function escHtml(s) {
-            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        function renderHexViewerError(container, message) {
+            const error = document.createElement('pre');
+            error.className = 'output-error';
+            error.setAttribute('role', 'alert');
+            error.textContent = String(message);
+            container.replaceChildren(error);
         }
 
         function segmentTooltip(seg) {
