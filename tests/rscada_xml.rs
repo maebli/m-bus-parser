@@ -10,6 +10,11 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
+
+#[cfg(feature = "decryption")]
+use m_bus_parser::DecodeOptions;
+use m_bus_parser::{render_hex, OutputFormat, RenderOptions};
 
 /// Frames that do not yet match libmbus's normalized XML output.
 ///
@@ -122,4 +127,74 @@ fn xml_output_matches_libmbus_normalized_xml() {
         "frames now match libmbus, remove them from KNOWN_MISMATCHES: {:?}",
         fixed
     );
+}
+
+#[test]
+fn wireless_short_transport_xml_uses_link_identity_and_transport_fields() {
+    let input = concat!(
+        "18 44 AE 4C 44 55 22 33 68 07 ",
+        "7A 55 00 00 00 04 13 89 E2 01 00 02 3B 00 00"
+    );
+    let xml = render_hex(input, OutputFormat::Xml, &RenderOptions::default())
+        .expect("wireless short-transport XML");
+
+    assert!(xml.starts_with("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>"));
+    assert!(xml.contains("<Id>33225544</Id>"));
+    assert!(xml.contains("<Manufacturer>SEN</Manufacturer>"));
+    assert!(xml.contains("<Medium>Water</Medium>"));
+    assert!(xml.contains("<AccessNumber>85</AccessNumber>"));
+    assert!(xml.contains("<Status>00</Status>"));
+    assert!(xml.contains("<Signature>0000</Signature>"));
+    assert!(xml.contains("<DataRecord id=\"0\">"));
+}
+
+#[test]
+fn wireless_ell_xml_uses_real_ell_access_without_inventing_tpl_fields() {
+    let input = "12 44 AE 0C 78 56 34 12 01 07 8C 20 27 78 0B 13 43 65 87";
+    let xml = render_hex(
+        input,
+        OutputFormat::from_str("xml").unwrap(),
+        &RenderOptions::default(),
+    )
+    .expect("wireless ELL XML");
+
+    assert!(xml.contains("<Id>12345678</Id>"));
+    assert!(xml.contains("<Manufacturer>CEN</Manufacturer>"));
+    assert!(xml.contains("<AccessNumber>39</AccessNumber>"));
+    assert!(!xml.contains("<Status>"));
+    assert!(!xml.contains("<Signature>"));
+    assert!(xml.contains("<DataRecord id=\"0\">"));
+}
+
+#[cfg(feature = "decryption")]
+#[test]
+fn wireless_encrypted_xml_is_header_only_without_key_and_decodes_with_key() {
+    let input = concat!(
+        "2E44931578563412330333637A2A002025",
+        "5923C95AAA26D1B2E7493BC2AD013EC4",
+        "A6F6D3529B520EDFF0EA6DEFC955B29D",
+        "6D69EBF3EC8A"
+    );
+    let without_key = render_hex(input, OutputFormat::Xml, &RenderOptions::default())
+        .expect("encrypted wireless XML header");
+    assert!(without_key.contains("<Id>12345678</Id>"));
+    assert!(!without_key.contains("<DataRecord"));
+
+    let with_key = render_hex(
+        input,
+        OutputFormat::Xml,
+        &RenderOptions {
+            decode: DecodeOptions {
+                key: Some([
+                    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
+                    0x0E, 0x0F, 0x11,
+                ]),
+                include_enrichment: true,
+            },
+            ..RenderOptions::default()
+        },
+    )
+    .expect("decrypted wireless XML");
+    assert!(with_key.contains("<DataRecord id=\"0\">"));
+    assert!(with_key.contains("<Value>"));
 }

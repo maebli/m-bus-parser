@@ -23,7 +23,11 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 ## Features
 
 - Parses **wired M-Bus** (EN 13757-2/-3) and **wireless M-Bus** (wMBus) frames
-- **Six output formats**: `table`, `json`, `yaml`, `csv`, `mermaid`, `xml`
+- **Eight harmonized output formats**: `table`, `json`, `yaml`, `csv`,
+  `mermaid`, `xml`, `annotated`, and `annotated-text`
+- A versioned canonical schema with exact decimal values, provenance,
+  partial-decode diagnostics, and stable error codes
+- Responsive, Unicode-aware tables for narrow terminals and browser cards
 - **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
 - Available as a **Rust library**, **CLI**, **WebAssembly (npm)** and **Python bindings**
@@ -69,65 +73,26 @@ m-bus-parser-cli parse [OPTIONS]
 Options:
   -d, --data <DATA>      Raw M-Bus frame as a hex string
   -f, --file <FILE>      File containing a hex frame
-  -t, --format <FORMAT>  Output format: table (default), json, yaml, csv, mermaid, xml
+  -t, --format <FORMAT>  table, json, yaml, csv, mermaid, xml, annotated, annotated-text
   -k, --key <KEY>        AES-128 decryption key (32 hex characters)
+      --width <WIDTH>    Table width (auto-detected on an interactive terminal)
+      --no-enrichment    Omit manufacturer enrichment
 ```
 
-Input hex can be in any of these forms:
+Input hex is strict: use compact hexadecimal or complete byte tokens separated
+by whitespace, colons, or hyphens.
+
 ```
 68 3D 3D 68 ...      (space-separated)
 683D3D68...          (plain hex)
-0x68,0x3D,0x3D,...   (0x-prefixed, comma-separated)
+0x68:0x3D:0x3D:0x68  (prefixed byte tokens)
 ```
 
 ### Table output (default)
 
-```bash
-m-bus-parser-cli parse -d "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 \
-  04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 \
-  0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16"
-```
-
-```
-Long Frame
-┌────────────────────────────────┬─────────────┐
-│ Function                       │ Address     │
-├────────────────────────────────┼─────────────┤
-│ RspUd (ACD: false, DFC: false) │ Primary (1) │
-└────────────────────────────────┴─────────────┘
-┌───────────────────────┬──────────────────────────────────────────┐
-│ Field                 │ Value                                    │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Identification Number │ 02205100                                 │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Manufacturer          │ SLB                                      │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Manufacturer Name     │ Schlumberger Industries                  │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Website               │ slb.com                                  │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Description           │ Energy and water metering                │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Access Number         │ 0                                        │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Status                │ Permanent error, Manufacturer specific 3 │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Security Mode         │ No encryption used                       │
-├───────────────────────┼──────────────────────────────────────────┤
-│ Version               │ 2                                        │
-├───────────────────────┼──────────────────────────────────────────┤
-│ DeviceType            │ Heat Meter (Return)                      │
-└───────────────────────┴──────────────────────────────────────────┘
-┌─────────────────────────────────────────┬───────────────────────┬────────────┬─────────────┐
-│ Value                                   │ Data Information      │ Header Hex │ Data Hex    │
-├─────────────────────────────────────────┼───────────────────────┼────────────┼─────────────┤
-│ (0)e4[Wh]                               │ 0,Inst,32-bit Integer │ 04 07      │ 00 00 00 00 │
-├─────────────────────────────────────────┼───────────────────────┼────────────┼─────────────┤
-│ (3)e-1[m³](Volume)                      │ 0,Inst,BCD 8-digit    │ 0C 15      │ 03 00 00 00 │
-├─────────────────────────────────────────┼───────────────────────┼────────────┼─────────────┤
-│ (1288)e-1[°C]                           │ 0,Inst,BCD 4-digit    │ 0A 5A      │ 88 12       │
-└─────────────────────────────────────────┴───────────────────────┴────────────┴─────────────┘
-```
+The table automatically selects a wide, compact, or vertical-card layout and
+never exceeds the detected terminal width. Use `--width 44` to request an exact
+maximum explicitly.
 
 ### Other formats
 
@@ -144,8 +109,12 @@ m-bus-parser-cli parse -d "..." -t csv
 # Mermaid diagram source (renders in the web app)
 m-bus-parser-cli parse -d "..." -t mermaid
 
-# Legacy libmbus normalized XML (drop-in for rSCADA/libmbus consumers)
+# Wired-compatible and wireless XML
 m-bus-parser-cli parse -d "..." -t xml
+
+# Byte annotations as JSON or human-readable text
+m-bus-parser-cli parse -d "..." -t annotated
+m-bus-parser-cli parse -d "..." -t annotated-text
 
 # With AES-128 decryption key
 m-bus-parser-cli parse -d "..." -k "000102030405060708090A0B0C0D0E0F"
@@ -159,7 +128,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-m-bus-parser = "0.1"
+m-bus-parser = { version = "0.4", features = ["std", "serde"] }
 ```
 
 ### Parse a wired frame
@@ -202,24 +171,30 @@ for record in parse_data_records(&data) {
 }
 ```
 
-### Serialize to any format
+### Decode and render with typed APIs
 
 ```rust
-use m_bus_parser::serialize_mbus_data;
+use m_bus_parser::{
+    DecodeOptions, OutputFormat, RenderOptions, decode_hex, render_hex,
+};
 
 let hex = "68 3D 3D 68 08 01 72 ...";
+let decoded = decode_hex(hex, &DecodeOptions::default())?;
+println!("schema v{}: {}", decoded.schema_version, decoded.protocol);
 
-let table  = serialize_mbus_data(hex, "table",   None);
-let json   = serialize_mbus_data(hex, "json",    None);
-let yaml   = serialize_mbus_data(hex, "yaml",    None);
-let csv    = serialize_mbus_data(hex, "csv",     None);
-let mermaid = serialize_mbus_data(hex, "mermaid", None);
-let xml    = serialize_mbus_data(hex, "xml",     None);
-
-// With decryption key
-let key: [u8; 16] = [0x00, 0x01, ..., 0x0F];
-let decrypted = serialize_mbus_data(hex, "table", Some(&key));
+let table = render_hex(
+    hex,
+    OutputFormat::Table,
+    &RenderOptions {
+        table_width: Some(72),
+        ..RenderOptions::default()
+    },
+)?;
 ```
+
+`serialize_mbus_data` remains as a string compatibility wrapper. New code
+should use the typed APIs so invalid input and unsupported options remain
+machine-readable `OutputError` values.
 
 ### `no_std` usage
 
@@ -227,7 +202,7 @@ The core parsing types are `no_std` compatible. Disable default features:
 
 ```toml
 [dependencies]
-m-bus-parser = { version = "0.1", default-features = false }
+m-bus-parser = { version = "0.4", default-features = false }
 ```
 
 An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m).
@@ -238,12 +213,14 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 
 | Format    | Flag    | Description                                      |
 |-----------|---------|--------------------------------------------------|
-| `table`   | default      | Human-readable ASCII table                   |
-| `json`    | `-t json`    | JSON                                         |
-| `yaml`    | `-t yaml`    | YAML                                         |
-| `csv`     | `-t csv`     | Comma-separated values                       |
-| `mermaid` | `-t mermaid` | Mermaid flowchart source (renders in web app)|
-| `xml`     | `-t xml`     | Legacy libmbus normalized XML (rSCADA-compatible)|
+| `table`         | default             | Width-aware human-readable table |
+| `json`          | `-t json`           | Canonical schema as JSON |
+| `yaml`          | `-t yaml`           | Canonical schema as YAML |
+| `csv`           | `-t csv`            | Stable tidy-record CSV |
+| `mermaid`       | `-t mermaid`        | Layer-oriented Mermaid flowchart |
+| `xml`           | `-t xml`            | Wired libmbus-compatible and wireless XML |
+| `annotated`     | `-t annotated`      | Byte-segment annotation envelope |
+| `annotated-text`| `-t annotated-text` | Human-readable byte annotations |
 
 ---
 

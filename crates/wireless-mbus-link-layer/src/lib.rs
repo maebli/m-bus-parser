@@ -94,7 +94,12 @@ pub fn strip_format_a_crcs<'a>(data: &[u8], output: &'a mut [u8]) -> Option<&'a 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WirelessFrame<'a> {
-    pub function: Function,
+    /// Raw wireless M-Bus C-field.
+    pub control_field: u8,
+    /// Decoded C-field when it maps to a function currently known by the
+    /// shared M-Bus core. Unknown but otherwise valid C-fields are preserved
+    /// through `control_field` instead of making the frame unparseable.
+    pub function: Option<Function>,
     pub manufacturer_id: ManufacturerId,
     #[cfg_attr(
         feature = "serde",
@@ -167,14 +172,15 @@ impl<'a> TryFrom<&'a [u8]> for WirelessFrame<'a> {
     fn try_from(data: &'a [u8]) -> Result<Self, FrameError> {
         let length = data.len();
         let length_byte = *data.first().ok_or(FrameError::EmptyData)? as usize;
-        let _c_field = *data.get(1).ok_or(FrameError::TooShort)? as usize;
+        let control_field = *data.get(1).ok_or(FrameError::TooShort)?;
         let manufacturer_id = ManufacturerId::try_from(&data[2..])?;
 
         // In wireless M-Bus, the L-field contains the number of bytes following the L-field
         if length_byte + 1 == length {
             let data_end = trailing_frame_crc_start(data).unwrap_or(length);
             return Ok(WirelessFrame {
-                function: Function::SndNk { prm: false },
+                control_field,
+                function: Function::try_from(control_field).ok(),
                 manufacturer_id,
                 data: &data[10..data_end],
             });
@@ -219,5 +225,27 @@ mod test {
             parsed.data,
             &[0x8C, 0x20, 0x27, 0x78, 0x0B, 0x13, 0x43, 0x65, 0x87]
         );
+    }
+
+    #[test]
+    fn c_field_is_decoded_and_preserved() {
+        let frame = [
+            0x18, 0x44, 0xAE, 0x4C, 0x44, 0x55, 0x22, 0x33, 0x68, 0x07, 0x7A, 0x55, 0x00, 0x00,
+            0x00, 0x00, 0x04, 0x13, 0x89, 0xE2, 0x01, 0x00, 0x02, 0x3B, 0x00,
+        ];
+        let parsed = WirelessFrame::try_from(frame.as_slice()).expect("valid wireless frame");
+        assert_eq!(parsed.control_field, 0x44);
+        assert_eq!(parsed.function, Some(Function::SndNr));
+    }
+
+    #[test]
+    fn unknown_c_field_does_not_invalidate_frame() {
+        let frame = [
+            0x18, 0x45, 0xAE, 0x4C, 0x44, 0x55, 0x22, 0x33, 0x68, 0x07, 0x7A, 0x55, 0x00, 0x00,
+            0x00, 0x00, 0x04, 0x13, 0x89, 0xE2, 0x01, 0x00, 0x02, 0x3B, 0x00,
+        ];
+        let parsed = WirelessFrame::try_from(frame.as_slice()).expect("valid wireless frame");
+        assert_eq!(parsed.control_field, 0x45);
+        assert_eq!(parsed.function, None);
     }
 }

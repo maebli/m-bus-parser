@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Added
+
+- A versioned canonical output schema shared by Rust, CLI, Python, and WASM,
+  with exact decimal values, source provenance, partial-decode diagnostics,
+  stable error codes, and optional manufacturer enrichment.
+- Typed `decode_*` and `render_*` Rust APIs, a native-object WASM decoder, a
+  custom Python exception, strict hexadecimal input, and explicit render
+  options.
+- Responsive Unicode-aware tables that adapt between wide, compact, and
+  vertical layouts without exceeding the requested terminal or container
+  width.
+- Self-hosted Shiki syntax highlighting for JSON, YAML, CSV, and XML in the
+  WASM documentation, with light/dark high-contrast themes, line numbers,
+  keyboard scrolling, forced-colors support, and automated WCAG AA checks.
+
+### Changed
+
+- JSON, YAML, CSV, table, Mermaid, annotated, XML, and binding outputs now use
+  one product-owned contract. Retained legacy serializers are available under
+  explicit legacy format names through this compatibility release.
+- Wireless link frames preserve the raw C-field and expose the decoded
+  function only when the value is known.
+
+### Fixed
+
+- XML rendering now supports clear, encrypted, short/long transport, and ELL
+  wireless M-Bus frames while retaining byte-for-byte wired libmbus parity.
+- Tables no longer wrap or mangle inside narrow terminals and browser output
+  cards.
+- Syntax tokens and line-number gutters meet the WCAG 2.2 AA 4.5:1 text
+  contrast threshold in both supported themes.
+
 ## [0.3.0]
 
 ### Added

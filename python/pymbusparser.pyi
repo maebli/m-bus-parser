@@ -9,21 +9,31 @@ OutputFormat = Literal[
     "csv",
     "table",
     "mermaid",
+    "xml",
     "annotated",
     "annotated-text",
     "hexview",
 ]
 
+class MbusParserError(ValueError): ...
+
 __version__: str
 __all__: List[str]
 
-def parse(data: DataInput, *, key: Optional[KeyInput] = None) -> Dict[str, Any]: ...
+def parse(
+    data: DataInput,
+    *,
+    key: Optional[KeyInput] = None,
+    include_enrichment: bool = True,
+) -> Dict[str, Any]: ...
 def parse_records(data: DataInput) -> List[Any]: ...
 def render(
     data: DataInput,
     format: OutputFormat = "json",
     *,
     key: Optional[KeyInput] = None,
+    width: Optional[int] = None,
+    include_enrichment: bool = True,
 ) -> str: ...
 def parse_application_layer(data_record: str) -> str: ...
 def m_bus_parse(data: str, format: OutputFormat, key: Optional[str] = None) -> str: ...

@@ -1,4 +1,4 @@
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", test))]
 use prettytable::{format, row, Table};
 use wireless_mbus_link_layer::WirelessFrame;
 
@@ -17,6 +17,10 @@ pub struct MbusData<'a, F> {
     pub frame: F,
     pub user_data: Option<user_data::UserDataBlock<'a>>,
     pub data_records: Option<user_data::DataRecords<'a>>,
+    /// Application-layer parsing is deliberately non-fatal: callers can still
+    /// inspect a valid link-layer frame and report a partial decode.
+    #[cfg_attr(feature = "serde", serde(skip_serializing))]
+    pub application_error: Option<m_bus_core::ApplicationLayerError>,
 }
 
 impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
@@ -26,27 +30,31 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
         let frame = frames::WiredFrame::try_from(data)?;
         let mut user_data = None;
         let mut data_records = None;
+        let mut application_error = None;
         match &frame {
             frames::WiredFrame::LongFrame { data, .. } => {
-                if let Ok(x) = user_data::UserDataBlock::try_from(*data) {
-                    match &x {
-                        user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                            variable_data_block,
-                            ..
+                match user_data::UserDataBlock::try_from(*data) {
+                    Ok(x) => {
+                        match &x {
+                            user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                                variable_data_block,
+                                ..
+                            }
+                            | user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                                variable_data_block,
+                                ..
+                            }
+                            | user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                                variable_data_block,
+                                ..
+                            } => {
+                                data_records = Some((*variable_data_block).into());
+                            }
+                            _ => {}
                         }
-                        | user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
-                            variable_data_block,
-                            ..
-                        }
-                        | user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
-                            variable_data_block,
-                            ..
-                        } => {
-                            data_records = Some((*variable_data_block).into());
-                        }
-                        _ => {}
+                        user_data = Some(x);
                     }
-                    user_data = Some(x);
+                    Err(error) => application_error = Some(error),
                 }
             }
             frames::WiredFrame::SingleCharacter { .. } => (),
@@ -59,6 +67,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
             frame,
             user_data,
             data_records,
+            application_error,
         })
     }
 }
@@ -70,38 +79,43 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, WirelessFrame<'a>> {
         let frame = wireless_mbus_link_layer::WirelessFrame::try_from(data)?;
         let mut user_data = None;
         let mut data_records = None;
+        let mut application_error = None;
         // Extract application layer data from wireless frame
         let wireless_mbus_link_layer::WirelessFrame { data, .. } = &frame;
 
-        if let Ok(user_data_block) = user_data::UserDataBlock::try_from(*data) {
-            match &user_data_block {
-                user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                    variable_data_block,
-                    ..
-                } => {
-                    data_records = Some((*variable_data_block).into());
+        match user_data::UserDataBlock::try_from(*data) {
+            Ok(user_data_block) => {
+                match &user_data_block {
+                    user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                        variable_data_block,
+                        ..
+                    } => {
+                        data_records = Some((*variable_data_block).into());
+                    }
+                    user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                        variable_data_block,
+                        ..
+                    } => {
+                        data_records = Some((*variable_data_block).into());
+                    }
+                    user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                        variable_data_block,
+                        ..
+                    } => {
+                        data_records = Some((*variable_data_block).into());
+                    }
+                    _ => {}
                 }
-                user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
-                    variable_data_block,
-                    ..
-                } => {
-                    data_records = Some((*variable_data_block).into());
-                }
-                user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
-                    variable_data_block,
-                    ..
-                } => {
-                    data_records = Some((*variable_data_block).into());
-                }
-                _ => {}
+                user_data = Some(user_data_block);
             }
-            user_data = Some(user_data_block);
+            Err(error) => application_error = Some(error),
         }
 
         Ok(MbusData {
             frame,
             user_data,
             data_records,
+            application_error,
         })
     }
 }
@@ -126,15 +140,26 @@ fn clean_and_convert(input: &str) -> Vec<u8> {
 #[must_use]
 pub fn serialize_mbus_data(data: &str, format: &str, key: Option<&[u8; 16]>) -> String {
     match format {
-        "json" => parse_to_json(data, key),
-        "yaml" => parse_to_yaml(data, key),
-        "csv" => parse_to_csv(data, key),
-        "xml" => parse_to_xml(data),
-        "mermaid" => parse_to_mermaid(data, key),
-        "annotated" => parse_to_annotated(data),
-        "hexview" => parse_to_hexview(data, key),
-        "annotated-text" => parse_to_annotated_text(data),
-        _ => parse_to_table(data, key),
+        "json-legacy" => parse_to_json(data, key),
+        "yaml-legacy" => parse_to_yaml(data, key),
+        "csv-wide" => parse_to_csv(data, key),
+        "annotated-legacy" => parse_to_annotated(data),
+        "hexview-legacy" => parse_to_hexview(data, key),
+        _ => match format.parse::<crate::output::OutputFormat>() {
+            Ok(output_format) => crate::output::render_hex(
+                data,
+                output_format,
+                &crate::output::RenderOptions {
+                    decode: crate::output::DecodeOptions {
+                        key: key.copied(),
+                        include_enrichment: true,
+                    },
+                    table_width: Some(100),
+                },
+            )
+            .unwrap_or_else(|error| format!("Error [{}]: {}", error.code(), error)),
+            Err(error) => format!("Error [{}]: {}", error.code(), error),
+        },
     }
 }
 
@@ -460,7 +485,7 @@ fn summarize_wireless(
 ) -> FrameSummary {
     let manufacturer_id = &parsed.frame.manufacturer_id;
     let mut summary = FrameSummary::new("Wireless");
-    summary.function = Some(parsed.frame.function.to_string());
+    summary.function = parsed.frame.function.map(|function| function.to_string());
     summary.identification_number = Some(manufacturer_id.identification_number.to_string());
     summary.manufacturer = Some(manufacturer_summary(
         manufacturer_id.manufacturer_code.to_string(),
@@ -607,7 +632,7 @@ fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", test))]
 #[must_use]
 fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
     match parse_frame_output(input, key) {
@@ -616,7 +641,7 @@ fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", test))]
 fn render_table(summary: &FrameSummary, key_provided: bool) -> String {
     let mut out = String::new();
     let title = match summary.frame_type {
@@ -1004,7 +1029,7 @@ pub fn parse_to_mermaid(input: &str, _key: Option<&[u8; 16]>) -> String {
         let wireless_mbus_link_layer::WirelessFrame {
             function,
             manufacturer_id,
-            data: _,
+            ..
         } = &parsed_data.frame;
 
         let mut out = String::from("flowchart TD\n");
@@ -1141,13 +1166,6 @@ fn mermaid_centered_chains(ids: &[&str], max_per_row: usize, pad_prefix: &str) -
 
 #[cfg(feature = "std")]
 #[must_use]
-fn parse_to_xml(input: &str) -> String {
-    let data = clean_and_convert(input);
-    crate::rscada_xml::render_from_bytes(&data)
-}
-
-#[cfg(feature = "std")]
-#[must_use]
 fn parse_to_annotated(input: &str) -> String {
     let data = clean_and_convert(input);
     annotated_segments_to_json(&data)
@@ -1180,6 +1198,61 @@ fn parse_to_hexview(input: &str, key: Option<&[u8; 16]>) -> String {
     let _ = key;
 
     annotated_segments_to_json(&data)
+}
+
+#[cfg(feature = "std")]
+pub(crate) fn render_annotated_bytes(
+    data: &[u8],
+    key: Option<&[u8; 16]>,
+) -> Result<String, crate::output::OutputError> {
+    let original_segments = crate::annotate::annotate_frame(data).map_err(|error| {
+        crate::output::OutputError::Rendering {
+            code: "annotation.failed",
+            message: error.to_string(),
+        }
+    })?;
+
+    #[cfg(feature = "decryption")]
+    if let Some(key_bytes) = key {
+        if let Some(display_data) = decrypted_hexview_data(data, key_bytes) {
+            let mut display_segments =
+                crate::annotate::annotate_frame(&display_data).map_err(|error| {
+                    crate::output::OutputError::Rendering {
+                        code: "annotation.failed",
+                        message: error.to_string(),
+                    }
+                })?;
+            replace_encrypted_payload_segments(&mut display_segments, &display_data);
+            return serde_json::to_string_pretty(&serde_json::json!({
+                "schema_version": 1,
+                "bytes": display_data,
+                "segments": display_segments,
+                "decrypted": true,
+                "original": {
+                    "bytes": data,
+                    "segments": original_segments,
+                }
+            }))
+            .map_err(|error| crate::output::OutputError::Serialization {
+                format: "annotated",
+                message: error.to_string(),
+            });
+        }
+    }
+
+    #[cfg(not(feature = "decryption"))]
+    let _ = key;
+
+    serde_json::to_string_pretty(&serde_json::json!({
+        "schema_version": 1,
+        "bytes": data,
+        "segments": original_segments,
+        "decrypted": false,
+    }))
+    .map_err(|error| crate::output::OutputError::Serialization {
+        format: "annotated",
+        message: error.to_string(),
+    })
 }
 
 #[cfg(feature = "std")]
@@ -1366,16 +1439,6 @@ fn decrypt_variable_data_with_key(
 }
 
 #[cfg(feature = "std")]
-#[must_use]
-fn parse_to_annotated_text(input: &str) -> String {
-    let data = clean_and_convert(input);
-    match crate::annotate::annotate_and_render(&data) {
-        Ok(text) => text,
-        Err(e) => format!("Error: {}", e),
-    }
-}
-
-#[cfg(feature = "std")]
 fn mermaid_escape(s: &str) -> String {
     s.replace('"', "#quot;")
         .replace('[', "#91;")
@@ -1438,7 +1501,7 @@ mod tests {
             "Version",
             "Device Type"
         ]));
-        assert!(row.starts_with("Wireless,SndNk,,12345678,ELS,Elster Group,42,No Error(s),"));
+        assert!(row.starts_with("Wireless,SndNr,,12345678,ELS,Elster Group,42,No Error(s),"));
         assert!(row.contains("AES-CBC-128; IV ≠ 0"));
         assert!(row.contains(",51,Gas Meter"));
     }
@@ -1827,7 +1890,7 @@ mod tests {
     #[test]
     fn test_annotated_output() {
         let input = "68 4D 4D 68 08 01 72 01 00 00 00 96 15 01 00 18 00 00 00 0C 78 56 00 00 00 01 FD 1B 00 02 FC 03 48 52 25 74 44 0D 22 FC 03 48 52 25 74 F1 0C 12 FC 03 48 52 25 74 63 11 02 65 B4 09 22 65 86 09 12 65 B7 09 01 72 00 72 65 00 00 B2 01 65 00 00 1F B3 16";
-        let output = super::serialize_mbus_data(input, "annotated", None);
+        let output = super::serialize_mbus_data(input, "annotated-legacy", None);
 
         // Should be valid JSON
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap_or_else(|e| {
@@ -1863,7 +1926,7 @@ mod tests {
     #[test]
     fn test_hexview_output_for_ci_78_frame_is_annotated_json() {
         let input = "1444AE0C7856341201078C2027780B134365877AC5";
-        let output = super::serialize_mbus_data(input, "hexview", None);
+        let output = super::serialize_mbus_data(input, "hexview-legacy", None);
 
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap_or_else(|e| {
             panic!(
