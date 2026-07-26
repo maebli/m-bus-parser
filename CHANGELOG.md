@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1]
+
+### Changed
+
+- Replaced the npm-based documentation highlighter with `syntect` running
+  inside the Rust WebAssembly package. JSON, YAML, CSV, and XML now use
+  prefixed semantic token classes and an audited high-contrast light/dark
+  palette.
+- CSV renders one row per input frame, with data records represented as
+  namespaced columns instead of repeating frame metadata for every record.
+
+### Fixed
+
+- Removed doubled source lines that introduced blank gaps in JSON, CSV, and
+  XML and caused line-number gutters to end halfway through long outputs.
+- Restored semantic grouping and the high-contrast eight-color data-record
+  palette in Mermaid diagrams.
+
 ## [0.4.0]
 
 ### Added

@@ -1887,67 +1887,75 @@ fn ucum_component(unit: &Unit) -> Option<String> {
 
 fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
     use prettytable::csv;
+
+    const RECORD_FIELDS: &[&str] = &[
+        "function",
+        "storage_number",
+        "tariff",
+        "subunit",
+        "quantities",
+        "value_type",
+        "value",
+        "value_decimal",
+        "raw_value",
+        "scale_power10",
+        "offset_power10",
+        "unit",
+        "unit_ucum",
+        "data_coding",
+        "header_hex",
+        "data_hex",
+        "record_hex",
+    ];
+
     let mut writer = csv::Writer::from_writer(Vec::new());
+    let mut headers = [
+        "schema_version",
+        "protocol",
+        "frame_kind",
+        "frame_function",
+        "address",
+        "meter_id",
+        "manufacturer_code",
+        "identity_source",
+        "access_numbers",
+        "status_codes",
+        "security_mode",
+        "decryption_state",
+        "decode_state",
+        "record_count",
+        "diagnostic_codes",
+        "manufacturer_name",
+        "manufacturer_website",
+        "frame_hex",
+    ]
+    .map(str::to_string)
+    .to_vec();
+    for record in &decoded.records {
+        headers.extend(
+            RECORD_FIELDS
+                .iter()
+                .map(|field| format!("record_{}_{field}", record.index)),
+        );
+    }
     writer
-        .write_record([
-            "schema_version",
-            "protocol",
-            "frame_kind",
-            "frame_function",
-            "address",
-            "meter_id",
-            "manufacturer_code",
-            "identity_source",
-            "access_numbers",
-            "status_codes",
-            "security_mode",
-            "decryption_state",
-            "decode_state",
-            "record_index",
-            "record_function",
-            "storage_number",
-            "tariff",
-            "subunit",
-            "quantities",
-            "value_type",
-            "value",
-            "value_decimal",
-            "raw_value",
-            "scale_power10",
-            "offset_power10",
-            "unit",
-            "unit_ucum",
-            "data_coding",
-            "header_hex",
-            "data_hex",
-            "record_hex",
-            "diagnostic_codes",
-            "manufacturer_name",
-            "manufacturer_website",
-            "frame_hex",
-        ])
+        .write_record(&headers)
         .map_err(|error| OutputError::Serialization {
             format: "csv",
             message: error.to_string(),
         })?;
 
-    if decoded.records.is_empty() {
-        writer
-            .write_record(csv_row(decoded, None))
-            .map_err(|error| OutputError::Serialization {
-                format: "csv",
-                message: error.to_string(),
-            })?;
-    } else {
-        for record in &decoded.records {
-            writer
-                .write_record(csv_row(decoded, Some(record)))
-                .map_err(|error| OutputError::Serialization {
-                    format: "csv",
-                    message: error.to_string(),
-                })?;
-        }
+    let mut row = csv_frame_row(decoded);
+    for record in &decoded.records {
+        row.extend(csv_record_values(record));
     }
+    writer
+        .write_record(row)
+        .map_err(|error| OutputError::Serialization {
+            format: "csv",
+            message: error.to_string(),
+        })?;
+
     let bytes = writer
         .into_inner()
         .map_err(|error| OutputError::Serialization {
@@ -1960,7 +1968,7 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
     })
 }
 
-fn csv_row(decoded: &DecodedOutput, record: Option<&RecordOutput>) -> Vec<String> {
+fn csv_frame_row(decoded: &DecodedOutput) -> Vec<String> {
     let identity = decoded.meter.identity.as_ref();
     let enrichment = decoded.enrichment.as_ref();
     let statuses = decoded
@@ -2003,64 +2011,7 @@ fn csv_row(decoded: &DecodedOutput, record: Option<&RecordOutput>) -> Vec<String
         decoded.security.mode.clone().unwrap_or_default(),
         decoded.security.decryption_state.clone(),
         decoded.decode_state.clone(),
-        record
-            .map(|value| value.index.to_string())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.function.clone())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.storage_number.to_string())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.tariff.to_string())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.subunit.to_string())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.quantities.join("|"))
-            .unwrap_or_default(),
-        record
-            .map(|value| value.value.kind.clone())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.value.display.clone())
-            .unwrap_or_default(),
-        record
-            .and_then(|value| value.value.decimal.clone())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.value.raw_hex.clone())
-            .unwrap_or_default(),
-        record
-            .and_then(|value| value.value.scale_power10)
-            .map(|value| value.to_string())
-            .unwrap_or_default(),
-        record
-            .and_then(|value| value.value.offset_power10)
-            .map(|value| value.to_string())
-            .unwrap_or_default(),
-        record
-            .and_then(|value| value.unit.as_ref())
-            .map(|value| value.display.clone())
-            .unwrap_or_default(),
-        record
-            .and_then(|value| value.unit.as_ref())
-            .and_then(|value| value.ucum.clone())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.data_coding.clone())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.header_hex.clone())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.data_hex.clone())
-            .unwrap_or_default(),
-        record
-            .map(|value| value.record_hex.clone())
-            .unwrap_or_default(),
+        decoded.records.len().to_string(),
         diagnostics,
         enrichment
             .map(|value| value.manufacturer_name.clone())
@@ -2069,6 +2020,44 @@ fn csv_row(decoded: &DecodedOutput, record: Option<&RecordOutput>) -> Vec<String
             .map(|value| value.manufacturer_website.clone())
             .unwrap_or_default(),
         decoded.raw.original_frame_hex.clone(),
+    ]
+}
+
+fn csv_record_values(record: &RecordOutput) -> Vec<String> {
+    vec![
+        record.function.clone(),
+        record.storage_number.to_string(),
+        record.tariff.to_string(),
+        record.subunit.to_string(),
+        record.quantities.join("|"),
+        record.value.kind.clone(),
+        record.value.display.clone(),
+        record.value.decimal.clone().unwrap_or_default(),
+        record.value.raw_hex.clone(),
+        record
+            .value
+            .scale_power10
+            .map(|value| value.to_string())
+            .unwrap_or_default(),
+        record
+            .value
+            .offset_power10
+            .map(|value| value.to_string())
+            .unwrap_or_default(),
+        record
+            .unit
+            .as_ref()
+            .map(|value| value.display.clone())
+            .unwrap_or_default(),
+        record
+            .unit
+            .as_ref()
+            .and_then(|value| value.ucum.clone())
+            .unwrap_or_default(),
+        record.data_coding.clone(),
+        record.header_hex.clone(),
+        record.data_hex.clone(),
+        record.record_hex.clone(),
     ]
 }
 
@@ -2360,16 +2349,51 @@ fn wrap_display(value: &str, width: usize) -> Vec<String> {
 }
 
 fn render_mermaid(decoded: &DecodedOutput) -> String {
+    const RECORD_CLASSES: &[&str] = &[
+        "record0", "record1", "record2", "record3", "record4", "record5", "record6", "record7",
+    ];
+
     let mut output = String::from("flowchart TD\n");
+    let mut frame_nodes = vec!["FRAME_KIND"];
+
+    output.push_str("    subgraph FRAME_SG[\"Frame\"]\n");
+    output.push_str("        direction LR\n");
     output.push_str(&format!(
-        "    FRAME[\"{} {} frame\"]\n",
+        "        FRAME_KIND[\"{} · {}\"]\n",
         mermaid_escape(&decoded.protocol),
         mermaid_escape(&decoded.frame.kind)
     ));
-    if let Some(identity) = &decoded.meter.identity {
+    if let Some(function) = &decoded.frame.function {
         output.push_str(&format!(
-            "    METER[\"Meter {} · {}\"]\n    FRAME --> METER\n",
-            mermaid_escape(identity.id.as_deref().unwrap_or("unknown")),
+            "        FRAME_FUNCTION[\"Function · {}\"]\n",
+            mermaid_escape(function)
+        ));
+        frame_nodes.push("FRAME_FUNCTION");
+    }
+    if let Some(address) = &decoded.frame.address {
+        output.push_str(&format!(
+            "        FRAME_ADDRESS[\"Address · {}\"]\n",
+            mermaid_escape(address)
+        ));
+        frame_nodes.push("FRAME_ADDRESS");
+    }
+    for pair in frame_nodes.windows(2) {
+        if let [from, to] = pair {
+            output.push_str(&format!("        {from} --> {to}\n"));
+        }
+    }
+    output.push_str("    end\n");
+
+    if let Some(identity) = &decoded.meter.identity {
+        let mut meter_nodes = vec!["METER_ID", "METER_MANUFACTURER"];
+        output.push_str("    subgraph METER_SG[\"Meter\"]\n");
+        output.push_str("        direction LR\n");
+        output.push_str(&format!(
+            "        METER_ID[\"ID · {}\"]\n",
+            mermaid_escape(identity.id.as_deref().unwrap_or("unknown"))
+        ));
+        output.push_str(&format!(
+            "        METER_MANUFACTURER[\"Manufacturer · {}\"]\n",
             mermaid_escape(
                 identity
                     .manufacturer_code
@@ -2377,30 +2401,126 @@ fn render_mermaid(decoded: &DecodedOutput) -> String {
                     .unwrap_or("unknown manufacturer")
             )
         ));
+        if let Some(device_type) = &identity.device_type {
+            output.push_str(&format!(
+                "        METER_TYPE[\"Type · {}\"]\n",
+                mermaid_escape(device_type)
+            ));
+            meter_nodes.push("METER_TYPE");
+        }
+        if let Some(version) = identity.version {
+            output.push_str(&format!("        METER_VERSION[\"Version · {version}\"]\n"));
+            meter_nodes.push("METER_VERSION");
+        }
+        for pair in meter_nodes.windows(2) {
+            if let [from, to] = pair {
+                output.push_str(&format!("        {from} --> {to}\n"));
+            }
+        }
+        output.push_str("    end\n");
+        output.push_str("    FRAME_SG --> METER_SG\n");
     }
+
+    output.push_str("    subgraph SECURITY_SG[\"Security\"]\n");
+    output.push_str("        direction LR\n");
     output.push_str(&format!(
-        "    SECURITY[\"Security: {} · {}\"]\n    FRAME --> SECURITY\n",
+        "        SECURITY_MODE[\"{}\"]\n        SECURITY_STATE[\"{}\"]\n",
         mermaid_escape(&decoded.security.payload_protection),
         mermaid_escape(&decoded.security.decryption_state)
     ));
-    for record in &decoded.records {
+    output.push_str("        SECURITY_MODE --> SECURITY_STATE\n");
+    output.push_str("    end\n");
+    output.push_str("    FRAME_SG --> SECURITY_SG\n");
+
+    if !decoded.records.is_empty() {
         output.push_str(&format!(
-            "    R{}[\"{}\"]\n",
-            record.index,
-            mermaid_escape(&reading(record))
+            "    subgraph RECORDS_SG[\"Data Records · {}\"]\n",
+            decoded.records.len()
         ));
+        output.push_str("        direction LR\n");
+        for record in &decoded.records {
+            output.push_str(&format!(
+                "        R{}[\"{}\"]\n",
+                record.index,
+                mermaid_escape(&reading(record))
+            ));
+        }
+        for pair in decoded.records.windows(2) {
+            if let [from, to] = pair {
+                output.push_str(&format!("        R{} ~~~ R{}\n", from.index, to.index));
+            }
+        }
+        output.push_str("    end\n");
         if decoded.meter.identity.is_some() {
-            output.push_str(&format!("    METER --> R{}\n", record.index));
+            output.push_str("    METER_SG --> RECORDS_SG\n");
         } else {
-            output.push_str(&format!("    FRAME --> R{}\n", record.index));
+            output.push_str("    FRAME_SG --> RECORDS_SG\n");
         }
     }
-    if !decoded.diagnostics.is_empty() {
+
+    if let Some(diagnostic) = decoded.diagnostics.first() {
         output.push_str(&format!(
-            "    DIAG[\"{} diagnostic(s)\"]\n    FRAME --> DIAG\n",
-            decoded.diagnostics.len()
+            "    DIAG[\"{} diagnostic(s) · {}\"]\n    FRAME_SG --> DIAG\n",
+            decoded.diagnostics.len(),
+            mermaid_escape(&diagnostic.code)
         ));
     }
+
+    output.push('\n');
+    output.push_str("    classDef frame fill:#1565c0,color:#fff,stroke:#0d47a1,stroke-width:2px\n");
+    output.push_str("    classDef meter fill:#2e7d32,color:#fff,stroke:#1b5e20,stroke-width:2px\n");
+    output.push_str(
+        "    classDef security fill:#e65100,color:#fff,stroke:#bf360c,stroke-width:2px\n",
+    );
+    output
+        .push_str("    classDef record0 fill:#1565c0,color:#fff,stroke:#0d47a1,stroke-width:2px\n");
+    output
+        .push_str("    classDef record1 fill:#2e7d32,color:#fff,stroke:#1b5e20,stroke-width:2px\n");
+    output
+        .push_str("    classDef record2 fill:#e65100,color:#fff,stroke:#bf360c,stroke-width:2px\n");
+    output
+        .push_str("    classDef record3 fill:#6a1b9a,color:#fff,stroke:#4a148c,stroke-width:2px\n");
+    output
+        .push_str("    classDef record4 fill:#c62828,color:#fff,stroke:#8e0000,stroke-width:2px\n");
+    output
+        .push_str("    classDef record5 fill:#00695c,color:#fff,stroke:#004d40,stroke-width:2px\n");
+    output
+        .push_str("    classDef record6 fill:#f9a825,color:#000,stroke:#f57f17,stroke-width:2px\n");
+    output
+        .push_str("    classDef record7 fill:#4527a0,color:#fff,stroke:#311b92,stroke-width:2px\n");
+    output.push_str(
+        "    classDef diagnostic fill:#b71c1c,color:#fff,stroke:#7f0000,stroke-width:2px\n",
+    );
+    output.push_str(&format!("    class {} frame\n", frame_nodes.join(",")));
+    if let Some(identity) = &decoded.meter.identity {
+        output.push_str("    class METER_ID,METER_MANUFACTURER meter\n");
+        if identity.device_type.is_some() {
+            output.push_str("    class METER_TYPE meter\n");
+        }
+        if identity.version.is_some() {
+            output.push_str("    class METER_VERSION meter\n");
+        }
+    }
+    output.push_str("    class SECURITY_MODE,SECURITY_STATE security\n");
+    for record in &decoded.records {
+        let record_class = RECORD_CLASSES
+            .get(record.index % RECORD_CLASSES.len())
+            .copied()
+            .unwrap_or("record0");
+        output.push_str(&format!("    class R{} {}\n", record.index, record_class));
+    }
+    if !decoded.diagnostics.is_empty() {
+        output.push_str("    class DIAG diagnostic\n");
+    }
+    output.push_str("    style FRAME_SG fill:#e8f1fb,stroke:#1565c0,color:#0d1117\n");
+    if decoded.meter.identity.is_some() {
+        output.push_str("    style METER_SG fill:#e8f5e9,stroke:#2e7d32,color:#0d1117\n");
+    }
+    output.push_str("    style SECURITY_SG fill:#fff3e0,stroke:#e65100,color:#0d1117\n");
+    if !decoded.records.is_empty() {
+        output.push_str("    style RECORDS_SG fill:#f3e5f5,stroke:#6a1b9a,color:#0d1117\n");
+    }
+
     output
 }
 

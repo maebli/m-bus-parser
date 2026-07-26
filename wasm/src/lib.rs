@@ -7,9 +7,18 @@ use m_bus_parser::{
 };
 use wasm_bindgen::prelude::*;
 
+mod highlight;
+
 #[wasm_bindgen]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Highlight JSON, YAML, CSV, XML, or plaintext with the bundled Rust grammar set.
+#[wasm_bindgen]
+pub fn m_bus_highlight(source: &str, language: &str) -> Result<String, JsValue> {
+    highlight::highlight_source(source, language)
+        .map_err(|error| JsError::new(&format!("syntax highlighting failed: {error}")).into())
 }
 
 fn error_to_js(error: OutputError) -> JsValue {
