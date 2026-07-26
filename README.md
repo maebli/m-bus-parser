@@ -103,10 +103,10 @@ m-bus-parser-cli parse -d "..." -t json
 # YAML
 m-bus-parser-cli parse -d "..." -t yaml
 
-# CSV
+# CSV (one row per input frame; record fields use namespaced columns)
 m-bus-parser-cli parse -d "..." -t csv
 
-# Mermaid diagram source (renders in the web app)
+# Colored, semantically grouped Mermaid diagram source (renders in the web app)
 m-bus-parser-cli parse -d "..." -t mermaid
 
 # Wired-compatible and wireless XML
@@ -216,8 +216,8 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 | `table`         | default             | Width-aware human-readable table |
 | `json`          | `-t json`           | Canonical schema as JSON |
 | `yaml`          | `-t yaml`           | Canonical schema as YAML |
-| `csv`           | `-t csv`            | Stable tidy-record CSV |
-| `mermaid`       | `-t mermaid`        | Layer-oriented Mermaid flowchart |
+| `csv`           | `-t csv`            | One frame row with namespaced record columns |
+| `mermaid`       | `-t mermaid`        | Colored, layer-oriented Mermaid flowchart |
 | `xml`           | `-t xml`            | Wired libmbus-compatible and wireless XML |
 | `annotated`     | `-t annotated`      | Byte-segment annotation envelope |
 | `annotated-text`| `-t annotated-text` | Human-readable byte annotations |

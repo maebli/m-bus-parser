@@ -72,6 +72,28 @@ fn formats_and_compatibility_aliases_share_one_parser() {
 
     let csv = render_hex(WIRED_FRAME, OutputFormat::Csv, &RenderOptions::default()).unwrap();
     assert!(csv.starts_with("schema_version,protocol,frame_kind"));
+    assert_eq!(
+        csv.lines().count(),
+        2,
+        "one input frame must produce one CSV data row"
+    );
+    assert!(csv.lines().next().unwrap().contains("record_0_value"));
+}
+
+#[test]
+fn mermaid_restores_semantic_color_and_grouping() {
+    let diagram = render_hex(
+        WIRED_FRAME,
+        OutputFormat::Mermaid,
+        &RenderOptions::default(),
+    )
+    .unwrap();
+
+    assert!(diagram.contains("subgraph FRAME_SG"));
+    assert!(diagram.contains("subgraph RECORDS_SG"));
+    assert!(diagram.contains("classDef frame"));
+    assert!(diagram.contains("classDef record0"));
+    assert!(diagram.contains("class R0 record0"));
 }
 
 #[test]
