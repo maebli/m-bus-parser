@@ -240,6 +240,11 @@ jobs:
         run: |
           cd wasm
           wasm-pack build --target bundler
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
       - name: Publish WASM package
         run: wasm-pack publish --access public wasm
       - name: Create new artifacts for website
