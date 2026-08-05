@@ -51,7 +51,8 @@ jobs:
         working-directory: experiments/arrayvec-iterator-resources
         run: |
           set -euxo pipefail
-          RUSTFLAGS='-C force-frame-pointers=yes' cargo rustc --release --target thumbv7m-none-eabi --lib -- --emit=obj,asm
+          cargo clean
+          RUSTFLAGS='-C force-frame-pointers=yes -C lto=no -C embed-bitcode=no' cargo rustc --release --target thumbv7m-none-eabi --lib -- --emit=obj,asm
 
           OBJ=$(find target/thumbv7m-none-eabi/release/deps -name 'arrayvec_iterator_resources-*.o' | head -1)
           ASM=$(find target/thumbv7m-none-eabi/release/deps -name 'arrayvec_iterator_resources-*.s' | head -1)
@@ -61,6 +62,8 @@ jobs:
           echo "assembly=$ASM"
           echo '--- Cortex-M target-specific type sizes (symbol byte sizes) ---'
           "$LLVM_BIN/llvm-nm" -S --size-sort "$OBJ" | grep TYPE_SIZE
+          echo '--- Cortex-M type declarations from assembly ---'
+          grep -A4 -B2 'TYPE_SIZE_' "$ASM"
           echo '--- Cortex-M function code sizes (symbol byte sizes) ---'
           "$LLVM_BIN/llvm-nm" -S --size-sort "$OBJ" | grep -E ' (eager_probe|iterator_probe)$'
 
