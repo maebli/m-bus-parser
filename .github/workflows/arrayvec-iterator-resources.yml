@@ -1,0 +1,89 @@
+name: ArrayVec vs iterator resource measurement
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/arrayvec-iterator-resources/**'
+      - '.github/workflows/arrayvec-iterator-resources.yml'
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust targets and LLVM tools
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7m-none-eabi
+          components: llvm-tools-preview
+
+      - name: Compile and test
+        working-directory: experiments/arrayvec-iterator-resources
+        run: |
+          set -euxo pipefail
+          cargo test
+          cargo build --release
+
+      - name: Runtime measurements on x86-64
+        working-directory: experiments/arrayvec-iterator-resources
+        run: |
+          set -euxo pipefail
+          cargo run --release | tee host-measurements.txt
+          echo '--- ELF section sizes ---'
+          size target/release/arrayvec-iterator-resources
+
+      - name: Host function code and stack-frame assembly
+        working-directory: experiments/arrayvec-iterator-resources
+        run: |
+          set -euxo pipefail
+          RUSTFLAGS='-C force-frame-pointers=yes' cargo rustc --release --bin arrayvec-iterator-resources -- --emit=obj
+          BIN=target/release/arrayvec-iterator-resources
+          echo '--- Function symbol sizes (bytes) ---'
+          nm -S --size-sort "$BIN" | grep -E ' (eager_probe|iterator_probe)$'
+          echo '--- eager_probe assembly ---'
+          objdump -d "$BIN" | sed -n '/<eager_probe>:/,/^$/p'
+          echo '--- iterator_probe assembly ---'
+          objdump -d "$BIN" | sed -n '/<iterator_probe>:/,/^$/p'
+
+      - name: Cortex-M no_std measurements
+        working-directory: experiments/arrayvec-iterator-resources
+        run: |
+          set -euxo pipefail
+          RUSTFLAGS='-C force-frame-pointers=yes' cargo rustc --release --target thumbv7m-none-eabi --lib -- --emit=obj,asm
+
+          OBJ=$(find target/thumbv7m-none-eabi/release/deps -name 'arrayvec_iterator_resources-*.o' | head -1)
+          ASM=$(find target/thumbv7m-none-eabi/release/deps -name 'arrayvec_iterator_resources-*.s' | head -1)
+          LLVM_BIN="$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin"
+
+          echo "object=$OBJ"
+          echo "assembly=$ASM"
+          echo '--- Cortex-M target-specific type sizes (symbol byte sizes) ---'
+          "$LLVM_BIN/llvm-nm" -S --size-sort "$OBJ" | grep TYPE_SIZE
+          echo '--- Cortex-M function code sizes (symbol byte sizes) ---'
+          "$LLVM_BIN/llvm-nm" -S --size-sort "$OBJ" | grep -E ' (eager_probe|iterator_probe)$'
+
+          python3 - "$ASM" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          text = pathlib.Path(sys.argv[1]).read_text()
+          for function in ("eager_probe", "iterator_probe"):
+              match = re.search(
+                  rf"(?ms)^\s*{function}:\n(?P<body>.*?)(?=^\.Lfunc_end|^\s*\.size\s+{function})",
+                  text,
+              )
+              print(f"--- {function} Cortex-M prologue / stack instructions ---")
+              if not match:
+                  print("function not found")
+                  continue
+              body = match.group("body")
+              relevant = [
+                  line.strip()
+                  for line in body.splitlines()
+                  if re.search(r"\b(push|pop|sub\s+sp|add\s+sp)\b", line)
+              ]
+              print("\n".join(relevant) if relevant else "no explicit stack adjustment found")
+          PY
