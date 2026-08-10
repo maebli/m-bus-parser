@@ -1224,7 +1224,7 @@ pub(crate) fn render_annotated_bytes(
                 })?;
             replace_encrypted_payload_segments(&mut display_segments, &display_data);
             return serde_json::to_string_pretty(&serde_json::json!({
-                "schema_version": 2,
+                "schema_version": 3,
                 "bytes": display_data,
                 "segments": display_segments,
                 "decrypted": true,
@@ -1244,7 +1244,7 @@ pub(crate) fn render_annotated_bytes(
     let _ = key;
 
     serde_json::to_string_pretty(&serde_json::json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "bytes": data,
         "segments": original_segments,
         "decrypted": false,

@@ -20,7 +20,7 @@ use crate::user_data::data_information::{
 };
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
-const SCHEMA_VERSION: u8 = 2;
+const SCHEMA_VERSION: u8 = 3;
 const DEFAULT_TABLE_WIDTH: usize = 100;
 const MINIMUM_TABLE_WIDTH: usize = 32;
 
@@ -336,30 +336,18 @@ pub struct RecordOutput {
     pub data_coding: String,
     pub header_hex: String,
     pub data_hex: String,
-    pub record_hex: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValueOutput {
     pub kind: String,
-    pub display: String,
+    /// The single canonical parsed representation for this value.
+    ///
+    /// Exact decimals and text use JSON strings, finite floating-point values
+    /// use JSON numbers, complete temporal values use ISO 8601 strings, and
+    /// partial temporal values use a compact component object.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub decimal: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub significand: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub number: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub scale_power10: Option<isize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub offset_power10: Option<isize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub precision: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub special: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub components: Option<serde_json::Value>,
-    pub raw_hex: String,
+    pub value: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1315,7 +1303,6 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
         data_coding,
         header_hex: record.data_record_header_hex(),
         data_hex: record.data_hex(),
-        record_hex: spaced_hex(record.raw_bytes()),
     }
 }
 
@@ -1464,9 +1451,6 @@ fn standardized_word(word: &str, first: bool) -> String {
 }
 
 fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
-    let header_size = record.data_record_header.get_size();
-    let raw = record.raw_bytes().get(header_size..).unwrap_or_default();
-    let raw_hex = spaced_hex(raw);
     let information = record.data_information();
     let value_information = record.value_information();
     let scale = value_information.map(|value| value.decimal_scale_exponent);
@@ -1480,16 +1464,10 @@ fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
                 let (number_value, special) = finite_number(*number);
                 return ValueOutput {
                     kind: "float".to_string(),
-                    display: special.clone().unwrap_or_else(|| number.to_string()),
-                    decimal: None,
-                    significand: None,
-                    number: number_value,
-                    scale_power10: None,
-                    offset_power10: None,
-                    precision: Some("f32_approximate".to_string()),
-                    special,
-                    components: None,
-                    raw_hex,
+                    value: number_value
+                        .and_then(serde_json::Number::from_f64)
+                        .map(serde_json::Value::Number)
+                        .or_else(|| special.map(serde_json::Value::String)),
                 };
             }
 
@@ -1497,42 +1475,17 @@ fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
                 exact_significand(record, *number).unwrap_or_else(|| format!("{number:.0}"));
             let scale_value = scale.unwrap_or(0);
             let decimal = scaled_decimal(&significand, scale_value, offset);
-            let convenience_number = decimal
-                .parse::<f64>()
-                .ok()
-                .filter(|value| value.is_finite());
             ValueOutput {
                 kind: "decimal".to_string(),
-                display: decimal.clone(),
-                decimal: Some(decimal),
-                significand: Some(significand),
-                number: convenience_number,
-                scale_power10: Some(scale_value),
-                offset_power10: offset,
-                precision: Some("exact".to_string()),
-                special: None,
-                components: None,
-                raw_hex,
+                value: Some(serde_json::Value::String(decimal)),
             }
         }
-        Some(DataType::Text(text)) => {
-            let display = text.to_string();
-            ValueOutput {
-                kind: "text".to_string(),
-                display,
-                decimal: None,
-                significand: None,
-                number: None,
-                scale_power10: None,
-                offset_power10: None,
-                precision: None,
-                special: None,
-                components: None,
-                raw_hex,
-            }
-        }
+        Some(DataType::Text(text)) => ValueOutput {
+            kind: "text".to_string(),
+            value: Some(serde_json::Value::String(text.to_string())),
+        },
         Some(DataType::Date(day, month, year)) => {
-            temporal_value("date", day, month, year, None, None, None, raw_hex)
+            temporal_value("date", day, month, year, None, None, None)
         }
         Some(DataType::Time(second, minute, hour)) => temporal_value(
             "time",
@@ -1542,18 +1495,10 @@ fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
             Some(hour),
             Some(minute),
             Some(second),
-            raw_hex,
         ),
-        Some(DataType::DateTime(day, month, year, hour, minute)) => temporal_value(
-            "datetime",
-            day,
-            month,
-            year,
-            Some(hour),
-            Some(minute),
-            None,
-            raw_hex,
-        ),
+        Some(DataType::DateTime(day, month, year, hour, minute)) => {
+            temporal_value("datetime", day, month, year, Some(hour), Some(minute), None)
+        }
         Some(DataType::DateTimeWithSeconds(day, month, year, hour, minute, second)) => {
             temporal_value(
                 "datetime",
@@ -1563,47 +1508,19 @@ fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
                 Some(hour),
                 Some(minute),
                 Some(second),
-                raw_hex,
             )
         }
-        Some(DataType::ManufacturerSpecific(data)) => ValueOutput {
+        Some(DataType::ManufacturerSpecific(_)) => ValueOutput {
             kind: "manufacturer_specific".to_string(),
-            display: hex_string(data),
-            decimal: None,
-            significand: None,
-            number: None,
-            scale_power10: None,
-            offset_power10: None,
-            precision: None,
-            special: None,
-            components: None,
-            raw_hex,
+            value: None,
         },
         None => ValueOutput {
             kind: "none".to_string(),
-            display: "No data".to_string(),
-            decimal: None,
-            significand: None,
-            number: None,
-            scale_power10: None,
-            offset_power10: None,
-            precision: None,
-            special: None,
-            components: None,
-            raw_hex,
+            value: None,
         },
         Some(_) => ValueOutput {
             kind: "unknown".to_string(),
-            display: "Unsupported value type".to_string(),
-            decimal: None,
-            significand: None,
-            number: None,
-            scale_power10: None,
-            offset_power10: None,
-            precision: None,
-            special: None,
-            components: None,
-            raw_hex,
+            value: None,
         },
     }
 }
@@ -1617,7 +1534,6 @@ fn temporal_value(
     hour: Option<&SingleEveryOrInvalid<u8>>,
     minute: Option<&SingleEveryOrInvalid<u8>>,
     second: Option<&SingleEveryOrInvalid<u8>>,
-    raw_hex: String,
 ) -> ValueOutput {
     let mut components = serde_json::Map::new();
     if kind != "time" {
@@ -1635,49 +1551,26 @@ fn temporal_value(
         components.insert("second".to_string(), component_json(value));
     }
 
-    let iso = temporal_iso(day, month, year, hour, minute, second, kind);
-    let display = iso.clone().unwrap_or_else(|| {
-        components
-            .iter()
-            .map(|(name, value)| format!("{name}={}", value["value_or_state"]))
-            .collect::<Vec<_>>()
-            .join(", ")
-    });
-    if let Some(iso) = &iso {
-        components.insert("iso".to_string(), serde_json::Value::String(iso.clone()));
-    }
+    let value = temporal_iso(day, month, year, hour, minute, second, kind)
+        .map(serde_json::Value::String)
+        .unwrap_or_else(|| serde_json::Value::Object(components));
     ValueOutput {
         kind: kind.to_string(),
-        display,
-        decimal: None,
-        significand: None,
-        number: None,
-        scale_power10: None,
-        offset_power10: None,
-        precision: None,
-        special: None,
-        components: Some(serde_json::Value::Object(components)),
-        raw_hex,
+        value: Some(value),
     }
 }
 
 fn component_json<T>(component: &SingleEveryOrInvalid<T>) -> serde_json::Value
 where
-    T: Serialize + fmt::Display,
+    T: Serialize,
 {
     match component {
-        SingleEveryOrInvalid::Single(value) => serde_json::json!({
-            "state": "single",
-            "value": value,
-            "value_or_state": value.to_string(),
-        }),
-        SingleEveryOrInvalid::Every() => {
-            serde_json::json!({"state": "every", "value_or_state": "every"})
+        SingleEveryOrInvalid::Single(value) => {
+            serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
         }
-        SingleEveryOrInvalid::Invalid() => {
-            serde_json::json!({"state": "invalid", "value_or_state": "invalid"})
-        }
-        _ => serde_json::json!({"state": "unknown", "value_or_state": "unknown"}),
+        SingleEveryOrInvalid::Every() => serde_json::Value::String("every".to_string()),
+        SingleEveryOrInvalid::Invalid() => serde_json::Value::String("invalid".to_string()),
+        _ => serde_json::Value::String("unknown".to_string()),
     }
 }
 
@@ -1959,6 +1852,9 @@ fn compare_abs(left: &str, right: &str) -> std::cmp::Ordering {
 
 fn apply_power10(integer: &str, exponent: isize) -> String {
     let (negative, digits) = split_sign(integer);
+    if digits.bytes().all(|digit| digit == b'0') {
+        return "0".to_string();
+    }
     let mut output = if exponent >= 0 {
         let mut value = digits.to_string();
         value.push_str(&"0".repeat(usize::try_from(exponent).unwrap_or(0)));
@@ -2039,15 +1935,10 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
         "quantities",
         "value_type",
         "value",
-        "value_decimal",
-        "raw_value",
-        "scale_power10",
-        "offset_power10",
         "unit",
         "data_coding",
         "header_hex",
         "data_hex",
-        "record_hex",
     ];
 
     let mut writer = csv::Writer::from_writer(Vec::new());
@@ -2173,25 +2064,43 @@ fn csv_record_values(record: &RecordOutput) -> Vec<String> {
         record.subunit.to_string(),
         record.quantities.join("|"),
         record.value.kind.clone(),
-        record.value.display.clone(),
-        record.value.decimal.clone().unwrap_or_default(),
-        record.value.raw_hex.clone(),
-        record
-            .value
-            .scale_power10
-            .map(|value| value.to_string())
-            .unwrap_or_default(),
-        record
-            .value
-            .offset_power10
-            .map(|value| value.to_string())
-            .unwrap_or_default(),
+        value_display(record),
         record.unit.clone().unwrap_or_default(),
         record.data_coding.clone(),
         record.header_hex.clone(),
         record.data_hex.clone(),
-        record.record_hex.clone(),
     ]
+}
+
+fn value_display(record: &RecordOutput) -> String {
+    match &record.value.value {
+        Some(serde_json::Value::String(value)) => value.clone(),
+        Some(serde_json::Value::Number(value)) => value.to_string(),
+        Some(serde_json::Value::Object(components)) => components
+            .iter()
+            .map(|(name, value)| {
+                let value = value
+                    .as_str()
+                    .map_or_else(|| value.to_string(), ToString::to_string);
+                format!("{name}={value}")
+            })
+            .collect::<Vec<_>>()
+            .join(", "),
+        Some(value) => value.to_string(),
+        None if record.value.kind == "manufacturer_specific" => record.data_hex.replace(' ', ""),
+        None if record.value.kind == "none" => "No data".to_string(),
+        None if record.value.kind == "unknown" => "Unsupported value type".to_string(),
+        None => String::new(),
+    }
+}
+
+fn record_hex(record: &RecordOutput) -> String {
+    match (record.header_hex.is_empty(), record.data_hex.is_empty()) {
+        (false, false) => format!("{} {}", record.header_hex, record.data_hex),
+        (false, true) => record.header_hex.clone(),
+        (true, false) => record.data_hex.clone(),
+        (true, true) => String::new(),
+    }
 }
 
 fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputError> {
@@ -2285,7 +2194,7 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
                             record.storage_number, record.tariff, record.subunit
                         ),
                         record.data_coding.clone(),
-                        record.record_hex.clone(),
+                        record_hex(record),
                     ]
                 })
                 .collect::<Vec<_>>();
@@ -2313,7 +2222,7 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
                             "{}\n{} · raw {}",
                             reading(record),
                             record.data_coding,
-                            record.record_hex
+                            record_hex(record)
                         ),
                         record.function.clone(),
                         format!(
@@ -2343,7 +2252,7 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
                             ),
                         ),
                         ("Coding".to_string(), record.data_coding.clone()),
-                        ("Raw".to_string(), record.record_hex.clone()),
+                        ("Raw".to_string(), record_hex(record)),
                     ],
                     width,
                 ));
@@ -2378,7 +2287,7 @@ fn reading(record: &RecordOutput) -> String {
         .as_ref()
         .map(|value| format!(" {value}"))
         .unwrap_or_default();
-    format!("{quantity}: {}{unit}", record.value.display)
+    format!("{quantity}: {}{unit}", value_display(record))
 }
 
 fn key_value_box(rows: &[(String, String)], width: usize) -> String {
@@ -2670,13 +2579,6 @@ fn hex_string(data: &[u8]) -> String {
     data.iter().map(|byte| format!("{byte:02X}")).collect()
 }
 
-fn spaced_hex(data: &[u8]) -> String {
-    data.iter()
-        .map(|byte| format!("{byte:02X}"))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2704,7 +2606,7 @@ mod tests {
         let rendered =
             render_hex(WIRED_FRAME, OutputFormat::Json, &RenderOptions::default()).unwrap();
         let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
-        assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["schema_version"], 3);
         assert_eq!(value["protocol"], "wired");
         assert!(value["records"].is_array());
         assert!(value.get("summary").is_none());
@@ -2752,6 +2654,14 @@ mod tests {
         assert_eq!(records[0].quantities, ["Volume"]);
         assert_eq!(records[0].unit.as_deref(), Some("m3"));
         assert_eq!(records[0].data_coding, "24-bit integer");
+        assert_eq!(
+            records[0]
+                .value
+                .value
+                .as_ref()
+                .and_then(|value| value.as_str()),
+            Some("12.565")
+        );
     }
 
     #[test]

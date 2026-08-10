@@ -38,7 +38,7 @@ fn canonical_json_has_a_versioned_stable_root() {
             "missing canonical field {field}"
         );
     }
-    assert_eq!(value["schema_version"], 2);
+    assert_eq!(value["schema_version"], 3);
     assert_eq!(value["protocol"], "wired");
     assert!(!object.contains_key("summary"));
     assert_eq!(
@@ -53,6 +53,34 @@ fn canonical_json_has_a_versioned_stable_root() {
     assert_eq!(value["records"][2]["unit"], "W");
     assert!(value["records"][2]["unit"].is_string());
     assert_eq!(value["records"][3]["unit"], "m3.h-1");
+
+    let first_record = value["records"][0].as_object().unwrap();
+    let first_value = first_record["value"].as_object().unwrap();
+    assert_eq!(first_value["kind"], "decimal");
+    assert_eq!(first_value["value"], "0");
+    assert_eq!(
+        first_value.len(),
+        2,
+        "record values must not repeat derived data"
+    );
+    for duplicate in [
+        "display",
+        "decimal",
+        "significand",
+        "number",
+        "scale_power10",
+        "offset_power10",
+        "precision",
+        "raw_hex",
+    ] {
+        assert!(
+            !first_value.contains_key(duplicate),
+            "duplicate value field {duplicate}"
+        );
+    }
+    assert_eq!(first_record["data_hex"], "00 00 00 00");
+    assert!(!first_record.contains_key("record_hex"));
+    assert_eq!(value["records"][7]["value"]["value"], "0012-01-12");
 }
 
 #[test]
@@ -66,7 +94,7 @@ fn enrichment_is_optional_without_changing_the_schema() {
     )
     .unwrap();
     let value = serde_json::to_value(decoded).unwrap();
-    assert_eq!(value["schema_version"], 2);
+    assert_eq!(value["schema_version"], 3);
     assert!(value.get("enrichment").is_none());
 }
 
@@ -90,6 +118,15 @@ fn formats_and_compatibility_aliases_share_one_parser() {
         "one input frame must produce one CSV data row"
     );
     assert!(csv.lines().next().unwrap().contains("record_0_value"));
+    for duplicate in [
+        "value_decimal",
+        "raw_value",
+        "scale_power10",
+        "offset_power10",
+        "record_hex",
+    ] {
+        assert!(!csv.lines().next().unwrap().contains(duplicate));
+    }
     assert!(csv.contains("Instantaneous value"));
     assert!(csv.contains("Volume flow"));
     assert!(csv.contains("6-digit BCD"));

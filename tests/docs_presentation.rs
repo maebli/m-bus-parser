@@ -50,6 +50,38 @@ fn docs_line_layout_and_palette_match_the_rust_contract() {
 }
 
 #[test]
+fn docs_hex_view_uses_serialized_annotation_names() {
+    for identifier in [
+        "layer === 'frame'",
+        "layer === 'app_header'",
+        "kind === 'dif'",
+        "kind === 'vife'",
+        "kind === 'plaintext_vif'",
+        "kind === 'data_payload'",
+        "'record_field': 'Data Records'",
+        "seg.layer === 'record_field'",
+    ] {
+        assert!(
+            DOCS_HTML.contains(identifier),
+            "missing annotation identifier {identifier}"
+        );
+    }
+
+    for stale_identifier in [
+        "layer === 'Frame'",
+        "layer === 'AppHeader'",
+        "kind === 'Dif'",
+        "kind === 'DataPayload'",
+        "seg.layer === 'RecordField'",
+    ] {
+        assert!(
+            !DOCS_HTML.contains(stale_identifier),
+            "stale annotation identifier {stale_identifier}"
+        );
+    }
+}
+
+#[test]
 fn checked_in_wasm_stays_within_the_docs_budget() {
     let wasm = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/m_bus_parser_wasm_pack_bg.wasm");
     let bytes = fs::metadata(wasm).unwrap().len();

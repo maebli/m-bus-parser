@@ -859,7 +859,7 @@
         <div id="output" aria-live="polite"></div>
     </div>
     <script type="module">
-        import init, { m_bus_highlight, m_bus_render, version } from "./m_bus_parser_wasm_pack.js?v=0.4.1";
+        import init, { m_bus_highlight, m_bus_render, version } from "./m_bus_parser_wasm_pack.js?v=0.4.3";
 
         let currentFormat = "json";
         let lastTableWidth = null;
@@ -945,7 +945,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.1", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.3", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             // Load data and format from URL params and auto-parse if present
@@ -1176,14 +1176,14 @@
 
             // Layer CSS class
             function layerClass(layer) {
-                if (layer === 'Frame') return 'hex-layer-frame';
-                if (layer === 'AppHeader') return 'hex-layer-appheader';
+                if (layer === 'frame') return 'hex-layer-frame';
+                if (layer === 'app_header') return 'hex-layer-appheader';
                 return 'hex-layer-record';
             }
             function segmentKindClass(kind) {
-                if (kind === 'Dif' || kind === 'Dife') return 'hex-kind-dif';
-                if (kind === 'Vif' || kind === 'Vife' || kind === 'PlaintextVif') return 'hex-kind-vif';
-                if (kind === 'DataPayload') return 'hex-kind-data';
+                if (kind === 'dif' || kind === 'dife') return 'hex-kind-dif';
+                if (kind === 'vif' || kind === 'vife' || kind === 'plaintext_vif') return 'hex-kind-vif';
+                if (kind === 'data_payload') return 'hex-kind-data';
                 return '';
             }
 
@@ -1375,14 +1375,14 @@
                     currentGroup = null;
                     const layerLabel = document.createElement('div');
                     layerLabel.className = 'hex-tree-layer';
-                    const layerNames = { 'Frame': 'Frame', 'AppHeader': 'Application Header', 'RecordField': 'Data Records' };
+                    const layerNames = { 'frame': 'Frame', 'app_header': 'Application Header', 'record_field': 'Data Records' };
                     layerLabel.textContent = layerNames[seg.layer] || seg.layer;
                     rightPanel.appendChild(layerLabel);
                     groupBody = null;
                 }
 
                 // Record grouping
-                if (seg.layer === 'RecordField' && seg.group !== null && seg.group !== currentGroup) {
+                if (seg.layer === 'record_field' && seg.group !== null && seg.group !== currentGroup) {
                     currentGroup = seg.group;
                     const groupDiv = document.createElement('div');
                     groupDiv.className = 'hex-tree-group';

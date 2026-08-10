@@ -27,7 +27,7 @@ class BindingsTests(unittest.TestCase):
         frame_bytes = bytes.fromhex(WIRED_FRAME.replace(" ", ""))
 
         self.assertIsInstance(parsed, dict)
-        self.assertEqual(parsed["schema_version"], 2)
+        self.assertEqual(parsed["schema_version"], 3)
         self.assertEqual(parsed["protocol"], "wired")
         self.assertIn("frame", parsed)
         self.assertEqual(parsed, pymbusparser.parse(frame_bytes))

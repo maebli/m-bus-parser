@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-08-11
+
+### Changed
+
+- Advanced the canonical output schema to version 3. Record values now contain
+  one parsed `value` instead of repeating display, numeric, precision, scaling,
+  component, and raw-byte representations. Record bytes live only in
+  `header_hex` and `data_hex`.
+
+### Fixed
+
+- Restored frame, application-header, DIF/VIF, and payload colors in the web
+  hex view after annotation identifiers moved to `snake_case`.
+
 ## [0.4.2] - 2026-08-10
 
 ### Changed
