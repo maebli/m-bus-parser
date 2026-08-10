@@ -34,7 +34,7 @@ fn decode_returns_a_native_versioned_object() {
         Reflect::get(&decoded, &JsValue::from_str("schema_version"))
             .unwrap()
             .as_f64(),
-        Some(2.0)
+        Some(3.0)
     );
     assert_eq!(
         Reflect::get(&decoded, &JsValue::from_str("protocol"))

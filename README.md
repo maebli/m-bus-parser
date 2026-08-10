@@ -236,8 +236,11 @@ share one vocabulary:
   when one is available, such as `W`, `Cel`, or `m3.h-1`.
 - Complete temporal values use ISO 8601 notation. The parser does not invent a
   timezone when a meter does not transmit one.
+- Each record value contains a `kind` and at most one parsed `value`. Exact
+  decimals, text, and complete temporal values use strings; finite floats use
+  JSON numbers; partial temporal values use a compact component object.
 - Raw binary values use uppercase hexadecimal and fields containing them end
-  in `_hex`.
+  in `_hex`. Record bytes live only in `header_hex` and `data_hex`.
 
 There is no common JSON schema shared by M-Bus parsers. These rules retain the
 protocol vocabulary used by [M-Bus](https://m-bus.com/documentation-wired/06-application-layer)
