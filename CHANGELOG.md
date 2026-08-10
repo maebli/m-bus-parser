@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-10
+
 ### Changed
 
 - Simplified canonical record units to a single `unit` string. It contains the
