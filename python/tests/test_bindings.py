@@ -27,7 +27,7 @@ class BindingsTests(unittest.TestCase):
         frame_bytes = bytes.fromhex(WIRED_FRAME.replace(" ", ""))
 
         self.assertIsInstance(parsed, dict)
-        self.assertEqual(parsed["schema_version"], 1)
+        self.assertEqual(parsed["schema_version"], 2)
         self.assertEqual(parsed["protocol"], "wired")
         self.assertIn("frame", parsed)
         self.assertEqual(parsed, pymbusparser.parse(frame_bytes))
@@ -53,6 +53,10 @@ class BindingsTests(unittest.TestCase):
 
         self.assertIsInstance(records, list)
         self.assertGreater(len(records), 0)
+        self.assertEqual(records[0]["function"], "Instantaneous value")
+        self.assertIn("quantities", records[0])
+        self.assertIn("data_coding", records[0])
+        self.assertNotIn("data_record_header", records[0])
 
     def test_render_and_legacy_api_return_strings(self):
         rendered = pymbusparser.render(WIRED_FRAME, "json")

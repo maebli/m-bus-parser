@@ -222,6 +222,30 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 | `annotated`     | `-t annotated`      | Byte-segment annotation envelope |
 | `annotated-text`| `-t annotated-text` | Human-readable byte annotations |
 
+### Naming and interoperability
+
+The canonical JSON, YAML, CSV, table, Mermaid, Python, and WebAssembly outputs
+share one vocabulary:
+
+- JSON/YAML member names and annotation identifiers use `snake_case`.
+- Link-layer functions use the M-Bus mnemonics (`RSP_UD`, `REQ_UD2`,
+  `SND_NKE`). Record functions, quantities, and data codings use the terms from
+  the M-Bus application-layer tables, such as `Instantaneous value`,
+  `Volume flow`, and `6-digit BCD`.
+- `unit` is a single case-sensitive [UCUM](https://ucum.org/ucum) expression
+  when one is available, such as `W`, `Cel`, or `m3.h-1`.
+- Complete temporal values use ISO 8601 notation. The parser does not invent a
+  timezone when a meter does not transmit one.
+- Raw binary values use uppercase hexadecimal and fields containing them end
+  in `_hex`.
+
+There is no common JSON schema shared by M-Bus parsers. These rules retain the
+protocol vocabulary used by [M-Bus](https://m-bus.com/documentation-wired/06-application-layer)
+and libmbus while keeping the structured formats predictable. The `xml` format
+deliberately retains libmbus's established XML vocabulary and unit symbols for
+compatibility. Formats whose names end in `-legacy` retain their historical
+contracts.
+
 ---
 
 ## Protocol Coverage

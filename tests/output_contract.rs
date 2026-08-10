@@ -38,9 +38,21 @@ fn canonical_json_has_a_versioned_stable_root() {
             "missing canonical field {field}"
         );
     }
-    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["schema_version"], 2);
     assert_eq!(value["protocol"], "wired");
     assert!(!object.contains_key("summary"));
+    assert_eq!(
+        value["frame"]["function"],
+        "RSP_UD (ACD: false, DFC: false)"
+    );
+    assert_eq!(value["records"][2]["function"], "Instantaneous value");
+    assert_eq!(value["records"][3]["quantities"][0], "Volume flow");
+    assert_eq!(value["records"][4]["quantities"][0], "Flow temperature");
+    assert_eq!(value["records"][2]["data_coding"], "6-digit BCD");
+    assert_eq!(value["records"][9]["function"], "Manufacturer specific");
+    assert_eq!(value["records"][2]["unit"], "W");
+    assert!(value["records"][2]["unit"].is_string());
+    assert_eq!(value["records"][3]["unit"], "m3.h-1");
 }
 
 #[test]
@@ -54,7 +66,7 @@ fn enrichment_is_optional_without_changing_the_schema() {
     )
     .unwrap();
     let value = serde_json::to_value(decoded).unwrap();
-    assert_eq!(value["schema_version"], 1);
+    assert_eq!(value["schema_version"], 2);
     assert!(value.get("enrichment").is_none());
 }
 
@@ -78,6 +90,14 @@ fn formats_and_compatibility_aliases_share_one_parser() {
         "one input frame must produce one CSV data row"
     );
     assert!(csv.lines().next().unwrap().contains("record_0_value"));
+    assert!(csv.contains("Instantaneous value"));
+    assert!(csv.contains("Volume flow"));
+    assert!(csv.contains("6-digit BCD"));
+
+    let yaml = render_hex(WIRED_FRAME, OutputFormat::Yaml, &RenderOptions::default()).unwrap();
+    let yaml_value: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+    assert_eq!(yaml_value["records"][3]["quantities"][0], "Volume flow");
+    assert_eq!(yaml_value["records"][3]["unit"], "m3.h-1");
 }
 
 #[test]

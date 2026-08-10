@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-10
+
+### Changed
+
+- Simplified canonical record units to a single `unit` string. It contains the
+  standardized representation when available, without exposing a technical
+  `ucum` label, and falls back to the human-readable symbol for units without a
+  standard mapping. This change advances the canonical output schema to
+  version 2.
+- Aligned canonical frame functions, record functions, quantities, and data
+  coding names with M-Bus terminology (`RSP_UD`, `Instantaneous value`,
+  `Volume flow`, `6-digit BCD`) across JSON, YAML, CSV, tables, Mermaid, Python,
+  and WebAssembly. Annotation identifiers now use `snake_case`, and standalone
+  application-record decoding now uses the same canonical record contract.
+
 ## [0.4.1]
 
 ### Changed

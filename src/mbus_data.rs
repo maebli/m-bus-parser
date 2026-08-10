@@ -1224,7 +1224,7 @@ pub(crate) fn render_annotated_bytes(
                 })?;
             replace_encrypted_payload_segments(&mut display_segments, &display_data);
             return serde_json::to_string_pretty(&serde_json::json!({
-                "schema_version": 1,
+                "schema_version": 2,
                 "bytes": display_data,
                 "segments": display_segments,
                 "decrypted": true,
@@ -1244,7 +1244,7 @@ pub(crate) fn render_annotated_bytes(
     let _ = key;
 
     serde_json::to_string_pretty(&serde_json::json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "bytes": data,
         "segments": original_segments,
         "decrypted": false,
@@ -1939,18 +1939,18 @@ mod tests {
             .expect("hexview output should be a JSON array");
 
         assert!(segments.iter().any(|seg| {
-            seg.get("kind").and_then(|v| v.as_str()) == Some("CiField")
+            seg.get("kind").and_then(|v| v.as_str()) == Some("ci_field")
                 && seg
                     .get("detail")
                     .and_then(|v| v.as_str())
                     .is_some_and(|detail| detail.contains("0x78"))
         }));
         assert!(segments.iter().any(|seg| {
-            seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+            seg.get("kind").and_then(|v| v.as_str()) == Some("data_payload")
                 && seg.get("detail").and_then(|v| v.as_str()) == Some("876543")
         }));
         assert!(!segments.iter().any(|seg| {
-            seg.get("kind").and_then(|v| v.as_str()) == Some("Unknown")
+            seg.get("kind").and_then(|v| v.as_str()) == Some("unknown")
                 || seg
                     .get("detail")
                     .and_then(|v| v.as_str())
@@ -1997,7 +1997,7 @@ mod tests {
             .and_then(|v| v.as_array())
             .expect("decrypted hexview should include annotation segments");
         assert!(segments.iter().any(|seg| {
-            seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+            seg.get("kind").and_then(|v| v.as_str()) == Some("data_payload")
                 && seg
                     .get("detail")
                     .and_then(|v| v.as_str())
@@ -2006,7 +2006,7 @@ mod tests {
         assert!(
             !segments
                 .iter()
-                .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("EncryptedPayload")),
+                .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("encrypted_payload")),
             "decrypted hexview should annotate decrypted records, not ciphertext payloads"
         );
     }
