@@ -19,7 +19,7 @@ fn test_m_bus_parse_table() {
     let input = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
     let output = m_bus_parser_wasm_pack::m_bus_parse(input, "table_format");
     assert!(output.contains("wired"));
-    assert!(output.contains("RspUd"));
+    assert!(output.contains("RSP_UD"));
     assert!(output.contains("02205100"));
     assert!(output.lines().all(|line| line.chars().count() <= 100));
 }
@@ -34,7 +34,7 @@ fn decode_returns_a_native_versioned_object() {
         Reflect::get(&decoded, &JsValue::from_str("schema_version"))
             .unwrap()
             .as_f64(),
-        Some(1.0)
+        Some(2.0)
     );
     assert_eq!(
         Reflect::get(&decoded, &JsValue::from_str("protocol"))
@@ -60,18 +60,18 @@ fn test_m_bus_parse_hexview_ci_78_annotations() {
         .expect("hexview should return a canonical annotation envelope");
 
     assert!(segments.iter().any(|seg| {
-        seg.get("kind").and_then(|v| v.as_str()) == Some("CiField")
+        seg.get("kind").and_then(|v| v.as_str()) == Some("ci_field")
             && seg
                 .get("detail")
                 .and_then(|v| v.as_str())
                 .is_some_and(|detail| detail.contains("0x78"))
     }));
     assert!(segments.iter().any(|seg| {
-        seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+        seg.get("kind").and_then(|v| v.as_str()) == Some("data_payload")
             && seg.get("detail").and_then(|v| v.as_str()) == Some("876543")
     }));
     assert!(!segments.iter().any(|seg| {
-        seg.get("kind").and_then(|v| v.as_str()) == Some("Unknown")
+        seg.get("kind").and_then(|v| v.as_str()) == Some("unknown")
             || seg
                 .get("detail")
                 .and_then(|v| v.as_str())
@@ -106,7 +106,7 @@ fn test_m_bus_parse_hexview_with_key_displays_decrypted_payload() {
         .and_then(|v| v.as_array())
         .expect("decrypted hexview should include annotation segments");
     assert!(segments.iter().any(|seg| {
-        seg.get("kind").and_then(|v| v.as_str()) == Some("DataPayload")
+        seg.get("kind").and_then(|v| v.as_str()) == Some("data_payload")
             && seg
                 .get("detail")
                 .and_then(|v| v.as_str())
@@ -114,7 +114,7 @@ fn test_m_bus_parse_hexview_with_key_displays_decrypted_payload() {
     }));
     assert!(!segments
         .iter()
-        .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("EncryptedPayload")));
+        .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("encrypted_payload")));
 }
 
 #[wasm_bindgen_test]

@@ -1,9 +1,8 @@
 use std::str::FromStr;
 
-use m_bus_parser::user_data::DataRecords;
 use m_bus_parser::{
-    decode_bytes, decode_hex_bytes, render_bytes, render_hex, DecodeOptions, OutputError,
-    OutputFormat, RenderOptions,
+    decode_bytes, decode_data_records, decode_hex_bytes, render_bytes, render_hex, DecodeOptions,
+    OutputError, OutputFormat, RenderOptions,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -62,14 +61,7 @@ fn json_to_python(py: Python<'_>, json: &str) -> PyResult<Py<PyAny>> {
 }
 
 fn records_json(data: &[u8]) -> PyResult<String> {
-    let records = DataRecords::from(data)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| {
-            binding_error(
-                "application.records_invalid",
-                format!("failed to parse application-layer records: {error}"),
-            )
-        })?;
+    let records = decode_data_records(data).map_err(parser_error)?;
 
     serde_json::to_string(&records).map_err(|error| {
         binding_error(

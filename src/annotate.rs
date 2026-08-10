@@ -14,6 +14,7 @@ use wired_mbus_link_layer::WiredFrame;
 /// The protocol role of a byte range within an M-Bus frame.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 #[non_exhaustive]
 pub enum SegmentKind {
     // Link layer
@@ -93,6 +94,7 @@ impl fmt::Display for SegmentKind {
 /// The protocol layer a segment belongs to.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum Layer {
     Frame,
     AppHeader,
@@ -181,7 +183,10 @@ fn annotate_wired(data: &[u8]) -> Result<Vec<ByteSegment>, MbusError> {
                 start: 1,
                 end: 2,
                 kind: SegmentKind::CField,
-                detail: Cow::Owned(format!("C Field: {}", function)),
+                detail: Cow::Owned(format!(
+                    "C Field: {}",
+                    crate::output::frame_function_name(&function)
+                )),
                 group: None,
                 layer: Layer::Frame,
             });
@@ -299,7 +304,7 @@ fn annotate_long_or_control_frame(
         kind: SegmentKind::CField,
         detail: Cow::Owned(format!(
             "C Field: {}{}",
-            function,
+            crate::output::frame_function_name(function),
             if is_control { " (Control)" } else { "" }
         )),
         group: None,

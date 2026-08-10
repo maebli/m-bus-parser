@@ -15,10 +15,12 @@ use wireless_mbus_link_layer as wireless;
 
 use crate::mbus_data::MbusData;
 use crate::user_data;
-use crate::user_data::data_information::{DataFieldCoding, DataType, Month, SingleEveryOrInvalid};
-use crate::user_data::value_information::{Unit, UnitName};
+use crate::user_data::data_information::{
+    DataFieldCoding, DataType, FunctionField, Month, SingleEveryOrInvalid, SpecialFunctions,
+};
+use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
-const SCHEMA_VERSION: u8 = 1;
+const SCHEMA_VERSION: u8 = 2;
 const DEFAULT_TABLE_WIDTH: usize = 100;
 const MINIMUM_TABLE_WIDTH: usize = 32;
 
@@ -328,8 +330,9 @@ pub struct RecordOutput {
     pub subunit: u64,
     pub quantities: Vec<String>,
     pub value: ValueOutput,
+    /// Standardized unit notation when available, otherwise a readable symbol.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub unit: Option<UnitOutput>,
+    pub unit: Option<String>,
     pub data_coding: String,
     pub header_hex: String,
     pub data_hex: String,
@@ -357,20 +360,6 @@ pub struct ValueOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub components: Option<serde_json::Value>,
     pub raw_hex: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct UnitComponent {
-    pub name: String,
-    pub exponent: i32,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct UnitOutput {
-    pub display: String,
-    pub components: Vec<UnitComponent>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ucum: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -485,6 +474,28 @@ pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutpu
             wireless: format!("{error:?}"),
         }),
     }
+}
+
+/// Decode DIF/VIF records after link and transport headers have been removed.
+pub fn decode_data_records(data: &[u8]) -> Result<Vec<RecordOutput>, OutputError> {
+    if data.is_empty() {
+        return Err(OutputError::EmptyInput);
+    }
+    let records = user_data::DataRecords::from(data);
+    let (output, error) = collect_records(Some(&records));
+    if let Some((offset, message)) = error {
+        return Err(OutputError::Rendering {
+            code: "application.records_invalid",
+            message: format!("failed to parse data record at byte offset {offset}: {message}"),
+        });
+    }
+    Ok(output)
+}
+
+/// Decode human-readable hexadecimal DIF/VIF records.
+pub fn decode_data_records_hex(input: &str) -> Result<Vec<RecordOutput>, OutputError> {
+    let data = decode_hex_bytes(input)?;
+    decode_data_records(&data)
 }
 
 /// Render a human-readable hexadecimal frame.
@@ -838,7 +849,7 @@ fn build_wired_output(
             data,
         } => (
             "long",
-            Some(function.to_string()),
+            Some(frame_function_name(function)),
             Some(address.to_string()),
             Some(*data),
         ),
@@ -848,13 +859,13 @@ fn build_wired_output(
             data,
         } => (
             "control",
-            Some(function.to_string()),
+            Some(frame_function_name(function)),
             Some(address.to_string()),
             Some(*data),
         ),
         wired::WiredFrame::ShortFrame { function, address } => (
             "short",
-            Some(function.to_string()),
+            Some(frame_function_name(function)),
             Some(address.to_string()),
             None,
         ),
@@ -895,7 +906,10 @@ fn build_wireless_output(
         "wireless",
         FrameOutput {
             kind: "wireless".to_string(),
-            function: parsed.frame.function.map(|function| function.to_string()),
+            function: parsed
+                .frame
+                .function
+                .map(|function| frame_function_name(&function)),
             address: None,
             control_field: Some(format!("{:02X}", parsed.frame.control_field)),
         },
@@ -1272,22 +1286,19 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
     let information = record.data_information();
     let value_information = record.value_information();
     let function = information
-        .map(|value| value.function_field.to_string())
-        .unwrap_or_else(|| "manufacturer_specific".to_string());
+        .map(|value| match value.data_field_coding {
+            DataFieldCoding::SpecialFunctions(function) => special_function_name(function),
+            _ => record_function_name(value.function_field).to_string(),
+        })
+        .unwrap_or_else(|| special_record_name(record));
     let storage_number = information.map_or(0, |value| value.storage_number);
     let tariff = information.map_or(0, |value| value.tariff);
     let subunit = information.map_or(0, |value| value.device);
     let data_coding = information
-        .map(|value| value.data_field_coding.to_string())
-        .unwrap_or_else(|| "manufacturer specific".to_string());
+        .map(|value| data_coding_name(value.data_field_coding))
+        .unwrap_or_else(|| special_record_name(record));
     let quantities = value_information
-        .map(|value| {
-            value
-                .labels
-                .iter()
-                .map(|label| format!("{label:?}"))
-                .collect()
-        })
+        .map(|value| value.labels.iter().map(quantity_name).collect())
         .unwrap_or_default();
     let unit = value_information
         .and_then(|value| (!value.units.is_empty()).then(|| unit_output(value.units.as_slice())));
@@ -1305,6 +1316,150 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
         header_hex: record.data_record_header_hex(),
         data_hex: record.data_hex(),
         record_hex: spaced_hex(record.raw_bytes()),
+    }
+}
+
+pub(crate) fn frame_function_name(function: &m_bus_core::Function) -> String {
+    use m_bus_core::Function;
+
+    match function {
+        Function::SndNk { prm } => format!("SND_NKE (PRM: {prm})"),
+        Function::SndUd { fcb } => format!("SND_UD (FCB: {fcb})"),
+        Function::SndUd2 => "SND_UD2".to_string(),
+        Function::SndUd3 => "SND_UD3".to_string(),
+        Function::SndNr => "SND_NR".to_string(),
+        Function::SendIr => "SND_IR".to_string(),
+        Function::AccNr => "ACC_NR".to_string(),
+        Function::AccDmd => "ACC_DMD".to_string(),
+        Function::ReqUd1 { fcb } => format!("REQ_UD1 (FCB: {fcb})"),
+        Function::ReqUd2 { fcb } => format!("REQ_UD2 (FCB: {fcb})"),
+        Function::RspUd { acd, dfc } => format!("RSP_UD (ACD: {acd}, DFC: {dfc})"),
+        Function::Ack => "ACK".to_string(),
+        Function::Nack => "NACK".to_string(),
+        Function::CnfIr => "CNF_IR".to_string(),
+        _ => format!("{function:?}"),
+    }
+}
+
+const fn record_function_name(function: FunctionField) -> &'static str {
+    match function {
+        FunctionField::InstantaneousValue => "Instantaneous value",
+        FunctionField::MaximumValue => "Maximum value",
+        FunctionField::MinimumValue => "Minimum value",
+        FunctionField::ValueDuringErrorState => "Value during error state",
+        _ => "Unknown",
+    }
+}
+
+fn special_record_name(record: &user_data::DataRecord<'_>) -> String {
+    match record.raw_bytes().first().copied().map(|dif| dif & 0x7F) {
+        Some(0x0F) => "Manufacturer specific".to_string(),
+        Some(0x1F) => "More records follow".to_string(),
+        Some(0x2F) => "Idle filler".to_string(),
+        Some(0x7F) => "Global readout request".to_string(),
+        _ => "Special function".to_string(),
+    }
+}
+
+fn data_coding_name(coding: DataFieldCoding) -> String {
+    match coding {
+        DataFieldCoding::NoData => "No data".to_string(),
+        DataFieldCoding::Integer8Bit => "8-bit integer".to_string(),
+        DataFieldCoding::Integer16Bit => "16-bit integer".to_string(),
+        DataFieldCoding::Integer24Bit => "24-bit integer".to_string(),
+        DataFieldCoding::Integer32Bit => "32-bit integer".to_string(),
+        DataFieldCoding::Real32Bit => "32-bit real".to_string(),
+        DataFieldCoding::Integer48Bit => "48-bit integer".to_string(),
+        DataFieldCoding::Integer64Bit => "64-bit integer".to_string(),
+        DataFieldCoding::SelectionForReadout => "Selection for readout".to_string(),
+        DataFieldCoding::BCD2Digit => "2-digit BCD".to_string(),
+        DataFieldCoding::BCD4Digit => "4-digit BCD".to_string(),
+        DataFieldCoding::BCD6Digit => "6-digit BCD".to_string(),
+        DataFieldCoding::BCD8Digit => "8-digit BCD".to_string(),
+        DataFieldCoding::VariableLength => "Variable length".to_string(),
+        DataFieldCoding::BCDDigit12 => "12-digit BCD".to_string(),
+        DataFieldCoding::DateTypeG => "Date (type G)".to_string(),
+        DataFieldCoding::DateTimeTypeF => "Date and time (type F)".to_string(),
+        DataFieldCoding::DateTimeTypeJ => "Time (type J)".to_string(),
+        DataFieldCoding::DateTimeTypeI => "Date and time (type I)".to_string(),
+        DataFieldCoding::SpecialFunctions(function) => special_function_name(function),
+        _ => "Unknown".to_string(),
+    }
+}
+
+fn special_function_name(function: SpecialFunctions) -> String {
+    match function {
+        SpecialFunctions::ManufacturerSpecific => "Manufacturer specific".to_string(),
+        SpecialFunctions::MoreRecordsFollow => "More records follow".to_string(),
+        SpecialFunctions::IdleFiller => "Idle filler".to_string(),
+        SpecialFunctions::Reserved => "Reserved special function".to_string(),
+        SpecialFunctions::GlobalReadoutRequest => "Global readout request".to_string(),
+        _ => "Unknown special function".to_string(),
+    }
+}
+
+fn quantity_name(label: &ValueLabel) -> String {
+    match label {
+        ValueLabel::Date => "Time point (date)".to_string(),
+        ValueLabel::Time => "Time point (time)".to_string(),
+        ValueLabel::DateTime | ValueLabel::DateTimeWithSeconds => {
+            "Time point (date and time)".to_string()
+        }
+        ValueLabel::DataContainerForWmbusProtocol => {
+            "Data container for wireless M-Bus protocol".to_string()
+        }
+        ValueLabel::PhaseUtoU => "Phase U-to-U".to_string(),
+        ValueLabel::PhaseUtoI => "Phase U-to-I".to_string(),
+        ValueLabel::PhaseItoU => "Phase I-to-U".to_string(),
+        _ => sentence_case_identifier(&format!("{label:?}")),
+    }
+}
+
+fn sentence_case_identifier(identifier: &str) -> String {
+    let characters = identifier.chars().collect::<Vec<_>>();
+    let mut words = Vec::new();
+    let mut word = String::new();
+    for (index, character) in characters.iter().copied().enumerate() {
+        let previous = index.checked_sub(1).and_then(|value| characters.get(value));
+        let next = characters.get(index + 1);
+        let boundary = !word.is_empty()
+            && character.is_ascii_uppercase()
+            && (previous.is_some_and(|value| value.is_ascii_lowercase() || value.is_ascii_digit())
+                || (previous.is_some_and(|value| value.is_ascii_uppercase())
+                    && next.is_some_and(|value| value.is_ascii_lowercase())));
+        if boundary {
+            words.push(word);
+            word = String::new();
+        }
+        word.push(character);
+    }
+    if !word.is_empty() {
+        words.push(word);
+    }
+
+    words
+        .into_iter()
+        .enumerate()
+        .map(|(index, word)| standardized_word(&word, index == 0))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn standardized_word(word: &str, first: bool) -> String {
+    match word {
+        "Vif" => "VIF".to_string(),
+        "Vife" => "VIFE".to_string(),
+        "Obis" => "OBIS".to_string(),
+        "Wmbus" => "wireless M-Bus".to_string(),
+        _ if word
+            .chars()
+            .filter(|character| character.is_ascii_alphabetic())
+            .all(|character| character.is_ascii_uppercase()) =>
+        {
+            word.to_string()
+        }
+        _ if first => word.to_string(),
+        _ => word.to_ascii_lowercase(),
     }
 }
 
@@ -1829,25 +1984,13 @@ fn apply_power10(integer: &str, exponent: isize) -> String {
     output
 }
 
-fn unit_output(units: &[Unit]) -> UnitOutput {
+fn unit_output(units: &[Unit]) -> String {
     let display = units.iter().map(ToString::to_string).collect::<String>();
-    let components = units
-        .iter()
-        .map(|unit| UnitComponent {
-            name: format!("{:?}", unit.name),
-            exponent: unit.exponent,
-        })
-        .collect();
-    let ucum = units
+    units
         .iter()
         .map(ucum_component)
         .collect::<Option<Vec<_>>>()
-        .map(|components| components.join("."));
-    UnitOutput {
-        display,
-        components,
-        ucum,
-    }
+        .map_or(display, |components| components.join("."))
 }
 
 fn ucum_component(unit: &Unit) -> Option<String> {
@@ -1901,7 +2044,6 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
         "scale_power10",
         "offset_power10",
         "unit",
-        "unit_ucum",
         "data_coding",
         "header_hex",
         "data_hex",
@@ -2044,16 +2186,7 @@ fn csv_record_values(record: &RecordOutput) -> Vec<String> {
             .offset_power10
             .map(|value| value.to_string())
             .unwrap_or_default(),
-        record
-            .unit
-            .as_ref()
-            .map(|value| value.display.clone())
-            .unwrap_or_default(),
-        record
-            .unit
-            .as_ref()
-            .and_then(|value| value.ucum.clone())
-            .unwrap_or_default(),
+        record.unit.clone().unwrap_or_default(),
         record.data_coding.clone(),
         record.header_hex.clone(),
         record.data_hex.clone(),
@@ -2243,7 +2376,7 @@ fn reading(record: &RecordOutput) -> String {
     let unit = record
         .unit
         .as_ref()
-        .map(|value| format!(" {}", value.display))
+        .map(|value| format!(" {value}"))
         .unwrap_or_default();
     format!("{quantity}: {}{unit}", record.value.display)
 }
@@ -2571,10 +2704,54 @@ mod tests {
         let rendered =
             render_hex(WIRED_FRAME, OutputFormat::Json, &RenderOptions::default()).unwrap();
         let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
-        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["schema_version"], 2);
         assert_eq!(value["protocol"], "wired");
         assert!(value["records"].is_array());
         assert!(value.get("summary").is_none());
+    }
+
+    #[test]
+    fn canonical_units_use_an_unlabelled_standardized_value() {
+        assert_eq!(
+            unit_output(&[
+                Unit {
+                    name: UnitName::Meter,
+                    exponent: 3,
+                },
+                Unit {
+                    name: UnitName::Hour,
+                    exponent: -1,
+                },
+            ]),
+            "m3.h-1"
+        );
+        assert_eq!(
+            unit_output(&[Unit {
+                name: UnitName::ReactiveWatt,
+                exponent: 1,
+            }]),
+            "W (reactive)"
+        );
+    }
+
+    #[test]
+    fn canonical_names_follow_m_bus_terms_and_preserve_acronyms() {
+        assert_eq!(quantity_name(&ValueLabel::VolumeFlow), "Volume flow");
+        assert_eq!(quantity_name(&ValueLabel::RFPowerLevel), "RF power level");
+        assert_eq!(
+            quantity_name(&ValueLabel::ObisDeclaration),
+            "OBIS declaration"
+        );
+    }
+
+    #[test]
+    fn standalone_records_use_the_canonical_record_schema() {
+        let records = decode_data_records(&[0x03, 0x13, 0x15, 0x31, 0x00]).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].function, "Instantaneous value");
+        assert_eq!(records[0].quantities, ["Volume"]);
+        assert_eq!(records[0].unit.as_deref(), Some("m3"));
+        assert_eq!(records[0].data_coding, "24-bit integer");
     }
 
     #[test]
