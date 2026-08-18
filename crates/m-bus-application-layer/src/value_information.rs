@@ -28,13 +28,13 @@ macro_rules! unit {
     };
 }
 
-impl TryFrom<&[u8]> for ValueInformationBlock {
+impl TryFrom<&[u8]> for ValueInformationBlock<'a> {
     type Error = DataInformationError;
 
-    fn try_from(data: &[u8]) -> Result<Self, DataInformationError> {
+    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
         let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
         let vif =
-            ValueInformationField::from(*data.first().ok_or(DataInformationError::DataTooShort)?);
+            ValueInformationField::from(*data.first().ok_or(ValueInformationError::DataTooShort)?);
         let mut plaintext_vife: Option<ArrayVec<char, 9>> = None;
 
         #[cfg(not(feature = "plaintext-before-extension"))]
@@ -44,7 +44,7 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
 
         if !standard_plaintex_vib && vif.value_information_contains_ascii() {
             plaintext_vife = Some(extract_plaintext_vife(
-                data.get(1..).ok_or(DataInformationError::DataTooShort)?,
+                data.get(1..).ok_or(ValueInformationError::DataTooShort)?,
             )?);
         }
 
@@ -56,7 +56,9 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                 _ => 1,
             };
             while offset < data.len() {
-                let vife_data = *data.get(offset).ok_or(DataInformationError::DataTooShort)?;
+                let vife_data = *data
+                    .get(offset)
+                    .ok_or(ValueInformationError::DataTooShort)?;
                 let current_vife = ValueInformationFieldExtension { data: vife_data };
                 let has_extension = current_vife.has_extension();
                 vife.push(current_vife);
@@ -65,13 +67,13 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
                     break;
                 }
                 if vife.len() > MAX_VIFE_RECORDS {
-                    return Err(DataInformationError::InvalidValueInformation);
+                    return Err(ValueInformationError::InvalidValueInformation);
                 }
             }
             if standard_plaintex_vib && vif.value_information_contains_ascii() {
                 plaintext_vife = Some(extract_plaintext_vife(
                     data.get(offset..)
-                        .ok_or(DataInformationError::DataTooShort)?,
+                        .ok_or(ValueInformationError::DataTooShort)?,
                 )?);
             }
         }
@@ -84,12 +86,12 @@ impl TryFrom<&[u8]> for ValueInformationBlock {
     }
 }
 
-fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, DataInformationError> {
-    let ascii_length = *data.first().ok_or(DataInformationError::DataTooShort)? as usize;
+fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, ValueInformationError> {
+    let ascii_length = *data.first().ok_or(ValueInformationError::DataTooShort)? as usize;
     let mut ascii = ArrayVec::<char, 9>::new();
     for item in data
         .get(1..=ascii_length)
-        .ok_or(DataInformationError::DataTooShort)?
+        .ok_or(ValueInformationError::DataTooShort)?
     {
         ascii.push(*item as char);
     }
@@ -973,6 +975,7 @@ fn consume_orthhogonal_vife(
 #[non_exhaustive]
 pub enum ValueInformationError {
     InvalidValueInformation,
+    DataTooShort,
 }
 
 impl From<u8> for ValueInformationField {
