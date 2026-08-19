@@ -28,14 +28,13 @@ macro_rules! unit {
     };
 }
 
-impl TryFrom<&[u8]> for ValueInformationBlock<'a> {
+impl<'a> TryFrom<&'a [u8]> for ValueInformationBlock<'a> {
     type Error = DataInformationError;
 
-    fn try_from(data: &[u8]) -> Result<Self, ValueInformationError> {
-        let mut vife = ArrayVec::<ValueInformationFieldExtension, MAX_VIFE_RECORDS>::new();
+    fn try_from(data: &'a [u8]) -> Result<Self, DataInformationError> {
         let vif =
-            ValueInformationField::from(*data.first().ok_or(ValueInformationError::DataTooShort)?);
-        let mut plaintext_vife: Option<ArrayVec<char, 9>> = None;
+            ValueInformationField::from(*data.first().ok_or(DataInformationError::DataTooShort)?);
+        let mut plaintext_vife = None;
 
         #[cfg(not(feature = "plaintext-before-extension"))]
         let standard_plaintex_vib = true;
@@ -43,44 +42,34 @@ impl TryFrom<&[u8]> for ValueInformationBlock<'a> {
         let standard_plaintex_vib = false;
 
         if !standard_plaintex_vib && vif.value_information_contains_ascii() {
-            plaintext_vife = Some(extract_plaintext_vife(
-                data.get(1..).ok_or(ValueInformationError::DataTooShort)?,
-            )?);
+            plaintext_vife = Some(PlainTextValueInformationExtension::new(
+                &data.get(1..).ok_or(DataInformationError::DataTooShort)?,
+            ))
         }
 
+        let mut offset = 0;
         if vif.has_extension() {
             // When the plaintext VIF precedes the extensions, the VIFE chain
             // starts after the ASCII length byte and string, not at offset 1.
-            let mut offset = match &plaintext_vife {
-                Some(chars) if !standard_plaintex_vib => 1 + 1 + chars.len(),
+
+            offset = match &plaintext_vife {
+                Some(x) if !standard_plaintex_vib => 1 + 1 + x.ascii_len(),
                 _ => 1,
             };
-            while offset < data.len() {
-                let vife_data = *data
-                    .get(offset)
-                    .ok_or(ValueInformationError::DataTooShort)?;
-                let current_vife = ValueInformationFieldExtension { data: vife_data };
-                let has_extension = current_vife.has_extension();
-                vife.push(current_vife);
-                offset += 1;
-                if !has_extension {
-                    break;
-                }
-                if vife.len() > MAX_VIFE_RECORDS {
-                    return Err(ValueInformationError::InvalidValueInformation);
-                }
-            }
             if standard_plaintex_vib && vif.value_information_contains_ascii() {
-                plaintext_vife = Some(extract_plaintext_vife(
+                plaintext_vife = Some(PlainTextValueInformationExtension::new(
                     data.get(offset..)
-                        .ok_or(ValueInformationError::DataTooShort)?,
-                )?);
+                        .ok_or(DataInformationError::DataTooShort)?,
+                ));
             }
         }
 
         Ok(Self {
             value_information: vif,
-            value_information_extension: if vife.is_empty() { None } else { Some(vife) },
+            value_information_extension: Some(ValueInformationFieldExtensions::new(
+                data.get(..offset)
+                    .ok_or(DataInformationError::DataTooShort)?,
+            )),
             plaintext_vife,
         })
     }
@@ -98,17 +87,16 @@ fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, ValueInforma
     Ok(ascii)
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq, Clone)]
-pub struct ValueInformationBlock {
+pub struct ValueInformationBlock<'a> {
     pub value_information: ValueInformationField,
-    pub value_information_extension:
-        Option<ArrayVec<ValueInformationFieldExtension, MAX_VIFE_RECORDS>>,
-    pub plaintext_vife: Option<ArrayVec<char, 9>>,
+    pub value_information_extension: Option<ValueInformationFieldExtensions<'a>>,
+    pub plaintext_vife: Option<PlainTextValueInformationExtension<'a>>,
 }
 
 #[cfg(feature = "defmt")]
-impl defmt::Format for ValueInformationBlock {
+impl<'a> defmt::Format for ValueInformationBlock<'a> {
     fn format(&self, f: defmt::Formatter) {
         defmt::write!(
             f,
@@ -117,19 +105,11 @@ impl defmt::Format for ValueInformationBlock {
         );
         if let Some(ext) = &self.value_information_extension {
             defmt::write!(f, ", value_information_extension: [");
-            for (i, vife) in ext.iter().enumerate() {
-                if i != 0 {
-                    defmt::write!(f, ", ");
-                }
-                defmt::write!(f, "{:?}", vife);
-            }
+            ext.iter().for_each(|x| defmt::write!(f, "{},", x));
             defmt::write!(f, "]");
         }
         if let Some(text) = &self.plaintext_vife {
-            defmt::write!(f, ", plaintext_vife: ");
-            for c in text {
-                defmt::write!(f, "{}", c);
-            }
+            defmt::write!(f, ", plaintext_vife: {}", text.as_ascii_str());
         }
         defmt::write!(f, " }}");
     }
@@ -144,6 +124,69 @@ pub struct ValueInformationField {
 impl ValueInformationField {
     const fn value_information_contains_ascii(&self) -> bool {
         self.data == 0x7C || self.data == 0xFC
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ValueInformationFieldExtensions<'a>(&'a [u8]);
+impl<'a> ValueInformationFieldExtensions<'a> {
+    const fn new(data: &'a [u8]) -> Self {
+        Self(data)
+    }
+}
+
+impl Iterator for ValueInformationFieldExtensions<'_> {
+    type Item = ValueInformationFieldExtension;
+    fn next(&mut self) -> Option<Self::Item> {
+        let (head, tail) = self.0.split_first()?;
+        self.0 = tail;
+        Some(ValueInformationFieldExtension { data: *head })
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.0.len(), Some(self.0.len()))
+    }
+}
+
+impl ExactSizeIterator for ValueInformationFieldExtensions<'_> {}
+impl DoubleEndedIterator for ValueInformationFieldExtensions<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let (end, start) = self.0.split_last()?;
+        self.0 = start;
+        Some(ValueInformationFieldExtension { data: *end })
+    }
+}
+
+impl<'a> ValueInformationFieldExtensions<'a> {
+    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
+        self.0.iter().copied()
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PlainTextValueInformationExtension<'a>(&'a [u8]);
+impl<'a> PlainTextValueInformationExtension<'a> {
+    const fn new(data: &'a [u8]) -> Self {
+        Self(data)
+    }
+
+    pub const fn ascii_len(&self) -> usize {
+        if let Some(x) = self.0.first() {
+            *x as usize
+        } else {
+            0
+        }
+    }
+
+    fn as_ascii_str(&self) -> Option<&str> {
+        if self.0.is_ascii() {
+            core::str::from_utf8(self.0).ok()
+        } else {
+            None
+        }
     }
 }
 
@@ -193,22 +236,34 @@ pub enum ValueInformationCoding {
     ManufacturerSpecific,
 }
 
-impl ValueInformationBlock {
+impl ValueInformationBlock<'_> {
+    pub fn new(
+        value_information: ValueInformationField,
+        value_information_extension: Option<ValueInformationFieldExtensions<'_>>,
+        plaintext_vife: Option<PlainTextValueInformationExtension<'_>>,
+    ) -> Self {
+        Self {
+            value_information,
+            value_information_extension,
+            plaintext_vife,
+        }
+    }
+
     #[must_use]
-    pub const fn get_size(&self) -> usize {
+    pub fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
-            size += vife.len();
+            size += vife.iter().count();
         }
         if let Some(plaintext_vife) = &self.plaintext_vife {
             // 1 byte for the length of the ASCII string
-            size += plaintext_vife.len() + 1;
+            size += plaintext_vife.ascii_len() + 1;
         }
         size
     }
 }
 
-impl TryFrom<&ValueInformationBlock> for ValueInformation {
+impl TryFrom<&ValueInformationBlock<'_>> for ValueInformation {
     type Error = DataInformationError;
 
     fn try_from(
@@ -218,10 +273,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
         let mut labels = ArrayVec::<ValueLabel, 10>::new();
         let mut decimal_scale_exponent: isize = 0;
         let mut decimal_offset_exponent = 0;
-        let vife_slice = match &value_information_block.value_information_extension {
-            Some(v) => v.as_slice(),
-            None => &[],
-        };
+        let vife_slice = value_information_block.value_information_extension;
         match ValueInformationCoding::from(&value_information_block.value_information) {
             ValueInformationCoding::Primary => {
                 match value_information_block.value_information.data & 0x7F {
@@ -715,7 +767,7 @@ impl TryFrom<&ValueInformationBlock> for ValueInformation {
 }
 
 fn consume_orthhogonal_vife(
-    vife: &[ValueInformationFieldExtension],
+    vife: ValueInformationFieldExtension,
     labels: &mut ArrayVec<ValueLabel, 10>,
     units: &mut ArrayVec<Unit, 10>,
     decimal_scale_exponent: &mut isize,
