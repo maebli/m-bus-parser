@@ -31,21 +31,11 @@ const KNOWN_MISMATCHES: &[&str] = &[
     // feature: their meters emit the plaintext VIF directly after the VIF
     // byte (libmbus semantics) instead of after the VIFE chain.
     #[cfg(not(feature = "plaintext-before-extension"))]
-    "ACW_Itron-CYBLE-M-Bus-14",
-    #[cfg(not(feature = "plaintext-before-extension"))]
-    "EDC",
-    #[cfg(not(feature = "plaintext-before-extension"))]
     "ELV-Elvaco-CMa10",
     #[cfg(not(feature = "plaintext-before-extension"))]
     "THI_cma10",
     #[cfg(not(feature = "plaintext-before-extension"))]
     "elv_temp_humid",
-    #[cfg(not(feature = "plaintext-before-extension"))]
-    "itron_cyble_m-bus_v1.4_cold_water",
-    #[cfg(not(feature = "plaintext-before-extension"))]
-    "itron_cyble_m-bus_v1.4_gas",
-    #[cfg(not(feature = "plaintext-before-extension"))]
-    "itron_cyble_m-bus_v1.4_water",
 ];
 
 fn first_difference(expected: &str, actual: &str) -> String {

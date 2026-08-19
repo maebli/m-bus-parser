@@ -55,7 +55,10 @@ impl<'a> TryFrom<&'a [u8]> for ValueInformationBlock<'a> {
                 data.get(offset..)
                     .ok_or(DataInformationError::DataTooShort)?,
             )?;
-            offset += extensions.len();
+            #[cfg(not(feature = "plaintext-before-extension"))]
+            {
+                offset += extensions.len();
+            }
             value_information_extension = Some(extensions);
         }
 
@@ -73,18 +76,6 @@ impl<'a> TryFrom<&'a [u8]> for ValueInformationBlock<'a> {
             plaintext_vife,
         })
     }
-}
-
-fn extract_plaintext_vife(data: &[u8]) -> Result<ArrayVec<char, 9>, ValueInformationError> {
-    let ascii_length = *data.first().ok_or(ValueInformationError::DataTooShort)? as usize;
-    let mut ascii = ArrayVec::<char, 9>::new();
-    for item in data
-        .get(1..=ascii_length)
-        .ok_or(ValueInformationError::DataTooShort)?
-    {
-        ascii.push(*item as char);
-    }
-    Ok(ascii)
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -179,8 +170,14 @@ impl DoubleEndedIterator for ValueInformationFieldExtensions<'_> {
 }
 
 impl<'a> ValueInformationFieldExtensions<'a> {
-    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
-        self.0.iter().copied()
+    pub fn iter(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = ValueInformationFieldExtension> + ExactSizeIterator + '_
+    {
+        self.0
+            .iter()
+            .copied()
+            .map(|data| ValueInformationFieldExtension { data })
     }
 }
 
@@ -215,7 +212,7 @@ impl<'a> PlainTextValueInformationExtension<'a> {
         }
     }
 
-    fn as_ascii_str(&self) -> Option<&str> {
+    pub fn as_ascii_str(&self) -> Option<&str> {
         core::str::from_utf8(self.0.get(1..)?).ok()
     }
 }
@@ -244,12 +241,6 @@ impl From<&ValueInformationField> for ValueInformationCoding {
 }
 
 impl ValueInformationField {
-    const fn has_extension(&self) -> bool {
-        self.data & 0x80 != 0
-    }
-}
-
-impl ValueInformationFieldExtension {
     const fn has_extension(&self) -> bool {
         self.data & 0x80 != 0
     }
@@ -771,9 +762,9 @@ impl TryFrom<&ValueInformationBlock<'_>> for ValueInformation {
 
                         _ => labels.push(ValueLabel::Reserved),
                     };
-                    // Skip vife_slice[0] — it's the true VIF (already consumed above)
+                    // The true VIF was already consumed from the iterator above.
                     consume_orthhogonal_vife(
-                        x.skip(1),
+                        x,
                         &mut labels,
                         &mut units,
                         &mut decimal_scale_exponent,

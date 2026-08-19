@@ -476,7 +476,8 @@ fn normalize_record(record: &user_data::data_record::DataRecord) -> Option<Norma
     let custom_vif: Option<String> = vib
         .plaintext_vife
         .as_ref()
-        .map(|chars| chars.iter().rev().collect());
+        .and_then(|chars| chars.as_ascii_str())
+        .map(|text| text.chars().rev().collect());
 
     let value = variable_value_decode(dif, vif, vifes.first().copied(), data).ok()?;
 
