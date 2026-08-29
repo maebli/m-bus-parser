@@ -1,3 +1,5 @@
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
+
 pub mod decryption;
 
 /// Serializes raw byte payloads as compact uppercase hex strings so that
