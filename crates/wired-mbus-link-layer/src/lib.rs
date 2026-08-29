@@ -1,3 +1,5 @@
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
+
 //! is part of the MBUS data link layer
 //! It is used to encapsulate the application layer data
 use m_bus_core::{FrameError, Function};

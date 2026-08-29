@@ -1,3 +1,5 @@
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
+
 use m_bus_core::{DeviceType, Function, IdentificationNumber, ManufacturerCode};
 
 /// CRC-16/EN13757 used in wireless M-Bus Format A frames.
