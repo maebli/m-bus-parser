@@ -42,6 +42,7 @@ jobs:
         run: python3 benches/stack-usage/measure.py --output parser-resources.json
       - name: Measure decode speed
         run: |
+          set -o pipefail
           cargo +nightly-2026-05-16 bench --locked --bench bench -- \
             parse_full_frame_eager --exact --noplot --discard-baseline \
             --output-format bencher \
