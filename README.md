@@ -6,6 +6,7 @@
 [![License](https://img.shields.io/crates/l/m-bus-parser.svg)](https://crates.io/crates/m-bus-parser)
 [![Documentation](https://docs.rs/m-bus-parser/badge.svg)](https://docs.rs/m-bus-parser)
 [![Build Status](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml/badge.svg)](https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml)
+[![Parser resources](https://github.com/maebli/m-bus-parser/actions/workflows/parser-resources.yml/badge.svg)](https://maebli.github.io/m-bus-parser/dev/bench/)
 
 *For contributing see [CONTRIBUTING.md](./CONTRIBUTING.md), for change history see [CHANGELOG.md](./CHANGELOG.md).*
 
@@ -31,6 +32,14 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 - **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
 - Available as a **Rust library**, **CLI**, **WebAssembly (npm)** and **Python bindings**
+
+Stack usage, linked footprint, and decode latency are measured by eagerly
+parsing a wired frame and consuming all of its application-layer records with a
+pinned compiler and dependency set. The badge above links to the
+[per-commit resource charts](https://maebli.github.io/m-bus-parser/dev/bench/),
+including the total critical path and each of its component frames. The
+measurement method and local command are documented in
+[`benches/stack-usage/`](./benches/stack-usage/).
 
 ---
 

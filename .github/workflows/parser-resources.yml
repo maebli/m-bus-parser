@@ -1,0 +1,108 @@
+name: Parser resources
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: parser-resources-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      STACK_USAGE_TOOLCHAIN: nightly-2026-05-16
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-05-16
+          components: llvm-tools-preview
+          targets: thumbv7em-none-eabi
+      - name: Measure parser resources
+        run: python3 benches/stack-usage/measure.py --output parser-resources.json
+      - name: Measure decode speed
+        run: |
+          cargo +nightly-2026-05-16 bench --locked --bench bench -- \
+            parse_full_frame_eager --exact --noplot --discard-baseline \
+            --output-format bencher \
+            --sample-size 50 --warm-up-time 1 --measurement-time 3 \
+            --nresamples 10000 2>&1 | tee decode-speed.txt
+      - name: Summarize parser resources
+        uses: benchmark-action/github-action-benchmark@a7bc2366eda11037936ea57d811a43b3418d3073 # v1.21.0
+        with:
+          name: Parser stack and footprint
+          tool: customSmallerIsBetter
+          output-file-path: parser-resources.json
+          save-data-file: false
+          summary-always: true
+      - name: Summarize decode speed
+        uses: benchmark-action/github-action-benchmark@a7bc2366eda11037936ea57d811a43b3418d3073 # v1.21.0
+        with:
+          name: Parser decode speed
+          tool: cargo
+          output-file-path: decode-speed.txt
+          save-data-file: false
+          summary-always: true
+      - name: Upload measurement
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-resources
+          path: |
+            parser-resources.json
+            decode-speed.txt
+          retention-days: 7
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: measure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download measurement
+        uses: actions/download-artifact@v4
+        with:
+          name: parser-resources
+      - name: Store and plot main-branch history
+        uses: benchmark-action/github-action-benchmark@a7bc2366eda11037936ea57d811a43b3418d3073 # v1.21.0
+        with:
+          name: Parser stack and footprint
+          tool: customSmallerIsBetter
+          output-file-path: parser-resources.json
+          gh-pages-branch: main
+          benchmark-data-dir-path: docs/dev/bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '105%'
+          fail-threshold: '110%'
+          fail-on-alert: true
+          summary-always: true
+          max-items-in-chart: 100
+      - name: Store and plot decode speed
+        uses: benchmark-action/github-action-benchmark@a7bc2366eda11037936ea57d811a43b3418d3073 # v1.21.0
+        with:
+          name: Parser decode speed
+          tool: cargo
+          output-file-path: decode-speed.txt
+          gh-pages-branch: main
+          benchmark-data-dir-path: docs/dev/bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '125%'
+          summary-always: true
+          max-items-in-chart: 100
