@@ -94,6 +94,18 @@ def one_file(paths: list[Path], description: str) -> Path:
     return paths[0]
 
 
+def llvm_tool(name: str, env: dict[str, str]) -> Path:
+    host_libdir = Path(
+        run(["rustc", "--print", "target-libdir"], cwd=HERE, env=env).strip()
+    )
+    tool = host_libdir.parent / "bin" / name
+    if not tool.is_file():
+        raise SystemExit(
+            f"{name} not found at {tool}; install the llvm-tools-preview component"
+        )
+    return tool
+
+
 def parse_stack_sizes(output: str) -> dict[str, int]:
     entries = re.findall(
         r"Entry \{\s+Functions: \[(.*?)\]\s+Size: (0x[0-9A-Fa-f]+)\s+\}",
@@ -154,6 +166,8 @@ def metric(name: str, value: int, extra: str) -> dict[str, object]:
 
 
 def measure_stack(temp: Path, base_env: dict[str, str]) -> tuple[dict[str, int], str]:
+    llvm_ar = llvm_tool("llvm-ar", base_env)
+    llvm_readobj = llvm_tool("llvm-readobj", base_env)
     target_dir = temp / "stack-target"
     env = base_env | {
         "CARGO_TARGET_DIR": str(target_dir),
@@ -196,12 +210,12 @@ def measure_stack(temp: Path, base_env: dict[str, str]) -> tuple[dict[str, int],
         archive = one_file(sorted(deps.glob(f"lib{crate}-*.rlib")), f"{crate} archive")
         crate_objects = objects_dir / crate
         crate_objects.mkdir()
-        run(["rust-ar", "x", str(archive)], cwd=crate_objects, env=env)
+        run([str(llvm_ar), "x", str(archive)], cwd=crate_objects, env=env)
         objects.extend(sorted(crate_objects.glob("*.o")))
     if not objects:
         raise SystemExit("no object files found in parser archives")
     stack_output = run(
-        ["rust-readobj", "--stack-sizes", "--demangle", *map(str, objects)],
+        [str(llvm_readobj), "--stack-sizes", "--demangle", *map(str, objects)],
         cwd=objects_dir,
         env=env,
     )
@@ -235,12 +249,7 @@ def measure_footprint(temp: Path, base_env: dict[str, str]) -> int:
         env=env,
     )
 
-    host_libdir = Path(
-        run(["rustc", "--print", "target-libdir"], cwd=HERE, env=base_env).strip()
-    )
-    llvm_size = host_libdir.parent / "bin" / "llvm-size"
-    if not llvm_size.is_file():
-        raise SystemExit(f"llvm-size not found at {llvm_size}")
+    llvm_size = llvm_tool("llvm-size", base_env)
     binary = target_dir / TARGET / "release" / "parser-footprint"
     output = run(
         [str(llvm_size), "--format=berkeley", str(binary)],
