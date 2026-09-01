@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788296467562,
+  "lastUpdate": 1788296469501,
   "repoUrl": "https://github.com/maebli/m-bus-parser",
   "entries": {
     "Parser stack and footprint": [
@@ -114,6 +114,38 @@ window.BENCHMARK_DATA = {
             "value": 18887,
             "unit": "bytes",
             "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; profile=opt-level=z,lto=fat,codegen-units=1; sections=text+data"
+          }
+        ]
+      }
+    ],
+    "Parser decode speed": [
+      {
+        "commit": {
+          "author": {
+            "email": "1138612+maebli@users.noreply.github.com",
+            "name": "Maebli",
+            "username": "maebli"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7fb01ef5909be1dc3e1856989315902bc7413ba1",
+          "message": "Merge pull request #116 from maebli/feature/zero-copy-completion\n\nFeature/zero copy completion (still a bit to go but one step closer)",
+          "timestamp": "2026-09-01T22:59:52+02:00",
+          "tree_id": "c84ab0e35dd146128d98af67acdeb56579a255fe",
+          "url": "https://github.com/maebli/m-bus-parser/commit/7fb01ef5909be1dc3e1856989315902bc7413ba1"
+        },
+        "date": 1788296468990,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parse_full_frame_eager",
+            "value": 1166,
+            "range": "± 25",
+            "unit": "ns/iter"
           }
         ]
       }
