@@ -118,10 +118,21 @@ impl ValueInformationField {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ValueInformationFieldExtensions<'a>(&'a [u8]);
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for ValueInformationFieldExtensions<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_seq(self.iter())
+    }
+}
+
 impl<'a> ValueInformationFieldExtensions<'a> {
     fn new(data: &'a [u8]) -> Result<Self, DataInformationError> {
         let Some(last_index) = data
@@ -181,10 +192,25 @@ impl<'a> ValueInformationFieldExtensions<'a> {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PlainTextValueInformationExtension<'a>(&'a [u8]);
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for PlainTextValueInformationExtension<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let plaintext = self.as_ascii_str().ok_or_else(|| {
+            <S::Error as serde::ser::Error>::custom("invalid plaintext VIFE encoding")
+        })?;
+
+        serializer.collect_seq(plaintext.chars())
+    }
+}
+
 impl<'a> PlainTextValueInformationExtension<'a> {
     fn new(data: &'a [u8]) -> Result<Self, DataInformationError> {
         let ascii_len = usize::from(*data.first().ok_or(DataInformationError::DataTooShort)?);
