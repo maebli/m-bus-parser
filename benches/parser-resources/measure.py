@@ -28,7 +28,7 @@ CRITICAL_PATH = (
 )
 
 FRAME_SYMBOLS = {
-    "full_parse": "m_bus_stack_usage::full_parse_fixture::parse_full_wired_frame",
+    "full_parse": "m_bus_parser_resources::full_parse_fixture::parse_full_wired_frame",
     "mbus_parse": (
         "<m_bus_parser::mbus_data::MbusData<wired_mbus_link_layer::WiredFrame> as "
         "core::convert::TryFrom<&[u8]>>::try_from"
@@ -201,7 +201,7 @@ def measure_stack(temp: Path, base_env: dict[str, str]) -> tuple[dict[str, int],
     objects_dir.mkdir()
     objects: list[Path] = []
     for crate in (
-        "m_bus_stack_usage",
+        "m_bus_parser_resources",
         "m_bus_parser",
         "wired_mbus_link_layer",
         "m_bus_application_layer",
@@ -264,7 +264,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("parser-resources.json"))
     args = parser.parse_args()
 
-    toolchain = os.environ.get("STACK_USAGE_TOOLCHAIN", "nightly")
+    toolchain = os.environ.get("PARSER_RESOURCES_TOOLCHAIN", "nightly")
     base_env = os.environ.copy()
     base_env["RUSTUP_TOOLCHAIN"] = toolchain
 

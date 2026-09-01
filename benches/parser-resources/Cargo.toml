@@ -1,5 +1,5 @@
 [package]
-name = "m-bus-stack-usage"
+name = "m-bus-parser-resources"
 version = "0.0.0"
 edition = "2021"
 publish = false

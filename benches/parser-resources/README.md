@@ -36,7 +36,7 @@ Install the pinned nightly toolchain, LLVM tools, and Thumb target, then run:
 ```console
 rustup component add llvm-tools-preview --toolchain nightly-2026-05-16
 rustup target add thumbv7em-none-eabi --toolchain nightly-2026-05-16
-STACK_USAGE_TOOLCHAIN=nightly-2026-05-16 python3 benches/stack-usage/measure.py \
+PARSER_RESOURCES_TOOLCHAIN=nightly-2026-05-16 python3 benches/parser-resources/measure.py \
   --output parser-resources.json
 cargo +nightly-2026-05-16 bench --bench bench -- parse_full_frame_eager --exact
 ```

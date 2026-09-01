@@ -145,7 +145,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "m-bus-stack-usage"
+name = "m-bus-parser-resources"
 version = "0.0.0"
 dependencies = [
  "m-bus-parser",

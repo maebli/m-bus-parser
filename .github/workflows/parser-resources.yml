@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: read
     env:
-      STACK_USAGE_TOOLCHAIN: nightly-2026-05-16
+      PARSER_RESOURCES_TOOLCHAIN: nightly-2026-05-16
       CARGO_TERM_COLOR: never
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
           components: llvm-tools-preview
           targets: thumbv7em-none-eabi
       - name: Measure parser resources
-        run: python3 benches/stack-usage/measure.py --output parser-resources.json
+        run: python3 benches/parser-resources/measure.py --output parser-resources.json
       - name: Measure decode speed
         run: |
           set -o pipefail

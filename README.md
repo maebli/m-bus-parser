@@ -39,7 +39,7 @@ pinned compiler and dependency set. The badge above links to the
 [per-commit resource charts](https://maebli.github.io/m-bus-parser/dev/bench/),
 including the total critical path and each of its component frames. The
 measurement method and local command are documented in
-[`benches/stack-usage/`](./benches/stack-usage/).
+[`benches/parser-resources/`](./benches/parser-resources/).
 
 ---
 

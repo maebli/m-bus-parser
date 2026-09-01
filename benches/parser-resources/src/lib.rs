@@ -1,6 +1,6 @@
 #![no_std]
 
-//! Build-only fixture used by `measure.py`.
+//! Build-only fixture used by the parser resource measurements.
 
 #[path = "../../full_parse_fixture.rs"]
 mod full_parse_fixture;

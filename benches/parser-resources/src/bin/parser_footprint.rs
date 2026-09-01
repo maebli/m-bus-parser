@@ -1,7 +1,7 @@
 #![cfg_attr(target_os = "none", no_std)]
 #![cfg_attr(target_os = "none", no_main)]
 
-use m_bus_stack_usage::{parse_full_wired_frame, FULL_FRAME};
+use m_bus_parser_resources::{parse_full_wired_frame, FULL_FRAME};
 
 #[cfg(target_os = "none")]
 use core::hint::black_box;
