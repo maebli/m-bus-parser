@@ -1,0 +1,132 @@
+name: Parser resources
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: parser-resources-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PARSER_RESOURCES_TOOLCHAIN: nightly-2026-05-16
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for benchmark history
+        id: benchmark-history
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-05-16
+          components: llvm-tools-preview
+          targets: thumbv7em-none-eabi
+      - name: Measure parser resources
+        run: python3 benches/parser-resources/measure.py --output parser-resources.json
+      - name: Measure decode speed
+        run: |
+          set -o pipefail
+          cargo +nightly-2026-05-16 bench --locked --bench bench -- \
+            parse_full_frame_eager --exact --noplot --discard-baseline \
+            --output-format bencher \
+            --sample-size 50 --warm-up-time 1 --measurement-time 3 \
+            --nresamples 10000 2>&1 | tee decode-speed.txt
+      - name: Summarize parser resources
+        if: steps.benchmark-history.outputs.exists == 'true'
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser stack and footprint
+          tool: customSmallerIsBetter
+          output-file-path: parser-resources.json
+          save-data-file: false
+          summary-always: true
+      - name: Summarize decode speed
+        if: steps.benchmark-history.outputs.exists == 'true'
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser decode speed
+          tool: cargo
+          output-file-path: decode-speed.txt
+          save-data-file: false
+          summary-always: true
+      - name: Upload measurement
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-resources
+          path: |
+            parser-resources.json
+            decode-speed.txt
+          retention-days: 7
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: measure
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Initialize benchmark history branch
+        shell: bash
+        run: |
+          if ! git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            source_ref=$(git rev-parse HEAD)
+            git switch --orphan gh-pages
+            git -c user.name=github-action-benchmark \
+              -c user.email=github@users.noreply.github.com \
+              commit --allow-empty -m "Initialize benchmark history"
+            git push origin gh-pages
+            git checkout --detach "$source_ref"
+          fi
+      - name: Download measurement
+        uses: actions/download-artifact@v4
+        with:
+          name: parser-resources
+      - name: Store and plot main-branch history
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser stack and footprint
+          tool: customSmallerIsBetter
+          output-file-path: parser-resources.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: docs/dev/bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '105%'
+          fail-threshold: '110%'
+          fail-on-alert: true
+          summary-always: true
+          max-items-in-chart: 100
+      - name: Store and plot decode speed
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser decode speed
+          tool: cargo
+          output-file-path: decode-speed.txt
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: docs/dev/bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '125%'
+          summary-always: true
+          max-items-in-chart: 100

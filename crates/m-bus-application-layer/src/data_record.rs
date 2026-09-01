@@ -9,7 +9,7 @@ use super::{
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RawDataRecordHeader<'a> {
     pub data_information_block: DataInformationBlock<'a>,
-    pub value_information_block: Option<ValueInformationBlock>,
+    pub value_information_block: Option<ValueInformationBlock<'a>>,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Clone)]

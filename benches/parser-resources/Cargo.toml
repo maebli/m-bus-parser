@@ -1,0 +1,25 @@
+[package]
+name = "m-bus-parser-resources"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+m-bus-parser = { path = "../.." }
+
+# Keep this benchmark independent from the repository workspace so its lockfile
+# freezes the dependency graph used by the historical measurements.
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = false
+codegen-units = 1
+debug = false
+strip = false
+
+[[bin]]
+name = "parser-footprint"
+path = "src/bin/parser_footprint.rs"
+test = false
+bench = false

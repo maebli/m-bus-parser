@@ -932,14 +932,14 @@ pub(crate) fn annotate_data_records(segments: &mut Vec<ByteSegment>, base: usize
 
                     // Plaintext VIF
                     if let Some(plaintext) = &vib.plaintext_vife {
-                        let pt_size = plaintext.len() + 1; // 1 for length byte
+                        let pt_size = plaintext.ascii_len() + 1; // 1 for length byte
                         segments.push(ByteSegment {
                             start: base + offset,
                             end: base + offset + pt_size,
                             kind: SegmentKind::PlaintextVif,
                             detail: Cow::Owned(format!(
                                 "Plaintext VIF: \"{}\"",
-                                plaintext.iter().collect::<String>()
+                                plaintext.as_ascii_str().unwrap_or_default()
                             )),
                             group: Some(record_index),
                             layer: Layer::RecordField,
