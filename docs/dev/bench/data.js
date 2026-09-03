@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788468915661,
+  "lastUpdate": 1788468917757,
   "repoUrl": "https://github.com/maebli/m-bus-parser",
   "entries": {
     "Parser stack and footprint": [
@@ -691,6 +691,36 @@ window.BENCHMARK_DATA = {
             "name": "parse_full_frame_eager",
             "value": 953,
             "range": "± 7",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "committer": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "distinct": true,
+          "id": "157cfeb96975f22e05ae2fd3f49b51b6b674158b",
+          "message": "adding info for cortex-m demo",
+          "timestamp": "2026-09-03T22:53:47+02:00",
+          "tree_id": "dfda905fa6e532d52ba324a3b89da8aee2fe45f8",
+          "url": "https://github.com/maebli/m-bus-parser/commit/157cfeb96975f22e05ae2fd3f49b51b6b674158b"
+        },
+        "date": 1788468917140,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parse_full_frame_eager",
+            "value": 880,
+            "range": "± 17",
             "unit": "ns/iter"
           }
         ]
