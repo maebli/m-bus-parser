@@ -108,7 +108,7 @@ jobs:
           name: Parser stack and footprint
           tool: customSmallerIsBetter
           output-file-path: parser-resources.json
-          gh-pages-branch: gh-pages
+          gh-pages-branch: main
           benchmark-data-dir-path: docs/dev/bench
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
@@ -123,7 +123,7 @@ jobs:
           name: Parser decode speed
           tool: cargo
           output-file-path: decode-speed.txt
-          gh-pages-branch: gh-pages
+          gh-pages-branch: main
           benchmark-data-dir-path: docs/dev/bench
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
