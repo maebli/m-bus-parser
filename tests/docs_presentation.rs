@@ -8,6 +8,25 @@ const DOCS_HTML: &str = include_str!("../docs/index.html");
 const RUST_WORKFLOW: &str = include_str!("../.github/workflows/rust.yml");
 
 #[test]
+fn docs_header_links_to_benchmarks_and_project_status() {
+    for destination in [
+        "./dev/bench/",
+        "https://crates.io/crates/m-bus-parser",
+        "https://docs.rs/m-bus-parser",
+        "https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml",
+        "https://github.com/maebli/m-bus-parser/blob/main/LICENSE",
+    ] {
+        assert!(
+            DOCS_HTML.contains(destination),
+            "missing header link to {destination}"
+        );
+    }
+
+    assert!(DOCS_HTML.contains("class=\"project-badges\""));
+    assert!(DOCS_HTML.contains("aria-label=\"Project status\""));
+}
+
+#[test]
 fn docs_use_the_rust_wasm_highlighter_without_an_npm_toolchain() {
     assert!(DOCS_HTML.contains("m_bus_highlight"));
     assert!(!DOCS_HTML.contains("highlighter.js"));

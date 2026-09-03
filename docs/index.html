@@ -53,6 +53,29 @@
             text-decoration: none;
         }
 
+        .header-text .subtitle a:hover,
+        .header-text .subtitle a:focus-visible {
+            color: #333;
+            text-decoration: underline;
+        }
+
+        .project-badges {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .project-badges a {
+            display: inline-flex;
+            line-height: 0;
+        }
+
+        .project-badges img {
+            height: 20px;
+        }
+
         .parser-version {
             font-size: 0.7em;
             color: #888;
@@ -335,6 +358,15 @@
         body.dark-mode .header-text .subtitle,
         body.dark-mode .parser-version {
             color: #aaa;
+        }
+
+        body.dark-mode .header-text .subtitle a {
+            color: #aaa;
+        }
+
+        body.dark-mode .header-text .subtitle a:hover,
+        body.dark-mode .header-text .subtitle a:focus-visible {
+            color: #fff;
         }
 
         body.dark-mode form {
@@ -792,7 +824,26 @@
         <div class="header-text">
             <h1>Online M-Bus Parser <span class="parser-version" id="parser-version"></span></h1>
             <div class="subtitle">
-                <a href="https://maebli.github.io/m-bus-parser" target="_blank">maebli.github.io/m-bus-parser</a> • <a href="https://github.com/maebli" target="_blank">Michael Aebli</a>
+                <a href="https://maebli.github.io/m-bus-parser/">maebli.github.io/m-bus-parser</a> •
+                <a href="https://github.com/maebli" target="_blank" rel="noopener noreferrer">Michael Aebli</a> •
+                <a href="./dev/bench/">Benchmarks</a>
+            </div>
+            <div class="project-badges" aria-label="Project status">
+                <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">
+                    <img src="https://img.shields.io/crates/v/m-bus-parser.svg" alt="m-bus-parser version on crates.io">
+                </a>
+                <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">
+                    <img src="https://img.shields.io/crates/d/m-bus-parser.svg" alt="m-bus-parser downloads on crates.io">
+                </a>
+                <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">
+                    <img src="https://docs.rs/m-bus-parser/badge.svg" alt="m-bus-parser documentation on docs.rs">
+                </a>
+                <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">
+                    <img src="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml/badge.svg" alt="Rust build status">
+                </a>
+                <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+                    <img src="https://img.shields.io/crates/l/m-bus-parser.svg" alt="m-bus-parser license">
+                </a>
             </div>
         </div>
         <div class="header-controls">
