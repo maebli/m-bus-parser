@@ -92,9 +92,9 @@ Input hex is strict: use compact hexadecimal or complete byte tokens separated
 by whitespace, colons, or hyphens.
 
 ```
-68 3D 3D 68 ...      (space-separated)
-683D3D68...          (plain hex)
-0x68:0x3D:0x3D:0x68  (prefixed byte tokens)
+68 04 04 68 53 01 00 00 54 16      (space-separated)
+68040468530100005416                (plain hex)
+0x68:0x04:0x04:0x68:0x53:0x01:0x00:0x00:0x54:0x16  (prefixed byte tokens)
 ```
 
 ### Table output (default)
@@ -106,27 +106,30 @@ maximum explicitly.
 ### Other formats
 
 ```bash
+FRAME="68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16"
+
 # JSON
-m-bus-parser-cli parse -d "..." -t json
+m-bus-parser-cli parse -d "$FRAME" -t json
 
 # YAML
-m-bus-parser-cli parse -d "..." -t yaml
+m-bus-parser-cli parse -d "$FRAME" -t yaml
 
 # CSV (one row per input frame; record fields use namespaced columns)
-m-bus-parser-cli parse -d "..." -t csv
+m-bus-parser-cli parse -d "$FRAME" -t csv
 
 # Colored, semantically grouped Mermaid diagram source (renders in the web app)
-m-bus-parser-cli parse -d "..." -t mermaid
+m-bus-parser-cli parse -d "$FRAME" -t mermaid
 
 # Wired-compatible and wireless XML
-m-bus-parser-cli parse -d "..." -t xml
+m-bus-parser-cli parse -d "$FRAME" -t xml
 
 # Byte annotations as JSON or human-readable text
-m-bus-parser-cli parse -d "..." -t annotated
-m-bus-parser-cli parse -d "..." -t annotated-text
+m-bus-parser-cli parse -d "$FRAME" -t annotated
+m-bus-parser-cli parse -d "$FRAME" -t annotated-text
 
-# With AES-128 decryption key
-m-bus-parser-cli parse -d "..." -k "000102030405060708090A0B0C0D0E0F"
+# Decrypt an AES-128-encrypted wireless frame
+ENCRYPTED_FRAME="2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A"
+m-bus-parser-cli parse -d "$ENCRYPTED_FRAME" -k "0102030405060708090A0B0C0D0E0F11"
 ```
 
 ---
@@ -143,24 +146,34 @@ m-bus-parser = { version = "0.4", features = ["std", "serde"] }
 ### Parse a wired frame
 
 ```rust
-use m_bus_parser::{Address, WiredFrame, Function};
-use m_bus_parser::mbus_data::MbusData;
+use m_bus_parser::WiredFrame;
 use m_bus_parser::user_data::parse_application_layer;
 
-let frame_bytes: Vec<u8> = vec![
-    0x68, 0x4D, 0x4D, 0x68, 0x08, 0x01, 0x72, 0x01,
-    // ... rest of frame
-];
+fn main() -> Result<(), m_bus_parser::MbusError> {
+    let frame_bytes: Vec<u8> = vec![
+        0x68, 0x3D, 0x3D, 0x68, 0x08, 0x01, 0x72, 0x00,
+        0x51, 0x20, 0x02, 0x82, 0x4D, 0x02, 0x04, 0x00,
+        0x88, 0x00, 0x00, 0x04, 0x07, 0x00, 0x00, 0x00,
+        0x00, 0x0C, 0x15, 0x03, 0x00, 0x00, 0x00, 0x0B,
+        0x2E, 0x00, 0x00, 0x00, 0x0B, 0x3B, 0x00, 0x00,
+        0x00, 0x0A, 0x5A, 0x88, 0x12, 0x0A, 0x5E, 0x16,
+        0x05, 0x0B, 0x61, 0x23, 0x77, 0x00, 0x02, 0x6C,
+        0x8C, 0x11, 0x02, 0x27, 0x37, 0x0D, 0x0F, 0x60,
+        0x00, 0x67, 0x16,
+    ];
 
-let frame = WiredFrame::try_from(frame_bytes.as_slice())?;
+    let frame = WiredFrame::try_from(frame_bytes.as_slice())?;
 
-if let WiredFrame::LongFrame { function, address, data } = frame {
-    let application_layer = parse_application_layer(data)?;
-    if let Some(records) = application_layer.data_records() {
-        for record in records {
-            println!("{:?}", record?.value());
+    if let WiredFrame::LongFrame { data, .. } = frame {
+        let application_layer = parse_application_layer(data)?;
+        if let Some(records) = application_layer.data_records() {
+            for record in records {
+                println!("{:?}", record?.value());
+            }
         }
     }
+
+    Ok(())
 }
 ```
 
@@ -170,13 +183,17 @@ When the link and transport headers have already been removed, parse the DIF/VIF
 records directly:
 
 ```rust
-use m_bus_parser::user_data::parse_data_records;
+use m_bus_parser::user_data::{DataRecordError, parse_data_records};
 
-let data = [0x03, 0x13, 0x15, 0x31, 0x00];
-for record in parse_data_records(&data) {
-    let record = record?;
-    println!("value: {:?}", record.value());
-    println!("value information: {:?}", record.value_information());
+fn main() -> Result<(), DataRecordError> {
+    let data = [0x03, 0x13, 0x15, 0x31, 0x00];
+    for record in parse_data_records(&data) {
+        let record = record?;
+        println!("value: {:?}", record.value());
+        println!("value information: {:?}", record.value_information());
+    }
+
+    Ok(())
 }
 ```
 
@@ -184,21 +201,26 @@ for record in parse_data_records(&data) {
 
 ```rust
 use m_bus_parser::{
-    DecodeOptions, OutputFormat, RenderOptions, decode_hex, render_hex,
+    DecodeOptions, OutputError, OutputFormat, RenderOptions, decode_hex, render_hex,
 };
 
-let hex = "68 3D 3D 68 08 01 72 ...";
-let decoded = decode_hex(hex, &DecodeOptions::default())?;
-println!("schema v{}: {}", decoded.schema_version, decoded.protocol);
+fn main() -> Result<(), OutputError> {
+    let hex = "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16";
+    let decoded = decode_hex(hex, &DecodeOptions::default())?;
+    println!("schema v{}: {}", decoded.schema_version, decoded.protocol);
 
-let table = render_hex(
-    hex,
-    OutputFormat::Table,
-    &RenderOptions {
-        table_width: Some(72),
-        ..RenderOptions::default()
-    },
-)?;
+    let table = render_hex(
+        hex,
+        OutputFormat::Table,
+        &RenderOptions {
+            table_width: Some(72),
+            ..RenderOptions::default()
+        },
+    )?;
+    println!("{table}");
+
+    Ok(())
+}
 ```
 
 `serialize_mbus_data` remains as a string compatibility wrapper. New code

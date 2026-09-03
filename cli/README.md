@@ -5,7 +5,7 @@ output contract as the Rust, Python, and WebAssembly APIs.
 
 ```console
 cargo install m-bus-parser-cli
-m-bus-parser-cli parse --data "68 3D 3D 68 ..." --format json
+m-bus-parser-cli parse --data "68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16" --format json
 ```
 
 Formats: `table` (default), `json`, `yaml`, `csv`, `mermaid`, `xml`,
