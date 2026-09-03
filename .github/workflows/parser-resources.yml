@@ -23,11 +23,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Detach source checkout
+        run: git checkout --detach
       - name: Check for benchmark history
         id: benchmark-history
         shell: bash
         run: |
-          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+          if git cat-file -e origin/main:docs/dev/bench/data.js 2>/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -55,6 +57,8 @@ jobs:
           name: Parser stack and footprint
           tool: customSmallerIsBetter
           output-file-path: parser-resources.json
+          gh-pages-branch: main
+          benchmark-data-dir-path: docs/dev/bench
           save-data-file: false
           summary-always: true
       - name: Summarize decode speed
@@ -64,6 +68,10 @@ jobs:
           name: Parser decode speed
           tool: cargo
           output-file-path: decode-speed.txt
+          gh-pages-branch: main
+          benchmark-data-dir-path: docs/dev/bench
+          # The preceding action leaves main ahead by one local-only commit.
+          skip-fetch-gh-pages: true
           save-data-file: false
           summary-always: true
       - name: Upload measurement
@@ -86,17 +94,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Initialize benchmark history branch
+      - name: Detach source checkout
+        run: git checkout --detach
+      - name: Restore legacy benchmark history
         shell: bash
         run: |
-          if ! git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
-            source_ref=$(git rev-parse HEAD)
-            git switch --orphan gh-pages
-            git -c user.name=github-action-benchmark \
-              -c user.email=github@users.noreply.github.com \
-              commit --allow-empty -m "Initialize benchmark history"
-            git push origin gh-pages
-            git checkout --detach "$source_ref"
+          if ! git cat-file -e origin/main:docs/dev/bench/data.js 2>/dev/null &&
+             git cat-file -e origin/gh-pages:docs/dev/bench/data.js 2>/dev/null; then
+            git checkout origin/gh-pages -- docs/dev/bench/data.js
+            git reset -- docs/dev/bench/data.js
           fi
       - name: Download measurement
         uses: actions/download-artifact@v4
