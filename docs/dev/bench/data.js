@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788465372935,
+  "lastUpdate": 1788466569725,
   "repoUrl": "https://github.com/maebli/m-bus-parser",
   "entries": {
     "Parser stack and footprint": [
@@ -230,6 +230,120 @@ window.BENCHMARK_DATA = {
             "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; profile=opt-level=z,lto=fat,codegen-units=1; sections=text+data"
           }
         ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "committer": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "distinct": true,
+          "id": "1364f2041d6373cfa8b39c3566e58f10efc8bf8a",
+          "message": "adjusting examples",
+          "timestamp": "2026-09-03T22:14:51+02:00",
+          "tree_id": "88eb8753c99beb0e3ff0697907a1e77317eeeb2e",
+          "url": "https://github.com/maebli/m-bus-parser/commit/1364f2041d6373cfa8b39c3566e58f10efc8bf8a"
+        },
+        "date": 1788466566761,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Eager full wired-frame parse stack",
+            "value": 2784,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; fixture=520 B; max(setup=476 B,records=2264 B)"
+          },
+          {
+            "name": "Frame and application setup nested stack",
+            "value": 476,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; mbus=248 B; wired=64 B; application=228 B"
+          },
+          {
+            "name": "Record decode nested stack",
+            "value": 2264,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "Eager full-frame fixture local stack frame",
+            "value": 520,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecords::next local stack frame",
+            "value": 704,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecord::try_from local stack frame",
+            "value": 16,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecord::parse local stack frame",
+            "value": 456,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecordHeader::try_from local stack frame",
+            "value": 280,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "ProcessedDataRecordHeader::try_from local stack frame",
+            "value": 584,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "ValueInformation::try_from local stack frame",
+            "value": 160,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "consume_orthhogonal_vife local stack frame",
+            "value": 64,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "VIF block parser local stack frame",
+            "value": 48,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecord value size",
+            "value": 216,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "VIF block value size",
+            "value": 20,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "Linked eager full parser text + data size",
+            "value": 18887,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; profile=opt-level=z,lto=fat,codegen-units=1; sections=text+data"
+          }
+        ]
       }
     ],
     "Parser decode speed": [
@@ -289,6 +403,36 @@ window.BENCHMARK_DATA = {
             "name": "parse_full_frame_eager",
             "value": 1318,
             "range": "± 13",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "committer": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "distinct": true,
+          "id": "1364f2041d6373cfa8b39c3566e58f10efc8bf8a",
+          "message": "adjusting examples",
+          "timestamp": "2026-09-03T22:14:51+02:00",
+          "tree_id": "88eb8753c99beb0e3ff0697907a1e77317eeeb2e",
+          "url": "https://github.com/maebli/m-bus-parser/commit/1364f2041d6373cfa8b39c3566e58f10efc8bf8a"
+        },
+        "date": 1788466569035,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parse_full_frame_eager",
+            "value": 1223,
+            "range": "± 28",
             "unit": "ns/iter"
           }
         ]
