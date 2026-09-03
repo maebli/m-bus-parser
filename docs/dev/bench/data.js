@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788466567507,
+  "lastUpdate": 1788466569725,
   "repoUrl": "https://github.com/maebli/m-bus-parser",
   "entries": {
     "Parser stack and footprint": [
@@ -403,6 +403,36 @@ window.BENCHMARK_DATA = {
             "name": "parse_full_frame_eager",
             "value": 1318,
             "range": "± 13",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "committer": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "distinct": true,
+          "id": "1364f2041d6373cfa8b39c3566e58f10efc8bf8a",
+          "message": "adjusting examples",
+          "timestamp": "2026-09-03T22:14:51+02:00",
+          "tree_id": "88eb8753c99beb0e3ff0697907a1e77317eeeb2e",
+          "url": "https://github.com/maebli/m-bus-parser/commit/1364f2041d6373cfa8b39c3566e58f10efc8bf8a"
+        },
+        "date": 1788466569035,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parse_full_frame_eager",
+            "value": 1223,
+            "range": "± 28",
             "unit": "ns/iter"
           }
         ]
