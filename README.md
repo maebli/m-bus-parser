@@ -240,6 +240,47 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 
 ---
 
+## Testing
+
+Run these commands from the repository root:
+
+```bash
+# Test the default no_std-compatible configuration
+cargo test --no-default-features
+
+# Test the std-enabled APIs and integration tests
+cargo test --features std
+
+# Test every optional feature, including serde and decryption
+cargo test --all-features
+
+# Test the alternate plaintext-before-extension behavior
+cargo test --features plaintext-before-extension
+```
+
+The first command uses the host test harness but builds the parser without its
+`std` feature. To also verify the library on a bare-metal target:
+
+```bash
+rustup target add thumbv7m-none-eabi
+cargo build --target thumbv7m-none-eabi --no-default-features
+```
+
+### Run the Cortex-M QEMU demo
+
+Install `qemu-system-arm`, make sure it is available on `PATH`, and add the
+target with `rustup target add thumbv7m-none-eabi`. Then run the demo from the
+repository root with this one-liner:
+
+```bash
+(cd examples/cortex-m && cargo run --release)
+```
+
+The example parses a frame, prints the result through semihosting, and exits
+QEMU.
+
+---
+
 ## Output Formats
 
 | Format    | Flag    | Description                                      |

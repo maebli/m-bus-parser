@@ -6,12 +6,11 @@
 use core::panic::PanicInfo;
 
 use cortex_m_semihosting::{debug, hprintln};
-use m_bus_parser::{user_data::DataRecords, MbusData};
+use m_bus_parser::{mbus_data::MbusData, user_data::DataRecords};
 
 use cortex_m_rt::entry;
 
 #[panic_handler]
-#[no_mangle]
 fn my_panic_handler(info: &PanicInfo) -> ! {
     hprintln!("Oh noes, panic {:?} :(", info);
     loop {}
@@ -26,7 +25,7 @@ fn main() -> ! {
         0xCD, 0x13, 0x02, 0x27, 0x00, 0x00, 0x09, 0xFD, 0x0E, 0x02, 0x09, 0xFD, 0x0F, 0x06, 0x0F,
         0x00, 0x01, 0x75, 0x13, 0xD3, 0x16,
     ];
-    let mbus_data = MbusData::try_from(example.as_slice()).unwrap();
+    let mbus_data = MbusData::<m_bus_parser::WiredFrame>::try_from(example.as_slice()).unwrap();
 
     hprintln!("{:?}", mbus_data);
     hprintln!("size: {}", core::mem::size_of::<DataRecords>());
