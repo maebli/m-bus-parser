@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788467536495,
+  "lastUpdate": 1788467538510,
   "repoUrl": "https://github.com/maebli/m-bus-parser",
   "entries": {
     "Parser stack and footprint": [
@@ -547,6 +547,36 @@ window.BENCHMARK_DATA = {
             "name": "parse_full_frame_eager",
             "value": 1223,
             "range": "± 28",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "committer": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "distinct": true,
+          "id": "b435ea42e3fe33211d021db5ea3d2f80fca9f168",
+          "message": "Merge remote-tracking branch 'origin/main'",
+          "timestamp": "2026-09-03T22:30:48+02:00",
+          "tree_id": "35f77fb56a1fec3e611a92734405ef300d2e073d",
+          "url": "https://github.com/maebli/m-bus-parser/commit/b435ea42e3fe33211d021db5ea3d2f80fca9f168"
+        },
+        "date": 1788467538049,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "parse_full_frame_eager",
+            "value": 953,
+            "range": "± 7",
             "unit": "ns/iter"
           }
         ]
