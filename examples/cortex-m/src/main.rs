@@ -10,11 +10,6 @@ use m_bus_parser::{WiredFrame, mbus_data::MbusData, user_data::DataRecords};
 
 use cortex_m_rt::entry;
 
-#[panic_handler]
-fn my_panic_handler(info: &PanicInfo) -> ! {
-    hprintln!("Oh noes, panic {:?} :(", info);
-    loop {}
-}
 
 #[entry]
 fn main() -> ! {
