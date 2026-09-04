@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788469294824,
+  "lastUpdate": 1788505403382,
   "repoUrl": "https://github.com/maebli/m-bus-parser",
   "entries": {
     "Parser stack and footprint": [
@@ -581,6 +581,120 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maebli/m-bus-parser/commit/de6d57291c139aa9d254fe128d07d0167d09c993"
         },
         "date": 1788469292798,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Eager full wired-frame parse stack",
+            "value": 2784,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; fixture=520 B; max(setup=476 B,records=2264 B)"
+          },
+          {
+            "name": "Frame and application setup nested stack",
+            "value": 476,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; mbus=248 B; wired=64 B; application=228 B"
+          },
+          {
+            "name": "Record decode nested stack",
+            "value": 2264,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "Eager full-frame fixture local stack frame",
+            "value": 520,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecords::next local stack frame",
+            "value": 704,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecord::try_from local stack frame",
+            "value": 16,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecord::parse local stack frame",
+            "value": 456,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecordHeader::try_from local stack frame",
+            "value": 280,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "ProcessedDataRecordHeader::try_from local stack frame",
+            "value": 584,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "ValueInformation::try_from local stack frame",
+            "value": 160,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "consume_orthhogonal_vife local stack frame",
+            "value": 64,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "VIF block parser local stack frame",
+            "value": 48,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "DataRecord value size",
+            "value": 216,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "VIF block value size",
+            "value": 20,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16"
+          },
+          {
+            "name": "Linked eager full parser text + data size",
+            "value": 18887,
+            "unit": "bytes",
+            "extra": "target=thumbv7em-none-eabi; toolchain=nightly-2026-05-16; profile=opt-level=z,lto=fat,codegen-units=1; sections=text+data"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "committer": {
+            "email": "doland@duck.com",
+            "name": "Michael Aebli",
+            "username": "maebli"
+          },
+          "distinct": true,
+          "id": "7d31bde172935729e3f58f1da5aa56cde03a9801",
+          "message": "sanitize email",
+          "timestamp": "2026-09-04T09:02:05+02:00",
+          "tree_id": "06b9db2c920cba4b7410228329867dcd670811d5",
+          "url": "https://github.com/maebli/m-bus-parser/commit/7d31bde172935729e3f58f1da5aa56cde03a9801"
+        },
+        "date": 1788505402930,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
