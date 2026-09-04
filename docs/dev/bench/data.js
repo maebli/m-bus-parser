@@ -6,12 +6,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "1138612+maebli@users.noreply.github.com",
             "name": "Maebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "noreply@github.com",
             "name": "GitHub",
             "username": "web-flow"
           },
@@ -120,12 +118,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -234,12 +230,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -348,12 +342,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -462,12 +454,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -576,12 +566,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -692,12 +680,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "1138612+maebli@users.noreply.github.com",
             "name": "Maebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "noreply@github.com",
             "name": "GitHub",
             "username": "web-flow"
           },
@@ -722,12 +708,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -752,12 +736,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -782,12 +764,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -812,12 +792,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
@@ -842,12 +820,10 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },
           "committer": {
-            "email": "doland@duck.com",
             "name": "Michael Aebli",
             "username": "maebli"
           },

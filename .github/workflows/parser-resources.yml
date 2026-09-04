@@ -25,6 +25,14 @@ jobs:
           fetch-depth: 0
       - name: Detach source checkout
         run: git checkout --detach
+      - name: Remove email addresses from benchmark metadata
+        shell: bash
+        run: |
+          # github-action-benchmark serializes head_commit into its output and logs.
+          sanitized_event="${RUNNER_TEMP}/github-event-sanitized.json"
+          jq 'walk(if type == "object" then del(.email) else . end)' \
+            "$GITHUB_EVENT_PATH" > "$sanitized_event"
+          cp "$sanitized_event" "$GITHUB_EVENT_PATH"
       - name: Check for benchmark history
         id: benchmark-history
         shell: bash
@@ -96,6 +104,14 @@ jobs:
           fetch-depth: 0
       - name: Detach source checkout
         run: git checkout --detach
+      - name: Remove email addresses from benchmark metadata
+        shell: bash
+        run: |
+          # github-action-benchmark serializes head_commit into public data.js.
+          sanitized_event="${RUNNER_TEMP}/github-event-sanitized.json"
+          jq 'walk(if type == "object" then del(.email) else . end)' \
+            "$GITHUB_EVENT_PATH" > "$sanitized_event"
+          cp "$sanitized_event" "$GITHUB_EVENT_PATH"
       - name: Restore legacy benchmark history
         shell: bash
         run: |
