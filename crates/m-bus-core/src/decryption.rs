@@ -62,32 +62,31 @@ impl<'a> EncryptedPayload<'a> {
         Self { data, context }
     }
 
+    /// Return plaintext bytes lazily without a payload-sized destination buffer.
+    #[cfg(feature = "decryption")]
+    pub fn decrypted_bytes<K: KeyProvider>(
+        &self,
+        provider: &K,
+    ) -> Result<DecryptedBytes<'a>, DecryptionError> {
+        let key = provider.get_key(&self.context)?;
+        match self.context.security_mode {
+            SecurityMode::NoEncryption => Ok(DecryptedBytes::plaintext(self.data)),
+            SecurityMode::AesCbc128IvZero => DecryptedBytes::cbc(self.data, key, &[0u8; 16]),
+            SecurityMode::AesCbc128IvNonZero => {
+                DecryptedBytes::cbc(self.data, key, &self._derive_iv())
+            }
+            mode => Err(DecryptionError::UnsupportedMode(mode)),
+        }
+    }
+
+    /// Write lazily decrypted bytes into caller-provided contiguous storage.
     #[cfg(feature = "decryption")]
     pub fn decrypt_into<K: KeyProvider>(
         &self,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, DecryptionError> {
-        let key = provider.get_key(&self.context)?;
-
-        match self.context.security_mode {
-            SecurityMode::NoEncryption => {
-                let len = self.data.len();
-                let dest = output
-                    .get_mut(..len)
-                    .ok_or(DecryptionError::InvalidDataLength)?;
-                dest.copy_from_slice(self.data);
-                Ok(len)
-            }
-            SecurityMode::AesCbc128IvZero => {
-                decrypt_aes_cbc_into(self.data, key, &[0u8; 16], output)
-            }
-            SecurityMode::AesCbc128IvNonZero => {
-                let iv = self._derive_iv();
-                decrypt_aes_cbc_into(self.data, key, &iv, output)
-            }
-            mode => Err(DecryptionError::UnsupportedMode(mode)),
-        }
+        write_decrypted(self.decrypted_bytes(provider)?, output)
     }
 
     #[cfg(feature = "decryption")]
@@ -178,66 +177,110 @@ impl<const N: usize> KeyProvider for StaticKeyProvider<N> {
     }
 }
 
+/// Lazily decrypted payload bytes, borrowing the original ciphertext.
+///
+/// AES-CBC retains its key schedule, chaining state, and one 16-byte working
+/// block, not a payload-sized plaintext buffer. Trailing incomplete blocks are
+/// yielded unchanged, matching [`EncryptedPayload::decrypt_into`].
+///
+/// Contiguous-slice parsers still require a destination buffer; callers that
+/// consume bytes incrementally can use this iterator directly.
 #[cfg(feature = "decryption")]
+pub struct DecryptedBytes<'a> {
+    input: &'a [u8],
+    decryptor: Option<Decryptor<Aes128>>,
+    block: cipher::Block<Aes128>,
+    position: usize,
+    remaining: usize,
+}
+
+#[cfg(feature = "decryption")]
+impl<'a> DecryptedBytes<'a> {
+    fn plaintext(input: &'a [u8]) -> Self {
+        Self {
+            input,
+            decryptor: None,
+            block: Default::default(),
+            position: 16,
+            remaining: input.len(),
+        }
+    }
+
+    fn cbc(input: &'a [u8], key: &[u8], iv: &[u8]) -> Result<Self, DecryptionError> {
+        if key.len() != 16 {
+            return Err(DecryptionError::InvalidKeyLength);
+        }
+        if iv.len() != 16 || input.is_empty() {
+            return Err(DecryptionError::InvalidDataLength);
+        }
+        let decryptor = Decryptor::<Aes128>::new_from_slices(key, iv)
+            .map_err(|_| DecryptionError::InvalidKeyLength)?;
+        Ok(Self {
+            decryptor: Some(decryptor),
+            ..Self::plaintext(input)
+        })
+    }
+}
+
+#[cfg(feature = "decryption")]
+impl Iterator for DecryptedBytes<'_> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        if self.position == 16
+            && let Some(decryptor) = &mut self.decryptor
+            && let Some(block) = self.input.get(..16)
+        {
+            self.block.copy_from_slice(block);
+            decryptor.decrypt_block(&mut self.block);
+            self.input = &self.input[16..];
+            self.position = 0;
+        }
+        let byte = if let Some(byte) = self.block.get(self.position) {
+            self.position += 1;
+            *byte
+        } else {
+            let (byte, rest) = self.input.split_first()?;
+            self.input = rest;
+            *byte
+        };
+        self.remaining -= 1;
+        Some(byte)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.remaining, Some(self.remaining))
+    }
+}
+
+#[cfg(feature = "decryption")]
+impl ExactSizeIterator for DecryptedBytes<'_> {}
+#[cfg(feature = "decryption")]
+impl core::iter::FusedIterator for DecryptedBytes<'_> {}
+
+#[cfg(feature = "decryption")]
+fn write_decrypted(bytes: DecryptedBytes<'_>, output: &mut [u8]) -> Result<usize, DecryptionError> {
+    let length = bytes.len();
+    let target = output
+        .get_mut(..length)
+        .ok_or(DecryptionError::InvalidDataLength)?;
+    for (target, byte) in target.iter_mut().zip(bytes) {
+        *target = byte;
+    }
+    Ok(length)
+}
+
+#[cfg(all(test, feature = "decryption"))]
 fn decrypt_aes_cbc_into(
     data: &[u8],
     key: &[u8],
     iv: &[u8],
     output: &mut [u8],
 ) -> Result<usize, DecryptionError> {
-    if key.len() != 16 {
-        return Err(DecryptionError::InvalidKeyLength);
-    }
-
-    if iv.len() != 16 {
-        return Err(DecryptionError::InvalidDataLength);
-    }
-
-    if data.is_empty() {
-        return Err(DecryptionError::InvalidDataLength);
-    }
-
-    let len = data.len();
-    // Round down to nearest multiple of 16 for encryption
-    let encrypted_len = len - (len % 16);
-
-    if encrypted_len == 0 {
-        // No full blocks to decrypt, just copy data as-is
-        let dest = output
-            .get_mut(..len)
-            .ok_or(DecryptionError::InvalidDataLength)?;
-        dest.copy_from_slice(data);
-        return Ok(len);
-    }
-
-    // Copy all data to output buffer (encrypted + any trailing plaintext)
-    let dest = output
-        .get_mut(..len)
-        .ok_or(DecryptionError::InvalidDataLength)?;
-    dest.copy_from_slice(data);
-
-    // Create decryptor
-    type Aes128CbcDec = Decryptor<Aes128>;
-
-    let key_array: [u8; 16] = key
-        .try_into()
-        .map_err(|_| DecryptionError::InvalidKeyLength)?;
-    let iv_array: [u8; 16] = iv
-        .try_into()
-        .map_err(|_| DecryptionError::InvalidDataLength)?;
-
-    let decryptor = Aes128CbcDec::new(&key_array.into(), &iv_array.into());
-
-    // Decrypt only the aligned portion in place
-    let decrypt_buf = output
-        .get_mut(..encrypted_len)
-        .ok_or(DecryptionError::InvalidDataLength)?;
-    decryptor
-        .decrypt_padded::<cipher::block_padding::NoPadding>(decrypt_buf)
-        .map_err(|_| DecryptionError::DecryptionFailed)?;
-
-    // Return total length (decrypted blocks + trailing plaintext)
-    Ok(len)
+    write_decrypted(DecryptedBytes::cbc(data, key, iv)?, output)
 }
 
 #[cfg(all(test, feature = "decryption"))]
@@ -259,6 +302,15 @@ mod tests {
         assert!(result.is_ok());
         let len = result.unwrap();
         assert_eq!(len, 16);
+        assert_eq!(output, [0; 16]);
+        let mut lazy = DecryptedBytes::cbc(&encrypted, &key, &iv).unwrap();
+        assert_eq!(lazy.len(), 16);
+        for remaining in (0..16).rev() {
+            assert_eq!(lazy.next(), Some(0));
+            assert_eq!(lazy.len(), remaining);
+        }
+        assert_eq!(lazy.next(), None);
+        assert_eq!(lazy.next(), None);
     }
 
     #[test]
@@ -398,5 +450,58 @@ mod tests {
 
         assert_eq!(len, 80);
         assert_eq!(&output[..80], &expected[..]);
+        assert!(payload.decrypted_bytes(&provider).unwrap().eq(expected));
+
+        // Every partial-block boundary preserves the historical plaintext tail.
+        for length in 1..=encrypted.len() {
+            let payload = EncryptedPayload::new(&encrypted[..length], context.clone());
+            let mut bytes = payload.decrypted_bytes(&provider).unwrap();
+            for index in 0..length {
+                assert_eq!(bytes.len(), length - index);
+                let want = if index < length / 16 * 16 {
+                    expected[index]
+                } else {
+                    encrypted[index]
+                };
+                assert_eq!(bytes.next(), Some(want));
+            }
+            assert_eq!(bytes.next(), None);
+            assert_eq!(bytes.next(), None);
+        }
+        // The lazy result is independent of the temporary context/provider.
+        let bytes = {
+            let local_payload = EncryptedPayload::new(&encrypted, context.clone());
+            let mut local_provider = StaticKeyProvider::<1>::new();
+            local_provider.add_key(0x6A49, 14639203, key).unwrap();
+            local_payload.decrypted_bytes(&local_provider).unwrap()
+        };
+        assert!(bytes.eq(expected));
+        let mut too_short = [0xAA; 79];
+        assert_eq!(
+            payload.decrypt_into(&provider, &mut too_short),
+            Err(DecryptionError::InvalidDataLength)
+        );
+        assert_eq!(too_short, [0xAA; 79]);
+
+        let mut context = context;
+        context.security_mode = SecurityMode::NoEncryption;
+        let plaintext = EncryptedPayload::new(&encrypted, context);
+        assert!(plaintext.decrypted_bytes(&provider).unwrap().eq(encrypted));
+    }
+    #[test]
+    fn lazy_decryption_rejects_invalid_parameters() {
+        assert_eq!(
+            DecryptedBytes::cbc(&[0; 16], &[0; 15], &[0; 16]).err(),
+            Some(DecryptionError::InvalidKeyLength)
+        );
+        assert_eq!(
+            DecryptedBytes::cbc(&[0; 16], &[0; 16], &[0; 15]).err(),
+            Some(DecryptionError::InvalidDataLength)
+        );
+        assert_eq!(
+            DecryptedBytes::cbc(&[], &[0; 16], &[0; 16]).err(),
+            Some(DecryptionError::InvalidDataLength)
+        );
+        assert_eq!(DecryptedBytes::plaintext(&[]).next(), None);
     }
 }

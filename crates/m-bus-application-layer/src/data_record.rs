@@ -11,12 +11,12 @@ pub struct RawDataRecordHeader<'a> {
     pub data_information_block: DataInformationBlock<'a>,
     pub value_information_block: Option<ValueInformationBlock<'a>>,
 }
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct ProcessedDataRecordHeader {
+pub struct ProcessedDataRecordHeader<'a> {
     pub data_information: Option<DataInformation>,
-    pub value_information: Option<ValueInformation>,
+    pub value_information: Option<ValueInformation<'a>>,
 }
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, PartialEq, Clone)]
@@ -32,7 +32,7 @@ pub struct DataRecord<'a> {
     pub raw_bytes: &'a [u8],
 }
 
-impl DataRecord<'_> {
+impl<'a> DataRecord<'a> {
     /// Returns the parsed value carried by this record.
     #[must_use]
     pub fn value(&self) -> Option<&DataType<'_>> {
@@ -50,7 +50,7 @@ impl DataRecord<'_> {
 
     /// Returns the processed value information (VIF and VIFE fields).
     #[must_use]
-    pub fn value_information(&self) -> Option<&ValueInformation> {
+    pub fn value_information(&self) -> Option<&ValueInformation<'a>> {
         self.data_record_header
             .processed_data_record_header
             .value_information
@@ -148,7 +148,7 @@ impl<'a> DataRecord<'a> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataRecordHeader<'a> {
     pub raw_data_record_header: RawDataRecordHeader<'a>,
-    pub processed_data_record_header: ProcessedDataRecordHeader,
+    pub processed_data_record_header: ProcessedDataRecordHeader<'a>,
 }
 
 impl DataRecordHeader<'_> {
@@ -188,9 +188,9 @@ impl<'a> TryFrom<&'a [u8]> for RawDataRecordHeader<'a> {
     }
 }
 
-impl TryFrom<&RawDataRecordHeader<'_>> for ProcessedDataRecordHeader {
+impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader<'a> {
     type Error = DataRecordError;
-    fn try_from(raw_data_record_header: &RawDataRecordHeader) -> Result<Self, DataRecordError> {
+    fn try_from(raw_data_record_header: &RawDataRecordHeader<'a>) -> Result<Self, DataRecordError> {
         let mut value_information = None;
         let mut data_information = None;
 
@@ -202,9 +202,9 @@ impl TryFrom<&RawDataRecordHeader<'_>> for ProcessedDataRecordHeader {
             // unfortunately, the data field coding is not always set in the data information block
             // so we must do some additional checks to determine the correct data field coding
 
-            if v.labels.contains(&ValueLabel::Date) {
+            if v.has_label(ValueLabel::Date) {
                 d.data_field_coding = DataFieldCoding::DateTypeG;
-            } else if v.labels.contains(&ValueLabel::DateTime) {
+            } else if v.has_label(ValueLabel::DateTime) {
                 // VIF 0x6D with a 6-byte data field is a type I date and time
                 // (EN 13757-3), only the 4-byte variant is type F.
                 d.data_field_coding = if d.data_field_coding == DataFieldCoding::Integer48Bit {
@@ -212,9 +212,9 @@ impl TryFrom<&RawDataRecordHeader<'_>> for ProcessedDataRecordHeader {
                 } else {
                     DataFieldCoding::DateTimeTypeF
                 };
-            } else if v.labels.contains(&ValueLabel::Time) {
+            } else if v.has_label(ValueLabel::Time) {
                 d.data_field_coding = DataFieldCoding::DateTimeTypeJ;
-            } else if v.labels.contains(&ValueLabel::DateTimeWithSeconds) {
+            } else if v.has_label(ValueLabel::DateTimeWithSeconds) {
                 d.data_field_coding = DataFieldCoding::DateTimeTypeI;
             }
 

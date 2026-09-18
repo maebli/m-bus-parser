@@ -12,12 +12,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrayvec"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -122,7 +116,6 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 name = "m-bus-application-layer"
 version = "0.4.0"
 dependencies = [
- "arrayvec",
  "bitflags",
  "m-bus-core",
 ]
@@ -135,7 +128,6 @@ version = "0.4.0"
 name = "m-bus-parser"
 version = "0.4.3"
 dependencies = [
- "arrayvec",
  "bindgen",
  "bitflags",
  "m-bus-application-layer",

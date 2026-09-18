@@ -161,11 +161,11 @@ fn real32bit() {
                 let Some(value_information) = data_record.value_information() else {
                     continue;
                 };
-                let labels = &value_information.labels;
-                if labels.contains(&ValueLabel::ReturnTemperature) {
+
+                if value_information.has_label(ValueLabel::ReturnTemperature) {
                     assert_eq!(data_record.value(), Some(&DataType::Number(41.44091796875)));
                 }
-                if labels.contains(&ValueLabel::FlowTemperature) {
+                if value_information.has_label(ValueLabel::FlowTemperature) {
                     assert_eq!(
                         data_record.value(),
                         Some(&DataType::Number(56.869384765625))

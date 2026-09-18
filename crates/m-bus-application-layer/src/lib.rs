@@ -655,12 +655,48 @@ impl<'a> UserDataBlock<'a> {
         }
     }
 
+    /// Decrypt variable data into caller-provided contiguous storage.
+    /// Use [`Self::decrypted_variable_bytes`] to consume plaintext lazily.
     #[cfg(feature = "decryption")]
     pub fn decrypt_variable_data<K: crate::decryption::KeyProvider>(
         &self,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
+        write_decrypted_bytes(self.decrypted_variable_bytes(provider)?, output)
+    }
+
+    /// Decrypt with link-layer identity into caller-provided storage.
+    /// Use [`Self::decrypted_variable_bytes_with_context`] for lazy plaintext.
+    #[cfg(feature = "decryption")]
+    pub fn decrypt_variable_data_with_context<K: crate::decryption::KeyProvider>(
+        &self,
+        provider: &K,
+        manufacturer: ManufacturerCode,
+        identification_number: u32,
+        version: u8,
+        device_type: DeviceType,
+        output: &mut [u8],
+    ) -> Result<usize, crate::decryption::DecryptionError> {
+        write_decrypted_bytes(
+            self.decrypted_variable_bytes_with_context(
+                provider,
+                manufacturer,
+                identification_number,
+                version,
+                device_type,
+            )?,
+            output,
+        )
+    }
+
+    /// Borrow ciphertext and yield plaintext without a full-payload buffer.
+    /// The iterator owns cipher state; it does not borrow this header or the key provider.
+    #[cfg(feature = "decryption")]
+    pub fn decrypted_variable_bytes<K: crate::decryption::KeyProvider>(
+        &self,
+        provider: &K,
+    ) -> Result<crate::decryption::DecryptedBytes<'a>, crate::decryption::DecryptionError> {
         use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
 
         match self {
@@ -692,7 +728,7 @@ impl<'a> UserDataBlock<'a> {
                 };
 
                 let payload = EncryptedPayload::new(variable_data_block, context);
-                payload.decrypt_into(provider, output)
+                payload.decrypted_bytes(provider)
             }
             Self::VariableDataStructureWithShortTplHeader {
                 short_tpl_header, ..
@@ -701,7 +737,7 @@ impl<'a> UserDataBlock<'a> {
                     Err(NotEncrypted)
                 } else {
                     // Short TPL header doesn't contain manufacturer info,
-                    // use decrypt_variable_data_with_context() instead
+                    // use decrypted_variable_bytes_with_context() instead
                     Err(UnknownEncryptionState)
                 }
             }
@@ -712,15 +748,14 @@ impl<'a> UserDataBlock<'a> {
     /// Decrypt variable data when manufacturer info is not available in the TPL header.
     /// Use this for frames with Short TPL header where manufacturer info comes from the link layer.
     #[cfg(feature = "decryption")]
-    pub fn decrypt_variable_data_with_context<K: crate::decryption::KeyProvider>(
+    pub fn decrypted_variable_bytes_with_context<K: crate::decryption::KeyProvider>(
         &self,
         provider: &K,
         manufacturer: ManufacturerCode,
         identification_number: u32,
         version: u8,
         device_type: DeviceType,
-        output: &mut [u8],
-    ) -> Result<usize, crate::decryption::DecryptionError> {
+    ) -> Result<crate::decryption::DecryptedBytes<'a>, crate::decryption::DecryptionError> {
         use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
 
         match self {
@@ -745,15 +780,30 @@ impl<'a> UserDataBlock<'a> {
                 };
 
                 let payload = EncryptedPayload::new(variable_data_block, context);
-                payload.decrypt_into(provider, output)
+                payload.decrypted_bytes(provider)
             }
             Self::VariableDataStructureWithLongTplHeader { .. } => {
-                // Long TPL header has its own manufacturer info, use decrypt_variable_data() instead
-                self.decrypt_variable_data(provider, output)
+                // Long TPL header has its own manufacturer info, use decrypted_variable_bytes() instead
+                self.decrypted_variable_bytes(provider)
             }
             _ => Err(DecryptionError::UnknownEncryptionState),
         }
     }
+}
+
+#[cfg(feature = "decryption")]
+fn write_decrypted_bytes(
+    bytes: crate::decryption::DecryptedBytes<'_>,
+    output: &mut [u8],
+) -> Result<usize, crate::decryption::DecryptionError> {
+    let length = bytes.len();
+    let target = output
+        .get_mut(..length)
+        .ok_or(crate::decryption::DecryptionError::InvalidDataLength)?;
+    for (target, byte) in target.iter_mut().zip(bytes) {
+        *target = byte;
+    }
+    Ok(length)
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1551,5 +1601,98 @@ mod tests {
 
         assert!(records.next().unwrap().is_err());
         assert!(records.next().is_none());
+    }
+}
+
+#[cfg(all(test, feature = "decryption"))]
+mod lazy_decryption_tests {
+    use super::*;
+    use crate::decryption::{DecryptionError, StaticKeyProvider};
+
+    const CIPHERTEXT: [u8; 16] = [
+        0x66, 0xe9, 0x4b, 0xd4, 0xef, 0x8a, 0x2c, 0x3b, 0x88, 0x4c, 0xfa, 0x59, 0xca, 0x34, 0x2b,
+        0x2e,
+    ];
+
+    fn short_header(mode: u16) -> ShortTplHeader {
+        ShortTplHeader {
+            access_number: 0,
+            status: StatusField::empty(),
+            configuration_field: ConfigurationField::from(mode << 8),
+        }
+    }
+
+    #[test]
+    fn lazy_plaintext_outlives_long_header_and_provider() {
+        let bytes = {
+            let mut keys = StaticKeyProvider::<1>::new();
+            keys.add_key(0x0421, 12345678, [0; 16]).unwrap();
+            let block = UserDataBlock::VariableDataStructureWithLongTplHeader {
+                extended_link_layer: None,
+                long_tpl_header: LongTplHeader {
+                    identification_number: IdentificationNumber { number: 12345678 },
+                    manufacturer: ManufacturerCode::from_id(0x0421),
+                    version: 1,
+                    device_type: DeviceType::WaterMeter,
+                    short_tpl_header: short_header(u16::from(
+                        m_bus_core::SecurityMode::AesCbc128IvZero.to_bits(),
+                    )),
+                    lsb_order: true,
+                },
+                variable_data_block: &CIPHERTEXT,
+            };
+            block.decrypted_variable_bytes(&keys).unwrap()
+        };
+        assert!(bytes.eq([0; 16]));
+    }
+
+    #[test]
+    fn short_header_requires_context_and_preserves_buffer_errors() {
+        let mut keys = StaticKeyProvider::<1>::new();
+        keys.add_key(0x0421, 12345678, [0; 16]).unwrap();
+        let manufacturer = ManufacturerCode::from_id(0x0421).unwrap();
+        let block = UserDataBlock::VariableDataStructureWithShortTplHeader {
+            extended_link_layer: None,
+            short_tpl_header: short_header(u16::from(
+                m_bus_core::SecurityMode::AesCbc128IvZero.to_bits(),
+            )),
+            variable_data_block: &CIPHERTEXT,
+        };
+        assert_eq!(
+            block.decrypted_variable_bytes(&keys).err(),
+            Some(DecryptionError::UnknownEncryptionState)
+        );
+        let bytes = block
+            .decrypted_variable_bytes_with_context(
+                &keys,
+                manufacturer,
+                12345678,
+                1,
+                DeviceType::WaterMeter,
+            )
+            .unwrap();
+        assert!(bytes.eq([0; 16]));
+        let mut output = [0xAA; 15];
+        assert_eq!(
+            block.decrypt_variable_data_with_context(
+                &keys,
+                manufacturer,
+                12345678,
+                1,
+                DeviceType::WaterMeter,
+                &mut output,
+            ),
+            Err(DecryptionError::InvalidDataLength)
+        );
+        assert_eq!(output, [0xAA; 15]);
+        let plaintext = UserDataBlock::VariableDataStructureWithShortTplHeader {
+            extended_link_layer: None,
+            short_tpl_header: short_header(0),
+            variable_data_block: &CIPHERTEXT,
+        };
+        assert_eq!(
+            plaintext.decrypted_variable_bytes(&keys).err(),
+            Some(DecryptionError::NotEncrypted)
+        );
     }
 }

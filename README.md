@@ -236,6 +236,23 @@ The core parsing types are `no_std` compatible. Disable default features:
 m-bus-parser = { version = "0.4", default-features = false }
 ```
 
+To consume transformed bytes without a frame-sized destination buffer:
+
+- `FormatAFrame::new(data)?.bytes()` borrows a wireless Format A frame, skips
+  recognized CRCs, and yields its corrected length byte. Construction scans the
+  blocks to determine the normalized length; iteration does not copy the frame.
+- With `decryption`, `EncryptedPayload::decrypted_bytes(&keys)` and
+  `UserDataBlock::decrypted_variable_bytes(&keys)` yield plaintext lazily.
+  Short transport headers use `decrypted_variable_bytes_with_context(...)`.
+  AES-CBC retains a key schedule, chaining state, and one 16-byte working block.
+  Incomplete trailing blocks retain the existing pass-through behavior.
+
+These APIs are allocation-free. Existing `*_into`/`decrypt_variable_data*` and
+`strip_format_a_crcs` APIs remain available when contiguous output is needed.
+The existing frame/record parsers take `&[u8]`, so they still require contiguous
+normalized/plaintext storage; they do not directly accept these byte iterators.
+Small decoded header/scalar values are still stored by value.
+
 An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m).
 
 ---

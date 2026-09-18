@@ -1286,10 +1286,11 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
         .map(|value| data_coding_name(value.data_field_coding))
         .unwrap_or_else(|| special_record_name(record));
     let quantities = value_information
-        .map(|value| value.labels.iter().map(quantity_name).collect())
+        .map(|value| value.labels().map(|label| quantity_name(&label)).collect())
         .unwrap_or_default();
     let unit = value_information
-        .and_then(|value| (!value.units.is_empty()).then(|| unit_output(value.units.as_slice())));
+        .map(|value| unit_output(value.units()))
+        .filter(|unit| !unit.is_empty());
 
     RecordOutput {
         index,
@@ -1880,11 +1881,13 @@ fn apply_power10(integer: &str, exponent: isize) -> String {
     output
 }
 
-fn unit_output(units: &[Unit]) -> String {
-    let display = units.iter().map(ToString::to_string).collect::<String>();
+fn unit_output(units: impl Iterator<Item = Unit> + Clone) -> String {
+    let display = units
+        .clone()
+        .map(|unit| unit.to_string())
+        .collect::<String>();
     units
-        .iter()
-        .map(ucum_component)
+        .map(|unit| ucum_component(&unit))
         .collect::<Option<Vec<_>>>()
         .map_or(display, |components| components.join("."))
 }
@@ -2615,23 +2618,29 @@ mod tests {
     #[test]
     fn canonical_units_use_an_unlabelled_standardized_value() {
         assert_eq!(
-            unit_output(&[
-                Unit {
-                    name: UnitName::Meter,
-                    exponent: 3,
-                },
-                Unit {
-                    name: UnitName::Hour,
-                    exponent: -1,
-                },
-            ]),
+            unit_output(
+                [
+                    Unit {
+                        name: UnitName::Meter,
+                        exponent: 3,
+                    },
+                    Unit {
+                        name: UnitName::Hour,
+                        exponent: -1,
+                    },
+                ]
+                .into_iter()
+            ),
             "m3.h-1"
         );
         assert_eq!(
-            unit_output(&[Unit {
-                name: UnitName::ReactiveWatt,
-                exponent: 1,
-            }]),
+            unit_output(
+                [Unit {
+                    name: UnitName::ReactiveWatt,
+                    exponent: 1,
+                }]
+                .into_iter()
+            ),
             "W (reactive)"
         );
     }

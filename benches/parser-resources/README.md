@@ -9,7 +9,7 @@ dependency lockfile and does not use QEMU.
 - Full-parse stack, its nested setup and record paths, and each local frame on
   the deepest path, compiled for
   `thumbv7em-none-eabi` and read from LLVM `.stack_sizes` metadata.
-- `DataRecord` and `ValueInformationBlock` value sizes on the same Thumb build.
+- `DataRecord`, `ValueInformationBlock`, and `ValueInformation` value sizes on the same Thumb build.
 - Linked eager-parser text and data size for `thumbv7em-none-eabi`, using
   `opt-level=z`, fat LTO, and one codegen unit.
 - The same eager full-frame decode latency, run natively with Criterion.
@@ -22,7 +22,10 @@ parse_full_wired_frame + max(
   MbusData::try_from -> frame/application setup,
   DataRecords::next -> DataRecord::try_from -> DataRecord::parse ->
     DataRecordHeader::try_from -> ProcessedDataRecordHeader::try_from ->
-    ValueInformation::try_from -> consume_orthhogonal_vife
+    ValueInformation::try_from + max(
+      head_vif_info,
+      OrthogonalVifes::fold -> OrthogonalVifes::next -> orthogonal_vife_info
+    )
 )
 ```
 

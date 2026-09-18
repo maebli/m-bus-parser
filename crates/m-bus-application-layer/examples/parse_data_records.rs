@@ -13,9 +13,9 @@ fn main() -> Result<(), DataRecordError> {
         println!("Record {}", index + 1);
         println!("  value: {:?}", record.value());
         if let Some(value_information) = record.value_information() {
-            println!("  labels: {:?}", value_information.labels);
+            println!("  labels: {:?}", value_information.labels());
             println!("  scale: 10^{}", value_information.decimal_scale_exponent);
-            println!("  units: {:?}", value_information.units);
+            println!("  units: {:?}", value_information.units());
         }
         println!("  raw bytes: {:02X?}", record.raw_bytes());
     }

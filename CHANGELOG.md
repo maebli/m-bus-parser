@@ -9,10 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Allocation-free `FormatAFrame` / `FormatABytes` views for wireless CRC-normalized
+  bytes, and lazy `DecryptedBytes` APIs on encrypted payloads and application
+  blocks. AES-CBC works one block at a time without a full plaintext buffer;
+  existing buffer-writing APIs remain compatible.
+
 - `DataFieldCoding::data_size`, which reports the byte length of a data field
   from the DIF alone, without decoding its contents.
 
+### Changed
+
+- **Breaking:** `ValueInformation<'a>` now borrows frame bytes and exposes
+  `labels()` and `units()` iterators instead of public collection fields.
+  `has_label()` and `first_unit()` provide common lookups. Struct literal
+  construction is no longer supported. `ProcessedDataRecordHeader<'a>` now
+  carries the frame lifetime as well. Debug and serialized output are unchanged.
+
+### Removed
+
+- The `arrayvec` dependency and `Deserialize` implementations for
+  `ValueInformation` and `ProcessedDataRecordHeader`.
+
 ### Fixed
+
+- Valid VIFE chains producing more than ten labels or units no longer panic.
 
 - BCD values carrying the EN 13757-3 `Fh` sign marker in their most significant
   digit now decode as negative numbers instead of being rejected as invalid

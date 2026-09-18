@@ -24,10 +24,21 @@ CRITICAL_PATH = (
     ("record_header_parse", "DataRecordHeader::try_from"),
     ("processed_header_parse", "ProcessedDataRecordHeader::try_from"),
     ("value_information_parse", "ValueInformation::try_from"),
-    ("vife_consumer", "consume_orthhogonal_vife"),
+)
+
+VIF_FRAMES = (
+    ("head_vif_info", "head_vif_info"),
+    ("vife_fold", "OrthogonalVifes::fold"),
+    ("vife_next", "OrthogonalVifes::next"),
+    ("vife_consumer", "orthogonal_vife_info"),
 )
 
 FRAME_SYMBOLS = {
+    "head_vif_info": "m_bus_application_layer::value_information::head_vif_info",
+    "vife_next": (
+        "<m_bus_application_layer::value_information::OrthogonalVifes as "
+        "core::iter::traits::iterator::Iterator>::next"
+    ),
     "full_parse": "m_bus_parser_resources::full_parse_fixture::parse_full_wired_frame",
     "mbus_parse": (
         "<m_bus_parser::mbus_data::MbusData<wired_mbus_link_layer::WiredFrame> as "
@@ -121,13 +132,18 @@ def parse_stack_sizes(output: str) -> dict[str, int]:
         frames[name] = sizes[symbol]
 
     patterns = {
+        "vife_fold": (
+            "<m_bus_application_layer::value_information::OrthogonalVifes as "
+            "core::iter::traits::iterator::Iterator>::fold::<(isize, isize), ",
+            ">",
+        ),
         "data_record_try_from": (
             "<m_bus_application_layer::data_record::DataRecord as "
             "core::convert::TryFrom<",
             ">::try_from",
         ),
         "vife_consumer": (
-            "m_bus_application_layer::value_information::consume_orthhogonal_vife",
+            "m_bus_application_layer::value_information::orthogonal_vife_info",
             "",
         ),
     }
@@ -273,7 +289,11 @@ def main() -> None:
         frames, build_output = measure_stack(temp_path, base_env)
         footprint = measure_footprint(temp_path, base_env)
 
-    record_stack = sum(frames[name] for name, _ in CRITICAL_PATH)
+    # Head decoding and the orthogonal fold run sequentially. The latter calls
+    # next(), which calls the orthogonal table decoder.
+    orthogonal_stack = frames["vife_fold"] + frames["vife_next"] + frames["vife_consumer"]
+    vif_decode_stack = max(frames["head_vif_info"], orthogonal_stack)
+    record_stack = sum(frames[name] for name, _ in CRITICAL_PATH) + vif_decode_stack
     wired_setup_stack = frames["wired_frame_parse"] + frames["checksum"]
     application_setup_stack = (
         frames["user_data_parse"]
@@ -289,6 +309,9 @@ def main() -> None:
     vif_block_size = parse_type_size(
         build_output,
         r"value_information::ValueInformationBlock(?:<'_>)?",
+    )
+    value_information_size = parse_type_size(
+        build_output, r"value_information::ValueInformation(?:<'_>)?",
     )
     context = f"target={TARGET}; toolchain={toolchain}"
     setup_context = (
@@ -313,7 +336,7 @@ def main() -> None:
         ),
         *[
             metric(f"{label} local stack frame", frames[name], context)
-            for name, label in CRITICAL_PATH
+            for name, label in CRITICAL_PATH + VIF_FRAMES
         ],
         metric(
             "VIF block parser local stack frame",
@@ -322,6 +345,7 @@ def main() -> None:
         ),
         metric("DataRecord value size", data_record_size, context),
         metric("VIF block value size", vif_block_size, context),
+        metric("ValueInformation value size", value_information_size, context),
         metric(
             "Linked eager full parser text + data size",
             footprint,

@@ -27,7 +27,7 @@ bindgen = "0.72.0"
 default = []
 std = ["prettytable-rs", "serde_json", "serde_yaml", "serde", "unicode-width", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std", "m-bus-application-layer/std"]
 plaintext-before-extension = ["m-bus-application-layer/plaintext-before-extension"]
-serde = ["dep:serde", "arrayvec/serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde", "m-bus-application-layer/serde"]
+serde = ["dep:serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde", "m-bus-application-layer/serde"]
 defmt = ["dep:defmt", "wired-mbus-link-layer/defmt", "wireless-mbus-link-layer/defmt", "m-bus-core/defmt", "m-bus-application-layer/defmt"]
 decryption = ["dep:aes", "dep:cbc", "dep:cipher", "dep:aes-gcm", "dep:ccm", "m-bus-application-layer/decryption"]
 
@@ -46,7 +46,6 @@ serde_yaml = { version = "0.9", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 unicode-width = { version = "0.2", optional = true }
 bitflags = "2.8.0"
-arrayvec = { version = "0.7.4", default-features = false }
 defmt = { version = "1.0.1", optional = true }
 wired-mbus-link-layer = { version = "0.4.0", path = "crates/wired-mbus-link-layer" }
 wireless-mbus-link-layer = { version = "0.4.0", path = "crates/wireless-mbus-link-layer" }

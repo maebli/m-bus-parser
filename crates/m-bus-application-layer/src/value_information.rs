@@ -2,7 +2,28 @@
 use std::fmt;
 
 use super::data_information::DataInformationError;
-use arrayvec::ArrayVec;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct VifInfo {
+    labels: &'static [ValueLabel],
+    units: &'static [Unit],
+    scale: isize,
+    offset: isize,
+}
+impl VifInfo {
+    const EMPTY: Self = Self {
+        labels: &[],
+        units: &[],
+        scale: 0,
+        offset: 0,
+    };
+}
+macro_rules! labels {
+    ($($label:expr),+ $(,)?) => { VifInfo { labels: &[$($label),+], ..VifInfo::EMPTY } };
+}
+macro_rules! units {
+    ($($unit:expr),+ $(,)?) => { VifInfo { units: &[$($unit),+], ..VifInfo::EMPTY } };
+}
 
 const MAX_VIFE_RECORDS: usize = 10;
 
@@ -310,774 +331,789 @@ impl<'a> ValueInformationBlock<'a> {
     }
 }
 
-impl TryFrom<&ValueInformationBlock<'_>> for ValueInformation {
-    type Error = DataInformationError;
+fn head_vif_info(
+    vif: ValueInformationField,
+    first_vife: Option<u8>,
+    second_vife_data: Option<u8>,
+) -> Result<VifInfo, DataInformationError> {
+    Ok(match ValueInformationCoding::from(&vif) {
+        ValueInformationCoding::Primary => match vif.data & 0x7F {
+            0x00..=0x07 => VifInfo {
+                labels: &[ValueLabel::Energy],
+                units: &[unit!(Watt), unit!(Hour)],
+                scale: (vif.data & 0b111) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x08..=0x0F => VifInfo {
+                labels: &[ValueLabel::Energy],
+                units: &[unit!(Joul)],
+                scale: (vif.data & 0b111) as isize,
+                ..VifInfo::EMPTY
+            },
+            0x10..=0x17 => VifInfo {
+                labels: &[ValueLabel::Volume],
+                units: &[unit!(Meter ^ 3)],
+                scale: (vif.data & 0b111) as isize - 6,
+                ..VifInfo::EMPTY
+            },
+            0x18..=0x1F => VifInfo {
+                labels: &[ValueLabel::Mass],
+                units: &[unit!(Kilogram)],
+                scale: (vif.data & 0b111) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x20..=0x23 => {
+                return Ok(VifInfo {
+                    labels: &[ValueLabel::OnTime],
+                    units: match vif.data & 3 {
+                        0 => &[unit!(Second)],
+                        1 => &[unit!(Minute)],
+                        2 => &[unit!(Hour)],
+                        _ => &[unit!(Day)],
+                    },
+                    ..VifInfo::EMPTY
+                });
+            }
+            0x24..=0x27 => {
+                return Ok(VifInfo {
+                    labels: &[ValueLabel::OperatingTime],
+                    units: match vif.data & 3 {
+                        0 => &[unit!(Second)],
+                        1 => &[unit!(Minute)],
+                        2 => &[unit!(Hour)],
+                        _ => &[unit!(Day)],
+                    },
+                    ..VifInfo::EMPTY
+                });
+            }
+            0x28..=0x2F => VifInfo {
+                labels: &[ValueLabel::Power],
+                units: &[unit!(Watt)],
+                scale: (vif.data & 0b111) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x30..=0x37 => VifInfo {
+                labels: &[ValueLabel::Power],
+                units: &[unit!(Joul), unit!(Hour ^ -1)],
+                scale: (vif.data & 0b111) as isize,
+                ..VifInfo::EMPTY
+            },
+            0x38..=0x3F => VifInfo {
+                labels: &[ValueLabel::VolumeFlow],
+                units: &[unit!(Meter ^ 3), unit!(Hour ^ -1)],
+                scale: (vif.data & 0b111) as isize - 6,
+                ..VifInfo::EMPTY
+            },
+            0x40..=0x47 => VifInfo {
+                labels: &[ValueLabel::VolumeFlow],
+                units: &[unit!(Meter ^ 3), unit!(Minute ^ -1)],
+                scale: (vif.data & 0b111) as isize - 7,
+                ..VifInfo::EMPTY
+            },
+            0x48..=0x4F => VifInfo {
+                labels: &[ValueLabel::VolumeFlow],
+                units: &[unit!(Meter ^ 3), unit!(Second ^ -1)],
+                scale: (vif.data & 0b111) as isize - 9,
+                ..VifInfo::EMPTY
+            },
+            0x50..=0x57 => VifInfo {
+                labels: &[ValueLabel::MassFlow],
+                units: &[unit!(Kilogram), unit!(Hour ^ -1)],
+                scale: (vif.data & 0b111) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x58..=0x5B => VifInfo {
+                labels: &[ValueLabel::FlowTemperature],
+                units: &[unit!(Celsius)],
+                scale: (vif.data & 0b11) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x5C..=0x5F => VifInfo {
+                labels: &[ValueLabel::ReturnTemperature],
+                units: &[unit!(Celsius)],
+                scale: (vif.data & 0b11) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x60..=0x63 => VifInfo {
+                labels: &[ValueLabel::TemperatureDifference],
+                units: &[unit!(Kelvin)],
+                scale: (vif.data & 0b11) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x64..=0x67 => VifInfo {
+                labels: &[ValueLabel::ExternalTemperature],
+                units: &[unit!(Celsius)],
+                scale: (vif.data & 0b11) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x68..=0x6B => VifInfo {
+                labels: &[ValueLabel::Pressure],
+                units: &[unit!(Bar)],
+                scale: (vif.data & 0b11) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x6C => labels!(ValueLabel::Date),
+            0x6D => labels!(ValueLabel::DateTime),
+            0x6E => labels!(ValueLabel::DimensionlessHCA),
+            0x70..=0x73 => labels!(ValueLabel::AveragingDuration),
+            0x74..=0x77 => labels!(ValueLabel::ActualityDuration),
+            0x78 => labels!(ValueLabel::FabricationNumber),
+            0x79 => labels!(ValueLabel::EnhancedIdentification),
+            0x7A => labels!(ValueLabel::Address),
+            0x7B => VifInfo::EMPTY,
 
-    fn try_from(
-        value_information_block: &ValueInformationBlock,
-    ) -> Result<Self, DataInformationError> {
-        let mut units = ArrayVec::<Unit, 10>::new();
-        let mut labels = ArrayVec::<ValueLabel, 10>::new();
-        let mut decimal_scale_exponent: isize = 0;
-        let mut decimal_offset_exponent = 0;
-        let vife_slice = value_information_block.value_information_extension.clone();
-        match ValueInformationCoding::from(&value_information_block.value_information) {
-            ValueInformationCoding::Primary => {
-                match value_information_block.value_information.data & 0x7F {
-                    0x00..=0x07 => {
-                        units.push(unit!(Watt));
-                        units.push(unit!(Hour));
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent =
-                            (value_information_block.value_information.data & 0b111) as isize - 3;
-                    }
-                    0x08..=0x0F => {
-                        units.push(unit!(Joul));
-                        labels.push(ValueLabel::Energy);
-                        decimal_scale_exponent =
-                            (value_information_block.value_information.data & 0b111) as isize;
-                    }
-                    0x10..=0x17 => {
-                        units.push(unit!(Meter ^ 3));
-                        labels.push(ValueLabel::Volume);
-                        decimal_scale_exponent =
-                            (value_information_block.value_information.data & 0b111) as isize - 6;
-                    }
-                    0x18..=0x1F => {
-                        units.push(unit!(Kilogram));
-                        labels.push(ValueLabel::Mass);
-                        decimal_scale_exponent =
-                            (value_information_block.value_information.data & 0b111) as isize - 3;
-                    }
-                    0x20..=0x23 => {
-                        labels.push(ValueLabel::OnTime);
-                        match value_information_block.value_information.data & 0x03 {
-                            0x00 => units.push(unit!(Second)),
-                            0x01 => units.push(unit!(Minute)),
-                            0x02 => units.push(unit!(Hour)),
-                            0x03 => units.push(unit!(Day)),
-                            _ => unreachable!(),
-                        }
-                    }
-                    0x24..=0x27 => {
-                        labels.push(ValueLabel::OperatingTime);
-                        match value_information_block.value_information.data & 0x03 {
-                            0x00 => units.push(unit!(Second)),
-                            0x01 => units.push(unit!(Minute)),
-                            0x02 => units.push(unit!(Hour)),
-                            0x03 => units.push(unit!(Day)),
-                            _ => unreachable!(),
-                        }
-                    }
-                    0x28..=0x2F => {
-                        units.push(unit!(Watt));
-                        labels.push(ValueLabel::Power);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b111) as isize - 3;
-                    }
-                    0x30..=0x37 => {
-                        units.push(unit!(Joul));
-                        units.push(unit!(Hour ^ -1));
-                        labels.push(ValueLabel::Power);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b111) as isize;
-                    }
-                    0x38..=0x3F => {
-                        units.push(unit!(Meter ^ 3));
-                        units.push(unit!(Hour ^ -1));
-                        labels.push(ValueLabel::VolumeFlow);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b111) as isize - 6;
-                    }
-                    0x40..=0x47 => {
-                        units.push(unit!(Meter ^ 3));
-                        units.push(unit!(Minute ^ -1));
-                        labels.push(ValueLabel::VolumeFlow);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b111) as isize - 7;
-                    }
-                    0x48..=0x4F => {
-                        units.push(unit!(Meter ^ 3));
-                        units.push(unit!(Second ^ -1));
-                        labels.push(ValueLabel::VolumeFlow);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b111) as isize - 9;
-                    }
-                    0x50..=0x57 => {
-                        units.push(unit!(Kilogram));
-                        units.push(unit!(Hour ^ -1));
-                        labels.push(ValueLabel::MassFlow);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b111) as isize - 3;
-                    }
-                    0x58..=0x5B => {
-                        units.push(unit!(Celsius));
-                        labels.push(ValueLabel::FlowTemperature);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b11) as isize - 3;
-                    }
-                    0x5C..=0x5F => {
-                        units.push(unit!(Celsius));
-                        labels.push(ValueLabel::ReturnTemperature);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b11) as isize - 3;
-                    }
-                    0x60..=0x63 => {
-                        units.push(unit!(Kelvin));
-                        labels.push(ValueLabel::TemperatureDifference);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b11) as isize - 3;
-                    }
-                    0x64..=0x67 => {
-                        units.push(unit!(Celsius));
-                        labels.push(ValueLabel::ExternalTemperature);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b11) as isize - 3;
-                    }
-                    0x68..=0x6B => {
-                        units.push(unit!(Bar));
-                        labels.push(ValueLabel::Pressure);
-                        decimal_scale_exponent +=
-                            (value_information_block.value_information.data & 0b11) as isize - 3;
-                    }
-                    0x6C => labels.push(ValueLabel::Date),
-                    0x6D => labels.push(ValueLabel::DateTime),
-                    0x6E => labels.push(ValueLabel::DimensionlessHCA),
-                    0x70..=0x73 => labels.push(ValueLabel::AveragingDuration),
-                    0x74..=0x77 => labels.push(ValueLabel::ActualityDuration),
-                    0x78 => labels.push(ValueLabel::FabricationNumber),
-                    0x79 => labels.push(ValueLabel::EnhancedIdentification),
-                    0x7A => labels.push(ValueLabel::Address),
-                    0x7B => {}
-
-                    _ => {
-                        return Err(DataInformationError::Unimplemented {
-                            feature: "Primary value information unit codes (partial)",
-                        })
+            _ => {
+                return Err(DataInformationError::Unimplemented {
+                    feature: "Primary value information unit codes (partial)",
+                })
+            }
+        },
+        ValueInformationCoding::MainVIFExtension => {
+            let Some(first_vife_data) = first_vife else {
+                return Ok(VifInfo::EMPTY);
+            };
+            match first_vife_data & 0x7F {
+                0x00..=0x03 => VifInfo {
+                    labels: &[ValueLabel::Credit],
+                    units: &[unit!(LocalMoneyCurrency)],
+                    scale: (first_vife_data & 0b11) as isize - 3,
+                    ..VifInfo::EMPTY
+                },
+                0x04..=0x07 => VifInfo {
+                    labels: &[ValueLabel::Debit],
+                    units: &[unit!(LocalMoneyCurrency)],
+                    scale: (first_vife_data & 0b11) as isize - 3,
+                    ..VifInfo::EMPTY
+                },
+                0x08 => labels!(ValueLabel::UniqueMessageIdentificationOrAccessNumber),
+                0x09 => labels!(ValueLabel::DeviceType),
+                0x0A => labels!(ValueLabel::Manufacturer),
+                0x0B => labels!(ValueLabel::ParameterSetIdentification),
+                0x0C => labels!(ValueLabel::ModelOrVersion),
+                0x0D => labels!(ValueLabel::HardwareVersion),
+                0x0E => labels!(ValueLabel::MetrologyFirmwareVersion),
+                0x0F => labels!(ValueLabel::OtherSoftwareVersion),
+                0x10 => labels!(ValueLabel::CustomerLocation),
+                0x11 => labels!(ValueLabel::Customer),
+                0x12 => labels!(ValueLabel::AccessCodeUser),
+                0x13 => labels!(ValueLabel::AccessCodeOperator),
+                0x14 => labels!(ValueLabel::AccessCodeSystemOperator),
+                0x15 => labels!(ValueLabel::AccessCodeDeveloper),
+                0x16 => labels!(ValueLabel::Password),
+                0x17 => labels!(ValueLabel::ErrorFlags),
+                0x18 => labels!(ValueLabel::ErrorMask),
+                0x19 => labels!(ValueLabel::SecurityKey),
+                0x1A => VifInfo {
+                    labels: &[ValueLabel::DigitalOutput, ValueLabel::Binary],
+                    ..VifInfo::EMPTY
+                },
+                0x1B => VifInfo {
+                    labels: &[ValueLabel::DigitalInput, ValueLabel::Binary],
+                    ..VifInfo::EMPTY
+                },
+                0x1C => VifInfo {
+                    labels: &[ValueLabel::BaudRate],
+                    units: &[unit!(Symbol), unit!(Second ^ -1)],
+                    ..VifInfo::EMPTY
+                },
+                0x1D => VifInfo {
+                    labels: &[ValueLabel::ResponseDelayTime],
+                    units: &[unit!(BitTime)],
+                    ..VifInfo::EMPTY
+                },
+                0x1E => labels!(ValueLabel::Retry),
+                0x1F => labels!(ValueLabel::RemoteControl),
+                0x20 => labels!(ValueLabel::FirstStorageForCycleStorage),
+                0x21 => labels!(ValueLabel::LastStorageForCycleStorage),
+                0x22 => labels!(ValueLabel::SizeOfStorageBlock),
+                0x23 => labels!(ValueLabel::DescriptionOfTariffAndSubunit),
+                0x24 => VifInfo {
+                    labels: &[ValueLabel::StorageInterval],
+                    units: &[unit!(Second)],
+                    ..VifInfo::EMPTY
+                },
+                0x25 => VifInfo {
+                    labels: &[ValueLabel::StorageInterval],
+                    units: &[unit!(Minute)],
+                    ..VifInfo::EMPTY
+                },
+                0x26 => VifInfo {
+                    labels: &[ValueLabel::StorageInterval],
+                    units: &[unit!(Hour)],
+                    ..VifInfo::EMPTY
+                },
+                0x27 => VifInfo {
+                    labels: &[ValueLabel::StorageInterval],
+                    units: &[unit!(Day)],
+                    ..VifInfo::EMPTY
+                },
+                0x28 => VifInfo {
+                    labels: &[ValueLabel::StorageInterval],
+                    units: &[unit!(Month)],
+                    ..VifInfo::EMPTY
+                },
+                0x29 => VifInfo {
+                    labels: &[ValueLabel::StorageInterval],
+                    units: &[unit!(Year)],
+                    ..VifInfo::EMPTY
+                },
+                0x30 => labels!(ValueLabel::DimensionlessHCA),
+                0x31 => labels!(ValueLabel::DataContainerForWmbusProtocol),
+                0x32 => VifInfo {
+                    labels: &[ValueLabel::PeriodOfNormalDataTransmission],
+                    units: &[unit!(Second)],
+                    ..VifInfo::EMPTY
+                },
+                0x33 => VifInfo {
+                    labels: &[ValueLabel::PeriodOfNormalDataTransmission],
+                    units: &[unit!(Meter)],
+                    ..VifInfo::EMPTY
+                },
+                0x34 => VifInfo {
+                    labels: &[ValueLabel::PeriodOfNormalDataTransmission],
+                    units: &[unit!(Hour)],
+                    ..VifInfo::EMPTY
+                },
+                0x35 => VifInfo {
+                    labels: &[ValueLabel::PeriodOfNormalDataTransmission],
+                    units: &[unit!(Day)],
+                    ..VifInfo::EMPTY
+                },
+                0x3A => labels!(ValueLabel::Dimensionless),
+                0x40..=0x4F => VifInfo {
+                    labels: &[ValueLabel::Voltage],
+                    units: &[unit!(Volt)],
+                    scale: (first_vife_data & 0b1111) as isize - 9,
+                    ..VifInfo::EMPTY
+                },
+                0x50..=0x5F => VifInfo {
+                    labels: &[ValueLabel::Current],
+                    units: &[unit!(Ampere)],
+                    scale: (first_vife_data & 0b1111) as isize - 12,
+                    ..VifInfo::EMPTY
+                },
+                0x60 => labels!(ValueLabel::ResetCounter),
+                0x61 => labels!(ValueLabel::CumulationCounter),
+                0x62 => labels!(ValueLabel::ControlSignal),
+                0x63 => labels!(ValueLabel::DayOfWeek),
+                0x64 => labels!(ValueLabel::WeekNumber),
+                0x65 => labels!(ValueLabel::TimePointOfChangeOfTariff),
+                0x66 => labels!(ValueLabel::StateOfParameterActivation),
+                0x67 => labels!(ValueLabel::SpecialSupplierInformation),
+                0x68 => VifInfo {
+                    labels: &[ValueLabel::DurationSinceLastCumulation],
+                    units: &[unit!(Hour)],
+                    ..VifInfo::EMPTY
+                },
+                0x69 => VifInfo {
+                    labels: &[ValueLabel::DurationSinceLastCumulation],
+                    units: &[unit!(Day)],
+                    ..VifInfo::EMPTY
+                },
+                0x6A => VifInfo {
+                    labels: &[ValueLabel::DurationSinceLastCumulation],
+                    units: &[unit!(Month)],
+                    ..VifInfo::EMPTY
+                },
+                0x6B => VifInfo {
+                    labels: &[ValueLabel::DurationSinceLastCumulation],
+                    units: &[unit!(Year)],
+                    ..VifInfo::EMPTY
+                },
+                0x6C => VifInfo {
+                    labels: &[ValueLabel::OperatingTimeBattery],
+                    units: &[unit!(Hour)],
+                    ..VifInfo::EMPTY
+                },
+                0x6D => VifInfo {
+                    labels: &[ValueLabel::OperatingTimeBattery],
+                    units: &[unit!(Day)],
+                    ..VifInfo::EMPTY
+                },
+                0x6E => VifInfo {
+                    labels: &[ValueLabel::OperatingTimeBattery],
+                    units: &[unit!(Month)],
+                    ..VifInfo::EMPTY
+                },
+                0x6F => VifInfo {
+                    labels: &[ValueLabel::OperatingTimeBattery],
+                    units: &[unit!(Hour)],
+                    ..VifInfo::EMPTY
+                },
+                0x70 => VifInfo {
+                    labels: &[ValueLabel::DateAndTimeOfBatteryChange],
+                    units: &[unit!(Second)],
+                    ..VifInfo::EMPTY
+                },
+                0x71 => VifInfo {
+                    labels: &[ValueLabel::RFPowerLevel],
+                    units: &[unit!(DecibelMilliWatt)],
+                    ..VifInfo::EMPTY
+                },
+                0x72 => labels!(ValueLabel::DaylightSavingBeginningEndingDeviation),
+                0x73 => labels!(ValueLabel::ListeningWindowManagementData),
+                0x74 => labels!(ValueLabel::RemainingBatteryLifeTime),
+                0x75 => labels!(ValueLabel::NumberOfTimesTheMeterWasStopped),
+                0x76 => VifInfo {
+                    labels: &[ValueLabel::DataContainerForManufacturerSpecificProtocol],
+                    ..VifInfo::EMPTY
+                },
+                0x7D => match second_vife_data.map(|s| s & 0x7F) {
+                    Some(0x00) => labels!(ValueLabel::CurrentlySelectedApplication),
+                    Some(0x02) => VifInfo {
+                        labels: &[ValueLabel::RemainingBatteryLifeTime],
+                        units: &[unit!(Month)],
+                        ..VifInfo::EMPTY
+                    },
+                    Some(0x03) => VifInfo {
+                        labels: &[ValueLabel::RemainingBatteryLifeTime],
+                        units: &[unit!(Year)],
+                        ..VifInfo::EMPTY
+                    },
+                    Some(0x3E) => VifInfo {
+                        labels: &[ValueLabel::MoistureLevel],
+                        units: &[unit!(Percent)],
+                        ..VifInfo::EMPTY
+                    },
+                    _ => labels!(ValueLabel::Reserved),
+                },
+                _ => labels!(ValueLabel::Reserved),
+            }
+        }
+        ValueInformationCoding::AlternateVIFExtension => {
+            use UnitName::*;
+            use ValueLabel::*;
+            macro_rules! populate {
+                ($name:ident / h, $exp:expr, dec: $d:literal, $label:expr) => {
+                    VifInfo {
+                        units: &[
+                            Unit {
+                                name: $name,
+                                exponent: $exp,
+                            },
+                            Unit {
+                                name: Hour,
+                                exponent: -1,
+                            },
+                        ],
+                        labels: &[$label],
+                        scale: $d,
+                        offset: 0,
                     }
                 };
-                if let Some(x) = vife_slice {
-                    consume_orthhogonal_vife(
-                        x,
-                        &mut labels,
-                        &mut units,
-                        &mut decimal_scale_exponent,
-                        &mut decimal_offset_exponent,
-                    );
-                }
-            }
-
-            ValueInformationCoding::MainVIFExtension => {
-                if let Some(x) = vife_slice {
-                    let mut inspect = x.clone();
-                    let first_vife_data = inspect
-                        .next()
-                        .ok_or(DataInformationError::DataTooShort)?
-                        .data;
-
-                    let second_vife_data = inspect.next().map(|v| v.data);
-                    match first_vife_data & 0x7F {
-                        0x00..=0x03 => {
-                            units.push(unit!(LocalMoneyCurrency));
-                            labels.push(ValueLabel::Credit);
-                            decimal_scale_exponent = (first_vife_data & 0b11) as isize - 3;
-                        }
-                        0x04..=0x07 => {
-                            units.push(unit!(LocalMoneyCurrency));
-                            labels.push(ValueLabel::Debit);
-                            decimal_scale_exponent = (first_vife_data & 0b11) as isize - 3;
-                        }
-                        0x08 => labels.push(ValueLabel::UniqueMessageIdentificationOrAccessNumber),
-                        0x09 => labels.push(ValueLabel::DeviceType),
-                        0x0A => labels.push(ValueLabel::Manufacturer),
-                        0x0B => labels.push(ValueLabel::ParameterSetIdentification),
-                        0x0C => labels.push(ValueLabel::ModelOrVersion),
-                        0x0D => labels.push(ValueLabel::HardwareVersion),
-                        0x0E => labels.push(ValueLabel::MetrologyFirmwareVersion),
-                        0x0F => labels.push(ValueLabel::OtherSoftwareVersion),
-                        0x10 => labels.push(ValueLabel::CustomerLocation),
-                        0x11 => labels.push(ValueLabel::Customer),
-                        0x12 => labels.push(ValueLabel::AccessCodeUser),
-                        0x13 => labels.push(ValueLabel::AccessCodeOperator),
-                        0x14 => labels.push(ValueLabel::AccessCodeSystemOperator),
-                        0x15 => labels.push(ValueLabel::AccessCodeDeveloper),
-                        0x16 => labels.push(ValueLabel::Password),
-                        0x17 => labels.push(ValueLabel::ErrorFlags),
-                        0x18 => labels.push(ValueLabel::ErrorMask),
-                        0x19 => labels.push(ValueLabel::SecurityKey),
-                        0x1A => {
-                            labels.push(ValueLabel::DigitalOutput);
-                            labels.push(ValueLabel::Binary);
-                        }
-                        0x1B => {
-                            labels.push(ValueLabel::DigitalInput);
-                            labels.push(ValueLabel::Binary);
-                        }
-                        0x1C => {
-                            units.push(unit!(Symbol));
-                            units.push(unit!(Second ^ -1));
-                            labels.push(ValueLabel::BaudRate);
-                        }
-                        0x1D => {
-                            units.push(unit!(BitTime));
-                            labels.push(ValueLabel::ResponseDelayTime);
-                        }
-                        0x1E => labels.push(ValueLabel::Retry),
-                        0x1F => labels.push(ValueLabel::RemoteControl),
-                        0x20 => labels.push(ValueLabel::FirstStorageForCycleStorage),
-                        0x21 => labels.push(ValueLabel::LastStorageForCycleStorage),
-                        0x22 => labels.push(ValueLabel::SizeOfStorageBlock),
-                        0x23 => labels.push(ValueLabel::DescriptionOfTariffAndSubunit),
-                        0x24 => {
-                            units.push(unit!(Second));
-                            labels.push(ValueLabel::StorageInterval);
-                        }
-                        0x25 => {
-                            units.push(unit!(Minute));
-                            labels.push(ValueLabel::StorageInterval);
-                        }
-                        0x26 => {
-                            units.push(unit!(Hour));
-                            labels.push(ValueLabel::StorageInterval);
-                        }
-                        0x27 => {
-                            units.push(unit!(Day));
-                            labels.push(ValueLabel::StorageInterval);
-                        }
-                        0x28 => {
-                            units.push(unit!(Month));
-                            labels.push(ValueLabel::StorageInterval);
-                        }
-                        0x29 => {
-                            units.push(unit!(Year));
-                            labels.push(ValueLabel::StorageInterval);
-                        }
-                        0x30 => labels.push(ValueLabel::DimensionlessHCA),
-                        0x31 => labels.push(ValueLabel::DataContainerForWmbusProtocol),
-                        0x32 => {
-                            units.push(unit!(Second));
-                            labels.push(ValueLabel::PeriodOfNormalDataTransmission);
-                        }
-                        0x33 => {
-                            units.push(unit!(Meter));
-                            labels.push(ValueLabel::PeriodOfNormalDataTransmission);
-                        }
-                        0x34 => {
-                            units.push(unit!(Hour));
-                            labels.push(ValueLabel::PeriodOfNormalDataTransmission);
-                        }
-                        0x35 => {
-                            units.push(unit!(Day));
-                            labels.push(ValueLabel::PeriodOfNormalDataTransmission);
-                        }
-                        0x3A => labels.push(ValueLabel::Dimensionless),
-                        0x40..=0x4F => {
-                            units.push(unit!(Volt));
-                            labels.push(ValueLabel::Voltage);
-                            decimal_scale_exponent = (first_vife_data & 0b1111) as isize - 9;
-                        }
-                        0x50..=0x5F => {
-                            units.push(unit!(Ampere));
-                            labels.push(ValueLabel::Current);
-                            decimal_scale_exponent = (first_vife_data & 0b1111) as isize - 12;
-                        }
-                        0x60 => labels.push(ValueLabel::ResetCounter),
-                        0x61 => labels.push(ValueLabel::CumulationCounter),
-                        0x62 => labels.push(ValueLabel::ControlSignal),
-                        0x63 => labels.push(ValueLabel::DayOfWeek),
-                        0x64 => labels.push(ValueLabel::WeekNumber),
-                        0x65 => labels.push(ValueLabel::TimePointOfChangeOfTariff),
-                        0x66 => labels.push(ValueLabel::StateOfParameterActivation),
-                        0x67 => labels.push(ValueLabel::SpecialSupplierInformation),
-                        0x68 => {
-                            units.push(unit!(Hour));
-                            labels.push(ValueLabel::DurationSinceLastCumulation);
-                        }
-                        0x69 => {
-                            units.push(unit!(Day));
-                            labels.push(ValueLabel::DurationSinceLastCumulation);
-                        }
-                        0x6A => {
-                            units.push(unit!(Month));
-                            labels.push(ValueLabel::DurationSinceLastCumulation);
-                        }
-                        0x6B => {
-                            units.push(unit!(Year));
-                            labels.push(ValueLabel::DurationSinceLastCumulation);
-                        }
-                        0x6C => {
-                            units.push(unit!(Hour));
-                            labels.push(ValueLabel::OperatingTimeBattery);
-                        }
-                        0x6D => {
-                            units.push(unit!(Day));
-                            labels.push(ValueLabel::OperatingTimeBattery);
-                        }
-                        0x6E => {
-                            units.push(unit!(Month));
-                            labels.push(ValueLabel::OperatingTimeBattery);
-                        }
-                        0x6F => {
-                            units.push(unit!(Hour));
-                            labels.push(ValueLabel::OperatingTimeBattery);
-                        }
-                        0x70 => {
-                            units.push(unit!(Second));
-                            labels.push(ValueLabel::DateAndTimeOfBatteryChange);
-                        }
-                        0x71 => {
-                            units.push(unit!(DecibelMilliWatt));
-                            labels.push(ValueLabel::RFPowerLevel);
-                        }
-                        0x72 => labels.push(ValueLabel::DaylightSavingBeginningEndingDeviation),
-                        0x73 => labels.push(ValueLabel::ListeningWindowManagementData),
-                        0x74 => labels.push(ValueLabel::RemainingBatteryLifeTime),
-                        0x75 => labels.push(ValueLabel::NumberOfTimesTheMeterWasStopped),
-                        0x76 => {
-                            labels.push(ValueLabel::DataContainerForManufacturerSpecificProtocol)
-                        }
-                        0x7D => match second_vife_data.map(|s| s & 0x7F) {
-                            Some(0x00) => labels.push(ValueLabel::CurrentlySelectedApplication),
-                            Some(0x02) => {
-                                units.push(unit!(Month));
-                                labels.push(ValueLabel::RemainingBatteryLifeTime);
-                            }
-                            Some(0x03) => {
-                                units.push(unit!(Year));
-                                labels.push(ValueLabel::RemainingBatteryLifeTime);
-                            }
-                            Some(0x3E) => {
-                                units.push(unit!(Percent));
-                                labels.push(ValueLabel::MoistureLevel);
-                            }
-                            _ => labels.push(ValueLabel::Reserved),
-                        },
-                        _ => labels.push(ValueLabel::Reserved),
+                ($name:ident / min, $exp:expr, dec: $d:literal, $label:expr) => {
+                    VifInfo {
+                        units: &[
+                            Unit {
+                                name: $name,
+                                exponent: $exp,
+                            },
+                            Unit {
+                                name: Minute,
+                                exponent: -1,
+                            },
+                        ],
+                        labels: &[$label],
+                        scale: $d,
+                        offset: 0,
                     }
-                    // Skip vife_slice[0] — it's the true VIF (already consumed above)
-                    consume_orthhogonal_vife(
-                        x.skip(1),
-                        &mut labels,
-                        &mut units,
-                        &mut decimal_scale_exponent,
-                        &mut decimal_offset_exponent,
-                    );
-                }
+                };
+                ($name:ident * h, $exp:expr, dec: $d:literal, $label:expr) => {
+                    VifInfo {
+                        units: &[
+                            Unit {
+                                name: $name,
+                                exponent: $exp,
+                            },
+                            Unit {
+                                name: Hour,
+                                exponent: 1,
+                            },
+                        ],
+                        labels: &[$label],
+                        scale: $d,
+                        offset: 0,
+                    }
+                };
+                ($name:ident , $exp:expr, dec: $d:literal, $label:expr) => {
+                    VifInfo {
+                        units: &[Unit {
+                            name: $name,
+                            exponent: $exp,
+                        }],
+                        labels: &[$label],
+                        scale: $d,
+                        offset: 0,
+                    }
+                };
             }
-            ValueInformationCoding::AlternateVIFExtension => {
-                use UnitName::*;
-                use ValueLabel::*;
-                let mk_unit = |name, exponent| Unit { name, exponent };
-                macro_rules! populate {
-                    (@trd) => {};
-                    (@trd , $label:expr) => {{ labels.push($label); }};
-                    (@snd dec: $decimal:literal $($rem:tt)*) => {{
-                        decimal_scale_exponent = $decimal;
-                        populate!(@trd $($rem)*);
-                    }};
-                    ($name:ident / h, $exponent:expr, $($rem:tt)*) => {{
-                        units.push(mk_unit($name, $exponent));
-                        units.push(mk_unit(Hour, -1));
-                        populate!(@snd $($rem)*)
-                    }};
-                    ($name:ident / min, $exponent:expr, $($rem:tt)*) => {{
-                        units.push(mk_unit($name, $exponent));
-                        units.push(mk_unit(Minute, -1));
-                        populate!(@snd $($rem)*)
-                    }};
-                    ($name:ident * h, $exponent:expr, $($rem:tt)*) => {{
-                        units.push(mk_unit($name, $exponent));
-                        units.push(mk_unit(Hour, 1));
-                        populate!(@snd $($rem)*)
-                    }};
-                    ($name:ident, $exponent:expr, $($rem:tt)*) => {{
-                        units.push(mk_unit($name, $exponent));
-                        populate!(@snd $($rem)*)
-                    }};
-                }
 
-                if let Some(mut x) = vife_slice {
-                    let first_vife_data = x.next().ok_or(DataInformationError::DataTooShort)?.data;
-                    match first_vife_data & 0x7F {
-                        0b0 => populate!(Watt / h, 3, dec: 5, Energy),
-                        0b000_0001 => populate!(Watt / h, 3, dec: 6, Energy),
-                        0b000_0010 => populate!(ReactiveWatt * h, 1, dec: 3, ReactiveEnergy),
-                        0b000_0011 => populate!(ReactiveWatt * h, 1, dec: 4, ReactiveEnergy),
-                        0b000_0100 => populate!(ApparentWatt * h, 1, dec: 3, ApparentEnergy),
-                        0b000_0101 => populate!(ApparentWatt * h, 1, dec: 4, ApparentEnergy),
-                        0b000_0110 => {
-                            labels.push(CoefficientOfPerformance);
-                            decimal_scale_exponent = -1;
-                        }
-                        0b000_1000 => populate!(Joul, 1, dec: 8, Energy),
-                        0b000_1001 => populate!(Joul, 1, dec: 9, Energy),
-                        0b000_1100 => populate!(Calorie, 1, dec: 5, Energy),
-                        0b000_1101 => populate!(Calorie, 1, dec: 6, Energy),
-                        0b000_1110 => populate!(Calorie, 1, dec: 7, Energy),
-                        0b000_1111 => populate!(Calorie, 1, dec: 8, Energy),
-                        0b001_0000 => populate!(Meter, 3, dec: 2, Volume),
-                        0b001_0001 => populate!(Meter, 3, dec: 3, Volume),
-                        0b001_0100 => populate!(ReactiveWatt, 1, dec: 0, ReactivePower),
-                        0b001_0101 => populate!(ReactiveWatt, 1, dec: 1, ReactivePower),
-                        0b001_0110 => populate!(ReactiveWatt, 1, dec: 2, ReactivePower),
-                        0b001_0111 => populate!(ReactiveWatt, 1, dec: 3, ReactivePower),
-                        0b001_1000 => populate!(Tonne, 1, dec: 2, Mass),
-                        0b001_1001 => populate!(Tonne, 1, dec: 3, Mass),
-                        0b001_1010 => populate!(Percent, 1, dec: -1, RelativeHumidity),
-                        0b001_1011 => populate!(Percent, 1, dec: 0, RelativeHumidity),
-                        0b010_0000 => populate!(Feet, 3, dec: 0, Volume),
-                        0b010_0001 => populate!(Feet, 3, dec: -1, Volume),
-                        0b010_0011 => populate!(Degree, 1, dec: -1, PhaseItoU),
-                        0b010_1000 => populate!(Watt, 1, dec: 5, Power),
-                        0b010_1001 => populate!(Watt, 1, dec: 6, Power),
-                        0b010_1010 => populate!(Degree, 1, dec: -1, PhaseUtoU),
-                        0b010_1011 => populate!(Degree, 1, dec: -1, PhaseUtoI),
-                        0b010_1100 => populate!(Hertz, 1, dec: -3, Frequency),
-                        0b010_1101 => populate!(Hertz, 1, dec: -2, Frequency),
-                        0b010_1110 => populate!(Hertz, 1, dec: -1, Frequency),
-                        0b010_1111 => populate!(Hertz, 1, dec: 0, Frequency),
-                        0b011_0000 => populate!(Joul / h, 1, dec: 8, Power),
-                        0b011_0001 => populate!(Joul / h, 1, dec: 9, Power),
-                        0b011_0100 => populate!(ApparentWatt, 1, dec: 0, ApparentPower),
-                        0b011_0101 => populate!(ApparentWatt, 1, dec: 1, ApparentPower),
-                        0b011_0110 => populate!(ApparentWatt, 1, dec: 2, ApparentPower),
-                        0b011_0111 => populate!(ApparentWatt, 1, dec: 3, ApparentPower),
-                        0b101_1000 => populate!(Fahrenheit, 1, dec: -3, FlowTemperature),
-                        0b101_1001 => populate!(Fahrenheit, 1, dec: -2, FlowTemperature),
-                        0b101_1010 => populate!(Fahrenheit, 1, dec: -1, FlowTemperature),
-                        0b101_1011 => populate!(Fahrenheit, 1, dec: 0, FlowTemperature),
-                        0b101_1100 => populate!(Fahrenheit, 1, dec: -3, ReturnTemperature),
-                        0b101_1101 => populate!(Fahrenheit, 1, dec: -2, ReturnTemperature),
-                        0b101_1110 => populate!(Fahrenheit, 1, dec: -1, ReturnTemperature),
-                        0b101_1111 => populate!(Fahrenheit, 1, dec: 0, ReturnTemperature),
-                        0b110_0000 => populate!(Fahrenheit, 1, dec: -3, TemperatureDifference),
-                        0b110_0001 => populate!(Fahrenheit, 1, dec: -2, TemperatureDifference),
-                        0b110_0010 => populate!(Fahrenheit, 1, dec: -1, TemperatureDifference),
-                        0b110_0011 => populate!(Fahrenheit, 1, dec: 0, TemperatureDifference),
-                        0b110_0100 => populate!(Fahrenheit, 1, dec: -3, ExternalTemperature),
-                        0b110_0101 => populate!(Fahrenheit, 1, dec: -2, ExternalTemperature),
-                        0b110_0110 => populate!(Fahrenheit, 1, dec: -1, ExternalTemperature),
-                        0b110_0111 => populate!(Fahrenheit, 1, dec: 0, ExternalTemperature),
-                        0b111_0000 => populate!(Fahrenheit, 1, dec: -3, ColdWarmTemperatureLimit),
-                        0b111_0001 => populate!(Fahrenheit, 1, dec: -2, ColdWarmTemperatureLimit),
-                        0b111_0010 => populate!(Fahrenheit, 1, dec: -1, ColdWarmTemperatureLimit),
-                        0b111_0011 => populate!(Fahrenheit, 1, dec: 0, ColdWarmTemperatureLimit),
-                        0b111_0100 => populate!(Celsius, 1, dec: -3, ColdWarmTemperatureLimit),
-                        0b111_0101 => populate!(Celsius, 1, dec: -2, ColdWarmTemperatureLimit),
-                        0b111_0110 => populate!(Celsius, 1, dec: -1, ColdWarmTemperatureLimit),
-                        0b111_0111 => populate!(Celsius, 1, dec: 0, ColdWarmTemperatureLimit),
-                        0b111_1000 => populate!(Watt, 1, dec: -3, CumulativeMaximumOfActivePower),
-                        0b111_1001 => populate!(Watt, 1, dec: -2, CumulativeMaximumOfActivePower),
-                        0b111_1010 => populate!(Watt, 1, dec: -1, CumulativeMaximumOfActivePower),
-                        0b111_1011 => populate!(Watt, 1, dec: 0, CumulativeMaximumOfActivePower),
-                        0b111_1100 => populate!(Watt, 1, dec: 1, CumulativeMaximumOfActivePower),
-                        0b111_1101 => populate!(Watt, 1, dec: 2, CumulativeMaximumOfActivePower),
-                        0b111_1110 => populate!(Watt, 1, dec: 3, CumulativeMaximumOfActivePower),
-                        0b111_1111 => populate!(Watt, 1, dec: 4, CumulativeMaximumOfActivePower),
-                        0b110_1000 => populate!(HCAUnit, 1,dec: 0, ResultingRatingFactor),
-                        0b110_1001 => populate!(HCAUnit, 1,dec: 0, ThermalOutputRatingFactor),
-                        0b110_1010 => {
-                            populate!(HCAUnit, 1,dec: 0, ThermalCouplingRatingFactorOverall)
-                        }
-                        0b110_1011 => populate!(HCAUnit, 1,dec: 0, ThermalCouplingRatingRoomSide),
-                        0b110_1100 => {
-                            populate!(HCAUnit, 1,dec: 0, ThermalCouplingRatingFactorHeatingSide)
-                        }
-                        0b110_1101 => populate!(HCAUnit, 1,dec: 0, LowTemperatureRatingFactor),
-                        0b110_1110 => populate!(HCAUnit, 1,dec: 0, DisplayOutputScalingFactor),
-
-                        _ => labels.push(ValueLabel::Reserved),
-                    };
-                    // The true VIF was already consumed from the iterator above.
-                    consume_orthhogonal_vife(
-                        x,
-                        &mut labels,
-                        &mut units,
-                        &mut decimal_scale_exponent,
-                        &mut decimal_offset_exponent,
-                    );
-                }
-            }
-            // we need to check if the next byte is equivalent to the length of the rest of the
-            // the data. In this case it is very likely that, this is how the payload is built up.
-            ValueInformationCoding::PlainText => {
-                labels.push(ValueLabel::PlainText);
-                if let Some(x) = vife_slice {
-                    consume_orthhogonal_vife(
-                        x,
-                        &mut labels,
-                        &mut units,
-                        &mut decimal_scale_exponent,
-                        &mut decimal_offset_exponent,
-                    );
-                }
-            }
-            ValueInformationCoding::ManufacturerSpecific => {
-                labels.push(ValueLabel::ManufacturerSpecific)
-            }
-        }
-
-        Ok(Self {
-            decimal_offset_exponent,
-            labels,
-            decimal_scale_exponent,
-            units,
-        })
-    }
-}
-
-fn consume_orthhogonal_vife(
-    vife: impl IntoIterator<Item = ValueInformationFieldExtension>,
-    labels: &mut ArrayVec<ValueLabel, 10>,
-    units: &mut ArrayVec<Unit, 10>,
-    decimal_scale_exponent: &mut isize,
-    decimal_offset_exponent: &mut isize,
-) {
-    let mut is_extension_of_combinable_orthogonal_vife = false;
-    for v in vife {
-        if v.data == 0xFC {
-            is_extension_of_combinable_orthogonal_vife = true;
-            continue;
-        }
-        if is_extension_of_combinable_orthogonal_vife {
-            is_extension_of_combinable_orthogonal_vife = false;
-            match v.data & 0x7F {
-                0x00 => labels.push(ValueLabel::Reserved),
-                0x01 => labels.push(ValueLabel::AtPhaseL1),
-                0x02 => labels.push(ValueLabel::AtPhaseL2),
-                0x03 => labels.push(ValueLabel::AtPhaseL3),
-                0x04 => labels.push(ValueLabel::AtNeutral),
-                0x05 => labels.push(ValueLabel::BetweenPhasesL1L2),
-                0x06 => labels.push(ValueLabel::BetweenPhasesL2L3),
-                0x07 => labels.push(ValueLabel::BetweenPhasesL3L1),
-                0x08 => labels.push(ValueLabel::AtQuadrant1),
-                0x09 => labels.push(ValueLabel::AtQuadrant2),
-                0x0A => labels.push(ValueLabel::AtQuadrant3),
-                0x0B => labels.push(ValueLabel::AtQuadrant4),
-                0x0C => labels.push(ValueLabel::DeltaBetweenImportAndExport),
-                0x0D => labels.push(ValueLabel::AlternativeNonMetricUnits),
-                0x0E => labels.push(ValueLabel::SecondarySensorMeasurement),
-                0x0F => labels.push(ValueLabel::HigherResolutionRegister),
-                0x10 => labels.push(
-                    ValueLabel::AccumulationOfAbsoluteValueBothPositiveAndNegativeContribution,
-                ),
-                0x11 => labels.push(ValueLabel::DataPresentedWithTypeC),
-                0x12 => labels.push(ValueLabel::DataPresentedWithTypeD),
-                0x13 => labels.push(ValueLabel::EndDate),
-                0x14 => labels.push(ValueLabel::DirectionFromCommunicationPartnerToMeter),
-                0x15 => labels.push(ValueLabel::DirectionFromMeterToCommunicationPartner),
-                _ => labels.push(ValueLabel::Reserved),
-            }
-        } else {
-            match v.data & 0x7F {
-                0x00..=0x0F => labels.push(ValueLabel::ReservedForObjectActions),
-                0x10..=0x11 => labels.push(ValueLabel::Reserved),
-                0x12 => labels.push(ValueLabel::Averaged),
-                0x13 => labels.push(ValueLabel::InverseCompactProfile),
-                0x14 => labels.push(ValueLabel::RelativeDeviation),
-                0x15..=0x1C => labels.push(ValueLabel::RecordErrorCodes),
-                0x1D => labels.push(ValueLabel::StandardConformDataContent),
-                0x1E => labels.push(ValueLabel::CompactProfileWithRegisterNumbers),
-                0x1F => labels.push(ValueLabel::CompactProfile),
-                0x20 => units.push(unit!(Second ^ -1)),
-                0x21 => units.push(unit!(Minute ^ -1)),
-                0x22 => units.push(unit!(Hour ^ -1)),
-                0x23 => units.push(unit!(Day ^ -1)),
-                0x24 => units.push(unit!(Week ^ -1)),
-                0x25 => units.push(unit!(Month ^ -1)),
-                0x26 => units.push(unit!(Year ^ -1)),
-                0x27 => units.push(unit!(Revolution ^ -1)),
-                0x28 => {
-                    units.push(unit!(Increment));
-                    units.push(unit!(InputPulseOnChannel0 ^ -1));
-                }
-                0x29 => {
-                    units.push(unit!(Increment));
-                    units.push(unit!(InputPulseOnChannel1 ^ -1));
-                }
-                0x2A => {
-                    units.push(unit!(Increment));
-                    units.push(unit!(OutputPulseOnChannel0 ^ -1));
-                }
-                0x2B => {
-                    units.push(unit!(Increment));
-                    units.push(unit!(OutputPulseOnChannel1 ^ -1));
-                }
-                0x2C => units.push(unit!(Liter)),
-                0x2D => units.push(unit!(Meter ^ -3)),
-                0x2E => units.push(unit!(Kilogram ^ -1)),
-                0x2F => units.push(unit!(Kelvin ^ -1)),
-                0x30 => {
-                    units.push(unit!(Watt ^ -1));
-                    units.push(unit!(Hour ^ -1));
-                    *decimal_scale_exponent -= 3;
-                }
-                0x31 => {
-                    units.push(unit!(Joul ^ -1));
-                    *decimal_scale_exponent += -9;
-                }
-                0x32 => {
-                    units.push(unit!(Watt ^ -1));
-                    *decimal_scale_exponent += -3;
-                }
-                0x33 => {
-                    units.push(unit!(Kelvin ^ -1));
-                    units.push(unit!(Liter ^ -1));
-                }
-                0x34 => units.push(unit!(Volt ^ -1)),
-                0x35 => units.push(unit!(Ampere ^ -1)),
-                0x36 => units.push(unit!(Second ^ 1)),
-                0x37 => {
-                    units.push(unit!(Second ^ 1));
-                    units.push(unit!(Volt ^ -1));
-                }
-                0x38 => {
-                    units.push(unit!(Second ^ 1));
-                    units.push(unit!(Ampere ^ -1));
-                }
-                0x39 => labels.push(ValueLabel::StartDateOf),
-                0x3A => labels.push(ValueLabel::VifContainsUncorrectedUnitOrValue),
-                0x3B => labels.push(ValueLabel::AccumulationOnlyIfValueIsPositive),
-                0x3C => labels.push(ValueLabel::AccumulationOnlyIfValueIsNegative),
-                0x3D => labels.push(ValueLabel::NonMetricUnits),
-                0x3E => labels.push(ValueLabel::ValueAtBaseConditions),
-                0x3F => labels.push(ValueLabel::ObisDeclaration),
-                // E100 u000 where u = 0: Lower; u = 1: Upper
-                0x40 => labels.push(ValueLabel::LowerLimitValue),
-                0x48 => labels.push(ValueLabel::UpperLimitValue),
-                // E100 u001 where u = 0: Lower; u = 1: Upper
-                0x41 => labels.push(ValueLabel::NumberOfExceedsOfLowerLimitValue),
-                0x49 => labels.push(ValueLabel::NumberOfExceedsOfUpperLimitValue),
-                /* E100 uf1b where
-                b = 0: Begin; b = 1: End
-                f = 0: First; b = 1: Last
-                u = 0: Lower; u = 1: Upper
-                */
-                0x42 => labels.push(ValueLabel::DateOfBeginFirstLowerLimitExceed),
-                0x43 => labels.push(ValueLabel::DateOfEndFirstLowerLimitExceed),
-                0x46 => labels.push(ValueLabel::DateOfBeginLastLowerLimitExceed),
-                0x47 => labels.push(ValueLabel::DateOfEndLastLowerLimitExceed),
-                0x4A => labels.push(ValueLabel::DateOfBeginFirstUpperLimitExceed),
-                0x4B => labels.push(ValueLabel::DateOfEndFirstUpperLimitExceed),
-                0x4E => labels.push(ValueLabel::DateOfBeginLastUpperLimitExceed),
-                0x4F => labels.push(ValueLabel::DateOfEndLastUpperLimitExceed),
-                0x50 => {
-                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                    units.push(unit!(Second));
-                }
-                0x51 => {
-                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                    units.push(unit!(Minute));
-                }
-                0x52 => {
-                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                    units.push(unit!(Hour));
-                }
-                0x53 => {
-                    labels.push(ValueLabel::DurationOfFirstLowerLimitExceed);
-                    units.push(unit!(Day));
-                }
-                0x54 => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                    units.push(unit!(Second));
-                }
-                0x55 => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                    units.push(unit!(Minute));
-                }
-                0x56 => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                    units.push(unit!(Hour));
-                }
-                0x57 => {
-                    labels.push(ValueLabel::DurationOfLastLowerLimitExceed);
-                    units.push(unit!(Day));
-                }
-                0x58 => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                    units.push(unit!(Second));
-                }
-                0x59 => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                    units.push(unit!(Minute));
-                }
-                0x5A => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                    units.push(unit!(Hour));
-                }
-                0x5B => {
-                    labels.push(ValueLabel::DurationOfFirstUpperLimitExceed);
-                    units.push(unit!(Day));
-                }
-                0x5C => {
-                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                    units.push(unit!(Second));
-                }
-                0x5D => {
-                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                    units.push(unit!(Minute));
-                }
-                0x5E => {
-                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                    units.push(unit!(Hour));
-                }
-                0x5F => {
-                    labels.push(ValueLabel::DurationOfLastUpperLimitExceed);
-                    units.push(unit!(Day));
-                }
-                0x60 => {
-                    labels.push(ValueLabel::DurationOfFirst);
-                    units.push(unit!(Second));
-                }
-                0x61 => {
-                    labels.push(ValueLabel::DurationOfFirst);
-                    units.push(unit!(Minute));
-                }
-                0x62 => {
-                    labels.push(ValueLabel::DurationOfFirst);
-                    units.push(unit!(Hour));
-                }
-                0x63 => {
-                    labels.push(ValueLabel::DurationOfFirst);
-                    units.push(unit!(Day));
-                }
-                0x64 => {
-                    labels.push(ValueLabel::DurationOfLast);
-                    units.push(unit!(Second));
-                }
-                0x65 => {
-                    labels.push(ValueLabel::DurationOfLast);
-                    units.push(unit!(Minute));
-                }
-                0x66 => {
-                    labels.push(ValueLabel::DurationOfLast);
-                    units.push(unit!(Hour));
-                }
-                0x67 => {
-                    labels.push(ValueLabel::DurationOfLast);
-                    units.push(unit!(Day));
-                }
-                0x68 => labels.push(ValueLabel::ValueDuringLowerValueExceed),
-                0x6C => labels.push(ValueLabel::ValueDuringUpperValueExceed),
-                0x69 => labels.push(ValueLabel::LeakageValues),
-                0x6D => labels.push(ValueLabel::OverflowValues),
-                0x6A => labels.push(ValueLabel::DateOfBeginFirst),
-                0x6B => labels.push(ValueLabel::DateOfBeginLast),
-                0x6E => labels.push(ValueLabel::DateOfEndLast),
-                0x6F => labels.push(ValueLabel::DateOfEndFirst),
-                0x70..=0x77 => {
-                    *decimal_scale_exponent += (v.data & 0b111) as isize - 6;
-                }
-                0x78..=0x7B => {
-                    *decimal_offset_exponent += (v.data & 0b11) as isize - 3;
-                }
-                0x7D => {
-                    *decimal_scale_exponent += 3;
-                }
-                0x7E => labels.push(ValueLabel::FutureValue),
-                0x7F => labels.push(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific),
-                _ => labels.push(ValueLabel::Reserved),
+            let Some(first_vife_data) = first_vife else {
+                return Ok(VifInfo::EMPTY);
             };
+            match first_vife_data & 0x7F {
+                0b0 => populate!(Watt / h, 3, dec: 5, Energy),
+                0b000_0001 => populate!(Watt / h, 3, dec: 6, Energy),
+                0b000_0010 => populate!(ReactiveWatt * h, 1, dec: 3, ReactiveEnergy),
+                0b000_0011 => populate!(ReactiveWatt * h, 1, dec: 4, ReactiveEnergy),
+                0b000_0100 => populate!(ApparentWatt * h, 1, dec: 3, ApparentEnergy),
+                0b000_0101 => populate!(ApparentWatt * h, 1, dec: 4, ApparentEnergy),
+                0b000_0110 => VifInfo {
+                    labels: &[CoefficientOfPerformance],
+                    scale: -1,
+                    ..VifInfo::EMPTY
+                },
+                0b000_1000 => populate!(Joul, 1, dec: 8, Energy),
+                0b000_1001 => populate!(Joul, 1, dec: 9, Energy),
+                0b000_1100 => populate!(Calorie, 1, dec: 5, Energy),
+                0b000_1101 => populate!(Calorie, 1, dec: 6, Energy),
+                0b000_1110 => populate!(Calorie, 1, dec: 7, Energy),
+                0b000_1111 => populate!(Calorie, 1, dec: 8, Energy),
+                0b001_0000 => populate!(Meter, 3, dec: 2, Volume),
+                0b001_0001 => populate!(Meter, 3, dec: 3, Volume),
+                0b001_0100 => populate!(ReactiveWatt, 1, dec: 0, ReactivePower),
+                0b001_0101 => populate!(ReactiveWatt, 1, dec: 1, ReactivePower),
+                0b001_0110 => populate!(ReactiveWatt, 1, dec: 2, ReactivePower),
+                0b001_0111 => populate!(ReactiveWatt, 1, dec: 3, ReactivePower),
+                0b001_1000 => populate!(Tonne, 1, dec: 2, Mass),
+                0b001_1001 => populate!(Tonne, 1, dec: 3, Mass),
+                0b001_1010 => populate!(Percent, 1, dec: -1, RelativeHumidity),
+                0b001_1011 => populate!(Percent, 1, dec: 0, RelativeHumidity),
+                0b010_0000 => populate!(Feet, 3, dec: 0, Volume),
+                0b010_0001 => populate!(Feet, 3, dec: -1, Volume),
+                0b010_0011 => populate!(Degree, 1, dec: -1, PhaseItoU),
+                0b010_1000 => populate!(Watt, 1, dec: 5, Power),
+                0b010_1001 => populate!(Watt, 1, dec: 6, Power),
+                0b010_1010 => populate!(Degree, 1, dec: -1, PhaseUtoU),
+                0b010_1011 => populate!(Degree, 1, dec: -1, PhaseUtoI),
+                0b010_1100 => populate!(Hertz, 1, dec: -3, Frequency),
+                0b010_1101 => populate!(Hertz, 1, dec: -2, Frequency),
+                0b010_1110 => populate!(Hertz, 1, dec: -1, Frequency),
+                0b010_1111 => populate!(Hertz, 1, dec: 0, Frequency),
+                0b011_0000 => populate!(Joul / h, 1, dec: 8, Power),
+                0b011_0001 => populate!(Joul / h, 1, dec: 9, Power),
+                0b011_0100 => populate!(ApparentWatt, 1, dec: 0, ApparentPower),
+                0b011_0101 => populate!(ApparentWatt, 1, dec: 1, ApparentPower),
+                0b011_0110 => populate!(ApparentWatt, 1, dec: 2, ApparentPower),
+                0b011_0111 => populate!(ApparentWatt, 1, dec: 3, ApparentPower),
+                0b101_1000 => populate!(Fahrenheit, 1, dec: -3, FlowTemperature),
+                0b101_1001 => populate!(Fahrenheit, 1, dec: -2, FlowTemperature),
+                0b101_1010 => populate!(Fahrenheit, 1, dec: -1, FlowTemperature),
+                0b101_1011 => populate!(Fahrenheit, 1, dec: 0, FlowTemperature),
+                0b101_1100 => populate!(Fahrenheit, 1, dec: -3, ReturnTemperature),
+                0b101_1101 => populate!(Fahrenheit, 1, dec: -2, ReturnTemperature),
+                0b101_1110 => populate!(Fahrenheit, 1, dec: -1, ReturnTemperature),
+                0b101_1111 => populate!(Fahrenheit, 1, dec: 0, ReturnTemperature),
+                0b110_0000 => populate!(Fahrenheit, 1, dec: -3, TemperatureDifference),
+                0b110_0001 => populate!(Fahrenheit, 1, dec: -2, TemperatureDifference),
+                0b110_0010 => populate!(Fahrenheit, 1, dec: -1, TemperatureDifference),
+                0b110_0011 => populate!(Fahrenheit, 1, dec: 0, TemperatureDifference),
+                0b110_0100 => populate!(Fahrenheit, 1, dec: -3, ExternalTemperature),
+                0b110_0101 => populate!(Fahrenheit, 1, dec: -2, ExternalTemperature),
+                0b110_0110 => populate!(Fahrenheit, 1, dec: -1, ExternalTemperature),
+                0b110_0111 => populate!(Fahrenheit, 1, dec: 0, ExternalTemperature),
+                0b111_0000 => populate!(Fahrenheit, 1, dec: -3, ColdWarmTemperatureLimit),
+                0b111_0001 => populate!(Fahrenheit, 1, dec: -2, ColdWarmTemperatureLimit),
+                0b111_0010 => populate!(Fahrenheit, 1, dec: -1, ColdWarmTemperatureLimit),
+                0b111_0011 => populate!(Fahrenheit, 1, dec: 0, ColdWarmTemperatureLimit),
+                0b111_0100 => populate!(Celsius, 1, dec: -3, ColdWarmTemperatureLimit),
+                0b111_0101 => populate!(Celsius, 1, dec: -2, ColdWarmTemperatureLimit),
+                0b111_0110 => populate!(Celsius, 1, dec: -1, ColdWarmTemperatureLimit),
+                0b111_0111 => populate!(Celsius, 1, dec: 0, ColdWarmTemperatureLimit),
+                0b111_1000 => populate!(Watt, 1, dec: -3, CumulativeMaximumOfActivePower),
+                0b111_1001 => populate!(Watt, 1, dec: -2, CumulativeMaximumOfActivePower),
+                0b111_1010 => populate!(Watt, 1, dec: -1, CumulativeMaximumOfActivePower),
+                0b111_1011 => populate!(Watt, 1, dec: 0, CumulativeMaximumOfActivePower),
+                0b111_1100 => populate!(Watt, 1, dec: 1, CumulativeMaximumOfActivePower),
+                0b111_1101 => populate!(Watt, 1, dec: 2, CumulativeMaximumOfActivePower),
+                0b111_1110 => populate!(Watt, 1, dec: 3, CumulativeMaximumOfActivePower),
+                0b111_1111 => populate!(Watt, 1, dec: 4, CumulativeMaximumOfActivePower),
+                0b110_1000 => populate!(HCAUnit, 1,dec: 0, ResultingRatingFactor),
+                0b110_1001 => populate!(HCAUnit, 1,dec: 0, ThermalOutputRatingFactor),
+                0b110_1010 => {
+                    populate!(HCAUnit, 1,dec: 0, ThermalCouplingRatingFactorOverall)
+                }
+                0b110_1011 => populate!(HCAUnit, 1,dec: 0, ThermalCouplingRatingRoomSide),
+                0b110_1100 => {
+                    populate!(HCAUnit, 1,dec: 0, ThermalCouplingRatingFactorHeatingSide)
+                }
+                0b110_1101 => populate!(HCAUnit, 1,dec: 0, LowTemperatureRatingFactor),
+                0b110_1110 => populate!(HCAUnit, 1,dec: 0, DisplayOutputScalingFactor),
+
+                _ => labels!(ValueLabel::Reserved),
+            }
+        }
+        ValueInformationCoding::PlainText => labels!(ValueLabel::PlainText),
+        ValueInformationCoding::ManufacturerSpecific => labels!(ValueLabel::ManufacturerSpecific),
+    })
+}
+fn orthogonal_vife_info(data: u8, combinable_ext: bool) -> VifInfo {
+    if combinable_ext {
+        match data & 0x7F {
+            0x00 => labels!(ValueLabel::Reserved),
+            0x01 => labels!(ValueLabel::AtPhaseL1),
+            0x02 => labels!(ValueLabel::AtPhaseL2),
+            0x03 => labels!(ValueLabel::AtPhaseL3),
+            0x04 => labels!(ValueLabel::AtNeutral),
+            0x05 => labels!(ValueLabel::BetweenPhasesL1L2),
+            0x06 => labels!(ValueLabel::BetweenPhasesL2L3),
+            0x07 => labels!(ValueLabel::BetweenPhasesL3L1),
+            0x08 => labels!(ValueLabel::AtQuadrant1),
+            0x09 => labels!(ValueLabel::AtQuadrant2),
+            0x0A => labels!(ValueLabel::AtQuadrant3),
+            0x0B => labels!(ValueLabel::AtQuadrant4),
+            0x0C => labels!(ValueLabel::DeltaBetweenImportAndExport),
+            0x0D => labels!(ValueLabel::AlternativeNonMetricUnits),
+            0x0E => labels!(ValueLabel::SecondarySensorMeasurement),
+            0x0F => labels!(ValueLabel::HigherResolutionRegister),
+            0x10 => {
+                labels!(ValueLabel::AccumulationOfAbsoluteValueBothPositiveAndNegativeContribution)
+            }
+            0x11 => labels!(ValueLabel::DataPresentedWithTypeC),
+            0x12 => labels!(ValueLabel::DataPresentedWithTypeD),
+            0x13 => labels!(ValueLabel::EndDate),
+            0x14 => labels!(ValueLabel::DirectionFromCommunicationPartnerToMeter),
+            0x15 => labels!(ValueLabel::DirectionFromMeterToCommunicationPartner),
+            _ => labels!(ValueLabel::Reserved),
+        }
+    } else {
+        match data & 0x7F {
+            0x00..=0x0F => labels!(ValueLabel::ReservedForObjectActions),
+            0x10..=0x11 => labels!(ValueLabel::Reserved),
+            0x12 => labels!(ValueLabel::Averaged),
+            0x13 => labels!(ValueLabel::InverseCompactProfile),
+            0x14 => labels!(ValueLabel::RelativeDeviation),
+            0x15..=0x1C => labels!(ValueLabel::RecordErrorCodes),
+            0x1D => labels!(ValueLabel::StandardConformDataContent),
+            0x1E => labels!(ValueLabel::CompactProfileWithRegisterNumbers),
+            0x1F => labels!(ValueLabel::CompactProfile),
+            0x20 => units!(unit!(Second ^ -1)),
+            0x21 => units!(unit!(Minute ^ -1)),
+            0x22 => units!(unit!(Hour ^ -1)),
+            0x23 => units!(unit!(Day ^ -1)),
+            0x24 => units!(unit!(Week ^ -1)),
+            0x25 => units!(unit!(Month ^ -1)),
+            0x26 => units!(unit!(Year ^ -1)),
+            0x27 => units!(unit!(Revolution ^ -1)),
+            0x28 => VifInfo {
+                units: &[unit!(Increment), unit!(InputPulseOnChannel0 ^ -1)],
+                ..VifInfo::EMPTY
+            },
+            0x29 => VifInfo {
+                units: &[unit!(Increment), unit!(InputPulseOnChannel1 ^ -1)],
+                ..VifInfo::EMPTY
+            },
+            0x2A => VifInfo {
+                units: &[unit!(Increment), unit!(OutputPulseOnChannel0 ^ -1)],
+                ..VifInfo::EMPTY
+            },
+            0x2B => VifInfo {
+                units: &[unit!(Increment), unit!(OutputPulseOnChannel1 ^ -1)],
+                ..VifInfo::EMPTY
+            },
+            0x2C => units!(unit!(Liter)),
+            0x2D => units!(unit!(Meter ^ -3)),
+            0x2E => units!(unit!(Kilogram ^ -1)),
+            0x2F => units!(unit!(Kelvin ^ -1)),
+            0x30 => VifInfo {
+                units: &[unit!(Watt ^ -1), unit!(Hour ^ -1)],
+                scale: -(3),
+                ..VifInfo::EMPTY
+            },
+            0x31 => VifInfo {
+                units: &[unit!(Joul ^ -1)],
+                scale: -9,
+                ..VifInfo::EMPTY
+            },
+            0x32 => VifInfo {
+                units: &[unit!(Watt ^ -1)],
+                scale: -3,
+                ..VifInfo::EMPTY
+            },
+            0x33 => VifInfo {
+                units: &[unit!(Kelvin ^ -1), unit!(Liter ^ -1)],
+                ..VifInfo::EMPTY
+            },
+            0x34 => units!(unit!(Volt ^ -1)),
+            0x35 => units!(unit!(Ampere ^ -1)),
+            0x36 => units!(unit!(Second ^ 1)),
+            0x37 => VifInfo {
+                units: &[unit!(Second ^ 1), unit!(Volt ^ -1)],
+                ..VifInfo::EMPTY
+            },
+            0x38 => VifInfo {
+                units: &[unit!(Second ^ 1), unit!(Ampere ^ -1)],
+                ..VifInfo::EMPTY
+            },
+            0x39 => labels!(ValueLabel::StartDateOf),
+            0x3A => labels!(ValueLabel::VifContainsUncorrectedUnitOrValue),
+            0x3B => labels!(ValueLabel::AccumulationOnlyIfValueIsPositive),
+            0x3C => labels!(ValueLabel::AccumulationOnlyIfValueIsNegative),
+            0x3D => labels!(ValueLabel::NonMetricUnits),
+            0x3E => labels!(ValueLabel::ValueAtBaseConditions),
+            0x3F => labels!(ValueLabel::ObisDeclaration),
+            // E100 u000 where u = 0: Lower; u = 1: Upper
+            0x40 => labels!(ValueLabel::LowerLimitValue),
+            0x48 => labels!(ValueLabel::UpperLimitValue),
+            // E100 u001 where u = 0: Lower; u = 1: Upper
+            0x41 => labels!(ValueLabel::NumberOfExceedsOfLowerLimitValue),
+            0x49 => labels!(ValueLabel::NumberOfExceedsOfUpperLimitValue),
+            /* E100 uf1b where
+            b = 0: Begin; b = 1: End
+            f = 0: First; b = 1: Last
+            u = 0: Lower; u = 1: Upper
+            */
+            0x42 => labels!(ValueLabel::DateOfBeginFirstLowerLimitExceed),
+            0x43 => labels!(ValueLabel::DateOfEndFirstLowerLimitExceed),
+            0x46 => labels!(ValueLabel::DateOfBeginLastLowerLimitExceed),
+            0x47 => labels!(ValueLabel::DateOfEndLastLowerLimitExceed),
+            0x4A => labels!(ValueLabel::DateOfBeginFirstUpperLimitExceed),
+            0x4B => labels!(ValueLabel::DateOfEndFirstUpperLimitExceed),
+            0x4E => labels!(ValueLabel::DateOfBeginLastUpperLimitExceed),
+            0x4F => labels!(ValueLabel::DateOfEndLastUpperLimitExceed),
+            0x50 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstLowerLimitExceed],
+                units: &[unit!(Second)],
+                ..VifInfo::EMPTY
+            },
+            0x51 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstLowerLimitExceed],
+                units: &[unit!(Minute)],
+                ..VifInfo::EMPTY
+            },
+            0x52 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstLowerLimitExceed],
+                units: &[unit!(Hour)],
+                ..VifInfo::EMPTY
+            },
+            0x53 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstLowerLimitExceed],
+                units: &[unit!(Day)],
+                ..VifInfo::EMPTY
+            },
+            0x54 => VifInfo {
+                labels: &[ValueLabel::DurationOfLastLowerLimitExceed],
+                units: &[unit!(Second)],
+                ..VifInfo::EMPTY
+            },
+            0x55 => VifInfo {
+                labels: &[ValueLabel::DurationOfLastLowerLimitExceed],
+                units: &[unit!(Minute)],
+                ..VifInfo::EMPTY
+            },
+            0x56 => VifInfo {
+                labels: &[ValueLabel::DurationOfLastLowerLimitExceed],
+                units: &[unit!(Hour)],
+                ..VifInfo::EMPTY
+            },
+            0x57 => VifInfo {
+                labels: &[ValueLabel::DurationOfLastLowerLimitExceed],
+                units: &[unit!(Day)],
+                ..VifInfo::EMPTY
+            },
+            0x58 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstUpperLimitExceed],
+                units: &[unit!(Second)],
+                ..VifInfo::EMPTY
+            },
+            0x59 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstUpperLimitExceed],
+                units: &[unit!(Minute)],
+                ..VifInfo::EMPTY
+            },
+            0x5A => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstUpperLimitExceed],
+                units: &[unit!(Hour)],
+                ..VifInfo::EMPTY
+            },
+            0x5B => VifInfo {
+                labels: &[ValueLabel::DurationOfFirstUpperLimitExceed],
+                units: &[unit!(Day)],
+                ..VifInfo::EMPTY
+            },
+            0x5C => VifInfo {
+                labels: &[ValueLabel::DurationOfLastUpperLimitExceed],
+                units: &[unit!(Second)],
+                ..VifInfo::EMPTY
+            },
+            0x5D => VifInfo {
+                labels: &[ValueLabel::DurationOfLastUpperLimitExceed],
+                units: &[unit!(Minute)],
+                ..VifInfo::EMPTY
+            },
+            0x5E => VifInfo {
+                labels: &[ValueLabel::DurationOfLastUpperLimitExceed],
+                units: &[unit!(Hour)],
+                ..VifInfo::EMPTY
+            },
+            0x5F => VifInfo {
+                labels: &[ValueLabel::DurationOfLastUpperLimitExceed],
+                units: &[unit!(Day)],
+                ..VifInfo::EMPTY
+            },
+            0x60 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirst],
+                units: &[unit!(Second)],
+                ..VifInfo::EMPTY
+            },
+            0x61 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirst],
+                units: &[unit!(Minute)],
+                ..VifInfo::EMPTY
+            },
+            0x62 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirst],
+                units: &[unit!(Hour)],
+                ..VifInfo::EMPTY
+            },
+            0x63 => VifInfo {
+                labels: &[ValueLabel::DurationOfFirst],
+                units: &[unit!(Day)],
+                ..VifInfo::EMPTY
+            },
+            0x64 => VifInfo {
+                labels: &[ValueLabel::DurationOfLast],
+                units: &[unit!(Second)],
+                ..VifInfo::EMPTY
+            },
+            0x65 => VifInfo {
+                labels: &[ValueLabel::DurationOfLast],
+                units: &[unit!(Minute)],
+                ..VifInfo::EMPTY
+            },
+            0x66 => VifInfo {
+                labels: &[ValueLabel::DurationOfLast],
+                units: &[unit!(Hour)],
+                ..VifInfo::EMPTY
+            },
+            0x67 => VifInfo {
+                labels: &[ValueLabel::DurationOfLast],
+                units: &[unit!(Day)],
+                ..VifInfo::EMPTY
+            },
+            0x68 => labels!(ValueLabel::ValueDuringLowerValueExceed),
+            0x6C => labels!(ValueLabel::ValueDuringUpperValueExceed),
+            0x69 => labels!(ValueLabel::LeakageValues),
+            0x6D => labels!(ValueLabel::OverflowValues),
+            0x6A => labels!(ValueLabel::DateOfBeginFirst),
+            0x6B => labels!(ValueLabel::DateOfBeginLast),
+            0x6E => labels!(ValueLabel::DateOfEndLast),
+            0x6F => labels!(ValueLabel::DateOfEndFirst),
+            0x70..=0x77 => VifInfo {
+                scale: (data & 0b111) as isize - 6,
+                ..VifInfo::EMPTY
+            },
+            0x78..=0x7B => VifInfo {
+                offset: (data & 0b11) as isize - 3,
+                ..VifInfo::EMPTY
+            },
+            0x7D => VifInfo {
+                scale: 3,
+                ..VifInfo::EMPTY
+            },
+            0x7E => labels!(ValueLabel::FutureValue),
+            0x7F => labels!(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific),
+            _ => labels!(ValueLabel::Reserved),
         }
     }
 }
@@ -1095,20 +1131,224 @@ impl From<u8> for ValueInformationField {
         Self { data }
     }
 }
-/// This is the most important type of the this file and represents
-/// the whole information inside the value information block
-/// value(x) = (multiplier * value + offset) * units
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq, Clone)]
-pub struct ValueInformation {
-    pub decimal_offset_exponent: isize,
-    pub labels: ArrayVec<ValueLabel, 10>,
-    pub decimal_scale_exponent: isize,
-    pub units: ArrayVec<Unit, 10>,
+/// Selects the orthogonal part of a VIFE chain.
+///
+/// Primary and PlainText start at VIFE[0]; MainVIFExtension and
+/// AlternateVIFExtension start at VIFE[1]; ManufacturerSpecific has no chain.
+/// Main extension 0x7D deliberately reuses VIFE[1] as both its sub-code and
+/// the first orthogonal VIFE, preserving the original decoder's behavior.
+fn orthogonal_chain(
+    coding: ValueInformationCoding,
+    ext: Option<ValueInformationFieldExtensions<'_>>,
+) -> ValueInformationFieldExtensions<'_> {
+    let mut chain = ext.unwrap_or(ValueInformationFieldExtensions(&[]));
+    match coding {
+        ValueInformationCoding::MainVIFExtension
+        | ValueInformationCoding::AlternateVIFExtension => {
+            chain.next();
+        }
+        ValueInformationCoding::ManufacturerSpecific => return ValueInformationFieldExtensions(&[]),
+        _ => {}
+    }
+    chain
 }
 
+#[derive(Clone)]
+struct OrthogonalVifes<'a> {
+    vife: ValueInformationFieldExtensions<'a>,
+    combinable_ext: bool,
+}
+impl Iterator for OrthogonalVifes<'_> {
+    type Item = VifInfo;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let v = self.vife.next()?;
+            // Whole-byte, unconditional comparison: repeated 0xFC prefixes keep
+            // the extension table selected; a terminal 0x7C is ordinary data.
+            if v.data == 0xFC {
+                self.combinable_ext = true;
+                continue;
+            }
+            let ext = core::mem::replace(&mut self.combinable_ext, false);
+            return Some(orthogonal_vife_info(v.data, ext));
+        }
+    }
+}
+
+/// A borrowed, allocation-free view of decoded VIF and VIFE information.
+///
+/// Labels and units are produced in wire order, including duplicates. The view
+/// borrows frame bytes, independently of the block used to construct it.
+#[derive(Clone)]
+pub struct ValueInformation<'a> {
+    head_labels: &'static [ValueLabel],
+    head_units: &'static [Unit],
+    orthogonal: ValueInformationFieldExtensions<'a>,
+    pub decimal_scale_exponent: isize,
+    pub decimal_offset_exponent: isize,
+}
+impl<'a> ValueInformation<'a> {
+    /// Iterates over all decoded labels in wire order.
+    #[must_use]
+    pub fn labels(&self) -> ValueLabels<'a> {
+        ValueLabels {
+            current: self.head_labels,
+            rest: OrthogonalVifes {
+                vife: self.orthogonal.clone(),
+                combinable_ext: false,
+            },
+        }
+    }
+    /// Iterates over all decoded units in wire order.
+    #[must_use]
+    pub fn units(&self) -> Units<'a> {
+        Units {
+            current: self.head_units,
+            rest: OrthogonalVifes {
+                vife: self.orthogonal.clone(),
+                combinable_ext: false,
+            },
+        }
+    }
+    #[must_use]
+    pub fn has_label(&self, label: ValueLabel) -> bool {
+        self.labels().any(|item| item == label)
+    }
+    #[must_use]
+    pub fn first_unit(&self) -> Option<Unit> {
+        self.units().next()
+    }
+}
+impl<'a> TryFrom<&ValueInformationBlock<'a>> for ValueInformation<'a> {
+    type Error = DataInformationError;
+    fn try_from(block: &ValueInformationBlock<'a>) -> Result<Self, Self::Error> {
+        let coding = ValueInformationCoding::from(&block.value_information);
+        let ext = block.value_information_extension.clone();
+        let mut peek = ext.clone().into_iter().flatten();
+        let first = peek.next().map(|v| v.data);
+        let second = peek.next().map(|v| v.data);
+        // A present but exhausted extension iterator was an error in the old
+        // decoder; absent extensions on manually constructed blocks were empty.
+        if matches!(
+            coding,
+            ValueInformationCoding::MainVIFExtension
+                | ValueInformationCoding::AlternateVIFExtension
+        ) && ext.is_some()
+            && first.is_none()
+        {
+            return Err(DataInformationError::DataTooShort);
+        }
+        let head = head_vif_info(block.value_information.clone(), first, second)?;
+        let orthogonal = OrthogonalVifes {
+            vife: orthogonal_chain(coding, ext),
+            combinable_ext: false,
+        };
+        let (scale, offset) = orthogonal
+            .clone()
+            .fold((head.scale, head.offset), |(s, o), v| {
+                (s + v.scale, o + v.offset)
+            });
+        Ok(Self {
+            head_labels: head.labels,
+            head_units: head.units,
+            orthogonal: orthogonal.vife,
+            decimal_scale_exponent: scale,
+            decimal_offset_exponent: offset,
+        })
+    }
+}
+impl PartialEq for ValueInformation<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.decimal_scale_exponent == other.decimal_scale_exponent
+            && self.decimal_offset_exponent == other.decimal_offset_exponent
+            && self.labels().eq(other.labels())
+            && self.units().eq(other.units())
+    }
+}
+impl core::fmt::Debug for ValueInformation<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ValueInformation")
+            .field("decimal_offset_exponent", &self.decimal_offset_exponent)
+            .field("labels", &self.labels())
+            .field("decimal_scale_exponent", &self.decimal_scale_exponent)
+            .field("units", &self.units())
+            .finish()
+    }
+}
+#[cfg(feature = "serde")]
+impl serde::Serialize for ValueInformation<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("ValueInformation", 4)?;
+        state.serialize_field("decimal_offset_exponent", &self.decimal_offset_exponent)?;
+        state.serialize_field("labels", &self.labels())?;
+        state.serialize_field("decimal_scale_exponent", &self.decimal_scale_exponent)?;
+        state.serialize_field("units", &self.units())?;
+        state.end()
+    }
+}
+
+/// Cloneable iterator over decoded labels in wire order.
+#[derive(Clone)]
+pub struct ValueLabels<'a> {
+    current: &'static [ValueLabel],
+    rest: OrthogonalVifes<'a>,
+}
+impl Iterator for ValueLabels<'_> {
+    type Item = ValueLabel;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some((first, tail)) = self.current.split_first() {
+                self.current = tail;
+                return Some(*first);
+            }
+            self.current = self.rest.next()?.labels;
+        }
+    }
+}
+impl core::fmt::Debug for ValueLabels<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_list().entries(self.clone()).finish()
+    }
+}
+#[cfg(feature = "serde")]
+impl serde::Serialize for ValueLabels<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.clone())
+    }
+}
+
+/// Cloneable iterator over decoded units in wire order.
+#[derive(Clone)]
+pub struct Units<'a> {
+    current: &'static [Unit],
+    rest: OrthogonalVifes<'a>,
+}
+impl Iterator for Units<'_> {
+    type Item = Unit;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some((first, tail)) = self.current.split_first() {
+                self.current = tail;
+                return Some(*first);
+            }
+            self.current = self.rest.next()?.units;
+        }
+    }
+}
+impl core::fmt::Debug for Units<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_list().entries(self.clone()).finish()
+    }
+}
+#[cfg(feature = "serde")]
+impl serde::Serialize for Units<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.clone())
+    }
+}
 #[cfg(feature = "defmt")]
-impl defmt::Format for ValueInformation {
+impl defmt::Format for ValueInformation<'_> {
     fn format(&self, f: defmt::Formatter) {
         defmt::write!(
             f,
@@ -1116,9 +1356,10 @@ impl defmt::Format for ValueInformation {
             self.decimal_offset_exponent,
             self.decimal_scale_exponent
         );
-        if !self.labels.is_empty() {
+        let mut labels = self.labels().peekable();
+        if labels.peek().is_some() {
             defmt::write!(f, ", labels: [");
-            for (i, label) in self.labels.iter().enumerate() {
+            for (i, label) in labels.enumerate() {
                 if i != 0 {
                     defmt::write!(f, ", ");
                 }
@@ -1126,9 +1367,10 @@ impl defmt::Format for ValueInformation {
             }
             defmt::write!(f, "]");
         }
-        if !self.units.is_empty() {
+        let mut units = self.units().peekable();
+        if units.peek().is_some() {
             defmt::write!(f, ", units: [");
-            for (i, unit) in self.units.iter().enumerate() {
+            for (i, unit) in units.enumerate() {
                 if i != 0 {
                     defmt::write!(f, ", ");
                 }
@@ -1141,7 +1383,7 @@ impl defmt::Format for ValueInformation {
 }
 
 #[cfg(feature = "std")]
-impl fmt::Display for ValueInformation {
+impl fmt::Display for ValueInformation<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.decimal_offset_exponent != 0 {
             write!(f, "+{})", self.decimal_offset_exponent)?;
@@ -1151,20 +1393,22 @@ impl fmt::Display for ValueInformation {
         if self.decimal_scale_exponent != 0 {
             write!(f, "e{}", self.decimal_scale_exponent)?;
         }
-        if !self.units.is_empty() {
+        let mut units = self.units().peekable();
+        if units.peek().is_some() {
             write!(f, "[")?;
-            for unit in &self.units {
+            for unit in units {
                 write!(f, "{}", unit)?;
             }
             write!(f, "]")?;
         }
-        if !self.labels.is_empty() {
+        let mut labels = self.labels().peekable();
+        if labels.peek().is_some() {
             write!(f, "(")?;
-            for (i, label) in self.labels.iter().enumerate() {
-                write!(f, "{:?}", label)?;
-                if i != self.labels.len() - 1 {
+            for (i, label) in labels.enumerate() {
+                if i != 0 {
                     write!(f, ", ")?;
                 }
+                write!(f, "{:?}", label)?;
             }
 
             return write!(f, ")");
@@ -1497,7 +1741,20 @@ impl fmt::Display for UnitName {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    fn assert_information(
+        actual: super::ValueInformation<'_>,
+        offset: isize,
+        scale: isize,
+        labels: &[super::ValueLabel],
+        units: &[super::Unit],
+    ) {
+        assert_eq!(actual.decimal_offset_exponent, offset);
+        assert_eq!(actual.decimal_scale_exponent, scale);
+        assert!(actual.labels().eq(labels.iter().copied()));
+        assert!(actual.units().eq(units.iter().copied()));
+    }
 
     #[test]
     fn test_single_byte_primary_value_information_parsing() {
@@ -1505,7 +1762,6 @@ mod tests {
         use crate::value_information::{
             Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
         };
-        use arrayvec::ArrayVec;
 
         /* VIB = 0x13 => m3^3*1e-3 */
         let data = [0x13];
@@ -1519,22 +1775,12 @@ mod tests {
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(
+        assert_information(
             ValueInformation::try_from(&result).unwrap(),
-            ValueInformation {
-                decimal_offset_exponent: 0,
-                decimal_scale_exponent: -3,
-                units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(unit!(Meter ^ 3));
-                    x
-                },
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Volume);
-                    x
-                }
-            }
+            0,
+            -3,
+            &[ValueLabel::Volume],
+            &[unit!(Meter ^ 3)],
         );
 
         /* VIB = 0x14 => m3^-3*1e-2 */
@@ -1549,23 +1795,12 @@ mod tests {
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(
+        assert_information(
             ValueInformation::try_from(&result).unwrap(),
-            ValueInformation {
-                decimal_offset_exponent: 0,
-                decimal_scale_exponent: -2,
-                units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(unit!(Meter ^ 3));
-                    x
-                },
-
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Volume);
-                    x
-                }
-            }
+            0,
+            -2,
+            &[ValueLabel::Volume],
+            &[unit!(Meter ^ 3)],
         );
 
         /* VIB = 0x15 => m3^3*1e-2 */
@@ -1580,22 +1815,12 @@ mod tests {
             }
         );
         assert_eq!(result.get_size(), 1);
-        assert_eq!(
+        assert_information(
             ValueInformation::try_from(&result).unwrap(),
-            ValueInformation {
-                decimal_offset_exponent: 0,
-                decimal_scale_exponent: -1,
-                units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(unit!(Meter ^ 3));
-                    x
-                },
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Volume);
-                    x
-                }
-            }
+            0,
+            -1,
+            &[ValueLabel::Volume],
+            &[unit!(Meter ^ 3)],
         );
 
         /* VIB = 0x16 => m3^-3*1e-1 */
@@ -1618,7 +1843,7 @@ mod tests {
         use crate::value_information::{
             Unit, ValueInformation, ValueInformationBlock, ValueInformationField, ValueLabel,
         };
-        use arrayvec::ArrayVec;
+
         /* 1 VIF, 1 - 10 orthogonal VIFE */
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
@@ -1628,12 +1853,10 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 2);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
-        assert_eq!(ValueInformation::try_from(&result).unwrap().labels, {
-            let mut x = ArrayVec::<ValueLabel, 10>::new();
-            x.push(ValueLabel::Volume);
-            x.push(ValueLabel::Averaged);
-            x
-        });
+        assert!(ValueInformation::try_from(&result)
+            .unwrap()
+            .labels()
+            .eq([ValueLabel::Volume, ValueLabel::Averaged]));
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
         /* VIFE 0x92 = 0x12 | 0x80  => Combinable Orthogonal VIFE meaning "averaged" with extension */
@@ -1644,24 +1867,12 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 3);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
-        assert_eq!(
+        assert_information(
             ValueInformation::try_from(&result).unwrap(),
-            ValueInformation {
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Volume);
-                    x.push(ValueLabel::Averaged);
-                    x
-                },
-                decimal_offset_exponent: 0,
-                decimal_scale_exponent: 0,
-                units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(unit!(Meter ^ 3));
-                    x.push(unit!(Second ^ -1));
-                    x
-                }
-            }
+            0,
+            0,
+            &[ValueLabel::Volume, ValueLabel::Averaged],
+            &[unit!(Meter ^ 3), unit!(Second ^ -1)],
         );
 
         /* VIF 0x96 = 0x16 | 0x80  => m3^-3*1e-1 with extension*/
@@ -1674,34 +1885,19 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 4);
         assert_eq!(result.value_information, ValueInformationField::from(0x96));
-        assert_eq!(
+        assert_information(
             ValueInformation::try_from(&result).unwrap(),
-            ValueInformation {
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::Volume);
-                    x.push(ValueLabel::Averaged);
-                    x
-                },
-                decimal_offset_exponent: 0,
-                decimal_scale_exponent: 0,
-                units: {
-                    let mut x = ArrayVec::<Unit, 10>::new();
-                    x.push(unit!(Meter ^ 3));
-                    x.push(unit!(Second ^ -1));
-                    x.push(unit!(Meter ^ -3));
-                    x
-                }
-            }
+            0,
+            0,
+            &[ValueLabel::Volume, ValueLabel::Averaged],
+            &[unit!(Meter ^ 3), unit!(Second ^ -1), unit!(Meter ^ -3)],
         );
     }
 
     #[cfg(not(feature = "plaintext-before-extension"))]
     #[test]
     fn test_plain_text_vif_norm_conform() {
-        use arrayvec::ArrayVec;
-
-        use crate::value_information::{Unit, ValueInformation, ValueLabel};
+        use crate::value_information::{ValueInformation, ValueLabel};
 
         use crate::value_information::ValueInformationBlock;
         // This is the ascii conform method of encoding the VIF
@@ -1718,18 +1914,12 @@ mod tests {
         let result = ValueInformationBlock::try_from(data.as_slice()).unwrap();
         assert_eq!(result.get_size(), 6);
         assert_eq!(result.value_information.data, 0xFC);
-        assert_eq!(
+        assert_information(
             ValueInformation::try_from(&result).unwrap(),
-            ValueInformation {
-                decimal_offset_exponent: 0,
-                decimal_scale_exponent: -2,
-                units: { ArrayVec::<Unit, 10>::new() },
-                labels: {
-                    let mut x = ArrayVec::<ValueLabel, 10>::new();
-                    x.push(ValueLabel::PlainText);
-                    x
-                }
-            }
+            0,
+            -2,
+            &[ValueLabel::PlainText],
+            &[],
         );
 
         // This is how the VIF is encoded in the test vectors
@@ -1761,7 +1951,7 @@ mod tests {
             &ValueInformationBlock::try_from([0xFD, 0x48].as_slice()).unwrap(),
         )
         .unwrap();
-        assert_eq!(vi.units[0].name, UnitName::Volt);
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Volt);
         assert_eq!(vi.decimal_scale_exponent, -1);
 
         // VIF=0xFD VIFE=0x59: Ampere 10^(9-12) = 0.001 A
@@ -1769,7 +1959,7 @@ mod tests {
             &ValueInformationBlock::try_from([0xFD, 0x59].as_slice()).unwrap(),
         )
         .unwrap();
-        assert_eq!(vi.units[0].name, UnitName::Ampere);
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Ampere);
         assert_eq!(vi.decimal_scale_exponent, -3);
     }
 
@@ -1783,26 +1973,26 @@ mod tests {
             &ValueInformationBlock::try_from([0xFB, 0x20].as_slice()).unwrap(),
         )
         .unwrap();
-        assert_eq!(vi.units[0].name, UnitName::Feet);
-        assert_eq!(vi.units[0].exponent, 3);
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Feet);
+        assert_eq!(vi.first_unit().unwrap().exponent, 3);
         assert_eq!(vi.decimal_scale_exponent, 0);
-        assert!(vi.labels.contains(&ValueLabel::Volume));
+        assert!(vi.has_label(ValueLabel::Volume));
 
         // VIF=0xFB VIFE=0x23 (E010 0011): Phase angle I-U, 0.1°
         let vi = ValueInformation::try_from(
             &ValueInformationBlock::try_from([0xFB, 0x23].as_slice()).unwrap(),
         )
         .unwrap();
-        assert_eq!(vi.units[0].name, UnitName::Degree);
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Degree);
         assert_eq!(vi.decimal_scale_exponent, -1);
-        assert!(vi.labels.contains(&ValueLabel::PhaseItoU));
+        assert!(vi.has_label(ValueLabel::PhaseItoU));
 
         // VIF=0xFB VIFE=0x70: °F cold/warm temp limit, 10^-3
         let vi = ValueInformation::try_from(
             &ValueInformationBlock::try_from([0xFB, 0x70].as_slice()).unwrap(),
         )
         .unwrap();
-        assert_eq!(vi.units[0].name, UnitName::Fahrenheit);
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Fahrenheit);
         assert_eq!(vi.decimal_scale_exponent, -3);
 
         // VIF=0xFB VIFE=0x22 (E010 0010): Reserved — should not error
@@ -1810,7 +2000,7 @@ mod tests {
             &ValueInformationBlock::try_from([0xFB, 0x22].as_slice()).unwrap(),
         )
         .unwrap();
-        assert!(vi.labels.contains(&ValueLabel::Reserved));
+        assert!(vi.has_label(ValueLabel::Reserved));
     }
 
     #[test]
@@ -1824,16 +2014,16 @@ mod tests {
             &ValueInformationBlock::try_from([0x21].as_slice()).unwrap(),
         )
         .unwrap();
-        assert!(vi.labels.contains(&ValueLabel::OnTime));
-        assert_eq!(vi.units[0].name, UnitName::Minute);
+        assert!(vi.has_label(ValueLabel::OnTime));
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Minute);
 
         // VIF 0x27 = 0010 0111 = Operating time (0x24-0x27), nn=11 => days
         let vi = ValueInformation::try_from(
             &ValueInformationBlock::try_from([0x27].as_slice()).unwrap(),
         )
         .unwrap();
-        assert!(vi.labels.contains(&ValueLabel::OperatingTime));
-        assert_eq!(vi.units[0].name, UnitName::Day);
+        assert!(vi.has_label(ValueLabel::OperatingTime));
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Day);
     }
 
     #[test]
@@ -1847,10 +2037,8 @@ mod tests {
             &ValueInformationBlock::try_from([0xFB, 0x78].as_slice()).unwrap(),
         )
         .unwrap();
-        assert!(vi
-            .labels
-            .contains(&ValueLabel::CumulativeMaximumOfActivePower));
-        assert_eq!(vi.units[0].name, UnitName::Watt);
+        assert!(vi.has_label(ValueLabel::CumulativeMaximumOfActivePower));
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Watt);
         assert_eq!(vi.decimal_scale_exponent, -3);
     }
 
@@ -1867,8 +2055,8 @@ mod tests {
         )
         .unwrap();
 
-        assert!(vi.labels.contains(&ValueLabel::RelativeHumidity));
-        assert_eq!(vi.units[0].name, UnitName::Percent);
+        assert!(vi.has_label(ValueLabel::RelativeHumidity));
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Percent);
         assert_eq!(vi.decimal_scale_exponent, -2);
     }
 
@@ -1886,9 +2074,9 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(vi.units[0].name, UnitName::Ampere);
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Ampere);
         assert_eq!(vi.decimal_scale_exponent, -3);
-        assert!(vi.labels.contains(&ValueLabel::AtPhaseL1));
+        assert!(vi.has_label(ValueLabel::AtPhaseL1));
     }
 
     #[test]
@@ -1905,8 +2093,8 @@ mod tests {
         )
         .unwrap();
 
-        assert!(vi.labels.contains(&ValueLabel::ExternalTemperature));
-        assert_eq!(vi.units[0].name, UnitName::Celsius);
+        assert!(vi.has_label(ValueLabel::ExternalTemperature));
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Celsius);
         assert_eq!(vi.decimal_scale_exponent, -4);
     }
 
@@ -1923,8 +2111,8 @@ mod tests {
         )
         .unwrap();
 
-        assert!(vi.labels.contains(&ValueLabel::MoistureLevel));
-        assert_eq!(vi.units[0].name, UnitName::Percent);
+        assert!(vi.has_label(ValueLabel::MoistureLevel));
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Percent);
         assert_eq!(vi.decimal_scale_exponent, 0);
     }
 
@@ -1969,12 +2157,6 @@ mod tests {
     fn test_combinable_orthogonal_vife_limit_exceed_mappings() {
         use crate::value_information::{
             UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
-        };
-
-        let parse_orthogonal_vife = |vife_byte: u8| -> ValueInformation {
-            let data = [0x93, vife_byte];
-            let vib = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-            ValueInformation::try_from(&vib).unwrap()
         };
 
         // (vife_byte, expected_label, optional expected unit name)
@@ -2079,17 +2261,19 @@ mod tests {
         ];
 
         for (vife_byte, expected_label, expected_unit) in cases {
-            let vi = parse_orthogonal_vife(*vife_byte);
+            let data = [0x93, *vife_byte];
+            let vib = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+            let vi = ValueInformation::try_from(&vib).unwrap();
             assert!(
-                vi.labels.contains(expected_label),
+                vi.has_label(*expected_label),
                 "VIFE 0x{vife_byte:02X}: expected label {expected_label:?}, got {:?}",
-                vi.labels
+                vi.labels()
             );
             if let Some(unit_name) = expected_unit {
                 assert!(
-                    vi.units.iter().any(|u| u.name == *unit_name),
+                    vi.units().any(|u| u.name == *unit_name),
                     "VIFE 0x{vife_byte:02X}: expected unit {unit_name:?}, got {:?}",
-                    vi.units
+                    vi.units()
                 );
             }
         }
@@ -2099,12 +2283,6 @@ mod tests {
     fn test_combinable_orthogonal_vife_fc_extension_mappings() {
         use crate::value_information::{ValueInformation, ValueInformationBlock, ValueLabel};
 
-        let parse_fc_vife = |vife_byte: u8| -> ValueInformation {
-            let data = [0x93, 0xFC, vife_byte];
-            let vib = ValueInformationBlock::try_from(data.as_slice()).unwrap();
-            ValueInformation::try_from(&vib).unwrap()
-        };
-
         let cases: &[(u8, ValueLabel)] = &[
             (0x02, ValueLabel::AtPhaseL2),
             (0x0D, ValueLabel::AlternativeNonMetricUnits),
@@ -2113,11 +2291,195 @@ mod tests {
         ];
 
         for (vife_byte, expected_label) in cases {
-            let vi = parse_fc_vife(*vife_byte);
+            let data = [0x93, 0xFC, *vife_byte];
+            let vib = ValueInformationBlock::try_from(data.as_slice()).unwrap();
+            let vi = ValueInformation::try_from(&vib).unwrap();
             assert!(
-                vi.labels.contains(expected_label),
+                vi.has_label(*expected_label),
                 "FC VIFE 0x{vife_byte:02X}: expected {expected_label:?}, got {:?}",
-                vi.labels
+                vi.labels()
+            );
+        }
+    }
+    #[test]
+    fn units_exceed_old_capacity() {
+        use super::*;
+        let block =
+            ValueInformationBlock::try_from([0xB8, 0xA8, 0xA8, 0xA8, 0xA8, 0x28].as_slice())
+                .unwrap();
+        let vi = ValueInformation::try_from(&block).unwrap();
+        assert!(vi
+            .units()
+            .eq([unit!(Meter ^ 3), unit!(Hour ^ -1)].into_iter().chain(
+                core::iter::repeat_n([unit!(Increment), unit!(InputPulseOnChannel0 ^ -1)], 5)
+                    .flatten()
+            )));
+        assert_eq!(vi.units().count(), 12);
+    }
+
+    #[test]
+    fn labels_exceed_old_capacity() {
+        use super::*;
+        let block = ValueInformationBlock::try_from(
+            [
+                0xFD, 0x9A, 0x92, 0x92, 0x92, 0x92, 0x92, 0x92, 0x92, 0x92, 0x12,
+            ]
+            .as_slice(),
+        )
+        .unwrap();
+        let vi = ValueInformation::try_from(&block).unwrap();
+        assert!(vi
+            .labels()
+            .eq([ValueLabel::DigitalOutput, ValueLabel::Binary]
+                .into_iter()
+                .chain(core::iter::repeat_n(ValueLabel::Averaged, 9))));
+        assert_eq!(vi.labels().count(), 11);
+    }
+
+    #[test]
+    fn repeated_fc_and_terminal_7c_preserve_table_selection() {
+        use super::*;
+        for (bytes, expected) in [
+            (
+                &[0x93, 0xFC, 0xFC, 0x01][..],
+                &[ValueLabel::Volume, ValueLabel::AtPhaseL1][..],
+            ),
+            (
+                &[0x93, 0x7C][..],
+                &[ValueLabel::Volume, ValueLabel::Reserved][..],
+            ),
+            (
+                &[0x93, 0xFC, 0x81, 0x12][..],
+                &[
+                    ValueLabel::Volume,
+                    ValueLabel::AtPhaseL1,
+                    ValueLabel::Averaged,
+                ][..],
+            ),
+        ] {
+            let block = ValueInformationBlock::try_from(bytes).unwrap();
+            assert!(ValueInformation::try_from(&block)
+                .unwrap()
+                .labels()
+                .eq(expected.iter().copied()));
+        }
+    }
+
+    #[test]
+    fn main_extension_subcode_is_also_orthogonal() {
+        use super::*;
+        let block = ValueInformationBlock::try_from([0xFD, 0xFD, 0x3E].as_slice()).unwrap();
+        let vi = ValueInformation::try_from(&block).unwrap();
+        assert!(vi
+            .labels()
+            .eq([ValueLabel::MoistureLevel, ValueLabel::ValueAtBaseConditions]));
+        assert!(vi.units().eq([unit!(Percent)]));
+    }
+
+    #[test]
+    fn equality_is_semantic_and_iterators_outlive_the_view() {
+        use super::*;
+        let short = ValueInformationBlock::try_from([0x13].as_slice()).unwrap();
+        // 0x76 contributes zero scale and no labels or units.
+        let equivalent = ValueInformationBlock::try_from([0x93, 0x76].as_slice()).unwrap();
+        assert_eq!(
+            ValueInformation::try_from(&short).unwrap(),
+            ValueInformation::try_from(&equivalent).unwrap()
+        );
+        let (mut labels, mut units) = {
+            let vi = ValueInformation::try_from(&short).unwrap();
+            (vi.labels(), vi.units())
+        };
+        assert_eq!(labels.next(), Some(ValueLabel::Volume));
+        assert_eq!(units.next(), Some(unit!(Meter ^ 3)));
+        assert!(labels.clone().eq(labels));
+        assert!(units.clone().eq(units));
+    }
+
+    #[test]
+    fn exponents_accumulate_and_iterators_clone_mid_chain() {
+        use super::*;
+        let block =
+            ValueInformationBlock::try_from([0x93, 0x92, 0xA8, 0xF5, 0x78].as_slice()).unwrap();
+        let vi = ValueInformation::try_from(&block).unwrap();
+        assert_eq!(vi.decimal_scale_exponent, -4);
+        assert_eq!(vi.decimal_offset_exponent, -3);
+        let mut units = vi.units();
+        assert_eq!(units.next(), Some(unit!(Meter ^ 3)));
+        assert_eq!(units.next(), Some(unit!(Increment)));
+        assert!(units.clone().eq(units));
+        let mut labels = vi.labels();
+        assert_eq!(labels.next(), Some(ValueLabel::Volume));
+        assert!(labels.clone().eq(labels));
+    }
+
+    #[test]
+    fn head_table_and_missing_extensions() {
+        use super::*;
+        let cases = [
+            (
+                0x13,
+                None,
+                None,
+                VifInfo {
+                    labels: &[ValueLabel::Volume],
+                    units: &[unit!(Meter ^ 3)],
+                    scale: -3,
+                    ..VifInfo::EMPTY
+                },
+            ),
+            (
+                0xFD,
+                Some(0x1A),
+                None,
+                labels!(ValueLabel::DigitalOutput, ValueLabel::Binary),
+            ),
+            (
+                0xFB,
+                Some(0x1A),
+                None,
+                VifInfo {
+                    labels: &[ValueLabel::RelativeHumidity],
+                    units: &[unit!(Percent)],
+                    scale: -1,
+                    ..VifInfo::EMPTY
+                },
+            ),
+            (
+                0xFD,
+                Some(0x7D),
+                Some(0x3E),
+                VifInfo {
+                    labels: &[ValueLabel::MoistureLevel],
+                    units: &[unit!(Percent)],
+                    ..VifInfo::EMPTY
+                },
+            ),
+            (0x7C, None, None, labels!(ValueLabel::PlainText)),
+            (0x7F, None, None, labels!(ValueLabel::ManufacturerSpecific)),
+        ];
+        for (vif, first, second, expected) in cases {
+            assert_eq!(head_vif_info(vif.into(), first, second).unwrap(), expected);
+        }
+        assert!(matches!(
+            head_vif_info(0x6F.into(), None, None),
+            Err(DataInformationError::Unimplemented { .. })
+        ));
+        for vif in [0xFD, 0xFB] {
+            let mut block = ValueInformationBlock {
+                value_information: vif.into(),
+                value_information_extension: None,
+                plaintext_vife: None,
+            };
+            assert!(ValueInformation::try_from(&block)
+                .unwrap()
+                .labels()
+                .next()
+                .is_none());
+            block.value_information_extension = Some(ValueInformationFieldExtensions(&[]));
+            assert_eq!(
+                ValueInformation::try_from(&block),
+                Err(DataInformationError::DataTooShort)
             );
         }
     }
