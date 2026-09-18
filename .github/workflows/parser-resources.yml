@@ -1,4 +1,4 @@
-name: Parser resources
+name: Benchmarks and site
 
 on:
   push:
@@ -8,8 +8,13 @@ on:
   workflow_dispatch:
 
 concurrency:
+  # Publishing reads, updates and re-uploads a single history file, so runs on
+  # the same ref must queue rather than overlap.
   group: parser-resources-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  BENCH_HISTORY_TAG: bench-history
 
 jobs:
   measure:
@@ -21,10 +26,6 @@ jobs:
       CARGO_TERM_COLOR: never
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Detach source checkout
-        run: git checkout --detach
       - name: Remove email addresses from benchmark metadata
         shell: bash
         run: |
@@ -33,15 +34,6 @@ jobs:
           jq 'walk(if type == "object" then del(.email) else . end)' \
             "$GITHUB_EVENT_PATH" > "$sanitized_event"
           cp "$sanitized_event" "$GITHUB_EVENT_PATH"
-      - name: Check for benchmark history
-        id: benchmark-history
-        shell: bash
-        run: |
-          if git cat-file -e origin/main:docs/dev/bench/data.js 2>/dev/null; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
       - name: Install pinned Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
@@ -58,30 +50,29 @@ jobs:
             --output-format bencher \
             --sample-size 50 --warm-up-time 1 --measurement-time 3 \
             --nresamples 10000 2>&1 | tee decode-speed.txt
+      - name: Restore benchmark history
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/restore-benchmark-history.sh
       - name: Summarize parser resources
-        if: steps.benchmark-history.outputs.exists == 'true'
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
           name: Parser stack and footprint
           tool: customSmallerIsBetter
           output-file-path: parser-resources.json
-          gh-pages-branch: main
-          benchmark-data-dir-path: docs/dev/bench
-          save-data-file: false
+          external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
+          max-items-in-chart: 100
       - name: Summarize decode speed
-        if: steps.benchmark-history.outputs.exists == 'true'
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
           name: Parser decode speed
           tool: cargo
           output-file-path: decode-speed.txt
-          gh-pages-branch: main
-          benchmark-data-dir-path: docs/dev/bench
-          # The preceding action leaves main ahead by one local-only commit.
-          skip-fetch-gh-pages: true
-          save-data-file: false
+          external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
+          max-items-in-chart: 100
       - name: Upload measurement
         uses: actions/upload-artifact@v4
         with:
@@ -92,18 +83,21 @@ jobs:
           retention-days: 7
 
   publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: measure
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      deployments: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
+          # Release markers on the charts need the full history and all tags.
           fetch-depth: 0
-      - name: Detach source checkout
-        run: git checkout --detach
       - name: Remove email addresses from benchmark metadata
         shell: bash
         run: |
@@ -112,43 +106,89 @@ jobs:
           jq 'walk(if type == "object" then del(.email) else . end)' \
             "$GITHUB_EVENT_PATH" > "$sanitized_event"
           cp "$sanitized_event" "$GITHUB_EVENT_PATH"
-      - name: Restore legacy benchmark history
-        shell: bash
-        run: |
-          if ! git cat-file -e origin/main:docs/dev/bench/data.js 2>/dev/null &&
-             git cat-file -e origin/gh-pages:docs/dev/bench/data.js 2>/dev/null; then
-            git checkout origin/gh-pages -- docs/dev/bench/data.js
-            git reset -- docs/dev/bench/data.js
-          fi
       - name: Download measurement
         uses: actions/download-artifact@v4
         with:
           name: parser-resources
-      - name: Store and plot main-branch history
+      - name: Restore benchmark history
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/restore-benchmark-history.sh
+      - name: Append parser resources to history
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
           name: Parser stack and footprint
           tool: customSmallerIsBetter
           output-file-path: parser-resources.json
-          gh-pages-branch: main
-          benchmark-data-dir-path: docs/dev/bench
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
+          external-data-json-path: ./cache/benchmark-data.json
           alert-threshold: '105%'
           fail-threshold: '110%'
           fail-on-alert: true
           summary-always: true
           max-items-in-chart: 100
-      - name: Store and plot decode speed
+      - name: Append decode speed to history
+        if: ${{ !cancelled() }}
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
           name: Parser decode speed
           tool: cargo
           output-file-path: decode-speed.txt
-          gh-pages-branch: main
-          benchmark-data-dir-path: docs/dev/bench
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
+          external-data-json-path: ./cache/benchmark-data.json
           alert-threshold: '125%'
           summary-always: true
           max-items-in-chart: 100
+      - name: Persist benchmark history
+        # A regression must still be recorded, so this runs even when an
+        # earlier step failed the alert threshold.
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$BENCH_HISTORY_TAG" >/dev/null 2>&1; then
+            gh release create "$BENCH_HISTORY_TAG" \
+              --title "Benchmark history" \
+              --notes "Storage for benchmark history plotted at ${{ github.server_url }}/${{ github.repository }}/dev/bench. Not a source release." \
+              --latest=false
+          fi
+          gh release upload "$BENCH_HISTORY_TAG" cache/benchmark-data.json --clobber
+      - name: Render benchmark page data
+        if: ${{ !cancelled() }}
+        run: python3 .github/scripts/render-bench-page.py
+      - name: Set up Rust
+        if: ${{ !cancelled() }}
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install wasm-pack
+        if: ${{ !cancelled() }}
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - name: Build wasm for the site
+        if: ${{ !cancelled() }}
+        run: |
+          cd wasm
+          wasm-pack build --target web --out-dir pkg-web
+      - name: Stage wasm artifacts
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp wasm/pkg-web/m_bus_parser_wasm_pack.js docs/
+          cp wasm/pkg-web/m_bus_parser_wasm_pack_bg.wasm docs/
+          if [ -f wasm/pkg-web/m_bus_parser_wasm_pack_bg.js ]; then
+            cp wasm/pkg-web/m_bus_parser_wasm_pack_bg.js docs/
+          fi
+          # The site cache-busts wasm by query string; pin it to this commit so
+          # browsers pick up each rebuild.
+          sed -i "s/?v=[0-9A-Za-z._-]*\"/?v=${GITHUB_SHA:0:7}\"/g" docs/index.html
+      - name: Upload site artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy to GitHub Pages
+        if: ${{ !cancelled() }}
+        id: deployment
+        uses: actions/deploy-pages@v4

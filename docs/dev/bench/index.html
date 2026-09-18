@@ -106,9 +106,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.2/dist/Chart.min.js"></script>
     <script src="data.js"></script>
+    <script src="tags.js"></script>
     <script id="main-script">
       'use strict';
       (function() {
+        const releaseColor = '#7d4fd1';
+
         // Colors from https://github.com/github/linguist/blob/master/lib/linguist/languages.yml
         const toolColors = {
           cargo: '#dea584',
@@ -170,12 +173,15 @@
 
         function renderAllChars(dataSets) {
 
-          function renderGraph(parent, name, dataset) {
+          function renderGraph(parent, name, dataset, setName) {
             const canvas = document.createElement('canvas');
             canvas.className = 'benchmark-chart';
             parent.appendChild(canvas);
 
             const color = toolColors[dataset.length > 0 ? dataset[0].tool : '_'];
+            const tagsByCommit = (window.BENCHMARK_TAGS || {})[setName] || {};
+            const tagsAt = dataset.map(d => tagsByCommit[d.commit.id]);
+            const tagged = tagsAt.some(Boolean);
             const data = {
               labels: dataset.map(d => d.commit.id.slice(0, 7)),
               datasets: [
@@ -184,6 +190,9 @@
                   data: dataset.map(d => d.bench.value),
                   borderColor: color,
                   backgroundColor: color + '60', // Add alpha for #rrggbbaa
+                  pointRadius: tagsAt.map(t => (t ? 5 : 3)),
+                  pointHoverRadius: tagsAt.map(t => (t ? 7 : 5)),
+                  pointBackgroundColor: tagsAt.map(t => (t ? releaseColor : color + '60')),
                 }
               ],
             };
@@ -214,7 +223,9 @@
                   afterTitle: items => {
                     const {index} = items[0];
                     const data = dataset[index];
-                    return '\n' + data.commit.message + '\n\n' + data.commit.timestamp + ' committed by @' + data.commit.committer.username + '\n';
+                    const names = tagsAt[index];
+                    const release = names ? 'Release ' + names.join(', ') + '\n' : '';
+                    return '\n' + release + data.commit.message + '\n\n' + data.commit.timestamp + ' committed by @' + data.commit.committer.username + '\n';
                   },
                   label: item => {
                     let label = item.value;
@@ -242,10 +253,54 @@
               },
             };
 
+            // Mark where each release shipped, so a step in the chart can be
+            // read against the versions it falls between.
+            const releaseMarkers = {
+              afterDatasetsDraw(chart) {
+                if (!tagged) {
+                  return;
+                }
+                const xAxis = chart.scales['x-axis-0'];
+                const {top, bottom} = chart.chartArea;
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.font = '11px ' + window.getComputedStyle(document.documentElement).fontFamily;
+                ctx.strokeStyle = releaseColor;
+                ctx.fillStyle = releaseColor;
+                ctx.lineWidth = 1;
+                tagsAt.forEach((names, index) => {
+                  if (!names) {
+                    return;
+                  }
+                  const x = xAxis.getPixelForTick(index);
+                  ctx.beginPath();
+                  ctx.setLineDash([4, 4]);
+                  ctx.moveTo(x, top);
+                  ctx.lineTo(x, bottom);
+                  ctx.stroke();
+                  ctx.setLineDash([]);
+                  const label = names.join(', ');
+                  ctx.save();
+                  ctx.translate(x + 4, top + 4);
+                  ctx.rotate(Math.PI / 2);
+                  ctx.textAlign = 'left';
+                  ctx.textBaseline = 'middle';
+                  // Keep the name readable where it crosses the plotted line.
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                  ctx.fillRect(-2, -7, ctx.measureText(label).width + 4, 14);
+                  ctx.fillStyle = releaseColor;
+                  ctx.fillText(label, 0, 0);
+                  ctx.restore();
+                });
+                ctx.restore();
+              },
+            };
+
             new Chart(canvas, {
               type: 'line',
               data,
               options,
+              plugins: [releaseMarkers],
             });
           }
 
@@ -264,7 +319,7 @@
             setElem.appendChild(graphsElem);
 
             for (const [benchName, benches] of benchSet.entries()) {
-              renderGraph(graphsElem, benchName, benches)
+              renderGraph(graphsElem, benchName, benches, name)
             }
           }
 
