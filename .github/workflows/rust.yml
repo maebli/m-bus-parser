@@ -35,6 +35,10 @@ jobs:
           cargo test --verbose -F std
       - name: Run Library Tests with plaintext before with enabled
         run: cargo test --verbose -F plaintext-before-extension
+      - name: Run workspace and decryption regression tests
+        run: |
+          cargo test --workspace --verbose --features decryption
+          cargo test --workspace --verbose --features decryption,plaintext-before-extension
       - name: Lint with Clippy
         run: |
           rustup component add clippy

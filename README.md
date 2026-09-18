@@ -245,12 +245,15 @@ To consume transformed bytes without a frame-sized destination buffer:
   yields plaintext lazily. Construct the payload with ciphertext and an explicit
   `decryption::KeyContext` derived from the parsed headers. Key lookup and cipher
   state stay in the core decryption module. AES-CBC retains a key schedule,
-  chaining state, and one
-  16-byte working block. Incomplete trailing blocks retain the existing
-  pass-through behavior.
+  chaining state, and one 16-byte working block. With the current software AES
+  backend, the iterator occupies 760 bytes on `thumbv7m-none-eabi`; the
+  decryption-only cipher shares that backend's key schedule. Incomplete trailing
+  blocks retain the existing pass-through behavior.
 
 These APIs are allocation-free. Existing `*_into`/`decrypt_variable_data*` and
 `strip_format_a_crcs` APIs remain available when contiguous output is needed.
+CRC stripping scans each block once, and unencrypted `decrypt_into` calls copy
+bytes directly without constructing AES iterator state.
 The existing frame/record parsers take `&[u8]`, so they still require contiguous
 normalized/plaintext storage; they do not directly accept these byte iterators.
 Small decoded header/scalar values are still stored by value.

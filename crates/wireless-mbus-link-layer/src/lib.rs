@@ -31,6 +31,12 @@ pub fn trailing_frame_crc_start(data: &[u8]) -> Option<usize> {
     (crc16_en13757(&data[..crc_start]) == expected).then_some(crc_start)
 }
 
+fn validate_format_a_header(data: &[u8]) -> Option<()> {
+    let header = data.get(..10)?;
+    let crc = data.get(10..12)?;
+    (crc16_en13757(header) == u16::from_be_bytes([crc[0], crc[1]])).then_some(())
+}
+
 /// A borrowed view of a Format A frame with its interleaved CRCs omitted.
 ///
 /// The source is never rewritten or copied. [`Self::bytes`] yields the corrected
@@ -58,11 +64,7 @@ pub struct FormatAFrame<'a> {
 impl<'a> FormatAFrame<'a> {
     #[must_use]
     pub fn new(data: &'a [u8]) -> Option<Self> {
-        let header = data.get(..10)?;
-        let crc = data.get(10..12)?;
-        if crc16_en13757(header) != u16::from_be_bytes([crc[0], crc[1]]) {
-            return None;
-        }
+        validate_format_a_header(data)?;
         let length = FormatAChunks {
             remaining: &data[12..],
         }
@@ -169,11 +171,17 @@ pub fn strip_format_a_crcs<'a>(data: &[u8], output: &'a mut [u8]) -> Option<&'a 
     if output.len() < data.len() {
         return None;
     }
-    let frame = FormatAFrame::new(data)?;
-    for (target, byte) in output.iter_mut().zip(frame.bytes()) {
-        *target = byte;
+    validate_format_a_header(data)?;
+    output[..10].copy_from_slice(&data[..10]);
+    let mut length = 10;
+    for chunk in (FormatAChunks {
+        remaining: &data[12..],
+    }) {
+        output[length..length + chunk.len()].copy_from_slice(chunk);
+        length += chunk.len();
     }
-    Some(&output[..frame.len()])
+    output[0] = (length - 1) as u8;
+    Some(&output[..length])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
