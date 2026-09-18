@@ -18,15 +18,17 @@ use m_bus_parser::{render_hex, OutputFormat, RenderOptions};
 
 /// Frames that do not yet match libmbus's normalized XML output.
 ///
-/// All remaining entries fail because the parser rejects BCD data containing
-/// non-decimal digits (the `Fh` negative sign marker and manufacturer error
-/// markers like `DDh`), aborting the record stream, while libmbus decodes
-/// them with its lenient BCD algorithm.
+/// The first two entries carry manufacturer error markers (`DDh`, `BDh`) in
+/// their "value during error state" records. libmbus's `mbus_data_bcd_decode`
+/// silently drops a high nibble >= `Ah` and adds a low nibble verbatim, which
+/// turns such a marker into a plausible-looking measurement: `DD B4 EB DD`
+/// becomes 13110413, rendered as `1311041.300000` W. We decline to invent a
+/// reading from an error flag, so the record is reported as an error and
+/// skipped. Every other record in these frames matches; only the two error
+/// records are missing, which shifts the `DataRecord` ids behind them.
 const KNOWN_MISMATCHES: &[&str] = &[
     "ELS_Elster-F96-Plus",
-    "SLB_CF-Compact-Integral-MK-MaXX",
     "abb_f95",
-    "landis+gyr_ultraheat_t230",
     // The frames below additionally require the `plaintext-before-extension`
     // feature: their meters emit the plaintext VIF directly after the VIF
     // byte (libmbus semantics) instead of after the VIFE chain.

@@ -140,7 +140,15 @@ impl<'a> Iterator for DataRecords<'a> {
                         return Some(Ok(record));
                     }
                     Err(error) => {
-                        self.offset = self.data.len();
+                        // A record whose contents fail to decode must not cost
+                        // us the records behind it: step over it by its
+                        // DIF/VIF-declared length and keep going. If even that
+                        // length is unknown the stream cannot be resynchronised,
+                        // so stop.
+                        match self.failed_record_size() {
+                            Some(size) => self.offset += size,
+                            None => self.offset = self.data.len(),
+                        }
                         return Some(Err(error));
                     }
                 }
@@ -151,6 +159,30 @@ impl<'a> Iterator for DataRecords<'a> {
 }
 
 impl<'a> DataRecords<'a> {
+    /// Length of the record at the current offset that failed to parse.
+    ///
+    /// Only the DIF/VIF header is re-read, so this works whenever the header
+    /// itself was well formed and it was the data field that could not be
+    /// decoded. Returns `None` when the header is unparseable, when the length
+    /// is not derivable, or when the record would not advance the offset.
+    fn failed_record_size(&self) -> Option<usize> {
+        let remaining = self.data.get(self.offset..)?;
+        let header = data_record::DataRecordHeader::try_from(remaining).ok()?;
+        let header_size = header.get_size();
+        let data_size = header
+            .processed_data_record_header
+            .data_information
+            .as_ref()?
+            .data_field_coding
+            .data_size(remaining.get(header_size..)?)?;
+
+        let size = header_size.checked_add(data_size)?;
+        if size == 0 || size > remaining.len() {
+            return None;
+        }
+        Some(size)
+    }
+
     #[must_use]
     pub const fn new(data: &'a [u8], long_tpl_header: Option<&'a LongTplHeader>) -> Self {
         DataRecords {
@@ -1211,6 +1243,41 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn undecodable_record_does_not_discard_the_rest_of_the_frame() {
+        // Record 1 is `3C 2A DD B4 EB DD` from abb_f95: an 8-digit BCD field
+        // holding a manufacturer error marker, which is not valid BCD. The
+        // records on either side of it must still be yielded.
+        let data = [
+            0x0C, 0x12, 0x42, 0x07, 0x00, 0x00, // volume, 4 bytes BCD
+            0x3C, 0x2A, 0xDD, 0xB4, 0xEB, 0xDD, // power, undecodable
+            0x0A, 0x5A, 0x04, 0x02, // flow temperature, 2 bytes BCD
+        ];
+
+        let results: Vec<_> = parse_data_records(&data).collect();
+        assert_eq!(results.len(), 3);
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+        assert!(results[2].is_ok());
+
+        let flow_temperature = results[2].as_ref().expect("third record parses");
+        assert_eq!(
+            flow_temperature.value(),
+            Some(&data_information::DataType::Number(204.0))
+        );
+    }
+
+    #[test]
+    fn unresynchronisable_record_stops_the_stream() {
+        // A truncated variable-length field: the LVAR byte claims more data
+        // than the frame holds, so there is no length to step over.
+        let data = [0x0D, 0x2A, 0x40, 0x01, 0x02];
+
+        let results: Vec<_> = parse_data_records(&data).collect();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].is_err());
+    }
 
     #[test]
     fn test_control_information() {

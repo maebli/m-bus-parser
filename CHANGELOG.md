@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `DataFieldCoding::data_size`, which reports the byte length of a data field
+  from the DIF alone, without decoding its contents.
+
+### Fixed
+
+- BCD values carrying the EN 13757-3 `Fh` sign marker in their most significant
+  digit now decode as negative numbers instead of being rejected as invalid
+  BCD. Frames from Sensus/SLB and Landis+Gyr meters reporting a negative
+  temperature difference now parse.
+- A data record whose contents cannot be decoded no longer discards the rest of
+  the frame. The record is still reported as an error, but the iterator steps
+  over it by its declared length and continues, so the records behind it are
+  recovered.
+
 ## [0.4.3] - 2026-08-11
 
 ### Changed
