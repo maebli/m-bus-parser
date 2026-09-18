@@ -522,6 +522,7 @@ fn bcd_to_value_internal(
 
     let mut data_value = 0.0;
     let mut current_weight = 1.0;
+    let mut negative = false;
 
     for i in 0..num_digits {
         let index = if lsb_order {
@@ -537,6 +538,14 @@ fn bcd_to_value_internal(
             (byte >> 4) & 0x0F
         };
 
+        // EN 13757-3: Fh in the most significant digit marks a negative value.
+        // It is a sign marker, not a digit, and contributes nothing to the
+        // magnitude.
+        if digit == 0x0F && i == num_digits - 1 {
+            negative = true;
+            break;
+        }
+
         if digit > 9 {
             return Err(DataRecordError::DataInformationError(
                 DataInformationError::InvalidValueInformation,
@@ -547,7 +556,13 @@ fn bcd_to_value_internal(
         current_weight *= 10.0;
     }
 
-    let signed_value = data_value * sign as f64;
+    let sign = if negative { -sign } else { sign };
+    // Avoid -0.0, which would render as "-0.000000".
+    let signed_value = if data_value == 0.0 {
+        0.0
+    } else {
+        data_value * sign as f64
+    };
 
     Ok(Data {
         value: Some(DataType::Number(signed_value)),
@@ -582,6 +597,51 @@ fn integer_to_value_internal(data: &[u8], byte_size: usize) -> Data<'_> {
 }
 
 impl DataFieldCoding {
+    /// Returns how many bytes the data field occupies, without decoding it.
+    ///
+    /// The length of every coding but [`DataFieldCoding::VariableLength`] is
+    /// fixed by the DIF alone, so `input` is only read for the LVAR byte of a
+    /// variable-length field. Returns `None` when the length cannot be
+    /// determined, which is the case for a missing or reserved LVAR byte and
+    /// for a reserved special function.
+    ///
+    /// This is what [`DataFieldCoding::parse`] would report as
+    /// [`Data::get_size`] on success, so a record whose contents fail to decode
+    /// can still be stepped over.
+    #[must_use]
+    pub fn data_size(&self, input: &[u8]) -> Option<usize> {
+        match self {
+            Self::NoData | Self::SelectionForReadout => Some(0),
+            Self::Integer8Bit | Self::BCD2Digit => Some(1),
+            Self::Integer16Bit | Self::BCD4Digit | Self::DateTypeG => Some(2),
+            Self::Integer24Bit | Self::BCD6Digit => Some(3),
+            Self::Integer32Bit
+            | Self::Real32Bit
+            | Self::BCD8Digit
+            | Self::DateTimeTypeF
+            | Self::DateTimeTypeJ => Some(4),
+            Self::Integer48Bit | Self::BCDDigit12 | Self::DateTimeTypeI => Some(6),
+            Self::Integer64Bit => Some(8),
+            Self::VariableLength => match *input.first()? {
+                length @ 0x00..=0xBF => Some(length as usize + 1),
+                length @ 0xC0..=0xC9 => Some((length - 0xC0) as usize + 1),
+                length @ 0xD0..=0xD9 => Some((length - 0xD0) as usize + 1),
+                length @ 0xE0..=0xEF => Some((length - 0xE0) as usize + 1),
+                length @ 0xF0..=0xF4 => Some(4 * (length - 0xEC) as usize + 1),
+                0xF5 => Some(48 + 1),
+                0xF6 => Some(64 + 1),
+                _ => None,
+            },
+            Self::SpecialFunctions(code) => match code {
+                SpecialFunctions::ManufacturerSpecific | SpecialFunctions::MoreRecordsFollow => {
+                    Some(input.len())
+                }
+                SpecialFunctions::IdleFiller | SpecialFunctions::GlobalReadoutRequest => Some(0),
+                SpecialFunctions::Reserved => None,
+            },
+        }
+    }
+
     pub fn parse<'a>(
         &self,
         input: &'a [u8],
@@ -1109,6 +1169,94 @@ mod tests {
                 DataInformationError::InvalidValueInformation
             ))
         ));
+    }
+
+    #[test]
+    fn test_bcd_to_value_negative_sign_nibble() {
+        // EN 13757-3: Fh in the most significant digit is a sign marker.
+        // SLB_CF-Compact-Integral-MK-MaXX carries -18 as `18 00 F0`.
+        let data = [0x18, 0x00, 0xF0];
+        let result = bcd_to_value_internal(&data, 6, 1, false);
+        assert_eq!(
+            result.unwrap(),
+            Data {
+                value: Some(DataType::Number(-18.0)),
+                size: 3
+            }
+        );
+    }
+
+    #[test]
+    fn test_bcd_to_value_negative_zero_is_positive_zero() {
+        let data = [0x00, 0x00, 0xF0];
+        let result = bcd_to_value_internal(&data, 6, 1, false);
+        let Some(DataType::Number(value)) = result.unwrap().value else {
+            panic!("expected a number");
+        };
+        assert!(value == 0.0 && value.is_sign_positive());
+    }
+
+    #[test]
+    fn test_bcd_to_value_sign_nibble_only_in_most_significant_digit() {
+        // An Fh anywhere but the top digit is still invalid BCD.
+        let data = [0x18, 0xF0, 0x00];
+        let result = bcd_to_value_internal(&data, 6, 1, false);
+        assert!(matches!(
+            result,
+            Err(DataRecordError::DataInformationError(
+                DataInformationError::InvalidValueInformation
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_data_size_matches_parsed_size() {
+        // `data_size` is the resynchronisation path for records that fail to
+        // decode, so it must not drift from what `parse` consumes.
+        let payload = [0x01_u8; 80];
+        let codings = [
+            DataFieldCoding::NoData,
+            DataFieldCoding::Integer8Bit,
+            DataFieldCoding::Integer16Bit,
+            DataFieldCoding::Integer24Bit,
+            DataFieldCoding::Integer32Bit,
+            DataFieldCoding::Real32Bit,
+            DataFieldCoding::Integer48Bit,
+            DataFieldCoding::Integer64Bit,
+            DataFieldCoding::SelectionForReadout,
+            DataFieldCoding::BCD2Digit,
+            DataFieldCoding::BCD4Digit,
+            DataFieldCoding::BCD6Digit,
+            DataFieldCoding::BCD8Digit,
+            DataFieldCoding::BCDDigit12,
+            DataFieldCoding::DateTypeG,
+            DataFieldCoding::DateTimeTypeF,
+            DataFieldCoding::DateTimeTypeJ,
+            DataFieldCoding::DateTimeTypeI,
+        ];
+
+        for coding in codings {
+            let parsed = coding.parse(&payload, None).expect("coding parses");
+            assert_eq!(
+                coding.data_size(&payload),
+                Some(parsed.get_size()),
+                "data_size disagrees with parse for {coding:?}"
+            );
+        }
+
+        // Variable length: the LVAR byte drives both.
+        for lvar in [0x03_u8, 0xC3, 0xD3, 0xE3, 0xF0, 0xF5, 0xF6] {
+            let mut input = [0x00_u8; 80];
+            input[0] = lvar;
+            let parsed = DataFieldCoding::VariableLength
+                .parse(&input, None)
+                .expect("variable length parses");
+            assert_eq!(
+                DataFieldCoding::VariableLength.data_size(&input),
+                Some(parsed.get_size()),
+                "data_size disagrees with parse for LVAR {lvar:#04X}"
+            );
+        }
     }
 
     #[test]
