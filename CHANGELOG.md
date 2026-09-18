@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Allocation-free `FormatAFrame` / `FormatABytes` views for wireless CRC-normalized
-  bytes, and lazy `DecryptedBytes` APIs on encrypted payloads and application
-  blocks. AES-CBC works one block at a time without a full plaintext buffer;
+  bytes, and a lazy `DecryptedBytes` API on core encrypted payloads.
+  AES-CBC works one block at a time without a full plaintext buffer;
   existing buffer-writing APIs remain compatible.
 
 - `DataFieldCoding::data_size`, which reports the byte length of a data field

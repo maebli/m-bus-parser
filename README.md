@@ -241,11 +241,13 @@ To consume transformed bytes without a frame-sized destination buffer:
 - `FormatAFrame::new(data)?.bytes()` borrows a wireless Format A frame, skips
   recognized CRCs, and yields its corrected length byte. Construction scans the
   blocks to determine the normalized length; iteration does not copy the frame.
-- With `decryption`, `EncryptedPayload::decrypted_bytes(&keys)` and
-  `UserDataBlock::decrypted_variable_bytes(&keys)` yield plaintext lazily.
-  Short transport headers use `decrypted_variable_bytes_with_context(...)`.
-  AES-CBC retains a key schedule, chaining state, and one 16-byte working block.
-  Incomplete trailing blocks retain the existing pass-through behavior.
+- With `decryption`, `decryption::EncryptedPayload::decrypted_bytes(&keys)`
+  yields plaintext lazily. Construct the payload with ciphertext and an explicit
+  `decryption::KeyContext` derived from the parsed headers. Key lookup and cipher
+  state stay in the core decryption module. AES-CBC retains a key schedule,
+  chaining state, and one
+  16-byte working block. Incomplete trailing blocks retain the existing
+  pass-through behavior.
 
 These APIs are allocation-free. Existing `*_into`/`decrypt_variable_data*` and
 `strip_format_a_crcs` APIs remain available when contiguous output is needed.
