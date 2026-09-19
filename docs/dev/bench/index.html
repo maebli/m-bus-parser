@@ -12,7 +12,9 @@
       }
       body {
         color: #4a4a4a;
-        margin: 8px;
+        margin: 24px auto;
+        padding: 0 20px;
+        max-width: 1440px;
         font-size: 1em;
         font-weight: 400;
       }
@@ -66,21 +68,47 @@
         flex-direction: column;
       }
       .benchmark-title {
-        font-size: 3rem;
+        font-size: 1.6rem;
         font-weight: 600;
         word-break: break-word;
-        text-align: center;
+        text-align: left;
       }
       .benchmark-graphs {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
-        align-items: center;
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+        gap: 20px;
         width: 100%;
       }
-      .benchmark-chart {
-        max-width: 1000px;
+      .benchmark-card {
+        min-width: 0;
+        padding: 16px;
+        border: 1px solid #dce2e9;
+        border-radius: 8px;
+      }
+      .benchmark-card h2 {
+        margin: 0 0 12px;
+        font-size: 1rem;
+        overflow-wrap: anywhere;
+      }
+      .benchmark-plot {
+        position: relative;
+        height: 300px;
+        min-width: 0;
+      }
+      .benchmark-values {
+        width: 100%;
+        margin-top: 12px;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      .benchmark-values th, .benchmark-values td {
+        padding: 5px 4px;
+        text-align: left;
+        border-bottom: 1px solid #eef1f4;
+      }
+      .benchmark-note {
+        font-size: 0.875rem;
+        color: #596574;
       }
     </style>
     <title>Benchmarks</title>
@@ -171,7 +199,12 @@
           };
 
           // Prepare data points for charts
-          return Object.keys(data.entries).map(name => ({
+          const preferredOrder = ['Parser optimization comparison', 'Parser decode speed', 'Parser stack and footprint'];
+          const rank = name => {
+            const index = preferredOrder.indexOf(name);
+            return index < 0 ? preferredOrder.length : index;
+          };
+          return Object.keys(data.entries).sort((a, b) => rank(a) - rank(b)).map(name => ({
             name,
             dataSet: collectBenchesPerTestCase(data.entries[name]),
           }));
@@ -180,13 +213,24 @@
         function renderAllChars(dataSets) {
 
           function renderGraph(parent, name, variants, setName) {
+            const card = document.createElement('article');
+            card.className = 'benchmark-card';
+            parent.appendChild(card);
+            const heading = document.createElement('h2');
+            heading.textContent = name;
+            card.appendChild(heading);
+            // Chart.js needs a dedicated, explicitly sized parent per canvas.
+            const plot = document.createElement('div');
+            plot.className = 'benchmark-plot';
+            card.appendChild(plot);
             const canvas = document.createElement('canvas');
             canvas.className = 'benchmark-chart';
-            parent.appendChild(canvas);
+            plot.appendChild(canvas);
 
             const profileColors = {z: '#3273dc', s: '#159957', '3': '#d17a00'};
             const profileLabels = {z: 'Size (z)', s: 'Size (s)', '3': 'Speed (3)'};
-            const series = [...variants.entries()];
+            const variantOrder = ['default', 'z', 's', '3'];
+            const series = [...variants.entries()].sort((a, b) => variantOrder.indexOf(a[0]) - variantOrder.indexOf(b[0]));
             // Align by run, not array position: older commits can lack variants.
             const pointKey = d => d.commit.id + ':' + d.date;
             const points = new Map();
@@ -196,6 +240,39 @@
               const byRun = new Map(values.map(d => [pointKey(d), d]));
               return dataset.map(d => byRun.get(pointKey(d)) || null);
             });
+            const note = document.createElement('p');
+            note.className = 'benchmark-note';
+            note.textContent = dataset.length === 1
+              ? '1 recorded run — more runs are needed to show a trend.'
+              : dataset.length + ' recorded runs. Select a point to view its commit.';
+            card.appendChild(note);
+            const table = document.createElement('table');
+            table.className = 'benchmark-values';
+            const header = document.createElement('tr');
+            for (const text of ['Profile', 'Latest value', 'Commit']) {
+              const cell = document.createElement('th');
+              cell.textContent = text;
+              header.appendChild(cell);
+            }
+            table.appendChild(header);
+            series.forEach(([variant], index) => {
+              const latest = aligned[index].filter(Boolean).slice(-1)[0];
+              const row = document.createElement('tr');
+              const label = document.createElement('td');
+              label.textContent = profileLabels[variant] || 'Default';
+              row.appendChild(label);
+              const value = document.createElement('td');
+              value.textContent = latest.bench.value.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + latest.bench.unit;
+              row.appendChild(value);
+              const commit = document.createElement('td');
+              const link = document.createElement('a');
+              link.href = latest.commit.url;
+              link.textContent = latest.commit.id.slice(0, 7);
+              commit.appendChild(link);
+              row.appendChild(commit);
+              table.appendChild(row);
+            });
+            card.appendChild(table);
             const tagsByCommit = (window.BENCHMARK_TAGS || {})[setName] || {};
             const tagsAt = dataset.map(d => tagsByCommit[d.commit.id]);
             const tagged = tagsAt.some(Boolean);
@@ -218,7 +295,9 @@
               }),
             };
             const options = {
-              title: {display: true, text: name},
+              responsive: true,
+              maintainAspectRatio: false,
+              title: {display: false, text: name},
               scales: {
                 xAxes: [
                   {
