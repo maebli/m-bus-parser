@@ -202,9 +202,21 @@ impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader<'a> {
             // unfortunately, the data field coding is not always set in the data information block
             // so we must do some additional checks to determine the correct data field coding
 
-            if v.has_label(ValueLabel::Date) {
+            // Decode the lazy labels once, retaining the existing precedence
+            // when more than one date/time label is present.
+            let date_time_labels = v.labels().fold(0u8, |flags, label| {
+                flags
+                    | match label {
+                        ValueLabel::Date => 1,
+                        ValueLabel::DateTime => 2,
+                        ValueLabel::Time => 4,
+                        ValueLabel::DateTimeWithSeconds => 8,
+                        _ => 0,
+                    }
+            });
+            if date_time_labels & 1 != 0 {
                 d.data_field_coding = DataFieldCoding::DateTypeG;
-            } else if v.has_label(ValueLabel::DateTime) {
+            } else if date_time_labels & 2 != 0 {
                 // VIF 0x6D with a 6-byte data field is a type I date and time
                 // (EN 13757-3), only the 4-byte variant is type F.
                 d.data_field_coding = if d.data_field_coding == DataFieldCoding::Integer48Bit {
@@ -212,9 +224,9 @@ impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader<'a> {
                 } else {
                     DataFieldCoding::DateTimeTypeF
                 };
-            } else if v.has_label(ValueLabel::Time) {
+            } else if date_time_labels & 4 != 0 {
                 d.data_field_coding = DataFieldCoding::DateTimeTypeJ;
-            } else if v.has_label(ValueLabel::DateTimeWithSeconds) {
+            } else if date_time_labels & 8 != 0 {
                 d.data_field_coding = DataFieldCoding::DateTimeTypeI;
             }
 
@@ -269,6 +281,56 @@ impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn date_time_overrides_match_all_single_extension_vifs() {
+        // Compare the single-pass classification with the original label
+        // precedence for all VIF/VIFE bytes and the relevant DIF widths.
+        for dif in [0x02, 0x04, 0x06, 0x09] {
+            for vif in 0..=u8::MAX {
+                // 0x7D is reserved and the existing VIF decoder rejects it
+                // with an unreachable!(), rather than a parse error.
+                if vif == 0x7d {
+                    continue;
+                }
+                for vife in 0..=0x7f {
+                    let bytes = [dif, vif, vife];
+                    let Ok(raw) = RawDataRecordHeader::try_from(bytes.as_slice()) else {
+                        continue;
+                    };
+                    let Ok(actual) = ProcessedDataRecordHeader::try_from(&raw) else {
+                        continue;
+                    };
+                    let Some(value) = actual.value_information.as_ref() else {
+                        continue;
+                    };
+                    let original = DataInformation::try_from(&raw.data_information_block)
+                        .unwrap()
+                        .data_field_coding;
+                    let expected = if value.has_label(ValueLabel::Date) {
+                        DataFieldCoding::DateTypeG
+                    } else if value.has_label(ValueLabel::DateTime) {
+                        if original == DataFieldCoding::Integer48Bit {
+                            DataFieldCoding::DateTimeTypeI
+                        } else {
+                            DataFieldCoding::DateTimeTypeF
+                        }
+                    } else if value.has_label(ValueLabel::Time) {
+                        DataFieldCoding::DateTimeTypeJ
+                    } else if value.has_label(ValueLabel::DateTimeWithSeconds) {
+                        DataFieldCoding::DateTimeTypeI
+                    } else {
+                        original
+                    };
+                    assert_eq!(
+                        actual.data_information.unwrap().data_field_coding,
+                        expected,
+                        "DIF={dif:02x} VIF={vif:02x} VIFE={vife:02x}",
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_parse_raw_data_record() {

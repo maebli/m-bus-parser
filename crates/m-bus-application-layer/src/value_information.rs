@@ -1224,9 +1224,11 @@ impl<'a> TryFrom<&ValueInformationBlock<'a>> for ValueInformation<'a> {
     fn try_from(block: &ValueInformationBlock<'a>) -> Result<Self, Self::Error> {
         let coding = ValueInformationCoding::from(&block.value_information);
         let ext = block.value_information_extension.clone();
-        let mut peek = ext.clone().into_iter().flatten();
-        let first = peek.next().map(|v| v.data);
-        let second = peek.next().map(|v| v.data);
+        // Peek at the remaining borrowed bytes directly. Flattening an optional
+        // iterator adds state transitions even for the common no-extension case.
+        let bytes = ext.as_ref().map_or(&[][..], |ext| ext.0);
+        let first = bytes.first().copied();
+        let second = bytes.get(1).copied();
         // A present but exhausted extension iterator was an error in the old
         // decoder; absent extensions on manually constructed blocks were empty.
         if matches!(
@@ -1771,6 +1773,28 @@ mod tests {
         assert_eq!(actual.decimal_scale_exponent, scale);
         assert!(actual.labels().eq(labels.iter().copied()));
         assert!(actual.units().eq(units.iter().copied()));
+    }
+
+    #[test]
+    fn value_information_peeks_remaining_extension_bytes_without_consuming_them() {
+        use super::{
+            ValueInformation, ValueInformationBlock, ValueInformationFieldExtensions, ValueLabel,
+        };
+        let bytes = [0x80, 0xfd, 0x3e];
+        let mut extensions = ValueInformationFieldExtensions::new(&bytes).unwrap();
+        assert_eq!(extensions.next().unwrap().data, 0x80);
+        let block = ValueInformationBlock::new(0xfd.into(), Some(extensions), None);
+        let info = ValueInformation::try_from(&block).unwrap();
+        assert!(info.has_label(ValueLabel::MoistureLevel));
+        assert_eq!(
+            info,
+            ValueInformation::try_from(
+                &ValueInformationBlock::try_from([0xfd, 0xfd, 0x3e].as_slice()).unwrap()
+            )
+            .unwrap()
+        );
+        assert_eq!(block.value_information_extension.as_ref().unwrap().len(), 2);
+        assert_eq!(ValueInformation::try_from(&block).unwrap(), info);
     }
 
     #[test]
