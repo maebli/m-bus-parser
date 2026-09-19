@@ -97,6 +97,9 @@
         <a id="repository-link" rel="noopener"></a>
       </div>
     </header>
+    <p>Optimization charts compare Size (z), Size (s), and Speed (3) on the same
+      fixture. Latency is measured on the native host; flash and static RAM are
+      measured for Thumb. Static RAM excludes stack and heap.</p>
     <main id="main"></main>
     <footer>
       <button id="dl-button">Download data as JSON</button>
@@ -136,12 +139,15 @@
               const {commit, date, tool, benches} = entry;
               for (const bench of benches) {
                 const result = { commit, date, tool, bench };
-                const arr = map.get(bench.name);
-                if (arr === undefined) {
-                  map.set(bench.name, [result]);
-                } else {
-                  arr.push(result);
-                }
+                // Optimization variants share a chart, while legacy metrics
+                // keep their existing single-series charts.
+                const match = bench.name.match(/^(.*) \[opt-level=(z|s|3)\]$/);
+                const name = match ? match[1] : bench.name;
+                const variant = match ? match[2] : 'default';
+                if (!map.has(name)) map.set(name, new Map());
+                const series = map.get(name);
+                if (!series.has(variant)) series.set(variant, []);
+                series.get(variant).push(result);
               }
             }
             return map;
@@ -173,30 +179,46 @@
 
         function renderAllChars(dataSets) {
 
-          function renderGraph(parent, name, dataset, setName) {
+          function renderGraph(parent, name, variants, setName) {
             const canvas = document.createElement('canvas');
             canvas.className = 'benchmark-chart';
             parent.appendChild(canvas);
 
-            const color = toolColors[dataset.length > 0 ? dataset[0].tool : '_'];
+            const profileColors = {z: '#3273dc', s: '#159957', '3': '#d17a00'};
+            const profileLabels = {z: 'Size (z)', s: 'Size (s)', '3': 'Speed (3)'};
+            const series = [...variants.entries()];
+            // Align by run, not array position: older commits can lack variants.
+            const pointKey = d => d.commit.id + ':' + d.date;
+            const points = new Map();
+            series.forEach(([, values]) => values.forEach(d => points.set(pointKey(d), d)));
+            const dataset = [...points.values()].sort((a, b) => a.date - b.date);
+            const aligned = series.map(([, values]) => {
+              const byRun = new Map(values.map(d => [pointKey(d), d]));
+              return dataset.map(d => byRun.get(pointKey(d)) || null);
+            });
             const tagsByCommit = (window.BENCHMARK_TAGS || {})[setName] || {};
             const tagsAt = dataset.map(d => tagsByCommit[d.commit.id]);
             const tagged = tagsAt.some(Boolean);
+            const pointAt = item => aligned[item.datasetIndex][item.index];
             const data = {
               labels: dataset.map(d => d.commit.id.slice(0, 7)),
-              datasets: [
-                {
-                  label: name,
-                  data: dataset.map(d => d.bench.value),
+              datasets: series.map(([variant, values], index) => {
+                const color = profileColors[variant] || toolColors[values[0].tool] || toolColors._;
+                return {
+                  label: profileLabels[variant] || name,
+                  data: aligned[index].map(d => d ? d.bench.value : null),
                   borderColor: color,
-                  backgroundColor: color + '60', // Add alpha for #rrggbbaa
+                  backgroundColor: color + '60',
+                  fill: false,
+                  spanGaps: false,
                   pointRadius: tagsAt.map(t => (t ? 5 : 3)),
                   pointHoverRadius: tagsAt.map(t => (t ? 7 : 5)),
                   pointBackgroundColor: tagsAt.map(t => (t ? releaseColor : color + '60')),
-                }
-              ],
+                };
+              }),
             };
             const options = {
+              title: {display: true, text: name},
               scales: {
                 xAxes: [
                   {
@@ -222,14 +244,14 @@
                 callbacks: {
                   afterTitle: items => {
                     const {index} = items[0];
-                    const data = dataset[index];
+                    const data = pointAt(items[0]);
                     const names = tagsAt[index];
                     const release = names ? 'Release ' + names.join(', ') + '\n' : '';
                     return '\n' + release + data.commit.message + '\n\n' + data.commit.timestamp + ' committed by @' + data.commit.committer.username + '\n';
                   },
                   label: item => {
-                    let label = item.value;
-                    const { range, unit } = dataset[item.index].bench;
+                    let label = data.datasets[item.datasetIndex].label + ": " + item.value;
+                    const { range, unit } = pointAt(item).bench;
                     label += ' ' + unit;
                     if (range) {
                       label += ' (' + range + ')';
@@ -237,7 +259,7 @@
                     return label;
                   },
                   afterLabel: item => {
-                    const { extra } = dataset[item.index].bench;
+                    const { extra } = pointAt(item).bench;
                     return extra ? '\n' + extra : '';
                   }
                 }
@@ -248,7 +270,9 @@
                 }
                 // XXX: Undocumented. How can we know the index?
                 const index = activeElems[0]._index;
-                const url = dataset[index].commit.url;
+                const point = aligned[activeElems[0]._datasetIndex][index];
+                if (!point) return;
+                const url = point.commit.url;
                 window.open(url, '_blank');
               },
             };

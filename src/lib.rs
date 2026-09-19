@@ -63,7 +63,7 @@ use m_bus_core::ApplicationLayerError;
 // Re-export link layer types for convenience
 pub use m_bus_core::{FrameError, Function};
 pub use wired_mbus_link_layer::{Address, WiredFrame};
-pub use wireless_mbus_link_layer::{ManufacturerId, WirelessFrame};
+pub use wireless_mbus_link_layer::{FormatABytes, FormatAFrame, ManufacturerId, WirelessFrame};
 
 #[cfg(feature = "std")]
 pub use mbus_data::serialize_mbus_data;

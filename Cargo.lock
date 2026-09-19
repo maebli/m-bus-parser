@@ -118,15 +118,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrayvec"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -808,7 +799,7 @@ checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 name = "m-bus-application-layer"
 version = "0.4.0"
 dependencies = [
- "arrayvec",
+ "bincode",
  "bitflags 2.13.1",
  "defmt",
  "m-bus-core",
@@ -832,7 +823,6 @@ version = "0.4.3"
 dependencies = [
  "aes",
  "aes-gcm",
- "arrayvec",
  "bindgen",
  "bitflags 2.13.1",
  "cbc",

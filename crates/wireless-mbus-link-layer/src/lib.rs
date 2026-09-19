@@ -31,66 +31,157 @@ pub fn trailing_frame_crc_start(data: &[u8]) -> Option<usize> {
     (crc16_en13757(&data[..crc_start]) == expected).then_some(crc_start)
 }
 
-/// Strip Format A CRCs from a wireless M-Bus frame.
+fn validate_format_a_header(data: &[u8]) -> Option<()> {
+    let header = data.get(..10)?;
+    let crc = data.get(10..12)?;
+    (crc16_en13757(header) == u16::from_be_bytes([crc[0], crc[1]])).then_some(())
+}
+
+/// A borrowed view of a Format A frame with its interleaved CRCs omitted.
 ///
-/// Format A frames have CRC-16 checksums embedded in the data:
-/// - Block 1: first 10 bytes (L, C, M, M, ID, ID, ID, ID, Ver, Type) + 2 CRC bytes
-/// - Block 2+: up to 16 bytes of data + 2 CRC bytes each
+/// The source is never rewritten or copied. [`Self::bytes`] yields the corrected
+/// length byte followed by the original non-CRC bytes. As with
+/// [`strip_format_a_crcs`], a valid first-block CRC is required; an unrecognized
+/// trailing block is retained verbatim for compatibility.
 ///
-/// Writes the stripped frame into `output` and returns the resulting slice,
-/// or `None` if the frame doesn't have valid Format A CRCs.
-/// The L-field is corrected to reflect the stripped payload size.
+/// Construction scans CRC boundaries to determine the corrected length. No
+/// destination buffer is needed to subsequently consume the bytes:
+///
+/// ```
+/// use wireless_mbus_link_layer::FormatAFrame;
+/// let raw = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff];
+/// let view = FormatAFrame::new(&raw).unwrap();
+/// let mut bytes = view.bytes();
+/// assert_eq!(bytes.next(), Some(9));
+/// assert_eq!(bytes.count(), 9);
+/// ```
+#[derive(Clone, Debug)]
+pub struct FormatAFrame<'a> {
+    data: &'a [u8],
+    length: usize,
+}
+
+impl<'a> FormatAFrame<'a> {
+    #[must_use]
+    pub fn new(data: &'a [u8]) -> Option<Self> {
+        validate_format_a_header(data)?;
+        let length = FormatAChunks {
+            remaining: &data[12..],
+        }
+        .fold(10, |length, chunk| length + chunk.len());
+        Some(Self { data, length })
+    }
+
+    /// Number of bytes after removing the recognized CRCs.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.length
+    }
+
+    /// A Format A frame always contains its ten-byte link header.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        false
+    }
+
+    /// Iterates over normalized bytes without a destination buffer.
+    #[must_use]
+    pub fn bytes(&self) -> FormatABytes<'a> {
+        FormatABytes {
+            length_byte: Some((self.length - 1) as u8),
+            current: self.data[1..10].iter(),
+            chunks: FormatAChunks {
+                remaining: &self.data[12..],
+            },
+            remaining: self.length,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FormatAChunks<'a> {
+    remaining: &'a [u8],
+}
+
+impl<'a> Iterator for FormatAChunks<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let data = self.remaining;
+        if data.is_empty() {
+            return None;
+        }
+        if data.len() >= 3 {
+            for length in (1..=16.min(data.len() - 2)).rev() {
+                let crc = u16::from_be_bytes([data[length], data[length + 1]]);
+                if crc16_en13757(&data[..length]) == crc {
+                    self.remaining = &data[length + 2..];
+                    return Some(&data[..length]);
+                }
+            }
+        }
+        self.remaining = &[];
+        Some(data)
+    }
+}
+
+/// Cloneable iterator over a borrowed Format A frame's normalized bytes.
+///
+/// Normalized data can be consumed incrementally. APIs accepting a contiguous
+/// slice still need caller-provided storage, filled with [`strip_format_a_crcs`].
+#[derive(Clone, Debug)]
+pub struct FormatABytes<'a> {
+    length_byte: Option<u8>,
+    current: core::slice::Iter<'a, u8>,
+    chunks: FormatAChunks<'a>,
+    remaining: usize,
+}
+
+impl Iterator for FormatABytes<'_> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let byte = if let Some(length) = self.length_byte.take() {
+            length
+        } else {
+            loop {
+                if let Some(byte) = self.current.next() {
+                    break *byte;
+                }
+                self.current = self.chunks.next()?.iter();
+            }
+        };
+        self.remaining -= 1;
+        Some(byte)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.remaining, Some(self.remaining))
+    }
+}
+
+impl ExactSizeIterator for FormatABytes<'_> {}
+impl core::iter::FusedIterator for FormatABytes<'_> {}
+
+/// Strip Format A CRCs into caller-provided contiguous storage.
+///
+/// Use [`FormatAFrame::bytes`] to consume normalized bytes lazily instead.
 pub fn strip_format_a_crcs<'a>(data: &[u8], output: &'a mut [u8]) -> Option<&'a [u8]> {
-    if data.len() < 12 || output.len() < data.len() {
+    // Preserve the historical destination-size requirement.
+    if output.len() < data.len() {
         return None;
     }
-
-    // Check block 1: first 10 bytes + 2 CRC
-    if crc16_en13757(&data[0..10]) != u16::from_be_bytes([data[10], data[11]]) {
-        return None;
-    }
-
-    let mut out_pos = 10;
+    validate_format_a_header(data)?;
     output[..10].copy_from_slice(&data[..10]);
-
-    let mut pos = 12;
-    while pos < data.len() {
-        let remaining = data.len() - pos;
-        if remaining < 3 {
-            output[out_pos..out_pos + remaining].copy_from_slice(&data[pos..pos + remaining]);
-            out_pos += remaining;
-            break;
-        }
-
-        let max_data_len = 16.min(remaining - 2);
-        let mut found = false;
-
-        for data_len in (1..=max_data_len).rev() {
-            let crc_start = pos + data_len;
-            if crc_start + 2 > data.len() {
-                continue;
-            }
-            if crc16_en13757(&data[pos..crc_start])
-                == u16::from_be_bytes([data[crc_start], data[crc_start + 1]])
-            {
-                output[out_pos..out_pos + data_len].copy_from_slice(&data[pos..crc_start]);
-                out_pos += data_len;
-                pos = crc_start + 2;
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            let remaining = data.len() - pos;
-            output[out_pos..out_pos + remaining].copy_from_slice(&data[pos..]);
-            out_pos += remaining;
-            break;
-        }
+    let mut length = 10;
+    for chunk in (FormatAChunks {
+        remaining: &data[12..],
+    }) {
+        output[length..length + chunk.len()].copy_from_slice(chunk);
+        length += chunk.len();
     }
-
-    output[0] = (out_pos - 1) as u8;
-    Some(&output[..out_pos])
+    output[0] = (length - 1) as u8;
+    Some(&output[..length])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -249,5 +340,88 @@ mod test {
         let parsed = WirelessFrame::try_from(frame.as_slice()).expect("valid wireless frame");
         assert_eq!(parsed.control_field, 0x45);
         assert_eq!(parsed.function, None);
+    }
+}
+
+#[cfg(test)]
+mod format_a_tests {
+    use super::*;
+
+    fn encode(payload: &[u8]) -> Vec<u8> {
+        let header = [0, 0x44, 0x49, 0x6A, 0x31, 0, 1, 0x55, 0x14, 0x37];
+        let mut frame = header.to_vec();
+        frame.extend(crc16_en13757(&header).to_be_bytes());
+        for chunk in payload.chunks(16) {
+            frame.extend(chunk);
+            frame.extend(crc16_en13757(chunk).to_be_bytes());
+        }
+        frame
+    }
+
+    #[test]
+    fn normalized_bytes_skip_crcs_across_block_boundaries() {
+        for length in [0, 1, 15, 16, 17, 31, 32, 33, 80, 240] {
+            let payload: Vec<u8> = (0..length).map(|n| (n * 17) as u8).collect();
+            let encoded = encode(&payload);
+            let original = encoded.clone();
+            let view = FormatAFrame::new(&encoded).unwrap();
+            let mut expected = vec![(length + 9) as u8];
+            expected.extend(&encoded[1..10]);
+            expected.extend(&payload);
+            assert_eq!(view.len(), expected.len());
+            assert!(!view.is_empty());
+            assert!(view.bytes().eq(expected.iter().copied()));
+            let mut bytes = view.bytes();
+            for (index, want) in expected.iter().enumerate() {
+                assert_eq!(bytes.len(), view.len() - index);
+                assert_eq!(bytes.size_hint(), (bytes.len(), Some(bytes.len())));
+                assert_eq!(bytes.next(), Some(*want));
+                assert!(bytes.clone().eq(expected.iter().skip(index + 1).copied()));
+            }
+            assert_eq!(bytes.next(), None);
+            assert_eq!(bytes.next(), None);
+            assert_eq!(bytes.len(), 0);
+            assert_eq!(encoded, original);
+            let mut output = vec![0; encoded.len()];
+            assert_eq!(
+                strip_format_a_crcs(&encoded, &mut output),
+                Some(expected.as_slice())
+            );
+        }
+    }
+
+    #[test]
+    fn tail_and_validation_match_the_buffer_api() {
+        for tail in [
+            &[][..],
+            &[0x33][..],
+            &[0x33, 0x44][..],
+            &[1, 2, 3, 4, 5][..],
+        ] {
+            let mut encoded = encode(&[]);
+            encoded.extend(tail);
+            let frame = FormatAFrame::new(&encoded).unwrap();
+            assert!(frame.bytes().skip(10).eq(tail.iter().copied()));
+            let mut too_small = vec![0xAA; encoded.len() - 1];
+            assert!(strip_format_a_crcs(&encoded, &mut too_small).is_none());
+            assert!(too_small.iter().all(|byte| *byte == 0xAA));
+        }
+        let encoded = encode(&[]);
+        for length in 0..12 {
+            assert!(FormatAFrame::new(&encoded[..length]).is_none());
+        }
+        let mut corrupt = encoded;
+        corrupt[10] ^= 1;
+        assert!(FormatAFrame::new(&corrupt).is_none());
+    }
+
+    #[test]
+    fn iterator_borrows_source_not_temporary_view() {
+        let encoded = encode(&[1, 2, 3]);
+        let bytes = {
+            let view = FormatAFrame::new(&encoded).unwrap();
+            view.bytes()
+        };
+        assert_eq!(bytes.skip(10).collect::<Vec<_>>(), [1, 2, 3]);
     }
 }

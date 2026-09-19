@@ -343,12 +343,11 @@ fn record_summaries(records: &user_data::DataRecords) -> Vec<RecordSummary> {
                 _ => None,
             };
             let unit = value_information
-                .map(|vi| vi.units.iter().map(ToString::to_string).collect::<String>())
+                .map(|vi| vi.units().map(|unit| unit.to_string()).collect::<String>())
                 .filter(|s| !s.is_empty());
             let quantity = value_information
                 .map(|vi| {
-                    vi.labels
-                        .iter()
+                    vi.labels()
                         .map(|label| format!("{:?}", label))
                         .collect::<Vec<_>>()
                         .join(", ")
