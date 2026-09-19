@@ -91,27 +91,25 @@ impl<'a> TryFrom<&'a [u8]> for DataInformationBlock<'a> {
         };
         let dif = DataInformationField::from(*dif_byte);
 
-        let length = data.iter().take_while(|&&u8| u8 & 0x80 != 0).count();
-        let offset = length + 1;
-        match () {
-            () if dif.has_extension() && offset > MAXIMUM_DATA_INFORMATION_SIZE => {
-                Err(DataInformationError::DataTooLong)
-            }
-            () if dif.has_extension() && offset > data.len() => {
-                Err(DataInformationError::DataTooShort)
-            }
-            () if dif.has_extension() => Ok(DataInformationBlock {
-                data_information_field: dif,
-                data_information_field_extension: Some(DataInformationFieldExtensions::new(
-                    data.get(..offset)
-                        .ok_or(DataInformationError::DataTooShort)?,
-                )),
-            }),
-            () => Ok(DataInformationBlock {
+        if !dif.has_extension() {
+            return Ok(DataInformationBlock {
                 data_information_field: dif,
                 data_information_field_extension: None,
-            }),
+            });
         }
+
+        let length = data.iter().take_while(|&&u8| u8 & 0x80 != 0).count();
+        let offset = length + 1;
+        if offset > MAXIMUM_DATA_INFORMATION_SIZE {
+            return Err(DataInformationError::DataTooLong);
+        }
+        Ok(DataInformationBlock {
+            data_information_field: dif,
+            data_information_field_extension: Some(DataInformationFieldExtensions::new(
+                data.get(..offset)
+                    .ok_or(DataInformationError::DataTooShort)?,
+            )),
+        })
     }
 }
 
@@ -1058,6 +1056,18 @@ mod tests {
                 size: 1,
             })
         );
+    }
+
+    #[test]
+    fn unextended_dif_does_not_interpret_following_bytes_as_extensions() {
+        for dif in 0..=0x7f {
+            let mut bytes = [0xff; MAXIMUM_DATA_INFORMATION_SIZE + 3];
+            bytes[0] = dif;
+            let block = DataInformationBlock::try_from(bytes.as_slice()).unwrap();
+            assert_eq!(block.data_information_field.data, dif);
+            assert_eq!(block.get_size(), 1);
+            assert!(block.data_information_field_extension.is_none());
+        }
     }
 
     #[test]
