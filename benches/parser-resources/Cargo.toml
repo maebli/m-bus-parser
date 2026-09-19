@@ -23,3 +23,10 @@ name = "parser-footprint"
 path = "src/bin/parser_footprint.rs"
 test = false
 bench = false
+
+[dev-dependencies]
+criterion = { version = "0.8.1", default-features = false }
+
+[[bench]]
+name = "optimization"
+harness = false

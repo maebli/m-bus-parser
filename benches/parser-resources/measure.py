@@ -170,11 +170,16 @@ def parse_type_size(output: str, pattern: str) -> int:
     return int(match.group(1))
 
 
-def parse_footprint(output: str) -> int:
+def parse_sections(output: str) -> tuple[int, int, int]:
     rows = [line.split() for line in output.splitlines() if line.strip()]
     if len(rows) < 2 or rows[0][:3] != ["text", "data", "bss"]:
         raise SystemExit("unexpected llvm-size output")
-    return int(rows[1][0]) + int(rows[1][1])
+    return tuple(int(value) for value in rows[1][:3])
+
+
+def parse_footprint(output: str) -> int:
+    text, data, _ = parse_sections(output)
+    return text + data
 
 
 def metric(name: str, value: int, extra: str) -> dict[str, object]:
@@ -238,11 +243,13 @@ def measure_stack(temp: Path, base_env: dict[str, str]) -> tuple[dict[str, int],
     return parse_stack_sizes(stack_output), build_output
 
 
-def measure_footprint(temp: Path, base_env: dict[str, str]) -> int:
+def measure_sections(
+    temp: Path, base_env: dict[str, str], opt_level: str = "z"
+) -> tuple[int, int, int]:
     target_dir = temp / "footprint-target"
     env = base_env | {
         "CARGO_TARGET_DIR": str(target_dir),
-        "CARGO_PROFILE_RELEASE_OPT_LEVEL": "z",
+        "CARGO_PROFILE_RELEASE_OPT_LEVEL": opt_level,
         "CARGO_PROFILE_RELEASE_LTO": "true",
         "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1",
         "CARGO_PROFILE_RELEASE_PANIC": "abort",
@@ -272,7 +279,12 @@ def measure_footprint(temp: Path, base_env: dict[str, str]) -> int:
         cwd=HERE,
         env=base_env,
     )
-    return parse_footprint(output)
+    return parse_sections(output)
+
+
+def measure_footprint(temp: Path, base_env: dict[str, str]) -> int:
+    text, data, _ = measure_sections(temp, base_env)
+    return text + data
 
 
 def main() -> None:

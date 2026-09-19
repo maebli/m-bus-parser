@@ -40,8 +40,12 @@ jobs:
           toolchain: nightly-2026-05-16
           components: llvm-tools-preview
           targets: thumbv7em-none-eabi
+      - name: Check benchmark chart comparisons
+        run: node --test .github/scripts/test-bench-charts.cjs
       - name: Measure parser resources
         run: python3 benches/parser-resources/measure.py --output parser-resources.json
+      - name: Compare speed and size optimization
+        run: python3 benches/parser-resources/compare.py --output optimization-comparison.json
       - name: Measure decode speed
         run: |
           set -o pipefail
@@ -73,6 +77,15 @@ jobs:
           external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
           max-items-in-chart: 100
+      - name: Summarize optimization comparison
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser optimization comparison
+          tool: customSmallerIsBetter
+          output-file-path: optimization-comparison.json
+          external-data-json-path: ./cache/benchmark-data.json
+          summary-always: true
+          max-items-in-chart: 100
       - name: Upload measurement
         uses: actions/upload-artifact@v4
         with:
@@ -80,6 +93,7 @@ jobs:
           path: |
             parser-resources.json
             decode-speed.txt
+            optimization-comparison.json
           retention-days: 7
 
   publish:
@@ -136,6 +150,16 @@ jobs:
           output-file-path: decode-speed.txt
           external-data-json-path: ./cache/benchmark-data.json
           alert-threshold: '125%'
+          summary-always: true
+          max-items-in-chart: 100
+      - name: Append optimization comparison to history
+        if: ${{ !cancelled() }}
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser optimization comparison
+          tool: customSmallerIsBetter
+          output-file-path: optimization-comparison.json
+          external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
           max-items-in-chart: 100
       - name: Persist benchmark history
