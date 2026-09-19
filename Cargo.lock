@@ -799,6 +799,7 @@ checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 name = "m-bus-application-layer"
 version = "0.4.0"
 dependencies = [
+ "bincode",
  "bitflags 2.13.1",
  "defmt",
  "m-bus-core",

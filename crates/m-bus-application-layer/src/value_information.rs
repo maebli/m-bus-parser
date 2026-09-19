@@ -1288,6 +1288,23 @@ impl serde::Serialize for ValueInformation<'_> {
     }
 }
 
+// Binary serializers need a known length. Count a clone so serialization stays
+// allocation-free and leaves the caller's iterator position unchanged.
+#[cfg(feature = "serde")]
+fn serialize_counted_sequence<I, S>(items: I, serializer: S) -> Result<S::Ok, S::Error>
+where
+    I: Iterator + Clone,
+    I::Item: serde::Serialize,
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeSeq;
+    let mut sequence = serializer.serialize_seq(Some(items.clone().count()))?;
+    for item in items {
+        sequence.serialize_element(&item)?;
+    }
+    sequence.end()
+}
+
 /// Cloneable iterator over decoded labels in wire order.
 #[derive(Clone)]
 pub struct ValueLabels<'a> {
@@ -1314,7 +1331,7 @@ impl core::fmt::Debug for ValueLabels<'_> {
 #[cfg(feature = "serde")]
 impl serde::Serialize for ValueLabels<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_seq(self.clone())
+        serialize_counted_sequence(self.clone(), serializer)
     }
 }
 
@@ -1344,7 +1361,7 @@ impl core::fmt::Debug for Units<'_> {
 #[cfg(feature = "serde")]
 impl serde::Serialize for Units<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_seq(self.clone())
+        serialize_counted_sequence(self.clone(), serializer)
     }
 }
 #[cfg(feature = "defmt")]
