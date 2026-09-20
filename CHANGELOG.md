@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Date and date/time records now report a four-digit year. The two-digit field
+  was passed through unchanged, so a type G date read `0012-01-12` instead of
+  `2012-01-12`. Type F and type I fields were worse: the year bits were read
+  from the minute and hour bytes instead of the day and month bytes, so the
+  year was unrelated to the transmitted date. The libmbus-compatible XML output
+  was already correct and is unchanged.
+
 ## [0.5.0] - 2026-09-20
 
 ### Added

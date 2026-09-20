@@ -80,7 +80,7 @@ fn canonical_json_has_a_versioned_stable_root() {
     }
     assert_eq!(first_record["data_hex"], "00 00 00 00");
     assert!(!first_record.contains_key("record_hex"));
-    assert_eq!(value["records"][7]["value"]["value"], "0012-01-12");
+    assert_eq!(value["records"][7]["value"]["value"], "2012-01-12");
 }
 
 #[test]
