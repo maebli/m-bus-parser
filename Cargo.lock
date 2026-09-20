@@ -797,7 +797,7 @@ checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 
 [[package]]
 name = "m-bus-application-layer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bincode",
  "bitflags 2.13.1",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "m-bus-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "aes",
  "cbc",
@@ -819,7 +819,7 @@ dependencies = [
 
 [[package]]
 name = "m-bus-parser"
-version = "0.4.3"
+version = "0.5.0"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -847,7 +847,7 @@ dependencies = [
 
 [[package]]
 name = "m-bus-parser-cli"
-version = "0.4.3"
+version = "0.5.0"
 dependencies = [
  "clap",
  "hex",
@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "m-bus-parser-wasm-pack"
-version = "0.4.3"
+version = "0.5.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",
@@ -1045,7 +1045,7 @@ dependencies = [
 
 [[package]]
 name = "pymbusparser"
-version = "0.4.3"
+version = "0.5.0"
 dependencies = [
  "hex",
  "m-bus-parser",
@@ -1705,7 +1705,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "wired-mbus-link-layer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "defmt",
  "m-bus-core",
@@ -1714,7 +1714,7 @@ dependencies = [
 
 [[package]]
 name = "wireless-mbus-link-layer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "crc16",
  "defmt",
