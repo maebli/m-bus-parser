@@ -496,15 +496,23 @@ macro_rules! parse_month {
     };
 }
 
+/// Decode the seven year bits of an EN 13757-3 type F, G or I field.
+///
+/// The year is split across two bytes: `$day_index` carries Y0..Y2 in bits
+/// 5-7 and `$month_index` carries Y3..Y6 in bits 4-7. Their position differs
+/// per type, so both indices are named by the caller.
+///
+/// The field holds two digits and no century, so it is read as 20xx, the same
+/// convention as the libmbus-compatible XML output.
 macro_rules! parse_year {
-    ($input:expr, $mask_byte1:expr, $mask_byte2:expr, $all_value:expr) => {{
-        let byte1 = u16::from($input.get(1).copied().unwrap_or(0) & $mask_byte1);
-        let byte2 = u16::from($input.get(0).copied().unwrap_or(0) & $mask_byte2);
-        let year = byte1.wrapping_shr(1) | byte2.wrapping_shr(5);
-        if year == $all_value {
+    ($input:expr, $day_index:expr, $month_index:expr) => {{
+        let day_byte = u16::from($input.get($day_index).copied().unwrap_or(0) & 0xE0);
+        let month_byte = u16::from($input.get($month_index).copied().unwrap_or(0) & 0xF0);
+        let year = (day_byte >> 5) | (month_byte >> 1);
+        if year == 0x7F {
             SingleEveryOrInvalid::Every()
         } else {
-            SingleEveryOrInvalid::Single(year)
+            SingleEveryOrInvalid::Single(2000 + year)
         }
     }};
 }
@@ -830,7 +838,7 @@ impl DataFieldCoding {
                     0
                 );
                 let month = parse_month!(input.get(1).ok_or(DataRecordError::InsufficientData)?);
-                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
+                let year = parse_year!(input, 0, 1);
 
                 Ok(Data {
                     value: Some(DataType::Date(day, month, year)),
@@ -857,7 +865,7 @@ impl DataFieldCoding {
                     0
                 );
                 let month = parse_month!(input.get(3).ok_or(DataRecordError::InsufficientData)?);
-                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
+                let year = parse_year!(input, 2, 3);
 
                 Ok(Data {
                     value: Some(DataType::DateTime(day, month, year, hour, minutes)),
@@ -921,7 +929,7 @@ impl DataFieldCoding {
                     0
                 );
                 let months = parse_month!(input.get(4).ok_or(DataRecordError::InsufficientData)?);
-                let year = parse_year!(input, 0xF0, 0xE0, 0x7F);
+                let year = parse_year!(input, 3, 4);
 
                 Ok(Data {
                     value: Some(DataType::DateTimeWithSeconds(
@@ -1267,6 +1275,76 @@ mod tests {
                 "data_size disagrees with parse for LVAR {lvar:#04X}"
             );
         }
+    }
+
+    #[test]
+    fn test_date_type_g_reads_the_full_year() {
+        // 8C 11: day 12, month 1, year bits 0b0001_100 = 12 -> 2012.
+        assert_eq!(
+            DataFieldCoding::DateTypeG.parse(&[0x8C, 0x11], None),
+            Ok(Data {
+                value: Some(DataType::Date(
+                    SingleEveryOrInvalid::Single(12),
+                    SingleEveryOrInvalid::Single(Month::January),
+                    SingleEveryOrInvalid::Single(2012),
+                )),
+                size: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn test_date_time_type_f_reads_the_year_from_the_day_and_month_bytes() {
+        // 2D 0D 0F 33: 15 March 2024, 13:45. The year bits live in the third
+        // and fourth byte, not in the minute and hour bytes.
+        assert_eq!(
+            DataFieldCoding::DateTimeTypeF.parse(&[0x2D, 0x0D, 0x0F, 0x33], None),
+            Ok(Data {
+                value: Some(DataType::DateTime(
+                    SingleEveryOrInvalid::Single(15),
+                    SingleEveryOrInvalid::Single(Month::March),
+                    SingleEveryOrInvalid::Single(2024),
+                    SingleEveryOrInvalid::Single(13),
+                    SingleEveryOrInvalid::Single(45),
+                )),
+                size: 4,
+            })
+        );
+    }
+
+    #[test]
+    fn test_date_time_type_i_reads_the_year_from_the_day_and_month_bytes() {
+        // 36 35 C0 53 39 00: 19 September 2026, 00:53:54.
+        assert_eq!(
+            DataFieldCoding::DateTimeTypeI.parse(&[0x36, 0x35, 0xC0, 0x53, 0x39, 0x00], None),
+            Ok(Data {
+                value: Some(DataType::DateTimeWithSeconds(
+                    SingleEveryOrInvalid::Single(19),
+                    SingleEveryOrInvalid::Single(Month::September),
+                    SingleEveryOrInvalid::Single(2026),
+                    SingleEveryOrInvalid::Single(0),
+                    SingleEveryOrInvalid::Single(53),
+                    SingleEveryOrInvalid::Single(54),
+                )),
+                size: 6,
+            })
+        );
+    }
+
+    #[test]
+    fn test_date_type_g_every_year_wildcard() {
+        // All seven year bits set is the "every year" wildcard, not year 2127.
+        assert_eq!(
+            DataFieldCoding::DateTypeG.parse(&[0xEC, 0xF1], None),
+            Ok(Data {
+                value: Some(DataType::Date(
+                    SingleEveryOrInvalid::Single(12),
+                    SingleEveryOrInvalid::Single(Month::January),
+                    SingleEveryOrInvalid::Every(),
+                )),
+                size: 2,
+            })
+        );
     }
 
     #[test]
