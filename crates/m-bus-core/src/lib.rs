@@ -39,10 +39,22 @@ pub struct ManufacturerCode {
 }
 
 impl ManufacturerCode {
+    /// Bits of a manufacturer field that encode the three letters.
+    ///
+    /// Bit 15 is not part of the code: it flags whether the address is
+    /// globally unique, and meters do set it (0xA697 is `ITW` with the flag).
+    pub const CODE_MASK: u16 = 0x7FFF;
+
+    /// Decode the three-letter code from a manufacturer field.
+    ///
+    /// Bit 15 is masked off, so a field with the flag set decodes to the same
+    /// letters as one without it. Callers that need the flag read it from the
+    /// raw field.
     pub const fn from_id(id: u16) -> Result<Self, ApplicationLayerError> {
-        let first_letter = ((id / (32 * 32)) + 64) as u8 as char;
-        let second_letter = (((id % (32 * 32)) / 32) + 64) as u8 as char;
-        let third_letter = ((id % 32) + 64) as u8 as char;
+        let letters = id & Self::CODE_MASK;
+        let first_letter = ((letters / (32 * 32)) + 64) as u8 as char;
+        let second_letter = (((letters % (32 * 32)) / 32) + 64) as u8 as char;
+        let third_letter = ((letters % 32) + 64) as u8 as char;
 
         if first_letter.is_ascii_uppercase()
             && second_letter.is_ascii_uppercase()
@@ -399,6 +411,23 @@ mod test {
             ManufacturerCode {
                 code: ['G', 'W', 'F']
             }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_manufacturer_code_ignores_top_bit() -> Result<(), ApplicationLayerError> {
+        // Meters do send the flag bit set: 0xA697 is 0x2697 ("ITW") with bit 15.
+        assert_eq!(
+            ManufacturerCode::from_id(0xA697)?,
+            ManufacturerCode {
+                code: ['I', 'T', 'W']
+            }
+        );
+        // The letters still have to be letters.
+        assert_eq!(
+            ManufacturerCode::from_id(0x8000),
+            Err(ApplicationLayerError::InvalidManufacturerCode { code: 0x8000 })
         );
         Ok(())
     }

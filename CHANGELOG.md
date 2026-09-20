@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   over it by its declared length and continues, so the records behind it are
   recovered.
 
+- Manufacturer fields with bit 15 set (for example `A697`, which is `ITW` plus
+  the flag) now decode to their three letters instead of failing. Wireless
+  telegrams from those meters were reported as `TooShort` and dropped. The flag
+  itself is kept in `ManufacturerId::is_unique_globally`, and a manufacturer
+  field that really is undecodable now reports the new
+  `FrameError::InvalidManufacturerCode` instead of `TooShort`.
+
 ## [0.4.3] - 2026-08-11
 
 ### Changed

@@ -208,6 +208,8 @@ pub struct ManufacturerId {
     pub identification_number: IdentificationNumber,
     pub device_type: DeviceType,
     pub version: u8,
+    /// Bit 15 of the manufacturer field, which sits outside the three-letter
+    /// code: meters that set it flag the address as not globally unique.
     pub is_unique_globally: bool,
 }
 
@@ -215,12 +217,16 @@ impl TryFrom<&[u8]> for ManufacturerId {
     type Error = FrameError;
     fn try_from(data: &[u8]) -> Result<Self, FrameError> {
         let mut iter = data.iter();
+        let manufacturer_field = u16::from_le_bytes([
+            *iter.next().ok_or(FrameError::TooShort)?,
+            *iter.next().ok_or(FrameError::TooShort)?,
+        ]);
         Ok(ManufacturerId {
-            manufacturer_code: ManufacturerCode::from_id(u16::from_le_bytes([
-                *iter.next().ok_or(FrameError::TooShort)?,
-                *iter.next().ok_or(FrameError::TooShort)?,
-            ]))
-            .map_err(|_| FrameError::TooShort)?,
+            manufacturer_code: ManufacturerCode::from_id(manufacturer_field).map_err(|_| {
+                FrameError::InvalidManufacturerCode {
+                    code: manufacturer_field,
+                }
+            })?,
             identification_number: IdentificationNumber::from_bcd_hex_digits([
                 *iter.next().ok_or(FrameError::TooShort)?,
                 *iter.next().ok_or(FrameError::TooShort)?,
@@ -246,7 +252,7 @@ impl TryFrom<&[u8]> for ManufacturerId {
                 };
                 DeviceType::from(device_type_code)
             },
-            is_unique_globally: false, /*todo not sure about this field*/
+            is_unique_globally: (manufacturer_field & !ManufacturerCode::CODE_MASK) == 0,
         })
     }
 }
@@ -256,7 +262,14 @@ impl TryFrom<&[u8]> for ManufacturerId {
 pub enum FrameError {
     EmptyData,
     TooShort,
-    WrongLength { expected: usize, actual: usize },
+    /// The manufacturer field's low 15 bits are not three uppercase letters.
+    InvalidManufacturerCode {
+        code: u16,
+    },
+    WrongLength {
+        expected: usize,
+        actual: usize,
+    },
 }
 
 impl<'a> TryFrom<&'a [u8]> for WirelessFrame<'a> {
@@ -329,6 +342,42 @@ mod test {
         let parsed = WirelessFrame::try_from(frame.as_slice()).expect("valid wireless frame");
         assert_eq!(parsed.control_field, 0x44);
         assert_eq!(parsed.function, Some(Function::SndNr));
+    }
+
+    #[test]
+    fn manufacturer_field_with_top_bit_set_is_decoded() {
+        let frame = [
+            0x18, 0x44, 0x97, 0xA6, 0x44, 0x55, 0x22, 0x33, 0x68, 0x07, 0x7A, 0x55, 0x00, 0x00,
+            0x00, 0x00, 0x04, 0x13, 0x89, 0xE2, 0x01, 0x00, 0x02, 0x3B, 0x00,
+        ];
+        let parsed = WirelessFrame::try_from(frame.as_slice()).expect("valid wireless frame");
+        assert_eq!(
+            parsed.manufacturer_id.manufacturer_code.code,
+            ['I', 'T', 'W']
+        );
+        assert!(!parsed.manufacturer_id.is_unique_globally);
+
+        // Same code without the flag, which does mark a globally unique address.
+        let mut frame = frame;
+        frame[3] = 0x26;
+        let parsed = WirelessFrame::try_from(frame.as_slice()).expect("valid wireless frame");
+        assert_eq!(
+            parsed.manufacturer_id.manufacturer_code.code,
+            ['I', 'T', 'W']
+        );
+        assert!(parsed.manufacturer_id.is_unique_globally);
+    }
+
+    #[test]
+    fn undecodable_manufacturer_field_is_not_reported_as_too_short() {
+        let frame = [
+            0x18, 0x44, 0x00, 0x00, 0x44, 0x55, 0x22, 0x33, 0x68, 0x07, 0x7A, 0x55, 0x00, 0x00,
+            0x00, 0x00, 0x04, 0x13, 0x89, 0xE2, 0x01, 0x00, 0x02, 0x3B, 0x00,
+        ];
+        assert_eq!(
+            WirelessFrame::try_from(frame.as_slice()),
+            Err(FrameError::InvalidManufacturerCode { code: 0x0000 })
+        );
     }
 
     #[test]

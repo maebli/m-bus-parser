@@ -120,6 +120,31 @@ mod tests {
         assert_eq!(data_records.len(), 1);
     }
 
+    #[test]
+    fn test_wireless_frame_with_manufacturer_flag_bit_set() {
+        // Reported in issue #126: the meter sets bit 15 of the manufacturer
+        // field (0xA697 = "ITW" plus the flag), which used to be rejected.
+        let bytes = hex::decode(
+            "384497A67856341200167A290300A00413D23B0300066D3635C05339004413D23B0300426C3F3C047F0740060C027F0D2A0E79671144150000",
+        )
+        .unwrap();
+        let mbus_data = MbusData::<WirelessFrame>::try_from(bytes.as_slice()).unwrap();
+
+        let manufacturer_id = mbus_data.frame.manufacturer_id;
+        assert_eq!(manufacturer_id.manufacturer_code.code, ['I', 'T', 'W']);
+        assert!(!manufacturer_id.is_unique_globally);
+        assert_eq!(manufacturer_id.identification_number.number, 12345678);
+
+        let data_records: Vec<_> = mbus_data
+            .data_records
+            .as_ref()
+            .expect("data records should be available")
+            .clone()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("every record should decode");
+        assert_eq!(data_records.len(), 7);
+    }
+
     #[cfg(feature = "std")]
     #[test]
     fn test_ci_78_wireless_frame_with_trailing_crc_annotations() {
