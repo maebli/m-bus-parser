@@ -140,7 +140,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-m-bus-parser = { version = "0.4", features = ["std", "serde"] }
+m-bus-parser = { version = "0.5", features = ["std", "serde"] }
 ```
 
 ### Parse a wired frame
@@ -233,7 +233,7 @@ The core parsing types are `no_std` compatible. Disable default features:
 
 ```toml
 [dependencies]
-m-bus-parser = { version = "0.4", default-features = false }
+m-bus-parser = { version = "0.5", default-features = false }
 ```
 
 To consume transformed bytes without a frame-sized destination buffer:
