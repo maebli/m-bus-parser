@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Valid VIFE chains producing more than ten labels or units no longer panic.
 
+- VIFEs following the `7Fh` manufacturer escape are no longer decoded against
+  the standard VIFE table. Vendor bytes that happened to fall in the
+  multiplicative-correction range corrupted the decimal scale exponent, so
+  affected records (for example ABB B21 energy) decoded orders of magnitude
+  off.
+
 - BCD values carrying the EN 13757-3 `Fh` sign marker in their most significant
   digit now decode as negative numbers instead of being rejected as invalid
   BCD. Frames from Sensus/SLB and Landis+Gyr meters reporting a negative

@@ -1170,6 +1170,11 @@ impl Iterator for OrthogonalVifes<'_> {
                 continue;
             }
             let ext = core::mem::replace(&mut self.combinable_ext, false);
+            if !ext && v.data & 0x7F == 0x7F {
+                // Everything following the manufacturer escape is vendor data,
+                // so it must not be matched against the standard VIFE table.
+                self.vife = ValueInformationFieldExtensions(&[]);
+            }
             return Some(orthogonal_vife_info(v.data, ext));
         }
     }
@@ -2411,6 +2416,24 @@ mod tests {
         assert_eq!(units.next(), Some(unit!(Meter ^ 3)));
         assert!(labels.clone().eq(labels));
         assert!(units.clone().eq(units));
+    }
+
+    #[test]
+    fn manufacturer_escape_stops_standard_vife_decoding() {
+        use super::*;
+        // ABB B21 energy record: VIF 0x04 (energy, x10^1) followed by the
+        // manufacturer escape 0xFF; 0xF2 and 0x00 are vendor data and must not
+        // be read as the standard multiplicative correction 0x70..=0x77.
+        let block = ValueInformationBlock::try_from([0x84, 0xFF, 0xF2, 0x00].as_slice()).unwrap();
+        let vi = ValueInformation::try_from(&block).unwrap();
+        assert_eq!(vi.decimal_scale_exponent, 1);
+        let mut labels = vi.labels();
+        assert_eq!(labels.next(), Some(ValueLabel::Energy));
+        assert_eq!(
+            labels.next(),
+            Some(ValueLabel::NextVIFEAndDataOfThisBlockAreManufacturerSpecific)
+        );
+        assert_eq!(labels.next(), None);
     }
 
     #[test]
