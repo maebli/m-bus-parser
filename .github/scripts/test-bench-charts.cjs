@@ -129,8 +129,8 @@ test('exported summary displays one comparison table with three rows', {
   assert.equal(elements.filter(e => e.className === 'comparison-value').length, 6);
   const comparison = elements.find(e => e.className === 'comparison-table');
   assert.equal(comparison.children.length, 4); // header + speed, stack, flash
-  assert.ok(elements.some(e => e.textContent && e.textContent.includes('Full decode of all 73')));
-  assert.ok(elements.some(e => e.textContent && e.textContent.includes('additionally reserved')));
+  assert.ok(elements.some(e => e.textContent && e.textContent.includes('same 73 wired meter messages')));
+  assert.ok(elements.some(e => e.textContent && e.textContent.includes('additional working memory')));
   assert.ok(html.includes('<details id="history-details">'));
 });
 
