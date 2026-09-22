@@ -94,6 +94,9 @@ impl<'a> From<DataRecords<'a>> for Vec<DataRecord<'a>> {
 impl<'a> Iterator for DataRecords<'a> {
     type Item = Result<DataRecord<'a>, DataRecordError>;
 
+    // Each branch calls `DataRecord::parse` once with the optional TPL header;
+    // separate `try_from` calls per header variant each got their own stack
+    // slot for the returned record.
     fn next(&mut self) -> Option<Self::Item> {
         while self.offset < self.data.len() {
             let dif = data_information::DataInformationField::from(*self.data.get(self.offset)?);
@@ -107,21 +110,13 @@ impl<'a> Iterator for DataRecords<'a> {
                     | data_information::SpecialFunctions::MoreRecordsFollow => {
                         let remaining = self.data.get(self.offset..)?;
                         self.offset = self.data.len();
-                        let record = if let Some(long_tpl_header) = self.long_tpl_header {
-                            DataRecord::try_from((remaining, long_tpl_header))
-                        } else {
-                            DataRecord::try_from(remaining)
-                        };
+                        let record = DataRecord::parse(remaining, self.long_tpl_header);
                         return Some(record);
                     }
                     data_information::SpecialFunctions::GlobalReadoutRequest => {
                         let remaining = self.data.get(self.offset..)?;
                         self.offset += 1;
-                        let record = if let Some(long_tpl_header) = self.long_tpl_header {
-                            DataRecord::try_from((remaining, long_tpl_header))
-                        } else {
-                            DataRecord::try_from(remaining)
-                        };
+                        let record = DataRecord::parse(remaining, self.long_tpl_header);
                         return Some(record);
                     }
                     data_information::SpecialFunctions::Reserved => {
@@ -129,11 +124,7 @@ impl<'a> Iterator for DataRecords<'a> {
                     }
                 }
             } else {
-                let record = if let Some(long_tpl_header) = self.long_tpl_header {
-                    DataRecord::try_from((self.data.get(self.offset..)?, long_tpl_header))
-                } else {
-                    DataRecord::try_from(self.data.get(self.offset..)?)
-                };
+                let record = DataRecord::parse(self.data.get(self.offset..)?, self.long_tpl_header);
                 match record {
                     Ok(record) => {
                         self.offset += record.get_size();
@@ -165,6 +156,10 @@ impl<'a> DataRecords<'a> {
     /// itself was well formed and it was the data field that could not be
     /// decoded. Returns `None` when the header is unparseable, when the length
     /// is not derivable, or when the record would not advance the offset.
+    // Out of line so the header it re-parses does not enlarge the stack
+    // frame of every `next` call.
+    #[inline(never)]
+    #[cold]
     fn failed_record_size(&self) -> Option<usize> {
         let remaining = self.data.get(self.offset..)?;
         let header = data_record::DataRecordHeader::try_from(remaining).ok()?;

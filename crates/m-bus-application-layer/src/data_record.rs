@@ -98,7 +98,7 @@ impl<'a> DataRecord<'a> {
 }
 
 impl<'a> DataRecord<'a> {
-    fn parse(
+    pub(crate) fn parse(
         data: &'a [u8],
         fixed_data_header: Option<&'a LongTplHeader>,
     ) -> Result<Self, DataRecordError> {
