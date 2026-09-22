@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Volume records with the non-metric VIFE `0x3D` now report US gallons instead
+  of cubic metres, keeping the VIF's decimal exponent. A frame with
+  `0C 93 3D 85 99 99 99` read `99999.985 m³` and now reads
+  `99999.985 [gal_us]` (#62).
+
 ## [0.5.1] - 2026-09-20
 
 ### Fixed

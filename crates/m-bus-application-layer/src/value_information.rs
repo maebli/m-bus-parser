@@ -1250,14 +1250,26 @@ impl<'a> TryFrom<&ValueInformationBlock<'a>> for ValueInformation<'a> {
             vife: orthogonal_chain(coding, ext),
             combinable_ext: false,
         };
-        let (scale, offset) = orthogonal
-            .clone()
-            .fold((head.scale, head.offset), |(s, o), v| {
-                (s + v.scale, o + v.offset)
-            });
+        let (scale, offset, non_metric) =
+            orthogonal
+                .clone()
+                .fold((head.scale, head.offset, false), |(s, o, n), v| {
+                    (
+                        s + v.scale,
+                        o + v.offset,
+                        n || v.labels == [ValueLabel::NonMetricUnits],
+                    )
+                });
+        // VIFE 0x3D selects the alternate non-metric unit (EN 13757-3 Annex C)
+        // while keeping the metric VIF's decimal exponent.
+        let head_units = if non_metric && head.units == [unit!(Meter ^ 3)] {
+            &[unit!(AmericanGallon)]
+        } else {
+            head.units
+        };
         Ok(Self {
             head_labels: head.labels,
-            head_units: head.units,
+            head_units,
             orthogonal: orthogonal.vife,
             decimal_scale_exponent: scale,
             decimal_offset_exponent: offset,
@@ -2160,6 +2172,33 @@ mod tests {
         assert!(vi.has_label(ValueLabel::MoistureLevel));
         assert_eq!(vi.first_unit().unwrap().name, UnitName::Percent);
         assert_eq!(vi.decimal_scale_exponent, 0);
+    }
+
+    #[test]
+    fn test_volume_with_non_metric_vife_is_us_gallon() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        // Issue #62: VIF=0x93 (Volume 10^-3 m³ + extension bit), VIFE=0x3D
+        // (alternate non-metric unit) → 10^-3 US gallon
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0x93, 0x3D].as_slice()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(vi.has_label(ValueLabel::Volume));
+        assert!(vi.has_label(ValueLabel::NonMetricUnits));
+        assert_eq!(vi.units().count(), 1);
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::AmericanGallon);
+        assert_eq!(vi.decimal_scale_exponent, -3);
+
+        // Without the VIFE the unit stays metric.
+        let vi = ValueInformation::try_from(
+            &ValueInformationBlock::try_from([0x13].as_slice()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(vi.first_unit().unwrap().name, UnitName::Meter);
     }
 
     #[test]
