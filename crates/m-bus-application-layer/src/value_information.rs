@@ -1183,12 +1183,17 @@ impl Iterator for OrthogonalVifes<'_> {
 /// Substitutes the metric units of a VIF followed by VIFE 0x3D, per
 /// EN 13757-3 Annex C Table C.1. Returns the non-metric units and the change
 /// to the decimal exponent; kBTU and mBTU/s are expressed as BTU and BTU/s.
+///
+/// Kept out of line and run after the scale fold, so the scale fold keeps its
+/// two-word accumulator and the scan's frame is not live at the same time.
+#[inline(never)]
 fn non_metric_units(
     coding: ValueInformationCoding,
     vif: u8,
     first_vife: Option<u8>,
+    orthogonal: &ValueInformationFieldExtensions<'_>,
 ) -> Option<(&'static [Unit], isize)> {
-    match coding {
+    let units: Option<(&'static [Unit], isize)> = match coding {
         ValueInformationCoding::Primary => match vif & 0x7F {
             // 10^(nnn-3) Wh -> 10^(nnn-3) kBTU
             0x00..=0x07 => Some((&[unit!(BritishThermalUnit)], 3)),
@@ -1208,7 +1213,25 @@ fn non_metric_units(
             _ => None,
         },
         _ => None,
+    };
+    let units = units?;
+    // Same walk as OrthogonalVifes::next, but on raw bytes: decoding each VIFE
+    // into a VifInfo would add an iterator frame below this one.
+    let mut combinable_ext = false;
+    for &byte in orthogonal.0 {
+        if byte == 0xFC {
+            combinable_ext = true;
+            continue;
+        }
+        if !core::mem::replace(&mut combinable_ext, false) {
+            match byte & 0x7F {
+                0x3D => return Some(units),
+                0x7F => return None,
+                _ => {}
+            }
+        }
     }
+    None
 }
 
 /// A borrowed, allocation-free view of decoded VIF and VIFE information.
@@ -1281,20 +1304,17 @@ impl<'a> TryFrom<&ValueInformationBlock<'a>> for ValueInformation<'a> {
             vife: orthogonal_chain(coding, ext),
             combinable_ext: false,
         };
-        let (scale, offset, non_metric) =
-            orthogonal
-                .clone()
-                .fold((head.scale, head.offset, false), |(s, o, n), v| {
-                    (
-                        s + v.scale,
-                        o + v.offset,
-                        n || v.labels == [ValueLabel::NonMetricUnits],
-                    )
-                });
-        let (head_units, scale) = match non_metric
-            .then(|| non_metric_units(coding, block.value_information.data, first))
-            .flatten()
-        {
+        let (scale, offset) = orthogonal
+            .clone()
+            .fold((head.scale, head.offset), |(s, o), v| {
+                (s + v.scale, o + v.offset)
+            });
+        let (head_units, scale) = match non_metric_units(
+            coding,
+            block.value_information.data,
+            first,
+            &orthogonal.vife,
+        ) {
             Some((units, delta)) => (units, scale + delta),
             None => (head.units, scale),
         };
@@ -2258,13 +2278,20 @@ mod tests {
             (vec![(UnitName::Fahrenheit, 1)], -3)
         );
 
-        // Without the VIFE the unit stays metric.
-        let vi = ValueInformation::try_from(
-            &ValueInformationBlock::try_from([0x13].as_slice()).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(vi.first_unit().unwrap().name, UnitName::Meter);
-        assert_eq!(vi.decimal_scale_exponent, -3);
+        // Without the VIFE, after the combinable extension prefix 0xFC, or after
+        // the manufacturer escape 0xFF, 0x3D is not the non-metric VIFE and the
+        // unit stays metric.
+        for bytes in [&[0x13][..], &[0x93, 0xFC, 0x3D], &[0x93, 0xFF, 0x3D]] {
+            let vi = ValueInformation::try_from(&ValueInformationBlock::try_from(bytes).unwrap())
+                .unwrap();
+            assert!(!vi.has_label(ValueLabel::NonMetricUnits), "{bytes:02X?}");
+            assert_eq!(
+                vi.first_unit().unwrap().name,
+                UnitName::Meter,
+                "{bytes:02X?}"
+            );
+            assert_eq!(vi.decimal_scale_exponent, -3, "{bytes:02X?}");
+        }
     }
 
     #[test]
