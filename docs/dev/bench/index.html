@@ -206,6 +206,7 @@
           for (const [metric, label, help] of [
             ['Corpus decode latency', 'Processing time', 'Average time to read one message'],
             ['Peak decoder stack', 'Working memory (stack)', 'Most temporary stack memory observed during decoding'],
+            ['Reserved decoder heap', 'Working memory (heap)', 'Memory the allocator reserved for decoded results'],
             ['Linked decoder flash', 'Program size (flash)', 'Storage needed for the decoder and its runtime'],
           ]) {
             const row = append(table, 'tr');
@@ -230,9 +231,7 @@
           }
           const note = append(parent, 'p', '', 'benchmark-note');
           note.textContent = 'Time is measured on the benchmark computer; memory and program size are measured for a Cortex-M4 microcontroller. µs means microseconds (one millionth of a second); KiB means 1,024 bytes. Compare bars within each row.';
-          const cStack = benches.find(b => b.name === 'Peak decoder stack [implementation=libmbus]');
-          const heap = cStack && (cStack.extra || '').match(/heap_reserved=(\d+)/);
-          if (heap) note.textContent += ' libmbus also reserved ' + (Number(heap[1]) / 1024).toFixed(1) + ' KiB of heap (additional working memory); Rust uses none. Stack values are observed peaks, not guaranteed maximums.';
+          note.textContent += ' Stack values are observed peaks, not guaranteed maximums; total working memory is stack plus heap.';
         }
 
         function init() {

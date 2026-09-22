@@ -118,19 +118,19 @@ test('CRC copy/view share charts per payload length without merging profiles or 
   assert.equal(charts[2].data.datasets[0].label, 'Size (z)');
 });
 
-test('exported summary displays one comparison table with three rows', {
+test('exported summary displays one comparison table with four rows', {
   skip: !process.env.BENCH_CORPUS_JSON,
 }, () => {
   const metrics = JSON.parse(readFileSync(process.env.BENCH_CORPUS_JSON, 'utf8'));
-  assert.equal(metrics.length, 6);
+  assert.equal(metrics.length, 8);
   const {charts, elements} = render({'Parser library comparison': [entry('measured', 1, metrics)]});
-  assert.equal(charts.length, 3); // optional historical charts remain in a closed details element
+  assert.equal(charts.length, 4); // optional historical charts remain in a closed details element
   assert.equal(elements.filter(e => e.className === 'comparison-table').length, 1);
-  assert.equal(elements.filter(e => e.className === 'comparison-value').length, 6);
+  assert.equal(elements.filter(e => e.className === 'comparison-value').length, 8);
   const comparison = elements.find(e => e.className === 'comparison-table');
-  assert.equal(comparison.children.length, 4); // header + speed, stack, flash
+  assert.equal(comparison.children.length, 5); // header + speed, stack, heap, flash
   assert.ok(elements.some(e => e.textContent && e.textContent.includes('same 73 wired meter messages')));
-  assert.ok(elements.some(e => e.textContent && e.textContent.includes('additional working memory')));
+  assert.ok(elements.some(e => e.textContent && e.textContent.includes('stack plus heap')));
   assert.ok(html.includes('<details id="history-details">'));
 });
 
@@ -140,7 +140,18 @@ test('the overview never mixes old memory results into a newer partial run', () 
     entry('new', 2, [{name: 'Corpus decode latency [implementation=rust]', unit: 'ns/frame', value: 1000}]),
   ]});
   const values = elements.filter(e => e.className === 'comparison-value');
-  assert.equal(values.filter(e => e.textContent === 'Not measured').length, 5);
+  assert.equal(values.filter(e => e.textContent === 'Not measured').length, 7);
+});
+
+test('heap row shows a zero heap as a measured value', () => {
+  const {elements} = render({'Parser library comparison': [entry('a', 1, [
+    bench('Reserved decoder heap [implementation=rust]', 0),
+    bench('Reserved decoder heap [implementation=libmbus]', 20480),
+  ])]});
+  const values = elements.filter(e => e.className === 'comparison-value').map(e => e.textContent);
+  assert.deepEqual(values.slice(4, 6), ['0 KiB', '20 KiB']);
+  const bars = elements.filter(e => e.className === 'comparison-bar comparison-libmbus');
+  assert.equal(bars[0].style.width, '100%');
 });
 
 test('instruction counts stay separate from timing and retain their units', () => {
