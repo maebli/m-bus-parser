@@ -80,6 +80,7 @@ def collect(directory: Path, context: str) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--instructions", type=Path, help="also write Linux x86-64 Callgrind metrics")
     parser.add_argument("--output", type=Path, default=Path("corpus-benchmarks.json"))
     parser.add_argument("--details", type=Path, default=Path("corpus-benchmarks-details.json"))
     parser.add_argument("--libmbus-source", type=Path, default=ROOT / "target/libmbus-source")
@@ -114,6 +115,11 @@ def main() -> None:
         comparison_context = (context + f"; rust=3; C=-O3; lto=off; features=std,plaintext-before-extension; "
                               f"libmbus={REVISION}; C compiler={c_compiler.splitlines()[0]}; libmbus diagnostic logging disabled")
         metrics = collect(comparison_dir, comparison_context)
+        if args.instructions:
+            from instructions import measure
+            counts = measure(ROOT, comparison_env, comparison_context, len(decoded), ROOT / "target/instruction-counts")
+            args.instructions.write_text(json.dumps(counts, indent=2) + "\n")
+            report["instructions"] = counts
         spec = importlib.util.spec_from_file_location("library_resources", ROOT / "benches/library-resources/measure.py")
         memory = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(memory)

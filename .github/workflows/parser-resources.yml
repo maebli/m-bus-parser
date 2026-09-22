@@ -18,7 +18,7 @@ env:
 
 jobs:
   measure:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -43,7 +43,7 @@ jobs:
       - name: Check benchmark chart comparisons
         run: node --test .github/scripts/test-bench-charts.cjs
       - name: Check corpus metric conversion
-        run: python3 -m unittest discover -s benches -p 'test_measure_corpus.py'
+        run: python3 -m unittest discover -s benches -p 'test_*.py'
       - name: Check corpus benchmark workloads
         run: |
           cargo +nightly-2026-05-16 bench --locked --bench corpus -- --test
@@ -63,9 +63,9 @@ jobs:
           tar -xf "$RUNNER_TEMP/arm-toolchain.tar.xz" --strip-components=1 -C "$toolchain"
           echo "$toolchain/bin" >> "$GITHUB_PATH"
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-system-arm
+          sudo apt-get install -y --no-install-recommends qemu-system-arm valgrind
       - name: Measure corpus and libmbus
-        run: python3 benches/measure-corpus.py --output corpus-benchmarks.json --details corpus-benchmarks-details.json
+        run: python3 benches/measure-corpus.py --output corpus-benchmarks.json --details corpus-benchmarks-details.json --instructions instruction-counts.json
       - name: Check measured corpus charts
         run: BENCH_CORPUS_JSON=corpus-benchmarks.json node --test .github/scripts/test-bench-charts.cjs
       - name: Measure decode speed
@@ -81,6 +81,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: .github/scripts/restore-benchmark-history.sh
+      - name: Check instruction regressions
+        id: instructions
+        continue-on-error: true
+        run: python3 benches/instructions.py instruction-counts.json cache/benchmark-data.json
       - name: Summarize parser resources
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
@@ -117,6 +121,15 @@ jobs:
           external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
           max-items-in-chart: 100
+      - name: Summarize instruction counts
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser instruction counts
+          tool: customSmallerIsBetter
+          output-file-path: instruction-counts.json
+          external-data-json-path: ./cache/benchmark-data.json
+          summary-always: true
+          max-items-in-chart: 100
       - name: Upload measurement
         uses: actions/upload-artifact@v4
         with:
@@ -127,7 +140,12 @@ jobs:
             optimization-comparison.json
             corpus-benchmarks.json
             corpus-benchmarks-details.json
+            instruction-counts.json
+            target/instruction-counts/*.callgrind
           retention-days: 7
+      - name: Fail on instruction regression
+        if: steps.instructions.outcome == 'failure'
+        run: exit 1
 
   publish:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -182,7 +200,6 @@ jobs:
           tool: cargo
           output-file-path: decode-speed.txt
           external-data-json-path: ./cache/benchmark-data.json
-          alert-threshold: '125%'
           summary-always: true
           max-items-in-chart: 100
       - name: Append optimization comparison to history
@@ -202,6 +219,16 @@ jobs:
           name: Parser library comparison
           tool: customSmallerIsBetter
           output-file-path: corpus-benchmarks.json
+          external-data-json-path: ./cache/benchmark-data.json
+          summary-always: true
+          max-items-in-chart: 100
+      - name: Append instruction counts to history
+        if: ${{ !cancelled() }}
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser instruction counts
+          tool: customSmallerIsBetter
+          output-file-path: instruction-counts.json
           external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
           max-items-in-chart: 100
@@ -225,7 +252,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           python3 .github/scripts/render-bench-page.py
-          cp corpus-benchmarks.json corpus-benchmarks-details.json docs/dev/bench/
+          cp corpus-benchmarks.json corpus-benchmarks-details.json instruction-counts.json docs/dev/bench/
       - name: Set up Rust
         if: ${{ !cancelled() }}
         uses: dtolnay/rust-toolchain@stable
