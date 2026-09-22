@@ -42,10 +42,32 @@ jobs:
           targets: thumbv7em-none-eabi
       - name: Check benchmark chart comparisons
         run: node --test .github/scripts/test-bench-charts.cjs
+      - name: Check corpus metric conversion
+        run: python3 -m unittest discover -s benches -p 'test_measure_corpus.py'
+      - name: Check corpus benchmark workloads
+        run: |
+          cargo +nightly-2026-05-16 bench --locked --bench corpus -- --test
+          cargo +nightly-2026-05-16 bench --locked --bench corpus --features std,plaintext-before-extension -- --test
       - name: Measure parser resources
         run: python3 benches/parser-resources/measure.py --output parser-resources.json
       - name: Compare speed and size optimization
         run: python3 benches/parser-resources/compare.py --output optimization-comparison.json
+      - name: Install embedded comparison tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          toolchain="$RUNNER_TEMP/arm-gnu-toolchain"
+          mkdir -p "$toolchain"
+          curl -fsSL --retry 3 https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi.tar.xz -o "$RUNNER_TEMP/arm-toolchain.tar.xz"
+          echo "62a63b981fe391a9cbad7ef51b17e49aeaa3e7b0d029b36ca1e9c3b2a9b78823  $RUNNER_TEMP/arm-toolchain.tar.xz" | sha256sum --check
+          tar -xf "$RUNNER_TEMP/arm-toolchain.tar.xz" --strip-components=1 -C "$toolchain"
+          echo "$toolchain/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-arm
+      - name: Measure corpus and libmbus
+        run: python3 benches/measure-corpus.py --output corpus-benchmarks.json --details corpus-benchmarks-details.json
+      - name: Check measured corpus charts
+        run: BENCH_CORPUS_JSON=corpus-benchmarks.json node --test .github/scripts/test-bench-charts.cjs
       - name: Measure decode speed
         run: |
           set -o pipefail
@@ -86,6 +108,15 @@ jobs:
           external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
           max-items-in-chart: 100
+      - name: Summarize corpus and libmbus
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser library comparison
+          tool: customSmallerIsBetter
+          output-file-path: corpus-benchmarks.json
+          external-data-json-path: ./cache/benchmark-data.json
+          summary-always: true
+          max-items-in-chart: 100
       - name: Upload measurement
         uses: actions/upload-artifact@v4
         with:
@@ -94,6 +125,8 @@ jobs:
             parser-resources.json
             decode-speed.txt
             optimization-comparison.json
+            corpus-benchmarks.json
+            corpus-benchmarks-details.json
           retention-days: 7
 
   publish:
@@ -162,6 +195,16 @@ jobs:
           external-data-json-path: ./cache/benchmark-data.json
           summary-always: true
           max-items-in-chart: 100
+      - name: Append corpus and libmbus to history
+        if: ${{ !cancelled() }}
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: Parser library comparison
+          tool: customSmallerIsBetter
+          output-file-path: corpus-benchmarks.json
+          external-data-json-path: ./cache/benchmark-data.json
+          summary-always: true
+          max-items-in-chart: 100
       - name: Persist benchmark history
         # A regression must still be recorded, so this runs even when an
         # earlier step failed the alert threshold.
@@ -180,7 +223,9 @@ jobs:
           gh release upload "$BENCH_HISTORY_TAG" cache/benchmark-data.json --clobber
       - name: Render benchmark page data
         if: ${{ !cancelled() }}
-        run: python3 .github/scripts/render-bench-page.py
+        run: |
+          python3 .github/scripts/render-bench-page.py
+          cp corpus-benchmarks.json corpus-benchmarks-details.json docs/dev/bench/
       - name: Set up Rust
         if: ${{ !cancelled() }}
         uses: dtolnay/rust-toolchain@stable

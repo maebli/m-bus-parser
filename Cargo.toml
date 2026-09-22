@@ -65,6 +65,10 @@ exclude = ["examples/cortex-m"]
 name = "bench"
 harness = false
 
+[[bench]]
+name = "corpus"
+harness = false
+
 
 [lints.clippy]
 unwrap_used = "warn"
