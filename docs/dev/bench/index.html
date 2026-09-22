@@ -178,66 +178,53 @@
 
         function renderComparison(entries) {
           const parent = document.getElementById('library-comparison');
-          const title = document.createElement('h1');
-          title.textContent = 'Rust vs libmbus';
-          parent.appendChild(title);
-          const description = document.createElement('p');
-          description.textContent = 'Complete decode of the same wired test corpus. Lower is better.';
-          parent.appendChild(description);
+          const append = (parent, tag, text = '', className = '') => {
+            const element = document.createElement(tag);
+            Object.assign(element, {textContent: text, className});
+            parent.appendChild(element);
+            return element;
+          };
+          append(parent, 'h1', 'Rust vs libmbus');
+          const description = append(parent, 'p', 'Complete decode of the same wired test corpus. Lower is better.');
           const runs = entries['Parser library comparison'] || [];
           const latest = runs.slice().sort((a, b) => a.date - b.date).slice(-1)[0];
           const benches = latest ? latest.benches : [];
           const speed = benches.find(b => b.name === 'Corpus decode latency [implementation=rust]');
           const count = speed && (speed.extra || '').match(/frames\/iteration=(\d+)/);
           if (count) description.textContent = 'Full decode of all ' + count[1] + ' wired test vectors, including known error cases. Lower is better.';
-          const table = document.createElement('table');
-          table.className = 'comparison-table';
-          const header = document.createElement('tr');
+          const table = append(parent, 'table', '', 'comparison-table');
+          const header = append(table, 'tr');
           for (const text of ['Measurement', 'Rust', 'libmbus']) {
-            const cell = document.createElement('th');
-            cell.textContent = text;
-            header.appendChild(cell);
+            append(header, 'th', text);
           }
-          table.appendChild(header);
           for (const [metric, label] of [
             ['Corpus decode latency', 'Average time / frame'],
             ['Peak decoder stack', 'Peak stack'],
             ['Linked decoder flash', 'Flash size'],
           ]) {
-            const row = document.createElement('tr');
-            const heading = document.createElement('th');
-            heading.textContent = label;
-            row.appendChild(heading);
+            const row = append(table, 'tr');
+            append(row, 'th', label);
             const values = ['rust', 'libmbus'].map(implementation =>
               benches.find(b => b.name === metric + ' [implementation=' + implementation + ']'));
             const max = Math.max(...values.map(value => value ? value.value : 0));
             values.forEach((value, index) => {
-              const cell = document.createElement('td');
-              const number = document.createElement('div');
-              number.className = 'comparison-value';
+              const cell = append(row, 'td');
+              const number = append(cell, 'div', '', 'comparison-value');
               number.textContent = value ? (value.unit === 'ns/frame'
                 ? (value.value / 1000).toLocaleString(undefined, {maximumFractionDigits: 3}) + ' µs/frame'
                 : (value.value / 1024).toLocaleString(undefined, {maximumFractionDigits: 2}) + ' KiB') : 'Not measured';
-              cell.appendChild(number);
               if (value) {
                 cell.title = value.extra || '';
-                const bar = document.createElement('div');
-                bar.className = 'comparison-bar comparison-' + (index === 0 ? 'rust' : 'libmbus');
+                const bar = append(cell, 'div', '', 'comparison-bar comparison-' + (index === 0 ? 'rust' : 'libmbus'));
                 bar.style.width = (max ? 100 * value.value / max : 0) + '%';
-                cell.appendChild(bar);
               }
-              row.appendChild(cell);
             });
-            table.appendChild(row);
           }
-          parent.appendChild(table);
-          const note = document.createElement('p');
-          note.className = 'benchmark-note';
+          const note = append(parent, 'p', '', 'benchmark-note');
           note.textContent = 'Native host speed; Cortex-M4 stack and flash. Stack is the observed high-water mark across the corpus. Bars are scaled separately within each row.';
           const cStack = benches.find(b => b.name === 'Peak decoder stack [implementation=libmbus]');
           const heap = cStack && (cStack.extra || '').match(/heap_reserved=(\d+)/);
           if (heap) note.textContent += ' libmbus additionally reserved ' + (Number(heap[1]) / 1024).toFixed(1) + ' KiB of heap; Rust uses no heap.';
-          parent.appendChild(note);
         }
 
         function init() {

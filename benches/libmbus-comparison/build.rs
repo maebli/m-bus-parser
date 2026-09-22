@@ -32,9 +32,7 @@ fn main() {
     );
     println!("cargo:rustc-env=LIBMBUS_REVISION={revision}");
     println!("cargo:rerun-if-changed={}", source.display());
-    // The whole corpus includes a known unsupported VIF. Disable only the
-    // diagnostic macro in a generated copy, so timing does not include stderr
-    // I/O. Leave the pinned checkout and all parser logic untouched.
+    // Disable diagnostic I/O in a generated copy, preserving decoder logic.
     let aux = fs::read_to_string(source.join("mbus/mbus-protocol-aux.c")).unwrap();
     let diagnostic = "#define MBUS_ERROR(...) fprintf (stderr, __VA_ARGS__)";
     assert_eq!(aux.matches(diagnostic).count(), 1);

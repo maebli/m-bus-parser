@@ -115,8 +115,7 @@ fn benchmarks(c: &mut Criterion) {
                 "resolved XML mismatch: {}",
                 fixture.name
             );
-            // This pinned libmbus version logs a VIF 0x7B normalization error
-            // to stderr on every render. Keep I/O out of the timed workload.
+            // Preserve the XML diagnostic exclusion; decode timings include this input.
             if fixture.name != "sen_pollutherm" {
                 matching.push(fixture);
             }

@@ -46,7 +46,7 @@ def corpus_hash() -> str:
     return digest.hexdigest()
 
 
-def metric(benchmark: dict, estimates: dict, context: str, comparison: bool = True) -> dict:
+def metric(benchmark: dict, estimates: dict, context: str) -> dict:
     identifier = benchmark["full_id"]
     if identifier not in ("comparison/decode/rust", "comparison/decode/libmbus"):
         raise ValueError(f"unexpected benchmark {identifier}")
@@ -66,12 +66,12 @@ def metric(benchmark: dict, estimates: dict, context: str, comparison: bool = Tr
     }
 
 
-def collect(directory: Path, context: str, comparison: bool) -> list[dict]:
+def collect(directory: Path, context: str) -> list[dict]:
     metrics = []
     for path in sorted(directory.glob("**/new/benchmark.json")):
         benchmark = json.loads(path.read_text())
         estimates = json.loads(path.with_name("estimates.json").read_text())
-        metrics.append(metric(benchmark, estimates, context, comparison))
+        metrics.append(metric(benchmark, estimates, context))
     expected = 2
     if len(metrics) != expected or len({m["name"] for m in metrics}) != expected:
         raise ValueError(f"expected {expected} distinct measurements, got {len(metrics)} in {directory}")
@@ -113,7 +113,7 @@ def main() -> None:
         decoded = json.loads(decode_report.read_text())
         comparison_context = (context + f"; rust=3; C=-O3; lto=off; features=std,plaintext-before-extension; "
                               f"libmbus={REVISION}; C compiler={c_compiler.splitlines()[0]}; libmbus diagnostic logging disabled")
-        metrics = collect(comparison_dir, comparison_context, True)
+        metrics = collect(comparison_dir, comparison_context)
         spec = importlib.util.spec_from_file_location("library_resources", ROOT / "benches/library-resources/measure.py")
         memory = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(memory)
