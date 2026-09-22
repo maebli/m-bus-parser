@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Volume records with the non-metric VIFE `0x3D` now report US gallons instead
-  of cubic metres, keeping the VIF's decimal exponent. A frame with
-  `0C 93 3D 85 99 99 99` read `99999.985 m³` and now reads
-  `99999.985 [gal_us]` (#62).
+- Records with the non-metric VIFE `0x3D` now use the units from EN 13757-3
+  Annex C instead of the metric ones: energy and power in BTU, volume and
+  volume flow in US gallons, and temperatures in °F. Before, the unit stayed
+  metric and only a "non metric units" label was added, so the frame from #62
+  read `99999.985 m³` instead of `99999985 [gal_us]`.
 
 ## [0.5.1] - 2026-09-20
 

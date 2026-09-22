@@ -1917,6 +1917,7 @@ fn ucum_component(unit: &Unit) -> Option<String> {
         UnitName::Hertz => "Hz",
         UnitName::Fahrenheit => "[degF]",
         UnitName::AmericanGallon => "[gal_us]",
+        UnitName::BritishThermalUnit => "[Btu_IT]",
         UnitName::Calorie => "cal",
         _ => return None,
     };

@@ -1180,6 +1180,37 @@ impl Iterator for OrthogonalVifes<'_> {
     }
 }
 
+/// Substitutes the metric units of a VIF followed by VIFE 0x3D, per
+/// EN 13757-3 Annex C Table C.1. Returns the non-metric units and the change
+/// to the decimal exponent; kBTU and mBTU/s are expressed as BTU and BTU/s.
+fn non_metric_units(
+    coding: ValueInformationCoding,
+    vif: u8,
+    first_vife: Option<u8>,
+) -> Option<(&'static [Unit], isize)> {
+    match coding {
+        ValueInformationCoding::Primary => match vif & 0x7F {
+            // 10^(nnn-3) Wh -> 10^(nnn-3) kBTU
+            0x00..=0x07 => Some((&[unit!(BritishThermalUnit)], 3)),
+            // 10^(nnn-6) m³ -> 10^(nnn-3) USgal
+            0x10..=0x17 => Some((&[unit!(AmericanGallon)], 3)),
+            // 10^(nnn-3) W -> 10^(nnn-3) mBTU/s
+            0x28..=0x2F => Some((&[unit!(BritishThermalUnit), unit!(Second ^ -1)], -3)),
+            // 10^(nnn-7) m³/min -> 10^(nnn-4) USgal/min
+            0x40..=0x47 => Some((&[unit!(AmericanGallon), unit!(Minute ^ -1)], 3)),
+            // Flow, return, difference and external temperature: °C/K -> °F
+            0x58..=0x67 => Some((&[unit!(Fahrenheit)], 0)),
+            _ => None,
+        },
+        // Cold/warm temperature limit: °C -> °F
+        ValueInformationCoding::AlternateVIFExtension => match first_vife? & 0x7F {
+            0x74..=0x77 => Some((&[unit!(Fahrenheit)], 0)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// A borrowed, allocation-free view of decoded VIF and VIFE information.
 ///
 /// Labels and units are produced in wire order, including duplicates. The view
@@ -1260,12 +1291,12 @@ impl<'a> TryFrom<&ValueInformationBlock<'a>> for ValueInformation<'a> {
                         n || v.labels == [ValueLabel::NonMetricUnits],
                     )
                 });
-        // VIFE 0x3D selects the alternate non-metric unit (EN 13757-3 Annex C)
-        // while keeping the metric VIF's decimal exponent.
-        let head_units = if non_metric && head.units == [unit!(Meter ^ 3)] {
-            &[unit!(AmericanGallon)]
-        } else {
-            head.units
+        let (head_units, scale) = match non_metric
+            .then(|| non_metric_units(coding, block.value_information.data, first))
+            .flatten()
+        {
+            Some((units, delta)) => (units, scale + delta),
+            None => (head.units, scale),
         };
         Ok(Self {
             head_labels: head.labels,
@@ -1726,6 +1757,7 @@ pub enum UnitName {
     Fahrenheit,
     AmericanGallon,
     Calorie,
+    BritishThermalUnit,
 }
 
 #[cfg(feature = "std")]
@@ -1772,6 +1804,7 @@ impl fmt::Display for UnitName {
             UnitName::HCAUnit => write!(f, "HCAUnit"),
             UnitName::Fahrenheit => write!(f, "°F"),
             UnitName::AmericanGallon => write!(f, "UsGal"),
+            UnitName::BritishThermalUnit => write!(f, "BTU"),
             UnitName::Calorie => write!(f, "cal"),
         }
     }
@@ -2175,23 +2208,55 @@ mod tests {
     }
 
     #[test]
-    fn test_volume_with_non_metric_vife_is_us_gallon() {
+    fn test_non_metric_vife_substitutes_units() {
         use crate::value_information::{
             UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
         };
 
-        // Issue #62: VIF=0x93 (Volume 10^-3 m³ + extension bit), VIFE=0x3D
-        // (alternate non-metric unit) → 10^-3 US gallon
-        let vi = ValueInformation::try_from(
-            &ValueInformationBlock::try_from([0x93, 0x3D].as_slice()).unwrap(),
-        )
-        .unwrap();
+        let decode = |bytes: &[u8]| {
+            let vi = ValueInformation::try_from(&ValueInformationBlock::try_from(bytes).unwrap())
+                .unwrap();
+            assert!(vi.has_label(ValueLabel::NonMetricUnits));
+            let units: Vec<_> = vi.units().map(|u| (u.name, u.exponent)).collect();
+            (units, vi.decimal_scale_exponent)
+        };
 
-        assert!(vi.has_label(ValueLabel::Volume));
-        assert!(vi.has_label(ValueLabel::NonMetricUnits));
-        assert_eq!(vi.units().count(), 1);
-        assert_eq!(vi.first_unit().unwrap().name, UnitName::AmericanGallon);
-        assert_eq!(vi.decimal_scale_exponent, -3);
+        // EN 13757-3 Annex C Table C.1, VIFE 0x3D after each metric VIF.
+        // Issue #62: VIF 0x93 is 10^-3 m³ = 1 l, which maps to 1 USgal.
+        assert_eq!(
+            decode(&[0x93, 0x3D]),
+            (vec![(UnitName::AmericanGallon, 1)], 0)
+        );
+        // 10^-3 Wh -> 10^-3 kBTU = 1 BTU
+        assert_eq!(
+            decode(&[0x80, 0x3D]),
+            (vec![(UnitName::BritishThermalUnit, 1)], 0)
+        );
+        // 10^-3 W -> 10^-3 mBTU/s = 10^-6 BTU/s
+        assert_eq!(
+            decode(&[0xA8, 0x3D]),
+            (
+                vec![(UnitName::BritishThermalUnit, 1), (UnitName::Second, -1)],
+                -6
+            )
+        );
+        // 10^-7 m³/min -> 10^-4 USgal/min
+        assert_eq!(
+            decode(&[0xC0, 0x3D]),
+            (
+                vec![(UnitName::AmericanGallon, 1), (UnitName::Minute, -1)],
+                -4
+            )
+        );
+        // Flow, return, difference and external temperature: 10^-3 °F
+        for vif in [0xD8, 0xDC, 0xE0, 0xE4] {
+            assert_eq!(decode(&[vif, 0x3D]), (vec![(UnitName::Fahrenheit, 1)], -3));
+        }
+        // Cold/warm temperature limit via 0xFB 0x74: 10^-3 °F
+        assert_eq!(
+            decode(&[0xFB, 0xF4, 0x3D]),
+            (vec![(UnitName::Fahrenheit, 1)], -3)
+        );
 
         // Without the VIFE the unit stays metric.
         let vi = ValueInformation::try_from(
@@ -2199,6 +2264,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(vi.first_unit().unwrap().name, UnitName::Meter);
+        assert_eq!(vi.decimal_scale_exponent, -3);
     }
 
     #[test]
