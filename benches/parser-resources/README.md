@@ -20,9 +20,8 @@ uses the larger nested path rather than adding both:
 ```text
 parse_full_wired_frame + max(
   MbusData::try_from -> frame/application setup,
-  DataRecords::next -> DataRecord::try_from -> DataRecord::parse ->
-    DataRecordHeader::try_from -> ProcessedDataRecordHeader::try_from ->
-    ValueInformation::try_from + max(
+  DataRecords::next -> DataRecord::parse ->
+    ProcessedDataRecordHeader::try_from -> ValueInformation::try_from + max(
       head_vif_info,
       OrthogonalVifes::fold -> OrthogonalVifes::next -> orthogonal_vife_info
     )

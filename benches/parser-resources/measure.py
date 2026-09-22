@@ -19,9 +19,7 @@ TARGET = "thumbv7em-none-eabi"
 
 CRITICAL_PATH = (
     ("record_iteration", "DataRecords::next"),
-    ("data_record_try_from", "DataRecord::try_from"),
     ("data_record_parse", "DataRecord::parse"),
-    ("record_header_parse", "DataRecordHeader::try_from"),
     ("processed_header_parse", "ProcessedDataRecordHeader::try_from"),
     ("value_information_parse", "ValueInformation::try_from"),
 )
@@ -63,10 +61,6 @@ FRAME_SYMBOLS = {
     ),
     "vif_block_parse": (
         "<m_bus_application_layer::value_information::ValueInformationBlock as "
-        "core::convert::TryFrom<&[u8]>>::try_from"
-    ),
-    "record_header_parse": (
-        "<m_bus_application_layer::data_record::DataRecordHeader as "
         "core::convert::TryFrom<&[u8]>>::try_from"
     ),
     "processed_header_parse": (
@@ -153,11 +147,6 @@ def parse_stack_sizes(output: str) -> dict[str, int]:
     frames["vife_fold"] = matches[0]
 
     patterns = {
-        "data_record_try_from": (
-            "<m_bus_application_layer::data_record::DataRecord as "
-            "core::convert::TryFrom<",
-            ">::try_from",
-        ),
         "vife_consumer": (
             "m_bus_application_layer::value_information::orthogonal_vife_info",
             "",
