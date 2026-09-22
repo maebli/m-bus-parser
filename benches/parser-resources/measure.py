@@ -132,9 +132,11 @@ def parse_stack_sizes(output: str) -> dict[str, int]:
         frames[name] = sizes[symbol]
 
     patterns = {
+        # Match any accumulator type so changing what the fold carries does not
+        # hide the frame.
         "vife_fold": (
             "<m_bus_application_layer::value_information::OrthogonalVifes as "
-            "core::iter::traits::iterator::Iterator>::fold::<(isize, isize), ",
+            "core::iter::traits::iterator::Iterator>::fold::<",
             ">",
         ),
         "data_record_try_from": (
