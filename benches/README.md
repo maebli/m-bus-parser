@@ -5,7 +5,7 @@ python3 benches/measure-corpus.py
 ```
 
 Writes `corpus-benchmarks.json` and `corpus-benchmarks-details.json`. CI publishes
-one Rust/libmbus table: native average decode time, Cortex-M4 peak stack, and flash.
+one Rust/libmbus table: native average decode time, Cortex-M4 peak stack, heap, and flash.
 On Linux x86-64, add `--instructions instruction-counts.json` (requires Valgrind).
 CI fails on instruction increases over 5% against the latest matching baseline;
 Compiler/tool/CPU/corpus changes reset it. Timing is informational. Counts include
@@ -19,8 +19,8 @@ All 73 wired vectors are timed, including known errors (Rust: 4; libmbus: 1).
 [XML exclusions](libmbus-comparison/xml-exclusions.json) affect only untimed checks.
 Both use O3 without LTO. Rust returns typed values; libmbus includes normalization,
 allocation, and cleanup. Diagnostic I/O is disabled. Compare speed on the same host.
-Stack is an observed watermark, not a worst-case bound. Flash includes runtime,
-excludes fixtures; heap is reported separately.
+Stack is an observed watermark, not a worst-case bound. Heap is the allocator's
+sbrk high-water mark. Flash includes runtime, excludes fixtures.
 
 For detailed cases, run `cargo bench --locked --bench corpus` (add `-- --test`
 for a smoke check). See [parser-resources](parser-resources/README.md) for

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare full-corpus Rust/libmbus speed, Cortex-M4 stack, and flash: six metrics."""
+"""Compare full-corpus Rust/libmbus speed, Cortex-M4 stack, heap, and flash: eight metrics."""
 from __future__ import annotations
 
 import argparse

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure the shared full-corpus decoder's Cortex-M4 flash and stack watermark."""
+"""Measure the shared full-corpus decoder's Cortex-M4 flash, stack, and heap watermarks."""
 from __future__ import annotations
 import argparse
 import json
@@ -102,6 +102,8 @@ def memory_metrics(output, source, env, expected, cc=None):
              "extra": context + "; observed stack watermark, max over corpus, not a static worst-case bound"},
             {"name": f"Linked decoder flash [implementation={library}]", "value": flash, "unit": "bytes",
              "extra": context + "; linked text+data minus .fixtures"},
+            {"name": f"Reserved decoder heap [implementation={library}]", "value": measurements["heap_reserved"], "unit": "bytes",
+             "extra": context + "; sbrk high-water mark over the corpus, including allocator overhead"},
         ])
         details[library] = measurements | {"flash_bytes": flash, "sections": section_sizes}
     return metrics, {"target": TARGET, "c_compiler": compiler, "qemu": qemu_version, "libraries": details}
