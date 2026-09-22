@@ -321,7 +321,7 @@ impl<'a> ValueInformationBlock<'a> {
     pub fn get_size(&self) -> usize {
         let mut size = 1;
         if let Some(vife) = &self.value_information_extension {
-            size += vife.iter().count();
+            size += vife.0.len();
         }
         if let Some(plaintext_vife) = &self.plaintext_vife {
             // 1 byte for the length of the ASCII string
@@ -1304,6 +1304,15 @@ impl<'a> TryFrom<&ValueInformationBlock<'a>> for ValueInformation<'a> {
             vife: orthogonal_chain(coding, ext),
             combinable_ext: false,
         };
+        if orthogonal.vife.0.is_empty() {
+            return Ok(Self {
+                head_labels: head.labels,
+                head_units: head.units,
+                orthogonal: orthogonal.vife,
+                decimal_scale_exponent: head.scale,
+                decimal_offset_exponent: head.offset,
+            });
+        }
         let (scale, offset) = orthogonal
             .clone()
             .fold((head.scale, head.offset), |(s, o), v| {
@@ -1832,6 +1841,9 @@ impl fmt::Display for UnitName {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+    use std::{vec, vec::Vec};
+
     fn assert_information(
         actual: super::ValueInformation<'_>,
         offset: isize,

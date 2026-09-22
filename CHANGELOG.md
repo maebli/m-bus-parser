@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Decoding data records needs about half the stack. On a Cortex-M4, the peak
-  stack while decoding the wired test corpus drops from 1976 to 992 bytes,
-  below libmbus (1176 bytes), and native decoding is about 30% faster. Records
-  are now built in place instead of being copied through several intermediate
-  values, and a record whose data field fails to decode no longer has its
-  header parsed a second time.
+- Decoding data records needs less stack and time. On a Cortex-M4, peak stack
+  across the 73 wired frames drops from 1976 to 944 bytes (libmbus: 1176),
+  while native decoding drops from about 739 to 469 ns/frame (libmbus: 2035).
+  Records are built in place, processed data information is updated in place,
+  common VIFs skip the orthogonal scan, and date/time coding uses the VIF
+  directly. A record whose data field fails to decode no longer has its header
+  parsed a second time.
 
 ### Fixed
 
