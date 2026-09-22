@@ -1180,6 +1180,60 @@ impl Iterator for OrthogonalVifes<'_> {
     }
 }
 
+/// Substitutes the metric units of a VIF followed by VIFE 0x3D, per
+/// EN 13757-3 Annex C Table C.1. Returns the non-metric units and the change
+/// to the decimal exponent; kBTU and mBTU/s are expressed as BTU and BTU/s.
+///
+/// Kept out of line and run after the scale fold, so the scale fold keeps its
+/// two-word accumulator and the scan's frame is not live at the same time.
+#[inline(never)]
+fn non_metric_units(
+    coding: ValueInformationCoding,
+    vif: u8,
+    first_vife: Option<u8>,
+    orthogonal: &ValueInformationFieldExtensions<'_>,
+) -> Option<(&'static [Unit], isize)> {
+    let units: Option<(&'static [Unit], isize)> = match coding {
+        ValueInformationCoding::Primary => match vif & 0x7F {
+            // 10^(nnn-3) Wh -> 10^(nnn-3) kBTU
+            0x00..=0x07 => Some((&[unit!(BritishThermalUnit)], 3)),
+            // 10^(nnn-6) m³ -> 10^(nnn-3) USgal
+            0x10..=0x17 => Some((&[unit!(AmericanGallon)], 3)),
+            // 10^(nnn-3) W -> 10^(nnn-3) mBTU/s
+            0x28..=0x2F => Some((&[unit!(BritishThermalUnit), unit!(Second ^ -1)], -3)),
+            // 10^(nnn-7) m³/min -> 10^(nnn-4) USgal/min
+            0x40..=0x47 => Some((&[unit!(AmericanGallon), unit!(Minute ^ -1)], 3)),
+            // Flow, return, difference and external temperature: °C/K -> °F
+            0x58..=0x67 => Some((&[unit!(Fahrenheit)], 0)),
+            _ => None,
+        },
+        // Cold/warm temperature limit: °C -> °F
+        ValueInformationCoding::AlternateVIFExtension => match first_vife? & 0x7F {
+            0x74..=0x77 => Some((&[unit!(Fahrenheit)], 0)),
+            _ => None,
+        },
+        _ => None,
+    };
+    let units = units?;
+    // Same walk as OrthogonalVifes::next, but on raw bytes: decoding each VIFE
+    // into a VifInfo would add an iterator frame below this one.
+    let mut combinable_ext = false;
+    for &byte in orthogonal.0 {
+        if byte == 0xFC {
+            combinable_ext = true;
+            continue;
+        }
+        if !core::mem::replace(&mut combinable_ext, false) {
+            match byte & 0x7F {
+                0x3D => return Some(units),
+                0x7F => return None,
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
 /// A borrowed, allocation-free view of decoded VIF and VIFE information.
 ///
 /// Labels and units are produced in wire order, including duplicates. The view
@@ -1255,9 +1309,18 @@ impl<'a> TryFrom<&ValueInformationBlock<'a>> for ValueInformation<'a> {
             .fold((head.scale, head.offset), |(s, o), v| {
                 (s + v.scale, o + v.offset)
             });
+        let (head_units, scale) = match non_metric_units(
+            coding,
+            block.value_information.data,
+            first,
+            &orthogonal.vife,
+        ) {
+            Some((units, delta)) => (units, scale + delta),
+            None => (head.units, scale),
+        };
         Ok(Self {
             head_labels: head.labels,
-            head_units: head.units,
+            head_units,
             orthogonal: orthogonal.vife,
             decimal_scale_exponent: scale,
             decimal_offset_exponent: offset,
@@ -1714,6 +1777,7 @@ pub enum UnitName {
     Fahrenheit,
     AmericanGallon,
     Calorie,
+    BritishThermalUnit,
 }
 
 #[cfg(feature = "std")]
@@ -1760,6 +1824,7 @@ impl fmt::Display for UnitName {
             UnitName::HCAUnit => write!(f, "HCAUnit"),
             UnitName::Fahrenheit => write!(f, "°F"),
             UnitName::AmericanGallon => write!(f, "UsGal"),
+            UnitName::BritishThermalUnit => write!(f, "BTU"),
             UnitName::Calorie => write!(f, "cal"),
         }
     }
@@ -2160,6 +2225,73 @@ mod tests {
         assert!(vi.has_label(ValueLabel::MoistureLevel));
         assert_eq!(vi.first_unit().unwrap().name, UnitName::Percent);
         assert_eq!(vi.decimal_scale_exponent, 0);
+    }
+
+    #[test]
+    fn test_non_metric_vife_substitutes_units() {
+        use crate::value_information::{
+            UnitName, ValueInformation, ValueInformationBlock, ValueLabel,
+        };
+
+        let decode = |bytes: &[u8]| {
+            let vi = ValueInformation::try_from(&ValueInformationBlock::try_from(bytes).unwrap())
+                .unwrap();
+            assert!(vi.has_label(ValueLabel::NonMetricUnits));
+            let units: Vec<_> = vi.units().map(|u| (u.name, u.exponent)).collect();
+            (units, vi.decimal_scale_exponent)
+        };
+
+        // EN 13757-3 Annex C Table C.1, VIFE 0x3D after each metric VIF.
+        // Issue #62: VIF 0x93 is 10^-3 m³ = 1 l, which maps to 1 USgal.
+        assert_eq!(
+            decode(&[0x93, 0x3D]),
+            (vec![(UnitName::AmericanGallon, 1)], 0)
+        );
+        // 10^-3 Wh -> 10^-3 kBTU = 1 BTU
+        assert_eq!(
+            decode(&[0x80, 0x3D]),
+            (vec![(UnitName::BritishThermalUnit, 1)], 0)
+        );
+        // 10^-3 W -> 10^-3 mBTU/s = 10^-6 BTU/s
+        assert_eq!(
+            decode(&[0xA8, 0x3D]),
+            (
+                vec![(UnitName::BritishThermalUnit, 1), (UnitName::Second, -1)],
+                -6
+            )
+        );
+        // 10^-7 m³/min -> 10^-4 USgal/min
+        assert_eq!(
+            decode(&[0xC0, 0x3D]),
+            (
+                vec![(UnitName::AmericanGallon, 1), (UnitName::Minute, -1)],
+                -4
+            )
+        );
+        // Flow, return, difference and external temperature: 10^-3 °F
+        for vif in [0xD8, 0xDC, 0xE0, 0xE4] {
+            assert_eq!(decode(&[vif, 0x3D]), (vec![(UnitName::Fahrenheit, 1)], -3));
+        }
+        // Cold/warm temperature limit via 0xFB 0x74: 10^-3 °F
+        assert_eq!(
+            decode(&[0xFB, 0xF4, 0x3D]),
+            (vec![(UnitName::Fahrenheit, 1)], -3)
+        );
+
+        // Without the VIFE, after the combinable extension prefix 0xFC, or after
+        // the manufacturer escape 0xFF, 0x3D is not the non-metric VIFE and the
+        // unit stays metric.
+        for bytes in [&[0x13][..], &[0x93, 0xFC, 0x3D], &[0x93, 0xFF, 0x3D]] {
+            let vi = ValueInformation::try_from(&ValueInformationBlock::try_from(bytes).unwrap())
+                .unwrap();
+            assert!(!vi.has_label(ValueLabel::NonMetricUnits), "{bytes:02X?}");
+            assert_eq!(
+                vi.first_unit().unwrap().name,
+                UnitName::Meter,
+                "{bytes:02X?}"
+            );
+            assert_eq!(vi.decimal_scale_exponent, -3, "{bytes:02X?}");
+        }
     }
 
     #[test]
