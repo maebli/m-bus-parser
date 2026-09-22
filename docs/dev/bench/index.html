@@ -110,6 +110,21 @@
         font-size: 0.875rem;
         color: #596574;
       }
+      .comparison-panel { margin: 24px 0; padding: 24px; border: 1px solid #dce2e9; border-radius: 12px; }
+      .comparison-panel h1 { margin: 0 0 8px; color: #202a38; }
+      .comparison-table { width: 100%; border-collapse: collapse; margin: 24px 0; table-layout: fixed; }
+      .comparison-table th, .comparison-table td { text-align: left; padding: 16px 12px; vertical-align: top; border-bottom: 1px solid #eef1f4; }
+      .comparison-table th:first-child { width: 25%; }
+      .comparison-bar { height: 10px; border-radius: 5px; margin-top: 10px; }
+      .comparison-rust { background: #b85c38; }
+      .comparison-libmbus { background: #3273dc; }
+      .comparison-value { font-size: 1.3rem; font-weight: 600; color: #202a38; }
+      summary { cursor: pointer; padding: 12px 0; }
+      @media (max-width: 600px) {
+        .comparison-panel { padding: 12px; }
+        .comparison-table th, .comparison-table td { padding: 12px 5px; }
+        .comparison-value { font-size: 1rem; }
+      }
     </style>
     <title>Benchmarks</title>
   </head>
@@ -125,10 +140,11 @@
         <a id="repository-link" rel="noopener"></a>
       </div>
     </header>
-    <p>Optimization charts compare Size (z), Size (s), and Speed (3) on the same
-      fixture. Latency is measured on the native host; flash and static RAM are
-      measured for Thumb. Static RAM excludes stack and heap.</p>
-    <main id="main"></main>
+    <section id="library-comparison" class="comparison-panel"></section>
+    <details id="history-details">
+      <summary>Earlier benchmark history</summary>
+      <main id="main"></main>
+    </details>
     <footer>
       <button id="dl-button">Download data as JSON</button>
       <div class="spacer"></div>
@@ -160,6 +176,70 @@
           _: '#333333'
         };
 
+        function renderComparison(entries) {
+          const parent = document.getElementById('library-comparison');
+          const title = document.createElement('h1');
+          title.textContent = 'Rust vs libmbus';
+          parent.appendChild(title);
+          const description = document.createElement('p');
+          description.textContent = 'Complete decode of the same wired test corpus. Lower is better.';
+          parent.appendChild(description);
+          const runs = entries['Parser library comparison'] || [];
+          const latest = runs.slice().sort((a, b) => a.date - b.date).slice(-1)[0];
+          const benches = latest ? latest.benches : [];
+          const speed = benches.find(b => b.name === 'Corpus decode latency [implementation=rust]');
+          const count = speed && (speed.extra || '').match(/frames\/iteration=(\d+)/);
+          if (count) description.textContent = 'Full decode of all ' + count[1] + ' wired test vectors, including known error cases. Lower is better.';
+          const table = document.createElement('table');
+          table.className = 'comparison-table';
+          const header = document.createElement('tr');
+          for (const text of ['Measurement', 'Rust', 'libmbus']) {
+            const cell = document.createElement('th');
+            cell.textContent = text;
+            header.appendChild(cell);
+          }
+          table.appendChild(header);
+          for (const [metric, label] of [
+            ['Corpus decode latency', 'Average time / frame'],
+            ['Peak decoder stack', 'Peak stack'],
+            ['Linked decoder flash', 'Flash size'],
+          ]) {
+            const row = document.createElement('tr');
+            const heading = document.createElement('th');
+            heading.textContent = label;
+            row.appendChild(heading);
+            const values = ['rust', 'libmbus'].map(implementation =>
+              benches.find(b => b.name === metric + ' [implementation=' + implementation + ']'));
+            const max = Math.max(...values.map(value => value ? value.value : 0));
+            values.forEach((value, index) => {
+              const cell = document.createElement('td');
+              const number = document.createElement('div');
+              number.className = 'comparison-value';
+              number.textContent = value ? (value.unit === 'ns/frame'
+                ? (value.value / 1000).toLocaleString(undefined, {maximumFractionDigits: 3}) + ' µs/frame'
+                : (value.value / 1024).toLocaleString(undefined, {maximumFractionDigits: 2}) + ' KiB') : 'Not measured';
+              cell.appendChild(number);
+              if (value) {
+                cell.title = value.extra || '';
+                const bar = document.createElement('div');
+                bar.className = 'comparison-bar comparison-' + (index === 0 ? 'rust' : 'libmbus');
+                bar.style.width = (max ? 100 * value.value / max : 0) + '%';
+                cell.appendChild(bar);
+              }
+              row.appendChild(cell);
+            });
+            table.appendChild(row);
+          }
+          parent.appendChild(table);
+          const note = document.createElement('p');
+          note.className = 'benchmark-note';
+          note.textContent = 'Native host speed; Cortex-M4 stack and flash. Stack is the observed high-water mark across the corpus. Bars are scaled separately within each row.';
+          const cStack = benches.find(b => b.name === 'Peak decoder stack [implementation=libmbus]');
+          const heap = cStack && (cStack.extra || '').match(/heap_reserved=(\d+)/);
+          if (heap) note.textContent += ' libmbus additionally reserved ' + (Number(heap[1]) / 1024).toFixed(1) + ' KiB of heap; Rust uses no heap.';
+          parent.appendChild(note);
+        }
+
         function init() {
           function collectBenchesPerTestCase(entries) {
             const map = new Map();
@@ -167,11 +247,11 @@
               const {commit, date, tool, benches} = entry;
               for (const bench of benches) {
                 const result = { commit, date, tool, bench };
-                // Optimization variants share a chart, while legacy metrics
-                // keep their existing single-series charts.
-                const match = bench.name.match(/^(.*) \[opt-level=(z|s|3)\]$/);
+                // Only explicitly comparable variants share a chart. Keep
+                // legacy metrics and different workloads in independent charts.
+                const match = bench.name.match(/^(.*) \[(?:opt-level=(z|s|3)|implementation=(rust|libmbus)|method=(copy|view))\]$/);
                 const name = match ? match[1] : bench.name;
-                const variant = match ? match[2] : 'default';
+                const variant = match ? (match[2] || match[3] || match[4]) : 'default';
                 if (!map.has(name)) map.set(name, new Map());
                 const series = map.get(name);
                 if (!series.has(variant)) series.set(variant, []);
@@ -199,7 +279,7 @@
           };
 
           // Prepare data points for charts
-          const preferredOrder = ['Parser optimization comparison', 'Parser decode speed', 'Parser stack and footprint'];
+          const preferredOrder = ['Parser library comparison', 'Parser corpus and libmbus', 'Parser optimization comparison', 'Parser decode speed', 'Parser stack and footprint'];
           const rank = name => {
             const index = preferredOrder.indexOf(name);
             return index < 0 ? preferredOrder.length : index;
@@ -227,9 +307,9 @@
             canvas.className = 'benchmark-chart';
             plot.appendChild(canvas);
 
-            const profileColors = {z: '#3273dc', s: '#159957', '3': '#d17a00'};
-            const profileLabels = {z: 'Size (z)', s: 'Size (s)', '3': 'Speed (3)'};
-            const variantOrder = ['default', 'z', 's', '3'];
+            const profileColors = {z: '#3273dc', s: '#159957', '3': '#d17a00', rust: '#b85c38', libmbus: '#3273dc', copy: '#159957', view: '#7d4fd1'};
+            const profileLabels = {z: 'Size (z)', s: 'Size (s)', '3': 'Speed (3)', rust: 'Rust (O3)', libmbus: 'libmbus (O3)', copy: 'Copy to buffer', view: 'Borrowed view'};
+            const variantOrder = ['default', 'z', 's', '3', 'rust', 'libmbus', 'copy', 'view'];
             const series = [...variants.entries()].sort((a, b) => variantOrder.indexOf(a[0]) - variantOrder.indexOf(b[0]));
             // Align by run, not array position: older commits can lack variants.
             const pointKey = d => d.commit.id + ':' + d.date;
@@ -249,7 +329,7 @@
             const table = document.createElement('table');
             table.className = 'benchmark-values';
             const header = document.createElement('tr');
-            for (const text of ['Profile', 'Latest value', 'Commit']) {
+            for (const text of ['Variant', 'Latest value', 'Commit']) {
               const cell = document.createElement('th');
               cell.textContent = text;
               header.appendChild(cell);
@@ -432,7 +512,9 @@
           }
         }
 
-        renderAllChars(init()); // Start
+        renderComparison(window.BENCHMARK_DATA.entries);
+        renderAllChars(init());
+        document.getElementById('history-details').ontoggle = () => window.dispatchEvent(new Event('resize'));
       })();
     </script>
   </body>

@@ -79,3 +79,11 @@ compared within the same machine/run; CI tracks its own history.
 The comparison JSON uses the same benchmark history format as `measure.py`.
 Chart grouping, incomplete histories, tooltips, and commit links can be checked
 with `node --test .github/scripts/test-bench-charts.cjs` from the repository root.
+
+## Corpus and libmbus measurements
+
+The same CI workflow publishes a [Rust/libmbus comparison](../README.md) with
+three rows: average decode time across all 73 wired vectors, peak observed
+Cortex-M4 stack, and linked Cortex-M4 flash. It writes six values to
+`corpus-benchmarks.json` and methodology to `corpus-benchmarks-details.json`.
+The website shows one comparison table and folds earlier benchmark charts away.

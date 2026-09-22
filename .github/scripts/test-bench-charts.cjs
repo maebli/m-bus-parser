@@ -12,7 +12,7 @@ function render(entries) {
   const opened = [];
   const elements = [];
   const element = tag => {
-    const node = {tag, children: [], appendChild(child) { this.children.push(child); child.parent = this; }};
+    const node = {tag, style: {}, children: [], appendChild(child) { this.children.push(child); child.parent = this; }};
     elements.push(node);
     return node;
   };
@@ -83,4 +83,62 @@ test('single-run zero-valued profiles remain visible with separate chart contain
   assert.ok(charts.every(c => c.options.maintainAspectRatio === false));
   assert.equal(elements.filter(e => e.textContent === '0 bytes').length, 3);
   assert.equal(elements.filter(e => e.className === 'benchmark-note' && e.textContent.includes('1 recorded run')).length, 2);
+});
+
+test('Rust/libmbus comparisons overlay only equivalent workloads and retain missing runs', () => {
+  const {charts, opened} = render({'Parser corpus and libmbus': [
+    entry('a', 1, [bench('Wired link-layer comparison [implementation=rust]', 20)]),
+    entry('b', 2, [
+      bench('Wired link-layer comparison [implementation=libmbus]', 45),
+      bench('Wired link-layer comparison [implementation=rust]', 21),
+      bench('Wired equivalent XML comparison [implementation=rust]', 300),
+      bench('Wired equivalent XML comparison [implementation=libmbus]', 600),
+    ]),
+  ]});
+  assert.equal(charts.length, 2);
+  assert.deepEqual(Array.from(charts[0].data.datasets, d => d.label), ['Rust (O3)', 'libmbus (O3)']);
+  assert.deepEqual(Array.from(charts[0].data.datasets, d => Array.from(d.data)), [[20, 21], [null, 45]]);
+  assert.equal(charts[1].options.title.text, 'Wired equivalent XML comparison');
+  const item = {datasetIndex: 1, index: 1, value: '45'};
+  assert.match(charts[0].options.tooltips.callbacks.label(item), /libmbus \(O3\): 45/);
+  charts[0].options.onClick(null, [{_datasetIndex: 1, _index: 1}]);
+  assert.deepEqual(opened, ['https://example.test/b']);
+});
+
+test('CRC copy/view share charts per payload length without merging profiles or sizes', () => {
+  const {charts} = render({'Parser corpus and libmbus': [entry('a', 1, [
+    bench('Format A normalization (16 payload bytes) [method=view]', 100),
+    bench('Format A normalization (16 payload bytes) [method=copy]', 80),
+    bench('Format A normalization (32 payload bytes) [method=copy]', 150),
+    bench('Wired corpus full semantic decode [opt-level=z]', 900),
+  ])]});
+  assert.equal(charts.length, 3);
+  assert.deepEqual(Array.from(charts[0].data.datasets, d => d.label), ['Copy to buffer', 'Borrowed view']);
+  assert.deepEqual(Array.from(charts[0].data.datasets, d => Array.from(d.data)), [[80], [100]]);
+  assert.equal(charts[2].data.datasets[0].label, 'Size (z)');
+});
+
+test('exported summary displays one comparison table with three rows', {
+  skip: !process.env.BENCH_CORPUS_JSON,
+}, () => {
+  const metrics = JSON.parse(readFileSync(process.env.BENCH_CORPUS_JSON, 'utf8'));
+  assert.equal(metrics.length, 6);
+  const {charts, elements} = render({'Parser library comparison': [entry('measured', 1, metrics)]});
+  assert.equal(charts.length, 3); // optional historical charts remain in a closed details element
+  assert.equal(elements.filter(e => e.className === 'comparison-table').length, 1);
+  assert.equal(elements.filter(e => e.className === 'comparison-value').length, 6);
+  const comparison = elements.find(e => e.className === 'comparison-table');
+  assert.equal(comparison.children.length, 4); // header + speed, stack, flash
+  assert.ok(elements.some(e => e.textContent && e.textContent.includes('Full decode of all 73')));
+  assert.ok(elements.some(e => e.textContent && e.textContent.includes('additionally reserved')));
+  assert.ok(html.includes('<details id="history-details">'));
+});
+
+test('the overview never mixes old memory results into a newer partial run', () => {
+  const {elements} = render({'Parser library comparison': [
+    entry('old', 1, [bench('Peak decoder stack [implementation=libmbus]', 500)]),
+    entry('new', 2, [{name: 'Corpus decode latency [implementation=rust]', unit: 'ns/frame', value: 1000}]),
+  ]});
+  const values = elements.filter(e => e.className === 'comparison-value');
+  assert.equal(values.filter(e => e.textContent === 'Not measured').length, 5);
 });
