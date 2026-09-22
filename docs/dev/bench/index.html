@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes" />
@@ -119,7 +119,10 @@
       .comparison-rust { background: #b85c38; }
       .comparison-libmbus { background: #3273dc; }
       .comparison-value { font-size: 1.3rem; font-weight: 600; color: #202a38; }
-      summary { cursor: pointer; padding: 12px 0; }
+      .measurement-help { display: block; margin-top: 6px; font-size: 0.875rem; font-weight: 400; color: #596574; }
+      summary { cursor: pointer; padding: 16px 0; font-weight: 600; color: #202a38; }
+      summary:focus-visible { outline: 2px solid #3273dc; outline-offset: 4px; }
+      .history-intro { margin: 0 0 12px; color: #596574; }
       @media (max-width: 600px) {
         .comparison-panel { padding: 12px; }
         .comparison-table th, .comparison-table td { padding: 12px 5px; }
@@ -142,11 +145,14 @@
     </header>
     <section id="library-comparison" class="comparison-panel"></section>
     <details id="history-details">
-      <summary>Earlier benchmark history</summary>
+      <summary>See performance over time and detailed tests</summary>
+      <p class="history-intro">These charts track changes across code updates and compare build settings.
+        Each point is a benchmark run. Select a point to see the code change behind it.
+        The table above is the latest Rust vs libmbus comparison.</p>
       <main id="main"></main>
     </details>
     <footer>
-      <button id="dl-button">Download data as JSON</button>
+      <button id="dl-button">Download benchmark data (JSON)</button>
       <div class="spacer"></div>
       <div class="small">Powered by <a rel="noopener" href="https://github.com/marketplace/actions/continuous-benchmark">github-action-benchmark</a></div>
     </footer>
@@ -185,25 +191,27 @@
             return element;
           };
           append(parent, 'h1', 'Rust vs libmbus');
-          const description = append(parent, 'p', 'Complete decode of the same wired test corpus. Lower is better.');
+          const description = append(parent, 'p', 'How quickly do the parsers read meter messages, and how much memory do they need? Smaller values and shorter bars are better.');
           const runs = entries['Parser library comparison'] || [];
           const latest = runs.slice().sort((a, b) => a.date - b.date).slice(-1)[0];
           const benches = latest ? latest.benches : [];
           const speed = benches.find(b => b.name === 'Corpus decode latency [implementation=rust]');
           const count = speed && (speed.extra || '').match(/frames\/iteration=(\d+)/);
-          if (count) description.textContent = 'Full decode of all ' + count[1] + ' wired test vectors, including known error cases. Lower is better.';
+          if (count) description.textContent = 'Both parsers process the same ' + count[1] + ' wired meter messages, including known error cases. Smaller values and shorter bars are better.';
           const table = append(parent, 'table', '', 'comparison-table');
           const header = append(table, 'tr');
           for (const text of ['Measurement', 'Rust', 'libmbus']) {
-            append(header, 'th', text);
+            append(header, 'th', text).scope = 'col';
           }
-          for (const [metric, label] of [
-            ['Corpus decode latency', 'Average time / frame'],
-            ['Peak decoder stack', 'Peak stack'],
-            ['Linked decoder flash', 'Flash size'],
+          for (const [metric, label, help] of [
+            ['Corpus decode latency', 'Processing time', 'Average time to read one message'],
+            ['Peak decoder stack', 'Working memory (stack)', 'Most temporary stack memory observed during decoding'],
+            ['Linked decoder flash', 'Program size (flash)', 'Storage needed for the decoder and its runtime'],
           ]) {
             const row = append(table, 'tr');
-            append(row, 'th', label);
+            const heading = append(row, 'th', label);
+            heading.scope = 'row';
+            append(heading, 'span', help, 'measurement-help');
             const values = ['rust', 'libmbus'].map(implementation =>
               benches.find(b => b.name === metric + ' [implementation=' + implementation + ']'));
             const max = Math.max(...values.map(value => value ? value.value : 0));
@@ -211,7 +219,7 @@
               const cell = append(row, 'td');
               const number = append(cell, 'div', '', 'comparison-value');
               number.textContent = value ? (value.unit === 'ns/frame'
-                ? (value.value / 1000).toLocaleString(undefined, {maximumFractionDigits: 3}) + ' µs/frame'
+                ? (value.value / 1000).toLocaleString(undefined, {maximumFractionDigits: 3}) + ' µs/message'
                 : (value.value / 1024).toLocaleString(undefined, {maximumFractionDigits: 2}) + ' KiB') : 'Not measured';
               if (value) {
                 cell.title = value.extra || '';
@@ -221,10 +229,10 @@
             });
           }
           const note = append(parent, 'p', '', 'benchmark-note');
-          note.textContent = 'Native host speed; Cortex-M4 stack and flash. Stack is the observed high-water mark across the corpus. Bars are scaled separately within each row.';
+          note.textContent = 'Time is measured on the benchmark computer; memory and program size are measured for a Cortex-M4 microcontroller. µs means microseconds (one millionth of a second); KiB means 1,024 bytes. Compare bars within each row.';
           const cStack = benches.find(b => b.name === 'Peak decoder stack [implementation=libmbus]');
           const heap = cStack && (cStack.extra || '').match(/heap_reserved=(\d+)/);
-          if (heap) note.textContent += ' libmbus additionally reserved ' + (Number(heap[1]) / 1024).toFixed(1) + ' KiB of heap; Rust uses no heap.';
+          if (heap) note.textContent += ' libmbus also reserved ' + (Number(heap[1]) / 1024).toFixed(1) + ' KiB of heap (additional working memory); Rust uses none. Stack values are observed peaks, not guaranteed maximums.';
         }
 
         function init() {
