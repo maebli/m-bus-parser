@@ -131,12 +131,28 @@ def parse_stack_sizes(output: str) -> dict[str, int]:
             raise SystemExit(f"stack size not found for {symbol}")
         frames[name] = sizes[symbol]
 
-    patterns = {
-        "vife_fold": (
+    # Match the fold by its caller, not its accumulator type, so changing what
+    # the fold carries does not hide the frame and the folds behind other
+    # iterator methods, such as last() and count(), are not picked up.
+    vife_fold = re.compile(
+        re.escape(
             "<m_bus_application_layer::value_information::OrthogonalVifes as "
-            "core::iter::traits::iterator::Iterator>::fold::<(isize, isize), ",
-            ">",
-        ),
+            "core::iter::traits::iterator::Iterator>::fold::<"
+        )
+        + r".*, "
+        + re.escape(
+            "<m_bus_application_layer::value_information::ValueInformation as "
+            "core::convert::TryFrom<&m_bus_application_layer::value_information::"
+            "ValueInformationBlock>>::try_from::{closure#"
+        )
+        + r"\d+\}>"
+    )
+    matches = [size for symbol, size in sizes.items() if vife_fold.fullmatch(symbol)]
+    if len(matches) != 1:
+        raise SystemExit(f"expected one stack size for vife_fold, found {len(matches)}")
+    frames["vife_fold"] = matches[0]
+
+    patterns = {
         "data_record_try_from": (
             "<m_bus_application_layer::data_record::DataRecord as "
             "core::convert::TryFrom<",
