@@ -6,6 +6,10 @@ python3 benches/measure-corpus.py
 
 Writes `corpus-benchmarks.json` and `corpus-benchmarks-details.json`. CI publishes
 one Rust/libmbus table: native average decode time, Cortex-M4 peak stack, and flash.
+On Linux x86-64, add `--instructions instruction-counts.json` (requires Valgrind).
+CI fails on instruction increases over 5% against the latest matching baseline;
+Compiler/tool/CPU/corpus changes reset it. Timing is informational. Counts include
+both decoders and cleanup, excluding setup and XML; see Detailed benchmarks.
 
 Requires Git, a C compiler, Rust `nightly-2026-05-16` with `thumbv7em-none-eabi`,
 Arm GCC 14.2.1 (`ARM_GCC` or PATH), and `qemu-system-arm`. The runner clones

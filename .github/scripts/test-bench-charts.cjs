@@ -142,3 +142,17 @@ test('the overview never mixes old memory results into a newer partial run', () 
   const values = elements.filter(e => e.className === 'comparison-value');
   assert.equal(values.filter(e => e.textContent === 'Not measured').length, 5);
 });
+
+test('instruction counts stay separate from timing and retain their units', () => {
+  const {charts} = render({'Parser instruction counts': [entry('a', 1,
+    ['rust', 'libmbus'].map(implementation => ({
+      name: `Decoder instructions [implementation=${implementation}]`,
+      value: 1200, unit: 'instructions/message',
+    })))], 'Parser library comparison': [entry('a', 1, [
+      {name: 'Corpus decode latency [implementation=rust]', value: 500, unit: 'ns/frame'},
+    ])]});
+  assert.equal(charts.length, 2);
+  assert.equal(charts[1].options.title.text, 'Decoder instructions');
+  assert.equal(charts[1].data.datasets.length, 2);
+  assert.match(charts[1].options.tooltips.callbacks.label({datasetIndex: 0, index: 0, value: '1200'}), /instructions\/message/);
+});

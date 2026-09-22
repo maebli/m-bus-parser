@@ -46,6 +46,25 @@ struct Fixture {
     expected_records: u32,
 }
 
+// Stable symbols let Callgrind count only the workload and its callees.
+#[no_mangle]
+#[inline(never)]
+fn instruction_rust(fixtures: &[Fixture]) {
+    for fixture in fixtures {
+        black_box(full_decode::decode(black_box(&fixture.bytes)));
+    }
+}
+
+#[no_mangle]
+#[inline(never)]
+fn instruction_libmbus(fixtures: &[Fixture]) {
+    for fixture in fixtures {
+        let bytes = black_box(fixture.bytes.as_slice());
+        // SAFETY: input remains valid throughout the synchronous C call.
+        black_box(unsafe { comparison_decode(bytes.as_ptr(), bytes.len()) });
+    }
+}
+
 fn benchmarks(c: &mut Criterion) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut paths: Vec<_> = fs::read_dir(root.join("tests/rscada/test-frames"))
@@ -181,6 +200,15 @@ fn benchmarks(c: &mut Criterion) {
     }
     if let Some(path) = std::env::var_os("LIBMBUS_DECODE_REPORT") {
         fs::write(path, serde_json::to_string_pretty(&counts).unwrap()).unwrap();
+    }
+    if let Ok(library) = std::env::var("LIBMBUS_INSTRUCTIONS") {
+        // Preflight above warms both decoders without entering the counted symbols.
+        match library.as_str() {
+            "rust" => instruction_rust(&fixtures),
+            "libmbus" => instruction_libmbus(&fixtures),
+            _ => panic!("unknown instruction workload: {library}"),
+        }
+        return;
     }
     let mut group = c.benchmark_group("comparison/decode");
     group
