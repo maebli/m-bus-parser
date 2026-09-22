@@ -94,9 +94,10 @@ impl<'a> From<DataRecords<'a>> for Vec<DataRecord<'a>> {
 impl<'a> Iterator for DataRecords<'a> {
     type Item = Result<DataRecord<'a>, DataRecordError>;
 
-    // Each branch calls `DataRecord::parse` once with the optional TPL header;
-    // separate `try_from` calls per header variant each got their own stack
-    // slot for the returned record.
+    // Inlined, and every record is returned exactly as `DataRecord::parse`
+    // produced it, never read in between: that lets the compiler build it
+    // directly in the caller's slot instead of a local copy.
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         while self.offset < self.data.len() {
             let dif = data_information::DataInformationField::from(*self.data.get(self.offset)?);
@@ -110,39 +111,30 @@ impl<'a> Iterator for DataRecords<'a> {
                     | data_information::SpecialFunctions::MoreRecordsFollow => {
                         let remaining = self.data.get(self.offset..)?;
                         self.offset = self.data.len();
-                        let record = DataRecord::parse(remaining, self.long_tpl_header);
-                        return Some(record);
+                        return Some(DataRecord::parse(remaining, self.long_tpl_header, &mut 0));
                     }
                     data_information::SpecialFunctions::GlobalReadoutRequest => {
                         let remaining = self.data.get(self.offset..)?;
                         self.offset += 1;
-                        let record = DataRecord::parse(remaining, self.long_tpl_header);
-                        return Some(record);
+                        return Some(DataRecord::parse(remaining, self.long_tpl_header, &mut 0));
                     }
                     data_information::SpecialFunctions::Reserved => {
                         self.offset += 1;
                     }
                 }
             } else {
-                let record = DataRecord::parse(self.data.get(self.offset..)?, self.long_tpl_header);
-                match record {
-                    Ok(record) => {
-                        self.offset += record.get_size();
-                        return Some(Ok(record));
-                    }
-                    Err(error) => {
-                        // A record whose contents fail to decode must not cost
-                        // us the records behind it: step over it by its
-                        // DIF/VIF-declared length and keep going. If even that
-                        // length is unknown the stream cannot be resynchronised,
-                        // so stop.
-                        match self.failed_record_size() {
-                            Some(size) => self.offset += size,
-                            None => self.offset = self.data.len(),
-                        }
-                        return Some(Err(error));
-                    }
-                }
+                // After a record that fails to decode, `parse` still reports
+                // its declared length so the records behind it are read; if
+                // even that is unknown the stream cannot be resynchronised,
+                // and the rest is skipped.
+                let mut consumed = 0;
+                let record = DataRecord::parse(
+                    self.data.get(self.offset..)?,
+                    self.long_tpl_header,
+                    &mut consumed,
+                );
+                self.offset += consumed;
+                return Some(record);
             }
         }
         None
@@ -150,34 +142,6 @@ impl<'a> Iterator for DataRecords<'a> {
 }
 
 impl<'a> DataRecords<'a> {
-    /// Length of the record at the current offset that failed to parse.
-    ///
-    /// Only the DIF/VIF header is re-read, so this works whenever the header
-    /// itself was well formed and it was the data field that could not be
-    /// decoded. Returns `None` when the header is unparseable, when the length
-    /// is not derivable, or when the record would not advance the offset.
-    // Out of line so the header it re-parses does not enlarge the stack
-    // frame of every `next` call.
-    #[inline(never)]
-    #[cold]
-    fn failed_record_size(&self) -> Option<usize> {
-        let remaining = self.data.get(self.offset..)?;
-        let header = data_record::DataRecordHeader::try_from(remaining).ok()?;
-        let header_size = header.get_size();
-        let data_size = header
-            .processed_data_record_header
-            .data_information
-            .as_ref()?
-            .data_field_coding
-            .data_size(remaining.get(header_size..)?)?;
-
-        let size = header_size.checked_add(data_size)?;
-        if size == 0 || size > remaining.len() {
-            return None;
-        }
-        Some(size)
-    }
-
     #[must_use]
     pub const fn new(data: &'a [u8], long_tpl_header: Option<&'a LongTplHeader>) -> Self {
         DataRecords {
