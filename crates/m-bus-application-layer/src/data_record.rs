@@ -2,7 +2,7 @@ use super::{
     data_information::{
         Data, DataFieldCoding, DataInformation, DataInformationBlock, DataType, SpecialFunctions,
     },
-    value_information::{ValueInformation, ValueInformationBlock, ValueLabel},
+    value_information::{ValueInformation, ValueInformationBlock},
     variable_user_data::DataRecordError,
     LongTplHeader,
 };
@@ -258,62 +258,39 @@ impl<'a> TryFrom<&RawDataRecordHeader<'a>> for ProcessedDataRecordHeader<'a> {
             }
         };
 
-        // One call site, read through the borrowed result: each `?` move or
-        // extra call site would give `DataInformation` another stack slot.
-        let data_information =
+        // Decode at one call site and adjust the coding in place so the
+        // processed header does not need a second DataInformation value.
+        let mut data_information =
             DataInformation::try_from(&raw_data_record_header.data_information_block);
-        let d = match &data_information {
+        let d = match &mut data_information {
             Ok(d) => d,
             Err(error) => return Err((*error).into()),
         };
-        // unfortunately, the data field coding is not always set in the data information block
-        // so we must do some additional checks to determine the correct data field coding
-        let data_field_coding = match &value_information {
-            Some(v) => date_time_coding(v, d.data_field_coding),
-            None => d.data_field_coding,
-        };
+        // The DIF alone does not always identify the data field coding.
+        d.data_field_coding = raw_data_record_header
+            .value_information_block
+            .as_ref()
+            .map_or(d.data_field_coding, |vib| {
+                date_time_coding(vib.value_information.data, d.data_field_coding)
+            });
 
         Ok(Self {
-            data_information: Some(DataInformation {
-                data_field_coding,
-                ..d.clone()
-            }),
+            data_information: data_information.ok(),
             value_information,
         })
     }
 }
 
-/// Returns the coding implied by date and time labels, which the DIF alone
-/// does not always announce, or `coding` if there are none.
-fn date_time_coding(v: &ValueInformation<'_>, coding: DataFieldCoding) -> DataFieldCoding {
-    // Decode the lazy labels once, retaining the existing precedence
-    // when more than one date/time label is present.
-    let date_time_labels = v.labels().fold(0u8, |flags, label| {
-        flags
-            | match label {
-                ValueLabel::Date => 1,
-                ValueLabel::DateTime => 2,
-                ValueLabel::Time => 4,
-                ValueLabel::DateTimeWithSeconds => 8,
-                _ => 0,
-            }
-    });
-    if date_time_labels & 1 != 0 {
-        DataFieldCoding::DateTypeG
-    } else if date_time_labels & 2 != 0 {
-        // VIF 0x6D with a 6-byte data field is a type I date and time
-        // (EN 13757-3), only the 4-byte variant is type F.
-        if coding == DataFieldCoding::Integer48Bit {
-            DataFieldCoding::DateTimeTypeI
-        } else {
-            DataFieldCoding::DateTimeTypeF
-        }
-    } else if date_time_labels & 4 != 0 {
-        DataFieldCoding::DateTimeTypeJ
-    } else if date_time_labels & 8 != 0 {
-        DataFieldCoding::DateTimeTypeI
-    } else {
-        coding
+/// The current VIF tables produce Date and DateTime only from primary VIFs
+/// 6Ch and 6Dh. Their orthogonal VIFEs cannot change the data-field coding, so
+/// there is no need to decode the lazy label iterator for every record.
+fn date_time_coding(vif: u8, coding: DataFieldCoding) -> DataFieldCoding {
+    match vif & 0x7F {
+        0x6C => DataFieldCoding::DateTypeG,
+        // VIF 6Dh with six data bytes is type I; four bytes is type F.
+        0x6D if coding == DataFieldCoding::Integer48Bit => DataFieldCoding::DateTimeTypeI,
+        0x6D => DataFieldCoding::DateTimeTypeF,
+        _ => coding,
     }
 }
 
@@ -349,6 +326,7 @@ impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::value_information::ValueLabel;
 
     #[test]
     fn date_time_overrides_match_all_single_extension_vifs() {
