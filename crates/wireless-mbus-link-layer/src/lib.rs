@@ -5,18 +5,9 @@ use m_bus_core::{DeviceType, Function, IdentificationNumber, ManufacturerCode};
 /// CRC-16/EN13757 used in wireless M-Bus Format A frames.
 /// Polynomial: 0x3D65, Init: 0x0000, XorOut: 0xFFFF, RefIn: false, RefOut: false.
 fn crc16_en13757(data: &[u8]) -> u16 {
-    let mut crc: u16 = 0x0000;
-    for &byte in data {
-        crc ^= (byte as u16) << 8;
-        for _ in 0..8 {
-            if crc & 0x8000 != 0 {
-                crc = (crc << 1) ^ 0x3D65;
-            } else {
-                crc <<= 1;
-            }
-        }
-    }
-    crc ^ 0xFFFF
+    // Reuse the existing dependency's byte table instead of eight bit steps
+    // per byte. This also accelerates trailing-CRC detection on raw frames.
+    crc16::State::<crc16::EN_13757>::calculate(data)
 }
 
 /// Return the start offset of a trailing frame CRC when the final two bytes
@@ -303,6 +294,53 @@ impl<'a> TryFrom<&'a [u8]> for WirelessFrame<'a> {
 mod test {
     use super::*;
 
+    // Independent bitwise oracle, also used to encode Format A test fixtures.
+    pub(super) fn reference_crc(data: &[u8]) -> u16 {
+        let mut crc = 0u16;
+        for &byte in data {
+            crc ^= u16::from(byte) << 8;
+            for _ in 0..8 {
+                crc = if crc & 0x8000 != 0 {
+                    (crc << 1) ^ 0x3D65
+                } else {
+                    crc << 1
+                };
+            }
+        }
+        crc ^ 0xFFFF
+    }
+
+    #[test]
+    fn crc_matches_check_value_and_all_short_inputs() {
+        assert_eq!(crc16_en13757(b"123456789"), 0xC2B7);
+        assert_eq!(crc16_en13757(&[]), 0xFFFF);
+        for byte in 0..=u8::MAX {
+            assert_eq!(crc16_en13757(&[byte]), reference_crc(&[byte]));
+        }
+        for value in 0..=u16::MAX {
+            let bytes = value.to_be_bytes();
+            assert_eq!(crc16_en13757(&bytes), reference_crc(&bytes));
+        }
+    }
+
+    #[test]
+    fn crc_matches_reference_at_every_wireless_frame_length() {
+        // Covers block boundaries and all possible L-field lengths, with
+        // uniform and varying bytes to exercise accumulated CRC state.
+        let patterns = [
+            [0; 256],
+            [0xFF; 256],
+            core::array::from_fn(|i| i as u8),
+            core::array::from_fn(|i| (i as u8).wrapping_mul(17).wrapping_add(93)),
+        ];
+        for bytes in patterns {
+            for length in 0..=bytes.len() {
+                let input = &bytes[..length];
+                assert_eq!(crc16_en13757(input), reference_crc(input));
+            }
+        }
+    }
+
     #[test]
     fn test_dummy() {
         let _id = 33225544;
@@ -399,10 +437,10 @@ mod format_a_tests {
     fn encode(payload: &[u8]) -> Vec<u8> {
         let header = [0, 0x44, 0x49, 0x6A, 0x31, 0, 1, 0x55, 0x14, 0x37];
         let mut frame = header.to_vec();
-        frame.extend(crc16_en13757(&header).to_be_bytes());
+        frame.extend(super::test::reference_crc(&header).to_be_bytes());
         for chunk in payload.chunks(16) {
             frame.extend(chunk);
-            frame.extend(crc16_en13757(chunk).to_be_bytes());
+            frame.extend(super::test::reference_crc(chunk).to_be_bytes());
         }
         frame
     }
