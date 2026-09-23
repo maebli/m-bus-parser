@@ -653,11 +653,7 @@ fn str_decode(bytes: &[u8]) -> String {
 /// Kept in frame byte order: the reference `.norm.xml` corpus was generated
 /// before libmbus started printing binary data LSB-first (commit 9b4b824).
 fn bin_decode(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|byte| format!("{:02X}", byte))
-        .collect::<Vec<_>>()
-        .join(" ")
+    m_bus_core::hex::encode_upper(bytes, true)
 }
 
 /// Type G date (2 bytes), printed like libmbus even when the fields are

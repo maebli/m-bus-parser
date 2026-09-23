@@ -4,7 +4,7 @@ use m_bus_core::{DeviceType, Function, IdentificationNumber, ManufacturerCode};
 
 /// CRC-16/EN13757 used in wireless M-Bus Format A frames.
 /// Polynomial: 0x3D65, Init: 0x0000, XorOut: 0xFFFF, RefIn: false, RefOut: false.
-fn crc16_en13757(data: &[u8]) -> u16 {
+pub fn crc16_en13757(data: &[u8]) -> u16 {
     // Reuse the existing dependency's byte table instead of eight bit steps
     // per byte. This also accelerates trailing-CRC detection on raw frames.
     crc16::State::<crc16::EN_13757>::calculate(data)

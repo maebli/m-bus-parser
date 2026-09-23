@@ -2,6 +2,9 @@
 
 pub mod decryption;
 
+#[cfg(feature = "std")]
+pub mod hex;
+
 /// Serializes raw byte payloads as compact uppercase hex strings so that
 /// human-facing dumps (JSON/YAML) don't render them as decimal byte arrays.
 /// Serialize-only: deserialization of these fields is unaffected.

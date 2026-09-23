@@ -75,13 +75,7 @@ impl<'a> DataRecord<'a> {
     pub fn data_record_header_hex(&self) -> String {
         let start = 0;
         let end = self.data_record_header.get_size();
-        self.raw_bytes
-            .get(start..end)
-            .unwrap_or(&[])
-            .iter()
-            .map(|b| format!("{:02X}", b))
-            .collect::<Vec<_>>()
-            .join(" ")
+        m_bus_core::hex::encode_upper(self.raw_bytes.get(start..end).unwrap_or(&[]), true)
     }
 
     #[cfg(feature = "std")]
@@ -89,13 +83,7 @@ impl<'a> DataRecord<'a> {
     pub fn data_hex(&self) -> String {
         let start = self.data_record_header.get_size();
         let end = self.get_size();
-        self.raw_bytes
-            .get(start..end)
-            .unwrap_or(&[])
-            .iter()
-            .map(|b| format!("{:02X}", b))
-            .collect::<Vec<_>>()
-            .join(" ")
+        m_bus_core::hex::encode_upper(self.raw_bytes.get(start..end).unwrap_or(&[]), true)
     }
 }
 
@@ -327,6 +315,20 @@ impl<'a> TryFrom<&'a [u8]> for DataRecord<'a> {
 mod tests {
     use super::*;
     use crate::value_information::ValueLabel;
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn record_hex_preserves_header_data_boundary_and_empty_payload() {
+        let bytes = [0x03, 0x13, 0x15, 0x31, 0x00];
+        let record = DataRecord::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(record.data_record_header_hex(), "03 13");
+        assert_eq!(record.data_hex(), "15 31 00");
+
+        let bytes = [0x00, 0x13];
+        let record = DataRecord::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(record.data_record_header_hex(), "00 13");
+        assert_eq!(record.data_hex(), "");
+    }
 
     #[test]
     fn date_time_overrides_match_all_single_extension_vifs() {

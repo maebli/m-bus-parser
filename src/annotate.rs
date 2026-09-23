@@ -10,6 +10,7 @@ use crate::MbusError;
 use std::borrow::Cow;
 use std::fmt;
 use wired_mbus_link_layer::WiredFrame;
+use wireless_mbus_link_layer::crc16_en13757;
 
 /// The protocol role of a byte range within an M-Bus frame.
 #[derive(Debug, Clone, PartialEq)]
@@ -1300,22 +1301,6 @@ fn build_format_a_offset_map(original: &[u8]) -> Vec<usize> {
     map
 }
 
-/// CRC-16/EN-13757 implementation (same as wireless-mbus-link-layer crate).
-fn crc16_en13757(data: &[u8]) -> u16 {
-    let mut crc: u16 = 0x0000;
-    for &byte in data {
-        crc ^= (byte as u16) << 8;
-        for _ in 0..8 {
-            if crc & 0x8000 != 0 {
-                crc = (crc << 1) ^ 0x3D65;
-            } else {
-                crc <<= 1;
-            }
-        }
-    }
-    crc ^ 0xFFFF
-}
-
 /// Check if a long TPL header indicates encryption.
 fn is_long_tpl_encrypted(app_data: &[u8]) -> bool {
     if app_data.len() < 13 {
@@ -1441,15 +1426,9 @@ pub fn render_annotations(segments: &[ByteSegment], data: &[u8]) -> String {
         let hex_str = if seg.start < data.len() {
             let end = seg.end.min(data.len());
             let show = (end - seg.start).min(max_hex_bytes);
-            let mut h: String = data[seg.start..seg.start + show]
-                .iter()
-                .map(|b| format!("{:02X} ", b))
-                .collect();
+            let mut h = m_bus_core::hex::encode_upper(&data[seg.start..seg.start + show], true);
             if byte_count > max_hex_bytes {
-                h.push_str("...");
-            } else {
-                // Remove trailing space
-                h.pop();
+                h.push_str(" ...");
             }
             h
         } else {
@@ -1479,6 +1458,44 @@ pub fn annotate_and_render(data: &[u8]) -> Result<String, MbusError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_a_offset_map_skips_valid_crc_blocks() {
+        let mut frame: Vec<u8> = (0..10).collect();
+        frame.extend_from_slice(&crc16_en13757(&frame).to_be_bytes());
+        frame.extend(0x20..0x30);
+        frame.extend_from_slice(&crc16_en13757(&frame[12..28]).to_be_bytes());
+        let expected: Vec<usize> = (0..10).chain(12..28).collect();
+        assert_eq!(build_format_a_offset_map(&frame), expected);
+    }
+
+    #[test]
+    fn rendered_hex_segments_preserve_spacing_and_truncation() {
+        for (bytes, expected) in [
+            (&[0xAB, 0xCD][..], "AB CD"),
+            (&[0, 1, 2, 3, 4, 5, 6, 7][..], "00 01 02 03 04 05 06 07"),
+            (
+                &[0, 1, 2, 3, 4, 5, 6, 7, 8][..],
+                "00 01 02 03 04 05 06 07 ...",
+            ),
+        ] {
+            let segment = ByteSegment {
+                start: 0,
+                end: bytes.len(),
+                kind: SegmentKind::Unknown,
+                detail: Cow::Borrowed("test"),
+                group: None,
+                layer: Layer::Frame,
+            };
+            let rendered = render_annotations(&[segment], bytes);
+            let offset = format!("[00..{:02X}]", bytes.len());
+            let expected_row = format!("│  {:<10} {:<24} {:<22} test", offset, expected, "Unknown");
+            assert!(
+                rendered.lines().any(|line| line == expected_row),
+                "{rendered}"
+            );
+        }
+    }
 
     /// Build a valid wired long frame from user data bytes.
     /// Computes proper length and checksum fields.

@@ -2580,7 +2580,7 @@ fn mermaid_escape(value: &str) -> String {
 }
 
 fn hex_string(data: &[u8]) -> String {
-    data.iter().map(|byte| format!("{byte:02X}")).collect()
+    m_bus_core::hex::encode_upper(data, false)
 }
 
 #[cfg(test)]
