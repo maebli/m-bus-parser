@@ -276,7 +276,7 @@ fn manufacturer_summary(code: String) -> ManufacturerSummary {
 
 #[cfg(feature = "std")]
 fn hex_string(data: &[u8]) -> String {
-    data.iter().map(|b| format!("{:02X}", b)).collect()
+    m_bus_core::hex::encode_upper(data, false)
 }
 
 #[cfg(feature = "std")]
