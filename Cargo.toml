@@ -25,7 +25,6 @@ bindgen = "0.73.2"
 
 [features]
 default = []
-manufacturer-decoders = ["dep:m-bus-manufacturer"]
 std = ["prettytable-rs", "serde_json", "serde_yaml", "serde", "unicode-width", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std", "m-bus-application-layer/std"]
 plaintext-before-extension = ["m-bus-application-layer/plaintext-before-extension"]
 serde = ["dep:serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde", "m-bus-application-layer/serde"]
@@ -41,7 +40,6 @@ codegen-units = 1 # Reduce codegen units to improve optimizations
 opt-level = "s"
 
 [dependencies]
-m-bus-manufacturer = { version = "0.5.2", path = "crates/m-bus-manufacturer", optional = true }
 prettytable-rs = { version = "^0.10", optional = true }
 serde_json = { version = "1.0.138", optional = true }
 serde_yaml = { version = "0.9", optional = true }

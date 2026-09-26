@@ -6,7 +6,7 @@ description = "Allocation-free framework for manufacturer-specific M-Bus decoder
 license = "MIT"
 repository = "https://github.com/maebli/m-bus-parser"
 readme = "README.md"
-include = ["src/**", "decoders/**", "examples/**", "build.rs", "Cargo.toml", "README.md"]
+include = ["src/**", "examples/**", "Cargo.toml", "README.md"]
 
 [dependencies]
 m-bus-core = { version = "0.5.2", path = "../m-bus-core" }

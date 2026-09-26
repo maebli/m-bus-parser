@@ -13,15 +13,8 @@ pub use m_bus_core::DeviceType;
 
 mod cursor;
 mod registry;
-pub mod testing;
 pub use cursor::Cursor;
 pub use registry::{DecodeSummary, Registry};
-
-/// Generated modules and individual decoder statics, sorted by filename.
-pub mod builtin {
-    include!(concat!(env!("OUT_DIR"), "/builtins.rs"));
-}
-pub use builtin::BUILTIN;
 
 /// Transport identity; missing values are never inferred from a decoder.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -55,23 +48,12 @@ impl Selector {
                 .device
                 .is_none_or(|device| meter.device == Some(device))
     }
-
-    pub fn overlaps(&self, other: &Self) -> bool {
-        let (a, b) = self.versions.unwrap_or((0, u8::MAX));
-        let (c, d) = other.versions.unwrap_or((0, u8::MAX));
-        self.is_valid()
-            && other.is_valid()
-            && self.manufacturer == other.manufacturer
-            && a <= d
-            && c <= b
-            && (self.device.is_none() || other.device.is_none() || self.device == other.device)
-    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct DecoderDescriptor {
     pub name: &'static str,
-    /// Vendor specification URL and section; mandatory for built-ins.
+    /// Vendor specification URL and section.
     pub source: &'static str,
     pub selector: Selector,
 }
@@ -82,7 +64,7 @@ pub struct DecoderDescriptor {
 /// On failure, already emitted fields are retained. Return a tail-relative error
 /// offset and do not panic, allocate, or loop without a bound derived from input.
 pub trait ManufacturerDecoder: Sync {
-    fn descriptor(&self) -> &'static DecoderDescriptor;
+    fn descriptor(&self) -> DecoderDescriptor;
     fn decode(
         &self,
         meter: &MeterInfo,
@@ -239,7 +221,9 @@ impl fmt::Display for DecodeError {
             ErrorKind::InvalidWidth => f.write_str("unsupported integer or BCD width"),
             ErrorKind::InvalidBcd => f.write_str("invalid BCD digit"),
             ErrorKind::InvalidDate => f.write_str("invalid date encoding"),
-            ErrorKind::InvalidConsumedLength => f.write_str("decoder consumed length exceeds tail"),
+            ErrorKind::InvalidConsumedLength => {
+                f.write_str("decoder consumed length is inconsistent with tail or fields")
+            }
             ErrorKind::InvalidField => f.write_str("invalid field range or labels"),
             ErrorKind::InvalidValue(reason) => f.write_str(reason),
         }

@@ -840,7 +840,6 @@ dependencies = [
  "hex",
  "m-bus-application-layer",
  "m-bus-core",
- "m-bus-manufacturer",
  "prettytable-rs",
  "serde",
  "serde-xml-rs",

@@ -1,22 +1,21 @@
-//! Synthetic layout only. Copy the Decoder implementation and tests into decoders/.
+//! Synthetic layout: status byte, then optional signed temperature in 0.01 °C.
 use m_bus_manufacturer::{
-    Cursor, DecodeError, DecoderDescriptor, Field, ManufacturerDecoder, MeterInfo, Selector, Unit,
-    UnitName,
+    Cursor, DecodeError, DecoderDescriptor, Field, ManufacturerDecoder, MeterInfo, Registry,
+    Selector, Unit, UnitName,
 };
 
-pub struct Decoder;
+struct Decoder;
 impl ManufacturerDecoder for Decoder {
-    fn descriptor(&self) -> &'static DecoderDescriptor {
-        static DESCRIPTOR: DecoderDescriptor = DecoderDescriptor {
+    fn descriptor(&self) -> DecoderDescriptor {
+        DecoderDescriptor {
             name: "Synthetic temperature meter",
-            source: "Synthetic example; replace with a vendor specification URL and section",
+            source: "Example only; replace with a vendor specification URL and section",
             selector: Selector {
                 manufacturer: *b"ABC",
                 versions: Some((1, 1)),
                 device: None,
             },
-        };
-        &DESCRIPTOR
+        }
     }
     fn decode(
         &self,
@@ -26,15 +25,11 @@ impl ManufacturerDecoder for Decoder {
     ) -> Result<usize, DecodeError> {
         let mut cursor = Cursor::new(tail);
         let status = cursor.u8()?;
-        emit(
-            Field::unsigned("status", u64::from(status), 0..1)
-                .flags(&[(0, "has_temperature"), (1, "low_battery")]),
-        );
+        emit(Field::unsigned("status", status.into(), 0..1).flags(&[(1, "low_battery")]));
         if status & 1 != 0 {
-            let start = cursor.position();
             let temperature = cursor.i16_le()?;
             emit(
-                Field::signed("temperature", temperature, start..cursor.position())
+                Field::signed("temperature", temperature, 1..3)
                     .exponent(-2)
                     .units(&[Unit {
                         name: UnitName::Celsius,
@@ -45,14 +40,16 @@ impl ManufacturerDecoder for Decoder {
         Ok(cursor.position())
     }
 }
+
+const METER: MeterInfo = MeterInfo {
+    manufacturer: Some(*b"ABC"),
+    version: Some(1),
+    device: None,
+};
+
 fn main() {
-    let meter = MeterInfo {
-        manufacturer: Some(*b"ABC"),
-        version: Some(1),
-        device: None,
-    };
-    m_bus_manufacturer::Registry::only(&[&Decoder])
-        .decode(&meter, &[3, 0x29, 9], &mut |field| println!("{field:?}"))
+    Registry::new(&[&Decoder])
+        .decode(&METER, &[3, 0x29, 9], &mut |field| println!("{field:?}"))
         .expect("matching example")
         .expect("valid sample");
 }
@@ -60,108 +57,49 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use m_bus_manufacturer::{
-        testing::{assert_fixtures, Fixture},
-        ErrorKind, Integer, Labels, Value,
-    };
-    const METER: MeterInfo = MeterInfo {
-        manufacturer: Some(*b"ABC"),
-        version: Some(1),
-        device: None,
-    };
-    const FLAGS: Labels<'static> = Labels::Flags(&[(0, "has_temperature"), (1, "low_battery")]);
-    pub(super) const FIXTURES: &[Fixture<'_>] = &[
-        Fixture {
-            name: "positive",
-            meter: METER,
-            tail: &[3, 0x29, 9],
-            fields: &[
-                Field {
-                    name: "status",
-                    value: Value::Integer(Integer::Unsigned(3)),
-                    range: 0..1,
-                    exponent: 0,
-                    units: &[],
-                    labels: FLAGS,
-                },
-                Field {
-                    name: "temperature",
-                    value: Value::Integer(Integer::Signed(2345)),
-                    range: 1..3,
-                    exponent: -2,
-                    units: &[Unit {
-                        name: UnitName::Celsius,
-                        exponent: 1,
-                    }],
-                    labels: Labels::None,
-                },
-            ],
-            result: Ok(3),
-        },
-        Fixture {
-            name: "negative",
-            meter: METER,
-            tail: &[1, 6, 0xff],
-            fields: &[
-                Field {
-                    name: "status",
-                    value: Value::Integer(Integer::Unsigned(1)),
-                    range: 0..1,
-                    exponent: 0,
-                    units: &[],
-                    labels: FLAGS,
-                },
-                Field {
-                    name: "temperature",
-                    value: Value::Integer(Integer::Signed(-250)),
-                    range: 1..3,
-                    exponent: -2,
-                    units: &[Unit {
-                        name: UnitName::Celsius,
-                        exponent: 1,
-                    }],
-                    labels: Labels::None,
-                },
-            ],
-            result: Ok(3),
-        },
-        Fixture {
-            name: "leftover",
-            meter: METER,
-            tail: &[0, 0xaa],
-            fields: &[Field {
-                name: "status",
-                value: Value::Integer(Integer::Unsigned(0)),
-                range: 0..1,
-                exponent: 0,
-                units: &[],
-                labels: FLAGS,
-            }],
-            result: Ok(1),
-        },
-        Fixture {
-            name: "truncated",
-            meter: METER,
-            tail: &[1, 0x29],
-            fields: &[Field {
-                name: "status",
-                value: Value::Integer(Integer::Unsigned(1)),
-                range: 0..1,
-                exponent: 0,
-                units: &[],
-                labels: FLAGS,
-            }],
-            result: Err(DecodeError::new(
-                1,
-                ErrorKind::InsufficientData {
-                    needed: 2,
-                    remaining: 1,
-                },
-            )),
-        },
-    ];
+    use m_bus_manufacturer::{ErrorKind, Integer, Value};
+
     #[test]
-    fn known_answers() {
-        assert_fixtures(&Decoder, FIXTURES);
+    fn temperature_and_status() {
+        for (tail, expected) in [([3, 0x29, 9], 2345), ([3, 6, 0xff], -250)] {
+            let mut count = 0;
+            let consumed = Decoder
+                .decode(&METER, &tail, &mut |field| {
+                    if count == 0 {
+                        assert_eq!(
+                            field,
+                            Field::unsigned("status", 3, 0..1).flags(&[(1, "low_battery")])
+                        );
+                        assert_eq!(field.active_labels().collect::<Vec<_>>(), ["low_battery"]);
+                    } else {
+                        assert_eq!(field.name, "temperature");
+                        assert_eq!(field.value, Value::Integer(Integer::Signed(expected)));
+                        assert_eq!(field.range, 1..3);
+                        assert_eq!(field.exponent, -2);
+                        assert_eq!(
+                            field.units,
+                            &[Unit {
+                                name: UnitName::Celsius,
+                                exponent: 1
+                            }]
+                        );
+                    }
+                    count += 1;
+                })
+                .unwrap();
+            assert_eq!((consumed, count), (3, 2));
+        }
+    }
+
+    #[test]
+    fn absent_temperature_and_truncation() {
+        let mut count = 0;
+        assert_eq!(Decoder.decode(&METER, &[0], &mut |_| count += 1), Ok(1));
+        assert_eq!(count, 1);
+        for tail in [&[][..], &[1][..], &[1, 0x29][..]] {
+            let error = Decoder.decode(&METER, tail, &mut |_| {}).unwrap_err();
+            assert_eq!(error.offset, usize::from(!tail.is_empty()));
+            assert!(matches!(error.kind, ErrorKind::InsufficientData { .. }));
+        }
     }
 }

@@ -1,50 +1,25 @@
 use crate::{
     DecodeError, DecoderDescriptor, ErrorKind, Field, Integer, Labels, ManufacturerDecoder,
-    MeterInfo, Value, BUILTIN,
+    MeterInfo, Value,
 };
 
-/// Ordered borrowed decoder lists; custom decoders take precedence over built-ins.
-#[derive(Clone, Copy)]
+/// Ordered borrowed decoder list. The first matching selector wins.
+#[derive(Clone, Copy, Default)]
 pub struct Registry<'a> {
-    custom: &'a [&'a dyn ManufacturerDecoder],
-    builtins: &'a [&'a dyn ManufacturerDecoder],
-}
-impl core::fmt::Debug for Registry<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Registry")
-            .field("custom_count", &self.custom.len())
-            .field("builtin_count", &self.builtins.len())
-            .finish()
-    }
-}
-impl Default for Registry<'_> {
-    fn default() -> Self {
-        Self::new(&[])
-    }
+    decoders: &'a [&'a dyn ManufacturerDecoder],
 }
 #[derive(Debug)]
 pub struct DecodeSummary {
-    pub decoder: &'static DecoderDescriptor,
+    pub decoder: DecoderDescriptor,
     pub consumed: usize,
 }
 impl<'a> Registry<'a> {
-    pub const fn new(custom: &'a [&'a dyn ManufacturerDecoder]) -> Self {
-        Self {
-            custom,
-            builtins: BUILTIN,
-        }
-    }
-    /// Use exactly this list (including an empty list to disable decoding).
-    pub const fn only(decoders: &'a [&'a dyn ManufacturerDecoder]) -> Self {
-        Self {
-            custom: decoders,
-            builtins: &[],
-        }
+    pub const fn new(decoders: &'a [&'a dyn ManufacturerDecoder]) -> Self {
+        Self { decoders }
     }
     pub fn find(&self, meter: &MeterInfo) -> Option<&'a dyn ManufacturerDecoder> {
-        self.custom
+        self.decoders
             .iter()
-            .chain(self.builtins)
             .copied()
             .find(|decoder| decoder.descriptor().selector.matches(meter))
     }

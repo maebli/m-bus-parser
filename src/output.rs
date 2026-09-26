@@ -5,10 +5,6 @@
 //! renderers.
 
 use core::str::FromStr;
-#[cfg(feature = "manufacturer-decoders")]
-use m_bus_manufacturer::{
-    DateValue, Field as ManufacturerField, Integer, MeterInfo, Registry, Value as ManufacturerValue,
-};
 use std::fmt;
 
 use m_bus_core::SecurityMode;
@@ -340,37 +336,6 @@ pub struct RecordOutput {
     pub data_coding: String,
     pub header_hex: String,
     pub data_hex: String,
-    #[cfg(feature = "manufacturer-decoders")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub manufacturer_decoder: Option<String>,
-    #[cfg(feature = "manufacturer-decoders")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub manufacturer_fields: Option<Vec<ManufacturerFieldOutput>>,
-    #[cfg(feature = "manufacturer-decoders")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub manufacturer_error: Option<ManufacturerErrorOutput>,
-}
-
-#[cfg(feature = "manufacturer-decoders")]
-#[derive(Debug, Clone, Serialize)]
-pub struct ManufacturerFieldOutput {
-    pub name: String,
-    pub value: ValueOutput,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unit: Option<String>,
-    pub labels: Vec<String>,
-    /// Byte range relative to the first byte of the manufacturer tail.
-    pub offset_start: usize,
-    pub offset_end: usize,
-    pub data_hex: String,
-}
-
-#[cfg(feature = "manufacturer-decoders")]
-#[derive(Debug, Clone, Serialize)]
-pub struct ManufacturerErrorOutput {
-    /// Relative to the first byte of the manufacturer tail.
-    pub offset: usize,
-    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -438,42 +403,6 @@ pub fn decode_hex(input: &str, options: &DecodeOptions) -> Result<DecodedOutput,
 
 /// Decode an already materialized frame.
 pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
-    decode_bytes_inner(
-        data,
-        options,
-        #[cfg(feature = "manufacturer-decoders")]
-        Registry::default(),
-    )
-}
-
-/// Decode a frame with custom manufacturer decoders before built-ins.
-/// Pass `Registry::only(&[])` to explicitly disable manufacturer decoding.
-#[cfg(feature = "manufacturer-decoders")]
-pub fn decode_bytes_with_decoders(
-    data: &[u8],
-    options: &DecodeOptions,
-    decoders: Registry<'_>,
-) -> Result<DecodedOutput, OutputError> {
-    decode_bytes_inner(data, options, decoders)
-}
-
-#[cfg(feature = "manufacturer-decoders")]
-pub fn decode_hex_with_decoders(
-    input: &str,
-    options: &DecodeOptions,
-    decoders: Registry<'_>,
-) -> Result<DecodedOutput, OutputError> {
-    let bytes = decode_hex_bytes(input)?;
-    let mut decoded = decode_bytes_with_decoders(&bytes, options, decoders)?;
-    decoded.raw.input = Some(input.to_string());
-    Ok(decoded)
-}
-
-fn decode_bytes_inner(
-    data: &[u8],
-    options: &DecodeOptions,
-    #[cfg(feature = "manufacturer-decoders")] decoders: Registry<'_>,
-) -> Result<DecodedOutput, OutputError> {
     if data.is_empty() {
         return Err(OutputError::EmptyInput);
     }
@@ -497,8 +426,6 @@ fn decode_bytes_inner(
                 &parsed,
                 security.clone(),
                 options.include_enrichment,
-                #[cfg(feature = "manufacturer-decoders")]
-                decoders,
             ));
         }
         Err(error) => error.to_string(),
@@ -528,8 +455,6 @@ fn decode_bytes_inner(
                 &parsed,
                 security.clone(),
                 options.include_enrichment,
-                #[cfg(feature = "manufacturer-decoders")]
-                decoders,
             ))
         }
         Err(error) => Err(OutputError::InvalidFrame {
@@ -545,11 +470,7 @@ pub fn decode_data_records(data: &[u8]) -> Result<Vec<RecordOutput>, OutputError
         return Err(OutputError::EmptyInput);
     }
     let records = user_data::DataRecords::from(data);
-    let (output, error) = collect_records(
-        Some(&records),
-        #[cfg(feature = "manufacturer-decoders")]
-        None,
-    );
+    let (output, error) = collect_records(Some(&records));
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",
@@ -601,7 +522,26 @@ pub fn render_bytes(
         }
         _ => {
             let decoded = decode_bytes(data, &options.decode)?;
-            render_decoded(&decoded, format, options.table_width)
+            match format {
+                OutputFormat::Json => serde_json::to_string_pretty(&decoded).map_err(|error| {
+                    OutputError::Serialization {
+                        format: "json",
+                        message: error.to_string(),
+                    }
+                }),
+                OutputFormat::Yaml => {
+                    serde_yaml::to_string(&decoded).map_err(|error| OutputError::Serialization {
+                        format: "yaml",
+                        message: error.to_string(),
+                    })
+                }
+                OutputFormat::Csv => render_csv(&decoded),
+                OutputFormat::Table => {
+                    render_table(&decoded, options.table_width.unwrap_or(DEFAULT_TABLE_WIDTH))
+                }
+                OutputFormat::Mermaid => Ok(render_mermaid(&decoded)),
+                _ => unreachable!("specialized formats handled above"),
+            }
         }
     }
 }
@@ -889,7 +829,6 @@ fn build_wired_output(
     parsed: &MbusData<wired::WiredFrame<'_>>,
     security_context: SecurityContext,
     include_enrichment: bool,
-    #[cfg(feature = "manufacturer-decoders")] decoders: Registry<'_>,
 ) -> DecodedOutput {
     let (kind, function, address, payload) = match &parsed.frame {
         wired::WiredFrame::LongFrame {
@@ -940,8 +879,6 @@ fn build_wired_output(
         None,
         security_context,
         include_enrichment,
-        #[cfg(feature = "manufacturer-decoders")]
-        decoders,
     )
 }
 
@@ -952,7 +889,6 @@ fn build_wireless_output(
     parsed: &MbusData<wireless::WirelessFrame<'_>>,
     security_context: SecurityContext,
     include_enrichment: bool,
-    #[cfg(feature = "manufacturer-decoders")] decoders: Registry<'_>,
 ) -> DecodedOutput {
     build_output(
         "wireless",
@@ -975,8 +911,6 @@ fn build_wireless_output(
         Some(&parsed.frame.manufacturer_id),
         security_context,
         include_enrichment,
-        #[cfg(feature = "manufacturer-decoders")]
-        decoders,
     )
 }
 
@@ -994,7 +928,6 @@ fn build_output(
     wireless_id: Option<&wireless::ManufacturerId>,
     security_context: SecurityContext,
     include_enrichment: bool,
-    #[cfg(feature = "manufacturer-decoders")] decoders: Registry<'_>,
 ) -> DecodedOutput {
     let mut diagnostics = Vec::new();
     if let Some(error) = application_error {
@@ -1037,38 +970,7 @@ fn build_output(
         });
     }
 
-    let (meter, transport) = meter_and_transport(user_data, wireless_id);
-    #[cfg(feature = "manufacturer-decoders")]
-    let manufacturer_meter = meter
-        .identity
-        .as_ref()
-        .map(|identity| MeterInfo {
-            manufacturer: identity
-                .manufacturer_code
-                .as_ref()
-                .and_then(|code| code.as_bytes().try_into().ok()),
-            version: identity.version,
-            device: identity.device_type_code.map(m_bus_core::DeviceType::from),
-        })
-        .unwrap_or_default();
-    let (record_outputs, record_error) = collect_records(
-        records,
-        #[cfg(feature = "manufacturer-decoders")]
-        Some((&manufacturer_meter, decoders)),
-    );
-    #[cfg(feature = "manufacturer-decoders")]
-    for record in &record_outputs {
-        if let Some(error) = &record.manufacturer_error {
-            diagnostics.push(Diagnostic {
-                severity: "warning".into(),
-                code: "manufacturer.partial".into(),
-                layer: "application".into(),
-                message: format!("record {}: {}", record.index, error.message),
-                offset_start: None,
-                offset_end: None,
-            });
-        }
-    }
+    let (record_outputs, record_error) = collect_records(records);
     if let Some((offset, message)) = record_error.as_ref() {
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
@@ -1080,6 +982,7 @@ fn build_output(
         });
     }
 
+    let (meter, transport) = meter_and_transport(user_data, wireless_id);
     let enrichment = if include_enrichment {
         meter
             .identity
@@ -1116,12 +1019,6 @@ fn build_output(
     let partial = application_error.is_some()
         || record_error.is_some()
         || (security_context.encrypted && !security_context.decrypted);
-
-    #[cfg(feature = "manufacturer-decoders")]
-    let partial = partial
-        || record_outputs
-            .iter()
-            .any(|record| record.manufacturer_error.is_some());
 
     DecodedOutput {
         schema_version: SCHEMA_VERSION,
@@ -1354,7 +1251,6 @@ fn enrichment_for(code: &str) -> Option<EnrichmentOutput> {
 
 fn collect_records(
     records: Option<&user_data::DataRecords<'_>>,
-    #[cfg(feature = "manufacturer-decoders")] manufacturer: Option<(&MeterInfo, Registry<'_>)>,
 ) -> (Vec<RecordOutput>, Option<(usize, String)>) {
     let Some(records) = records else {
         return (Vec::new(), None);
@@ -1365,10 +1261,7 @@ fn collect_records(
         match item {
             Ok(record) => {
                 let size = record.raw_bytes().len();
-                let converted = record_output(output.len(), &record);
-                #[cfg(feature = "manufacturer-decoders")]
-                let converted = manufacturer_record_output(converted, &record, manufacturer);
-                output.push(converted);
+                output.push(record_output(output.len(), &record));
                 offset += size;
             }
             Err(error) => return (output, Some((offset, error.to_string()))),
@@ -1411,12 +1304,6 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
         data_coding,
         header_hex: record.data_record_header_hex(),
         data_hex: record.data_hex(),
-        #[cfg(feature = "manufacturer-decoders")]
-        manufacturer_decoder: None,
-        #[cfg(feature = "manufacturer-decoders")]
-        manufacturer_fields: None,
-        #[cfg(feature = "manufacturer-decoders")]
-        manufacturer_error: None,
     }
 }
 
@@ -2088,14 +1975,6 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
                 .map(|field| format!("record_{}_{field}", record.index)),
         );
     }
-    #[cfg(feature = "manufacturer-decoders")]
-    for record in &decoded.records {
-        headers.extend(
-            manufacturer_csv_columns(record)
-                .into_iter()
-                .map(|(name, _)| name),
-        );
-    }
     writer
         .write_record(&headers)
         .map_err(|error| OutputError::Serialization {
@@ -2106,14 +1985,6 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
     let mut row = csv_frame_row(decoded);
     for record in &decoded.records {
         row.extend(csv_record_values(record));
-    }
-    #[cfg(feature = "manufacturer-decoders")]
-    for record in &decoded.records {
-        row.extend(
-            manufacturer_csv_columns(record)
-                .into_iter()
-                .map(|(_, value)| value),
-        );
     }
     writer
         .write_record(row)
@@ -2420,32 +2291,7 @@ fn reading(record: &RecordOutput) -> String {
         .as_ref()
         .map(|value| format!(" {value}"))
         .unwrap_or_default();
-    let reading = format!("{quantity}: {}{unit}", value_display(record));
-    #[cfg(feature = "manufacturer-decoders")]
-    {
-        let mut reading = reading;
-        if let Some(fields) = &record.manufacturer_fields {
-            for field in fields {
-                reading.push_str(&format!(
-                    "\n  {}: {}",
-                    field.name,
-                    manufacturer_value_display(field)
-                ));
-                if let Some(unit) = &field.unit {
-                    reading.push_str(&format!(" {unit}"));
-                }
-                if !field.labels.is_empty() {
-                    reading.push_str(&format!(" [{}]", field.labels.join(", ")));
-                }
-            }
-        }
-        if let Some(error) = &record.manufacturer_error {
-            reading.push_str(&format!("\n  Error: {}", error.message));
-        }
-        reading
-    }
-    #[cfg(not(feature = "manufacturer-decoders"))]
-    reading
+    format!("{quantity}: {}{unit}", value_display(record))
 }
 
 fn key_value_box(rows: &[(String, String)], width: usize) -> String {
@@ -2735,165 +2581,6 @@ fn mermaid_escape(value: &str) -> String {
 
 fn hex_string(data: &[u8]) -> String {
     m_bus_core::hex::encode_upper(data, false)
-}
-
-/// Render canonical decoded output, including custom manufacturer fields.
-/// XML and annotated formats require raw frames and are not supported here.
-pub fn render_decoded(
-    decoded: &DecodedOutput,
-    format: OutputFormat,
-    table_width: Option<usize>,
-) -> Result<String, OutputError> {
-    match format {
-        OutputFormat::Json => {
-            serde_json::to_string_pretty(decoded).map_err(|error| OutputError::Serialization {
-                format: "json",
-                message: error.to_string(),
-            })
-        }
-        OutputFormat::Yaml => {
-            serde_yaml::to_string(decoded).map_err(|error| OutputError::Serialization {
-                format: "yaml",
-                message: error.to_string(),
-            })
-        }
-        OutputFormat::Csv => render_csv(decoded),
-        OutputFormat::Table => render_table(decoded, table_width.unwrap_or(DEFAULT_TABLE_WIDTH)),
-        OutputFormat::Mermaid => Ok(render_mermaid(decoded)),
-        _ => Err(OutputError::UnsupportedFormat {
-            format: format.to_string(),
-        }),
-    }
-}
-
-#[cfg(feature = "manufacturer-decoders")]
-fn manufacturer_record_output(
-    mut output: RecordOutput,
-    record: &user_data::DataRecord<'_>,
-    context: Option<(&MeterInfo, Registry<'_>)>,
-) -> RecordOutput {
-    let Some((meter, registry)) = context else {
-        return output;
-    };
-    let Some(DataType::ManufacturerSpecific(tail)) = record.value() else {
-        return output;
-    };
-    let Some(decoder) = registry.find(meter) else {
-        return output;
-    };
-    output.manufacturer_decoder = Some(decoder.descriptor().name.to_string());
-    let mut fields = Vec::new();
-    let result = registry.decode(meter, tail, &mut |field| {
-        fields.push(manufacturer_field_output(field, tail));
-    });
-    output.manufacturer_fields = Some(fields);
-    if let Some(Err(error)) = result {
-        output.manufacturer_error = Some(ManufacturerErrorOutput {
-            offset: error.offset,
-            message: error.to_string(),
-        });
-    }
-    output
-}
-
-#[cfg(feature = "manufacturer-decoders")]
-fn manufacturer_field_output(field: ManufacturerField<'_>, tail: &[u8]) -> ManufacturerFieldOutput {
-    let value = match &field.value {
-        ManufacturerValue::Integer(integer) => {
-            let significand = match integer {
-                Integer::Signed(v) => v.to_string(),
-                Integer::Unsigned(v) => v.to_string(),
-            };
-            ValueOutput {
-                kind: "decimal".into(),
-                value: Some(serde_json::Value::String(scaled_decimal(
-                    &significand,
-                    isize::from(field.exponent),
-                    None,
-                ))),
-            }
-        }
-        ManufacturerValue::Bytes(bytes) => ValueOutput {
-            kind: "bytes".into(),
-            value: Some(serde_json::Value::String(hex_string(bytes))),
-        },
-        ManufacturerValue::Date(DateValue::Date { day, month, year }) => {
-            temporal_value("date", day, month, year, None, None, None)
-        }
-        ManufacturerValue::Date(DateValue::DateTime {
-            day,
-            month,
-            year,
-            hour,
-            minute,
-        }) => temporal_value("datetime", day, month, year, Some(hour), Some(minute), None),
-    };
-    let unit = unit_output(field.units.iter().copied());
-    ManufacturerFieldOutput {
-        name: field.name.to_string(),
-        value,
-        unit: (!unit.is_empty()).then_some(unit),
-        labels: field.active_labels().map(str::to_string).collect(),
-        offset_start: field.range.start,
-        offset_end: field.range.end,
-        data_hex: tail
-            .get(field.range)
-            .map(|bytes| m_bus_core::hex::encode_upper(bytes, true))
-            .unwrap_or_default(),
-    }
-}
-
-#[cfg(feature = "manufacturer-decoders")]
-fn manufacturer_value_display(field: &ManufacturerFieldOutput) -> String {
-    match &field.value.value {
-        Some(serde_json::Value::String(value)) => value.clone(),
-        Some(value) => value.to_string(),
-        None => String::new(),
-    }
-}
-
-#[cfg(feature = "manufacturer-decoders")]
-fn manufacturer_csv_columns(record: &RecordOutput) -> Vec<(String, String)> {
-    let Some(decoder) = &record.manufacturer_decoder else {
-        return Vec::new();
-    };
-    let prefix = format!("record_{}_manufacturer", record.index);
-    let mut columns = vec![
-        (format!("{prefix}_decoder"), decoder.clone()),
-        (
-            format!("{prefix}_error_offset"),
-            record
-                .manufacturer_error
-                .as_ref()
-                .map(|e| e.offset.to_string())
-                .unwrap_or_default(),
-        ),
-        (
-            format!("{prefix}_error"),
-            record
-                .manufacturer_error
-                .as_ref()
-                .map(|e| e.message.clone())
-                .unwrap_or_default(),
-        ),
-    ];
-    if let Some(fields) = &record.manufacturer_fields {
-        for (index, field) in fields.iter().enumerate() {
-            for (name, value) in [
-                ("name", field.name.clone()),
-                ("value_type", field.value.kind.clone()),
-                ("value", manufacturer_value_display(field)),
-                ("unit", field.unit.clone().unwrap_or_default()),
-                ("labels", field.labels.join("|")),
-                ("offset_start", field.offset_start.to_string()),
-                ("offset_end", field.offset_end.to_string()),
-                ("data_hex", field.data_hex.clone()),
-            ] {
-                columns.push((format!("{prefix}_field_{index}_{name}"), value));
-            }
-        }
-    }
-    columns
 }
 
 #[cfg(test)]

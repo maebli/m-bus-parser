@@ -102,7 +102,7 @@ fn dates_reuse_protocol_components_and_check_lengths() {
 }
 
 #[test]
-fn selectors_require_metadata_and_overlap_at_inclusive_boundaries() {
+fn selectors_require_metadata_and_validate_restrictions() {
     let selector = Selector {
         manufacturer: *b"ABC",
         versions: Some((1, 3)),
@@ -119,19 +119,6 @@ fn selectors_require_metadata_and_overlap_at_inclusive_boundaries() {
     meter.version = Some(3);
     meter.device = None;
     assert!(!selector.matches(&meter));
-    assert!(selector.overlaps(&Selector {
-        versions: Some((3, 4)),
-        device: None,
-        ..selector
-    }));
-    assert!(!selector.overlaps(&Selector {
-        versions: Some((4, 5)),
-        ..selector
-    }));
-    assert!(!selector.overlaps(&Selector {
-        device: Some(DeviceType::GasMeter),
-        ..selector
-    }));
     assert!(!Selector {
         versions: Some((4, 1)),
         ..selector
@@ -146,20 +133,18 @@ fn selectors_require_metadata_and_overlap_at_inclusive_boundaries() {
 
 struct Demo;
 impl ManufacturerDecoder for Demo {
-    fn descriptor(&self) -> &'static DecoderDescriptor {
-        {
-            static DESCRIPTOR: DecoderDescriptor = DecoderDescriptor {
-                name: "Demo",
-                source: "Synthetic test",
-                selector: Selector {
-                    manufacturer: *b"ABC",
-                    versions: None,
-                    device: None,
-                },
-            };
-            &DESCRIPTOR
+    fn descriptor(&self) -> DecoderDescriptor {
+        DecoderDescriptor {
+            name: "Demo",
+            source: "Synthetic test",
+            selector: Selector {
+                manufacturer: *b"ABC",
+                versions: None,
+                device: None,
+            },
         }
     }
+
     fn decode(
         &self,
         _: &MeterInfo,
@@ -177,7 +162,7 @@ impl ManufacturerDecoder for Demo {
 }
 struct MustNotRun;
 impl ManufacturerDecoder for MustNotRun {
-    fn descriptor(&self) -> &'static DecoderDescriptor {
+    fn descriptor(&self) -> DecoderDescriptor {
         Demo.descriptor()
     }
     fn decode(
@@ -191,7 +176,7 @@ impl ManufacturerDecoder for MustNotRun {
 }
 #[test]
 fn first_match_leftovers_and_partial_errors() {
-    let registry = Registry::only(&[&Demo, &MustNotRun]);
+    let registry = Registry::new(&[&Demo, &MustNotRun]);
     let meter = MeterInfo {
         manufacturer: Some(*b"ABC"),
         ..MeterInfo::default()
@@ -240,7 +225,7 @@ fn full_width_enum_and_flags_do_not_round() {
 
 struct Invalid(bool);
 impl ManufacturerDecoder for Invalid {
-    fn descriptor(&self) -> &'static DecoderDescriptor {
+    fn descriptor(&self) -> DecoderDescriptor {
         Demo.descriptor()
     }
     fn decode(
@@ -266,26 +251,9 @@ fn bad_decoder_ranges_and_lengths_return_errors() {
     for invalid_field in [false, true] {
         let decoder = Invalid(invalid_field);
         let decoders: &[&dyn ManufacturerDecoder] = &[&decoder];
-        assert!(Registry::only(decoders)
+        assert!(Registry::new(decoders)
             .decode(&meter, &[], &mut |_| panic!("invalid field emitted"))
             .unwrap()
             .is_err());
-    }
-}
-
-#[test]
-fn builtins_have_sources_valid_selectors_and_no_overlaps() {
-    for (index, decoder) in BUILTIN.iter().enumerate() {
-        let desc = decoder.descriptor();
-        assert!(!desc.name.trim().is_empty() && !desc.source.trim().is_empty());
-        assert!(desc.selector.is_valid());
-        for other in &BUILTIN[index + 1..] {
-            assert!(
-                !desc.selector.overlaps(&other.descriptor().selector),
-                "overlapping built-ins: {} / {}",
-                desc.name,
-                other.descriptor().name
-            );
-        }
     }
 }
