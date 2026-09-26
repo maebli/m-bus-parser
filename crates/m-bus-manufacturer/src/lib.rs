@@ -12,9 +12,9 @@ pub use m_bus_application_layer::value_information::{Unit, UnitName};
 pub use m_bus_core::DeviceType;
 
 mod cursor;
-mod registry;
+mod dispatch;
 pub use cursor::Cursor;
-pub use registry::{DecodeSummary, Registry};
+pub use dispatch::{decode, DecodeSummary};
 
 /// Transport identity; missing values are never inferred from a decoder.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -24,15 +24,24 @@ pub struct MeterInfo {
     pub device: Option<DeviceType>,
 }
 
-/// A manufacturer's optional inclusive version range and device restriction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Selector {
+/// One stateless decoder entry. Version ranges are inclusive.
+#[derive(Debug, Clone, Copy)]
+pub struct Decoder {
+    pub name: &'static str,
+    /// Vendor specification URL and section.
+    pub source: &'static str,
     pub manufacturer: [u8; 3],
     pub versions: Option<(u8, u8)>,
     pub device: Option<DeviceType>,
+    pub decode: DecodeFn,
 }
 
-impl Selector {
+/// Emit borrowed fields synchronously and return the number of tail bytes consumed.
+/// Fields must be consumed in the callback. Errors use tail-relative offsets;
+/// earlier fields are retained. Functions must terminate without panicking or allocating.
+pub type DecodeFn = fn(&MeterInfo, &[u8], &mut dyn FnMut(Field<'_>)) -> Result<usize, DecodeError>;
+
+impl Decoder {
     pub fn is_valid(&self) -> bool {
         self.manufacturer.iter().all(u8::is_ascii_uppercase)
             && self.versions.is_none_or(|(min, max)| min <= max)
@@ -48,29 +57,6 @@ impl Selector {
                 .device
                 .is_none_or(|device| meter.device == Some(device))
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct DecoderDescriptor {
-    pub name: &'static str,
-    /// Vendor specification URL and section.
-    pub source: &'static str,
-    pub selector: Selector,
-}
-
-/// Emits fields synchronously, then returns the number of tail bytes consumed.
-///
-/// Fields may borrow temporary decoder storage and must be consumed in the callback.
-/// On failure, already emitted fields are retained. Return a tail-relative error
-/// offset and do not panic, allocate, or loop without a bound derived from input.
-pub trait ManufacturerDecoder: Sync {
-    fn descriptor(&self) -> DecoderDescriptor;
-    fn decode(
-        &self,
-        meter: &MeterInfo,
-        tail: &[u8],
-        emit: &mut dyn FnMut(Field<'_>),
-    ) -> Result<usize, DecodeError>;
 }
 
 /// Integer keys never pass through floating point (including values above 2^53).

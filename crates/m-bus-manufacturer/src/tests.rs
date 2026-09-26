@@ -103,10 +103,11 @@ fn dates_reuse_protocol_components_and_check_lengths() {
 
 #[test]
 fn selectors_require_metadata_and_validate_restrictions() {
-    let selector = Selector {
+    let selector = Decoder {
         manufacturer: *b"ABC",
         versions: Some((1, 3)),
         device: Some(DeviceType::WaterMeter),
+        ..DEMO
     };
     let mut meter = MeterInfo {
         manufacturer: Some(*b"ABC"),
@@ -119,84 +120,64 @@ fn selectors_require_metadata_and_validate_restrictions() {
     meter.version = Some(3);
     meter.device = None;
     assert!(!selector.matches(&meter));
-    assert!(!Selector {
+    assert!(!Decoder {
         versions: Some((4, 1)),
         ..selector
     }
     .is_valid());
-    assert!(!Selector {
+    assert!(!Decoder {
         manufacturer: *b"abc",
         ..selector
     }
     .is_valid());
 }
 
-struct Demo;
-impl ManufacturerDecoder for Demo {
-    fn descriptor(&self) -> DecoderDescriptor {
-        DecoderDescriptor {
-            name: "Demo",
-            source: "Synthetic test",
-            selector: Selector {
-                manufacturer: *b"ABC",
-                versions: None,
-                device: None,
-            },
-        }
-    }
+const DEMO: Decoder = Decoder {
+    name: "Demo",
+    source: "Synthetic test",
+    manufacturer: *b"ABC",
+    versions: None,
+    device: None,
+    decode: demo,
+};
 
-    fn decode(
-        &self,
-        _: &MeterInfo,
-        tail: &[u8],
-        emit: &mut dyn FnMut(Field<'_>),
-    ) -> Result<usize, DecodeError> {
-        let mut cursor = Cursor::new(tail);
-        let value = cursor.u8()?;
-        emit(Field::unsigned("value", value.into(), 0..1));
-        if value == 0 {
-            cursor.skip(2)?;
-        }
-        Ok(cursor.position())
+fn demo(_: &MeterInfo, tail: &[u8], emit: &mut dyn FnMut(Field<'_>)) -> Result<usize, DecodeError> {
+    let mut cursor = Cursor::new(tail);
+    let value = cursor.u8()?;
+    emit(Field::unsigned("value", value.into(), 0..1));
+    if value == 0 {
+        cursor.skip(2)?;
     }
+    Ok(cursor.position())
 }
-struct MustNotRun;
-impl ManufacturerDecoder for MustNotRun {
-    fn descriptor(&self) -> DecoderDescriptor {
-        Demo.descriptor()
-    }
-    fn decode(
-        &self,
-        _: &MeterInfo,
-        _: &[u8],
-        _: &mut dyn FnMut(Field<'_>),
-    ) -> Result<usize, DecodeError> {
-        panic!("must not retry")
-    }
-}
+
 #[test]
 fn first_match_leftovers_and_partial_errors() {
-    let registry = Registry::new(&[&Demo, &MustNotRun]);
+    let decoders = &[
+        DEMO,
+        Decoder {
+            decode: |_, _, _| panic!("must not retry"),
+            ..DEMO
+        },
+    ];
     let meter = MeterInfo {
         manufacturer: Some(*b"ABC"),
         ..MeterInfo::default()
     };
     let mut fields = Vec::new();
-    let result = registry
-        .decode(&meter, &[1, 2], &mut |f| {
-            fields.push((f.name.to_owned(), f.range))
-        })
-        .unwrap()
-        .unwrap();
+    let result = decode(decoders, &meter, &[1, 2], &mut |f| {
+        fields.push((f.name.to_owned(), f.range))
+    })
+    .unwrap()
+    .unwrap();
     assert_eq!(result.consumed, 1);
     assert_eq!(fields, [("value".into(), 0..1), ("unparsed".into(), 1..2)]);
     fields.clear();
     assert_eq!(
-        registry
-            .decode(&meter, &[0], &mut |f| fields
-                .push((f.name.to_owned(), f.range)))
-            .unwrap()
-            .unwrap_err(),
+        decode(decoders, &meter, &[0], &mut |f| fields
+            .push((f.name.to_owned(), f.range)))
+        .unwrap()
+        .unwrap_err(),
         DecodeError::new(
             1,
             ErrorKind::InsufficientData {
@@ -206,9 +187,12 @@ fn first_match_leftovers_and_partial_errors() {
         )
     );
     assert_eq!(fields, [("value".into(), 0..1)]);
-    assert!(registry
-        .decode(&MeterInfo::default(), &[1], &mut |_| panic!("no match"))
-        .is_none());
+    assert!(
+        decode(decoders, &MeterInfo::default(), &[1], &mut |_| panic!(
+            "no match"
+        ))
+        .is_none()
+    );
 }
 
 #[test]
@@ -223,37 +207,28 @@ fn full_width_enum_and_flags_do_not_round() {
     assert_eq!(negative.active_labels().collect::<Vec<_>>(), ["minimum"]);
 }
 
-struct Invalid(bool);
-impl ManufacturerDecoder for Invalid {
-    fn descriptor(&self) -> DecoderDescriptor {
-        Demo.descriptor()
-    }
-    fn decode(
-        &self,
-        _: &MeterInfo,
-        _: &[u8],
-        emit: &mut dyn FnMut(Field<'_>),
-    ) -> Result<usize, DecodeError> {
-        if self.0 {
-            emit(Field::unsigned("bad", 0, 0..usize::MAX));
-            Ok(0)
-        } else {
-            Ok(usize::MAX)
-        }
-    }
-}
 #[test]
 fn bad_decoder_ranges_and_lengths_return_errors() {
     let meter = MeterInfo {
         manufacturer: Some(*b"ABC"),
         ..MeterInfo::default()
     };
-    for invalid_field in [false, true] {
-        let decoder = Invalid(invalid_field);
-        let decoders: &[&dyn ManufacturerDecoder] = &[&decoder];
-        assert!(Registry::new(decoders)
-            .decode(&meter, &[], &mut |_| panic!("invalid field emitted"))
-            .unwrap()
-            .is_err());
+    let bad_functions: [DecodeFn; 2] = [
+        |_, _, emit| {
+            emit(Field::unsigned("bad", 0, 0..usize::MAX));
+            Ok(0)
+        },
+        |_, _, _| Ok(usize::MAX),
+    ];
+    for function in bad_functions {
+        let decoders = [Decoder {
+            decode: function,
+            ..DEMO
+        }];
+        assert!(decode(&decoders, &meter, &[], &mut |_| panic!(
+            "invalid field emitted"
+        ))
+        .unwrap()
+        .is_err());
     }
 }
