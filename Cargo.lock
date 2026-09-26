@@ -817,6 +817,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "m-bus-manufacturer"
+version = "0.5.2"
+dependencies = [
+ "m-bus-application-layer",
+ "m-bus-core",
+]
+
+[[package]]
 name = "m-bus-parser"
 version = "0.5.2"
 dependencies = [
@@ -832,6 +840,7 @@ dependencies = [
  "hex",
  "m-bus-application-layer",
  "m-bus-core",
+ "m-bus-manufacturer",
  "prettytable-rs",
  "serde",
  "serde-xml-rs",

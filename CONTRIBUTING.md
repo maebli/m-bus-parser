@@ -10,6 +10,7 @@ Contributions are welcome and appreciated — whether it's a bug report, a new f
 - [Setting up](#setting-up)
 - [Project structure](#project-structure)
 - [Making changes](#making-changes)
+- [Manufacturer-specific decoders](#manufacturer-specific-decoders)
 - [Testing](#testing)
 - [CI checks](#ci-checks)
 - [Opening a pull request](#opening-a-pull-request)
@@ -119,6 +120,26 @@ The `src/` crate is the public API. It ties together the inner crates and provid
    - Adding a CI field type → `crates/m-bus-application-layer/`
 
 3. **Add a test** if applicable. For a new device frame, add a `.hex` file to `tests/rscada/test-frames/` and a corresponding test.
+
+---
+
+## Manufacturer-specific decoders
+
+The allocation-free framework lives in `crates/m-bus-manufacturer`. No vendor is
+registered until its layout and sample readings are understood. Start from the
+[tested synthetic example](crates/m-bus-manufacturer/examples/decoder.rs) and follow
+the [decoder contribution guide](crates/m-bus-manufacturer/README.md).
+
+A contribution is one `decoders/<code>_<slug>.rs` file with a cited descriptor,
+`ManufacturerDecoder` implementation and a `tests::FIXTURES` table. Discovery and
+registration are generated; tests reject overlapping built-in selectors. Add a
+full-frame regression under the root `tests/` when implementing a real meter.
+
+Run `cargo test -p m-bus-manufacturer --all-targets`, the root manufacturer integration
+tests, and the embedded build commands in the guide. Format each added decoder with
+`rustfmt --edition 2021 <file>` (included files are not necessarily found by `cargo fmt`).
+Review loops and all input-dependent indexing: compilation alone does not prove
+termination or panic freedom. Keep implementation dependencies allocation-free.
 
 ---
 

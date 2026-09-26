@@ -1,0 +1,13 @@
+[package]
+name = "m-bus-manufacturer"
+version = "0.5.2"
+edition = "2021"
+description = "Allocation-free framework for manufacturer-specific M-Bus decoders"
+license = "MIT"
+repository = "https://github.com/maebli/m-bus-parser"
+readme = "README.md"
+include = ["src/**", "decoders/**", "examples/**", "build.rs", "Cargo.toml", "README.md"]
+
+[dependencies]
+m-bus-core = { version = "0.5.2", path = "../m-bus-core" }
+m-bus-application-layer = { version = "0.5.2", path = "../m-bus-application-layer" }

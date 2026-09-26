@@ -6,6 +6,7 @@ name = "cortex-m"
 version = "0.1.1"
 
 [dependencies]
+m-bus-manufacturer = { path = "../../crates/m-bus-manufacturer", version = "0.5.2" }
 cortex-m = "0.7.7"
 cortex-m-rt = "0.7.3"
 cortex-m-semihosting = "0.5.0"

@@ -52,6 +52,8 @@ pub mod annotate;
 #[cfg(feature = "std")]
 pub mod manufacturers;
 pub mod mbus_data;
+#[cfg(feature = "manufacturer-decoders")]
+pub use m_bus_manufacturer as manufacturer;
 #[cfg(feature = "std")]
 pub mod output;
 #[cfg(feature = "std")]
@@ -73,6 +75,8 @@ pub use output::{
     render_bytes, render_hex, DecodeOptions, DecodedOutput, OutputError, OutputFormat,
     RenderOptions,
 };
+#[cfg(all(feature = "std", feature = "manufacturer-decoders"))]
+pub use output::{decode_bytes_with_decoders, decode_hex_with_decoders};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]

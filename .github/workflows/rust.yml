@@ -39,6 +39,20 @@ jobs:
         run: |
           cargo test --workspace --verbose --features decryption
           cargo test --workspace --verbose --features decryption,plaintext-before-extension
+      - name: Test manufacturer decoder framework and example
+        run: |
+          cargo test -p m-bus-manufacturer --all-targets
+          for decoder in crates/m-bus-manufacturer/decoders/*.rs; do
+            [ -f "$decoder" ] || continue
+            rustfmt --edition 2021 --check "$decoder"
+          done
+          cargo test -p m-bus-parser --features std,manufacturer-decoders --test manufacturer_decoders
+      - name: Check allocation-free manufacturer decoders
+        run: |
+          rustup target add thumbv7em-none-eabi
+          cargo build -p m-bus-manufacturer --no-default-features --target thumbv7em-none-eabi
+          cargo check -p m-bus-parser --no-default-features --features manufacturer-decoders --target thumbv7em-none-eabi
+          (cd examples/cortex-m && cargo build --release --bin manufacturer --target thumbv7em-none-eabi)
       - name: Lint with Clippy
         run: |
           rustup component add clippy
@@ -169,6 +183,7 @@ jobs:
           publish_crate wired-mbus-link-layer crates/wired-mbus-link-layer/Cargo.toml
           publish_crate wireless-mbus-link-layer crates/wireless-mbus-link-layer/Cargo.toml
           publish_crate m-bus-application-layer crates/m-bus-application-layer/Cargo.toml
+          publish_crate m-bus-manufacturer crates/m-bus-manufacturer/Cargo.toml
           publish_crate m-bus-parser Cargo.toml
 
   publish-cli:

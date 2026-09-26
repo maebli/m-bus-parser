@@ -137,3 +137,9 @@ to intervene to uphold that code of conduct.
 
 [CoC]: https://www.rust-lang.org/policies/code-of-conduct
 [team]: https://github.com/rust-embedded/wg#the-cortex-m-team
+
+## Manufacturer decoder example
+
+`cargo build --release --bin manufacturer --target thumbv7em-none-eabi` links a
+synthetic manufacturer decoder, checked cursor and registry without `std` or a heap
+allocator. The decoder is local to the example and is not registered as vendor support.
