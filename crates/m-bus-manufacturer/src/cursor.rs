@@ -1,4 +1,5 @@
-use crate::{DateValue, DecodeError, ErrorKind};
+use crate::{DateValue, DecodeError, ErrorKind, Field};
+use core::ops::Range;
 use m_bus_application_layer::data_information::{DataFieldCoding, DataType};
 
 /// Checked sequential reader. Failed reads leave the position unchanged.
@@ -6,6 +7,29 @@ use m_bus_application_layer::data_information::{DataFieldCoding, DataType};
 pub struct Cursor<'a> {
     data: &'a [u8],
     position: usize,
+}
+
+/// A parsed value together with the bytes it came from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reading<T> {
+    pub value: T,
+    pub range: Range<usize>,
+}
+
+impl<T: Copy> Reading<T> {
+    pub fn unsigned<'n>(&self, name: &'n str) -> Field<'n>
+    where
+        T: Into<u64>,
+    {
+        Field::unsigned(name, self.value.into(), self.range.clone())
+    }
+
+    pub fn signed<'n>(&self, name: &'n str) -> Field<'n>
+    where
+        T: Into<i64>,
+    {
+        Field::signed(name, self.value.into(), self.range.clone())
+    }
 }
 
 macro_rules! integer_reads {
@@ -18,6 +42,23 @@ macro_rules! integer_reads {
 impl<'a> Cursor<'a> {
     pub const fn new(data: &'a [u8]) -> Self {
         Self { data, position: 0 }
+    }
+    /// Read a value and remember its byte range. Failure restores the starting position.
+    pub fn read<T>(
+        &mut self,
+        read: impl FnOnce(&mut Self) -> Result<T, DecodeError>,
+    ) -> Result<Reading<T>, DecodeError> {
+        let start = self.position;
+        match read(self) {
+            Ok(value) => Ok(Reading {
+                value,
+                range: start..self.position,
+            }),
+            Err(error) => {
+                self.position = start;
+                Err(error)
+            }
+        }
     }
     pub const fn position(&self) -> usize {
         self.position

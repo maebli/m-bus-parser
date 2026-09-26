@@ -1,13 +1,11 @@
 //! Synthetic layout: status byte, then optional signed temperature in 0.01 °C.
 use m_bus_manufacturer::{decode, Cursor, DecodeError, Decoder, Field, MeterInfo, Unit, UnitName};
 
-const DECODERS: &[Decoder] = &[Decoder {
-    name: "Synthetic temperature meter",
-    source: "Example only; replace with a vendor specification URL and section",
-    manufacturer: *b"ABC",
-    versions: Some((1, 1)),
-    device: None,
-    decode: decode_abc,
+const HAS_TEMPERATURE: u8 = 1 << 0;
+const LOW_BATTERY: &[(u8, &str)] = &[(1, "low_battery")];
+const CELSIUS: &[Unit] = &[Unit {
+    name: UnitName::Celsius,
+    exponent: 1,
 }];
 
 fn decode_abc(
@@ -16,21 +14,28 @@ fn decode_abc(
     emit: &mut dyn FnMut(Field<'_>),
 ) -> Result<usize, DecodeError> {
     let mut cursor = Cursor::new(tail);
-    let status = cursor.u8()?;
-    emit(Field::unsigned("status", status.into(), 0..1).flags(&[(1, "low_battery")]));
-    if status & 1 != 0 {
-        let temperature = cursor.i16_le()?;
-        emit(
-            Field::signed("temperature", temperature, 1..3)
-                .exponent(-2)
-                .units(&[Unit {
-                    name: UnitName::Celsius,
-                    exponent: 1,
-                }]),
-        );
+    let status = cursor.read(Cursor::u8)?;
+    emit(status.unsigned("status").flags(LOW_BATTERY));
+
+    if status.value & HAS_TEMPERATURE != 0 {
+        let temperature = cursor.read(Cursor::i16_le)?;
+        let field = temperature
+            .signed("temperature")
+            .exponent(-2)
+            .units(CELSIUS);
+        emit(field);
     }
     Ok(cursor.position())
 }
+
+const DECODERS: &[Decoder] = &[Decoder {
+    name: "Synthetic temperature meter",
+    source: "Example only; replace with a vendor specification URL and section",
+    manufacturer: *b"ABC",
+    versions: Some((1, 1)),
+    device: None,
+    decode: decode_abc,
+}];
 
 const METER: MeterInfo = MeterInfo {
     manufacturer: Some(*b"ABC"),

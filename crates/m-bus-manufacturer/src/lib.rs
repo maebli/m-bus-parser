@@ -13,7 +13,7 @@ pub use m_bus_core::DeviceType;
 
 mod cursor;
 mod dispatch;
-pub use cursor::Cursor;
+pub use cursor::{Cursor, Reading};
 pub use dispatch::{decode, DecodeSummary};
 
 /// Transport identity; missing values are never inferred from a decoder.

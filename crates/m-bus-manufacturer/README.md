@@ -4,11 +4,19 @@ A standalone `no_std`, allocation-free crate for decoding manufacturer-specific
 DIF `0x0F`/`0x1F` tails. No vendors are implemented yet; the parser, CLI and browser
 are not connected to it. See the [runnable, tested example](examples/decoder.rs).
 
-Add a `Decoder` entry with manufacturer, optional version range/device, specification
-reference and a plain decode function. Use `Cursor` for
-checked integer, BCD, date and slice reads, then emit named `Field`s with byte ranges,
-exact values, scaling, units and optional flag/enum labels. Failed reads leave the
-cursor unchanged. Fields are borrowed and must be consumed within the callback.
+A decoder reads bytes and reports named readings. For example:
+
+```rust
+let temperature = cursor.read(Cursor::i16_le)?;
+let field = temperature.signed("temperature").exponent(-2);
+// A raw value of -250 represents -2.50; the byte range is recorded automatically.
+```
+
+Use `reading.value` for conditions and calculations, and `.units(...)` or `.flags(...)`
+for metadata. `Cursor` also supports BCD, dates and byte slices. Failed reads leave it
+unchanged. Emitted fields are borrowed and must be consumed within the callback.
+Add a `Decoder` table entry with the function, manufacturer/version/device restrictions
+and a specification reference; the example shows the complete setup.
 
 Pass the table to `decode(&decoders, &meter, tail, &mut emit)` with the bytes after
 the manufacturer DIF.

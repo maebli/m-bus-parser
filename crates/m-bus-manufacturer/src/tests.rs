@@ -232,3 +232,28 @@ fn bad_decoder_ranges_and_lengths_return_errors() {
         .is_err());
     }
 }
+
+#[test]
+fn readings_track_offsets_and_failed_reads_roll_back() {
+    let mut cursor = Cursor::new(&[0, 6, 0xff, 42]);
+    cursor.skip(1).unwrap();
+    let temperature = cursor.read(Cursor::i16_le).unwrap();
+    assert_eq!(temperature.value, -250);
+    assert_eq!(
+        temperature.signed("temperature"),
+        Field::signed("temperature", -250, 1..3)
+    );
+    let error = cursor
+        .read(|cursor| {
+            cursor.u8()?;
+            cursor.u16_le()
+        })
+        .unwrap_err();
+    assert_eq!(error.offset, 4);
+    assert_eq!(cursor.position(), 3);
+    let status = cursor.read(Cursor::u8).unwrap();
+    assert_eq!(
+        status.unsigned("status"),
+        Field::unsigned("status", 42, 3..4)
+    );
+}
