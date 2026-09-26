@@ -1,0 +1,49 @@
+name: Manufacturer-specific parser request
+description: Request support for a manufacturer's meter data format.
+title: "[Parser request] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us which meter you would like supported. Requests help prioritize new parsers.
+        Fill in each field. If documentation or sample data is unavailable, write "Not available".
+  - type: input
+    id: manufacturer
+    attributes:
+      label: Manufacturer / company
+      placeholder: e.g. Kamstrup
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Meter model
+      description: Include the firmware or protocol version if known.
+      placeholder: Model name or number
+    validations:
+      required: true
+  - type: textarea
+    id: specification
+    attributes:
+      label: Parsing specification
+      description: Link or attach the protocol specification or datasheet, including relevant pages or byte layouts. If unavailable, say so.
+      placeholder: Specification link, attachment, or description of the data format
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Example M-Bus data
+      description: Paste a sample hex frame, or write "Not available". Only share data suitable for a public issue; omit decryption keys and identifying details.
+      placeholder: Hex frame and whether it uses wired or wireless M-Bus
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected readings
+      description: Which fields should be decoded? If you have sample data, include its known values and units.
+      placeholder: e.g. energy, volume, temperature, status flags
+    validations:
+      required: true
