@@ -276,13 +276,14 @@ impl From<&ValueInformationField> for ValueInformationCoding {
         match value_information.data {
             0x00..=0x7B | 0x80..=0xFA => Self::Primary,
             0x7C | 0xFC => Self::PlainText,
-            0xFD => Self::MainVIFExtension,
+            // Without the extension bit, no VIFE follows and the decoded
+            // value information is empty, as for the alternate code 0x7B.
+            0x7D | 0xFD => Self::MainVIFExtension,
             0xFB => Self::AlternateVIFExtension,
             0x7E => Self::ManufacturerSpecific,
             0xFE => Self::ManufacturerSpecific,
             0x7F => Self::ManufacturerSpecific,
             0xFF => Self::ManufacturerSpecific,
-            _ => unreachable!("Invalid value information: {:X}", value_information.data),
         }
     }
 }
