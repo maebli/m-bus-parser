@@ -347,10 +347,15 @@ fn assert_record(name: &str, actual: &DataRecord<'_>, expected: &ExpectedRecord)
             } else {
                 text.parse::<f64>().unwrap()
             };
-            assert!(
-                (value - number).abs() <= 1e-6 * number.abs().max(1.0),
-                "{context}: value {value} != {text}"
-            );
+            if info.data_field_coding == DataFieldCoding::Real32Bit {
+                // XML rounds floating-point values; integer and BCD values are exact.
+                assert!(
+                    (value - number).abs() <= 1e-6 * number.abs().max(1.0),
+                    "{context}: value {value} != {text}"
+                );
+            } else {
+                assert_eq!(*value, number, "{context}: value");
+            }
         }
         Some(DataType::Text(value)) => {
             // serde-xml-rs trims whitespace-only XML values.
