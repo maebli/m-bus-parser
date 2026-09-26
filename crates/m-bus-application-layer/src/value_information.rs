@@ -456,8 +456,20 @@ fn head_vif_info(
             0x6C => labels!(ValueLabel::Date),
             0x6D => labels!(ValueLabel::DateTime),
             0x6E => labels!(ValueLabel::DimensionlessHCA),
-            0x70..=0x73 => labels!(ValueLabel::AveragingDuration),
-            0x74..=0x77 => labels!(ValueLabel::ActualityDuration),
+            0x70..=0x77 => VifInfo {
+                labels: if vif.data & 0x04 == 0 {
+                    &[ValueLabel::AveragingDuration]
+                } else {
+                    &[ValueLabel::ActualityDuration]
+                },
+                units: match vif.data & 3 {
+                    0 => &[unit!(Second)],
+                    1 => &[unit!(Minute)],
+                    2 => &[unit!(Hour)],
+                    _ => &[unit!(Day)],
+                },
+                ..VifInfo::EMPTY
+            },
             0x78 => labels!(ValueLabel::FabricationNumber),
             0x79 => labels!(ValueLabel::EnhancedIdentification),
             0x7A => labels!(ValueLabel::Address),
@@ -753,8 +765,8 @@ fn head_vif_info(
                 return Ok(VifInfo::EMPTY);
             };
             match first_vife_data & 0x7F {
-                0b0 => populate!(Watt / h, 3, dec: 5, Energy),
-                0b000_0001 => populate!(Watt / h, 3, dec: 6, Energy),
+                0b0 => populate!(Watt * h, 1, dec: 5, Energy),
+                0b000_0001 => populate!(Watt * h, 1, dec: 6, Energy),
                 0b000_0010 => populate!(ReactiveWatt * h, 1, dec: 3, ReactiveEnergy),
                 0b000_0011 => populate!(ReactiveWatt * h, 1, dec: 4, ReactiveEnergy),
                 0b000_0100 => populate!(ApparentWatt * h, 1, dec: 3, ApparentEnergy),
@@ -1878,6 +1890,54 @@ mod tests {
         );
         assert_eq!(block.value_information_extension.as_ref().unwrap().len(), 2);
         assert_eq!(ValueInformation::try_from(&block).unwrap(), info);
+    }
+
+    #[test]
+    fn duration_vifs_include_their_time_unit() {
+        use super::*;
+        for (base, label) in [
+            (0x70, ValueLabel::AveragingDuration),
+            (0x74, ValueLabel::ActualityDuration),
+        ] {
+            for (offset, name) in [
+                UnitName::Second,
+                UnitName::Minute,
+                UnitName::Hour,
+                UnitName::Day,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let bytes = [base + offset as u8];
+                let block = ValueInformationBlock::try_from(bytes.as_slice()).unwrap();
+                let info = ValueInformation::try_from(&block).unwrap();
+                assert!(info.labels().eq([label]));
+                assert!(info.units().eq([Unit { name, exponent: 1 }]));
+                assert_eq!(info.decimal_scale_exponent, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn extended_energy_vifs_use_watt_hours() {
+        use super::*;
+        for (vife, scale) in [(0x00, 5), (0x01, 6)] {
+            let bytes = [0xfb, vife];
+            let block = ValueInformationBlock::try_from(bytes.as_slice()).unwrap();
+            let info = ValueInformation::try_from(&block).unwrap();
+            assert!(info.labels().eq([ValueLabel::Energy]));
+            assert!(info.units().eq([
+                Unit {
+                    name: UnitName::Watt,
+                    exponent: 1
+                },
+                Unit {
+                    name: UnitName::Hour,
+                    exponent: 1
+                },
+            ]));
+            assert_eq!(info.decimal_scale_exponent, scale);
+        }
     }
 
     #[test]

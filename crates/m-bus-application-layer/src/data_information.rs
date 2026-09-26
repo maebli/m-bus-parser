@@ -215,7 +215,8 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
                     return Err(DataInformationError::DataTooLong);
                 }
                 let dife = dife.data;
-                storage_number += u64::from(dife & 0x0f) << ((extension_index * 4) + 1);
+                // DIF carries bit 0; the first DIFE starts at bit 1.
+                storage_number |= u64::from(dife & 0x0f) << ((device_index * 4) + 1);
                 tariff |= u64::from((dife & 0x30) >> 4) << (tariff_index);
                 tariff_index += 2;
                 device |= u64::from((dife & 0x40) >> 6) << device_index;
@@ -1047,6 +1048,31 @@ impl std::fmt::Display for DataFieldCoding {
 mod tests {
 
     use super::*;
+    #[test]
+    fn storage_number_uses_consecutive_bits_after_the_dif() {
+        // DIF bit 6 is bit 0; DIFE nibbles then contribute bits 1..=40.
+        // https://m-bus.com/documentation-wired/06-application-layer, section 6.3.2
+        let cases: &[(&[u8], u64)] = &[
+            (&[0x84, 0x01], 2),
+            (&[0xc4, 0x02], 5),
+            (&[0x84, 0x80, 0x01], 32),
+            (&[0xc4, 0x8f, 0x0f], 511),
+            (
+                &[
+                    0xc4, 0x8f, 0x8f, 0x8f, 0x8f, 0x8f, 0x8f, 0x8f, 0x8f, 0x8f, 0x0f,
+                ],
+                (1_u64 << 41) - 1,
+            ),
+        ];
+        for &(bytes, expected) in cases {
+            let block = DataInformationBlock::try_from(bytes).unwrap();
+            let info = DataInformation::try_from(&block).unwrap();
+            assert_eq!(info.storage_number, expected, "{bytes:02x?}");
+            assert_eq!(info.tariff, 0);
+            assert_eq!(info.device, 0);
+        }
+    }
+
     #[test]
     fn test_data_information() {
         let data = [0x13_u8];
