@@ -4,7 +4,41 @@ use m_bus_parser::user_data::{
     data_information::DataType, data_record::DataRecord, parse_application_layer,
     parse_data_records_with_header, value_information::ValueLabel, UserDataBlock,
 };
-use m_bus_parser::WiredFrame;
+use m_bus_parser::{mbus_data::MbusData, WiredFrame};
+
+#[test]
+fn vif_7d_does_not_interrupt_wired_frame_record_iteration() {
+    // Issue #143: the benchmark fixture with the second VIF changed to 0x7D
+    // and the checksum corrected.
+    let bytes = hex::decode(
+        "683C3C680808727803491177040E160A0000000C7878034911047D31D40000426C0000441300000000046D0B0BCD130227000009FD0E0209FD0F060F000175133D16",
+    )
+    .unwrap();
+    let parsed = MbusData::<WiredFrame>::try_from(bytes.as_slice()).unwrap();
+    let records = parsed
+        .data_records
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(records.len(), 9);
+    let record = records.get(1).unwrap();
+    assert_eq!(record.raw_bytes(), &[0x04, 0x7D, 0x31, 0xD4, 0x00, 0x00]);
+    assert_eq!(record.value(), Some(&DataType::Number(54321.0)));
+    let information = record.value_information().unwrap();
+    assert_eq!(information.labels().count(), 0);
+    assert_eq!(information.units().count(), 0);
+    assert!(records
+        .get(2)
+        .unwrap()
+        .value_information()
+        .unwrap()
+        .has_label(ValueLabel::Date));
+    assert_eq!(
+        records.last().unwrap().value(),
+        Some(&DataType::ManufacturerSpecific(&[0x00, 0x01, 0x75, 0x13]))
+    );
+}
 
 #[test]
 fn test_lsb_frame() {

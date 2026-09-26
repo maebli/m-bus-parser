@@ -316,6 +316,22 @@ mod tests {
     use super::*;
     use crate::value_information::ValueLabel;
 
+    #[test]
+    fn vif_7d_without_extension_preserves_value_and_record_boundary() {
+        for value in [0x00, 0x13, 0x7F] {
+            let bytes = [0x01, 0x7D, value, 0x00];
+            let record = DataRecord::try_from(bytes.as_slice()).unwrap();
+
+            assert_eq!(record.value(), Some(&DataType::Number(f64::from(value))));
+            assert_eq!(record.raw_bytes(), &bytes[..3]);
+            let information = record.value_information().unwrap();
+            assert_eq!(information.labels().count(), 0);
+            assert_eq!(information.units().count(), 0);
+            assert_eq!(information.decimal_scale_exponent, 0);
+            assert_eq!(information.decimal_offset_exponent, 0);
+        }
+    }
+
     #[cfg(feature = "std")]
     #[test]
     fn record_hex_preserves_header_data_boundary_and_empty_payload() {
@@ -336,11 +352,6 @@ mod tests {
         // precedence for all VIF/VIFE bytes and the relevant DIF widths.
         for dif in [0x02, 0x04, 0x06, 0x09] {
             for vif in 0..=u8::MAX {
-                // 0x7D is reserved and the existing VIF decoder rejects it
-                // with an unreachable!(), rather than a parse error.
-                if vif == 0x7d {
-                    continue;
-                }
                 for vife in 0..=0x7f {
                     let bytes = [dif, vif, vife];
                     let Ok(raw) = RawDataRecordHeader::try_from(bytes.as_slice()) else {
