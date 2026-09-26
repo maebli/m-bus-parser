@@ -39,6 +39,11 @@ jobs:
         run: |
           cargo test --workspace --verbose --features decryption
           cargo test --workspace --verbose --features decryption,plaintext-before-extension
+      - name: Check manufacturer decoder crate
+        run: |
+          cargo test -p m-bus-manufacturer --all-targets
+          rustup target add thumbv7em-none-eabi
+          cargo build -p m-bus-manufacturer --target thumbv7em-none-eabi
       - name: Lint with Clippy
         run: |
           rustup component add clippy
@@ -169,6 +174,7 @@ jobs:
           publish_crate wired-mbus-link-layer crates/wired-mbus-link-layer/Cargo.toml
           publish_crate wireless-mbus-link-layer crates/wireless-mbus-link-layer/Cargo.toml
           publish_crate m-bus-application-layer crates/m-bus-application-layer/Cargo.toml
+          publish_crate m-bus-manufacturer crates/m-bus-manufacturer/Cargo.toml
           publish_crate m-bus-parser Cargo.toml
 
   publish-cli:

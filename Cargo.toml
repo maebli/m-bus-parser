@@ -58,7 +58,7 @@ aes-gcm = { version = "0.11", optional = true, default-features = false, feature
 ccm = { version = "0.6", optional = true, default-features = false }
 
 [workspace]
-members = ["cli", "wasm","python", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer", "crates/m-bus-core"]
+members = ["crates/m-bus-manufacturer", "cli", "wasm","python", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer", "crates/m-bus-core"]
 exclude = ["examples/cortex-m"]
 
 [[bench]]

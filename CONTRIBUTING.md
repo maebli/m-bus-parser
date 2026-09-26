@@ -122,6 +122,12 @@ The `src/` crate is the public API. It ties together the inner crates and provid
 
 ---
 
+## Manufacturer-specific decoders
+
+The standalone framework is in `crates/m-bus-manufacturer`. See its
+[guide](crates/m-bus-manufacturer/README.md) and
+[tested example](crates/m-bus-manufacturer/examples/decoder.rs).
+
 ## Testing
 
 ```bash
