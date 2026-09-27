@@ -235,10 +235,16 @@ struct SummarySection<'a> {
 }
 
 #[cfg(feature = "std")]
+enum LegacyOutputFormat {
+    Summary,
+    Json,
+    Yaml,
+}
+
+#[cfg(feature = "std")]
 struct ParsedOutput {
     summary: FrameSummary,
-    json: serde_json::Value,
-    yaml: String,
+    serialized: String,
 }
 
 #[cfg(feature = "std")]
@@ -504,33 +510,47 @@ fn summarize_wireless(
 }
 
 #[cfg(feature = "std")]
-fn build_output<T: serde::Serialize>(parsed: &T, summary: FrameSummary) -> ParsedOutput {
-    let mut json = serde_json::to_value(parsed).unwrap_or_default();
-    if let serde_json::Value::Object(ref mut map) = json {
-        map.insert(
-            "summary".to_string(),
-            serde_json::to_value(&summary).unwrap_or_default(),
-        );
-    }
-
-    let mut yaml = serde_yaml::to_string(parsed).unwrap_or_default();
-    yaml.push_str(
-        &serde_yaml::to_string(&SummarySection { summary: &summary }).unwrap_or_default(),
-    );
-
+fn build_output<T: serde::Serialize>(
+    parsed: &T,
+    summary: FrameSummary,
+    format: LegacyOutputFormat,
+) -> ParsedOutput {
+    let serialized = match format {
+        LegacyOutputFormat::Summary => String::new(),
+        LegacyOutputFormat::Json => {
+            let mut json = serde_json::to_value(parsed).unwrap_or_default();
+            if let serde_json::Value::Object(ref mut map) = json {
+                map.insert(
+                    "summary".to_string(),
+                    serde_json::to_value(&summary).unwrap_or_default(),
+                );
+            }
+            serde_json::to_string_pretty(&json).unwrap_or_default()
+        }
+        LegacyOutputFormat::Yaml => {
+            let mut yaml = serde_yaml::to_string(parsed).unwrap_or_default();
+            yaml.push_str(
+                &serde_yaml::to_string(&SummarySection { summary: &summary }).unwrap_or_default(),
+            );
+            yaml
+        }
+    };
     ParsedOutput {
         summary,
-        json,
-        yaml,
+        serialized,
     }
 }
 
 /// Parses a frame (wired first, wireless as fallback), applies decryption when
-/// a key is provided, and produces the shared output model every text format
-/// renders from.
+/// a key is provided, and builds the summary plus only the requested legacy
+/// serialization. Summary-only consumers do not serialize the parsed records.
 #[cfg(feature = "std")]
 #[cfg_attr(not(feature = "decryption"), allow(unused_mut))]
-fn parse_frame_output(input: &str, key: Option<&[u8; 16]>) -> Option<ParsedOutput> {
+fn parse_frame_output(
+    input: &str,
+    key: Option<&[u8; 16]>,
+    format: LegacyOutputFormat,
+) -> Option<ParsedOutput> {
     let data = clean_and_convert(input);
     #[cfg(feature = "decryption")]
     let mut decrypted_buffer = [0u8; 256];
@@ -568,7 +588,7 @@ fn parse_frame_output(input: &str, key: Option<&[u8; 16]>) -> Option<ParsedOutpu
             }
         }
         let summary = summarize_wired(&parsed, encrypted, decrypted);
-        return Some(build_output(&parsed, summary));
+        return Some(build_output(&parsed, summary, format));
     }
 
     // If wired fails, try wireless - strip Format A CRCs if present
@@ -607,7 +627,7 @@ fn parse_frame_output(input: &str, key: Option<&[u8; 16]>) -> Option<ParsedOutpu
             }
         }
         let summary = summarize_wireless(&parsed, encrypted, decrypted);
-        return Some(build_output(&parsed, summary));
+        return Some(build_output(&parsed, summary, format));
     }
 
     None
@@ -616,8 +636,8 @@ fn parse_frame_output(input: &str, key: Option<&[u8; 16]>) -> Option<ParsedOutpu
 #[cfg(feature = "std")]
 #[must_use]
 pub fn parse_to_json(input: &str, key: Option<&[u8; 16]>) -> String {
-    match parse_frame_output(input, key) {
-        Some(output) => serde_json::to_string_pretty(&output.json).unwrap_or_default(),
+    match parse_frame_output(input, key, LegacyOutputFormat::Json) {
+        Some(output) => output.serialized,
         None => "{}".to_string(),
     }
 }
@@ -625,8 +645,8 @@ pub fn parse_to_json(input: &str, key: Option<&[u8; 16]>) -> String {
 #[cfg(feature = "std")]
 #[must_use]
 fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
-    match parse_frame_output(input, key) {
-        Some(output) => output.yaml,
+    match parse_frame_output(input, key, LegacyOutputFormat::Yaml) {
+        Some(output) => output.serialized,
         None => "---\nerror: Could not parse data\n".to_string(),
     }
 }
@@ -634,7 +654,7 @@ fn parse_to_yaml(input: &str, key: Option<&[u8; 16]>) -> String {
 #[cfg(all(feature = "std", test))]
 #[must_use]
 fn parse_to_table(input: &str, key: Option<&[u8; 16]>) -> String {
-    match parse_frame_output(input, key) {
+    match parse_frame_output(input, key, LegacyOutputFormat::Summary) {
         Some(output) => render_table(&output.summary, key.is_some()),
         None => "Error: Could not parse data as wired or wireless M-Bus".to_string(),
     }
@@ -746,7 +766,7 @@ pub fn parse_to_csv(input: &str, key: Option<&[u8; 16]>) -> String {
 
     let mut writer = csv::Writer::from_writer(vec![]);
 
-    let Some(output) = parse_frame_output(input, key) else {
+    let Some(output) = parse_frame_output(input, key, LegacyOutputFormat::Summary) else {
         writer
             .write_record(["Error"])
             .map_err(|_| ())
@@ -1585,7 +1605,8 @@ mod tests {
             "1444AE0C7856341201078C2027780B134365877AC5",
         ];
         for input in inputs {
-            let output = super::parse_frame_output(input, None).expect("frame should parse");
+            let output = super::parse_frame_output(input, None, super::LegacyOutputFormat::Summary)
+                .expect("frame should parse");
             let summary = &output.summary;
             let table = super::parse_to_table(input, None);
             let csv = super::parse_to_csv(input, None);
