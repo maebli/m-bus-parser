@@ -1882,14 +1882,14 @@ fn apply_power10(integer: &str, exponent: isize) -> String {
 }
 
 fn unit_output(units: impl Iterator<Item = Unit> + Clone) -> String {
-    let display = units
-        .clone()
-        .map(|unit| unit.to_string())
-        .collect::<String>();
     units
+        .clone()
         .map(|unit| ucum_component(&unit))
         .collect::<Option<Vec<_>>>()
-        .map_or(display, |components| components.join("."))
+        .map_or_else(
+            || units.map(|unit| unit.to_string()).collect::<String>(),
+            |components| components.join("."),
+        )
 }
 
 fn ucum_component(unit: &Unit) -> Option<String> {
@@ -2644,6 +2644,27 @@ mod tests {
             ),
             "W (reactive)"
         );
+        assert_eq!(
+            unit_output(
+                [
+                    Unit {
+                        name: UnitName::Meter,
+                        exponent: 1
+                    },
+                    Unit {
+                        name: UnitName::ReactiveWatt,
+                        exponent: 1
+                    },
+                    Unit {
+                        name: UnitName::Hour,
+                        exponent: -1
+                    },
+                ]
+                .into_iter()
+            ),
+            "mW (reactive)h⁻¹"
+        );
+        assert_eq!(unit_output(core::iter::empty()), "");
     }
 
     #[test]
