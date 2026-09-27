@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use m_bus_parser::user_data::data_information::DataFieldCoding;
 use m_bus_parser::WiredFrame;
 use std::hint::black_box;
 
@@ -25,5 +26,37 @@ fn m_bus_parser_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, frame_parse_benchmark, m_bus_parser_benchmark);
+fn bcd_parse_benchmark(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bcd");
+    for (name, coding, data) in [
+        ("2_digits", DataFieldCoding::BCD2Digit, &[0x98][..]),
+        (
+            "8_digits",
+            DataFieldCoding::BCD8Digit,
+            &[0x98, 0x76, 0x54, 0x32][..],
+        ),
+        (
+            "12_digits",
+            DataFieldCoding::BCDDigit12,
+            &[0x98, 0x76, 0x54, 0x32, 0x10, 0x98][..],
+        ),
+        (
+            "18_digits",
+            DataFieldCoding::VariableLength,
+            &[0xC9, 0x98, 0x76, 0x54, 0x32, 0x10, 0x98, 0x76, 0x54, 0x32][..],
+        ),
+    ] {
+        group.bench_function(name, |b| {
+            b.iter(|| black_box(black_box(coding).parse(black_box(data), None)))
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    frame_parse_benchmark,
+    m_bus_parser_benchmark,
+    bcd_parse_benchmark
+);
 criterion_main!(benches);
