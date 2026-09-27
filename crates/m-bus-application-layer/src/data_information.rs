@@ -523,6 +523,66 @@ fn bcd_to_value_internal(
     sign: i32,
     lsb_order: bool,
 ) -> Result<Data<'_>, DataRecordError> {
+    // Common byte-aligned BCD values fit exactly in f64. Longer values keep
+    // the original floating-point accumulation order and rounding; odd digit
+    // counts keep their historical nibble ordering as well.
+    if num_digits > 15 || !num_digits.is_multiple_of(2) {
+        return bcd_to_value_floating(data, num_digits, sign, lsb_order);
+    }
+    let bytes = data
+        .get(..num_digits / 2)
+        .ok_or(DataRecordError::InsufficientData)?;
+    let (data_value, negative) = if lsb_order {
+        bcd_integer_magnitude(bytes.iter())?
+    } else {
+        bcd_integer_magnitude(bytes.iter().rev())?
+    };
+
+    let sign = if negative { -sign } else { sign };
+    // Avoid -0.0, which would render as "-0.000000".
+    let signed_value = if data_value == 0 {
+        0.0
+    } else {
+        data_value as f64 * sign as f64
+    };
+
+    Ok(Data {
+        value: Some(DataType::Number(signed_value)),
+        size: num_digits.div_ceil(2),
+    })
+}
+
+// Consume the most significant byte first, then append two digits at a time.
+fn bcd_integer_magnitude<'a>(
+    mut bytes: impl Iterator<Item = &'a u8>,
+) -> Result<(u64, bool), DataRecordError> {
+    let Some(&first) = bytes.next() else {
+        return Ok((0, false));
+    };
+    let high = first >> 4;
+    let low = first & 0x0F;
+    let negative = high == 0x0F;
+    if low > 9 || (high > 9 && !negative) {
+        return Err(DataInformationError::InvalidValueInformation.into());
+    }
+    let mut value = u64::from(if negative { low } else { high * 10 + low });
+    for &byte in bytes {
+        let high = byte >> 4;
+        let low = byte & 0x0F;
+        if high > 9 || low > 9 {
+            return Err(DataInformationError::InvalidValueInformation.into());
+        }
+        value = value * 100 + u64::from(high * 10 + low);
+    }
+    Ok((value, negative))
+}
+
+fn bcd_to_value_floating(
+    data: &[u8],
+    num_digits: usize,
+    sign: i32,
+    lsb_order: bool,
+) -> Result<Data<'_>, DataRecordError> {
     if data.len() < num_digits.div_ceil(2) {
         return Err(DataRecordError::InsufficientData);
     }
@@ -1188,6 +1248,61 @@ mod tests {
         let result = DataInformationBlock::try_from(data.as_slice());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().get_size(), 2);
+    }
+
+    #[test]
+    fn bcd_matches_previous_rounding_and_validation() {
+        fn check(data: &[u8], digits: usize) {
+            for lsb_order in [false, true] {
+                for sign in [-1, 1] {
+                    let actual = bcd_to_value_internal(data, digits, sign, lsb_order);
+                    let expected = bcd_to_value_floating(data, digits, sign, lsb_order);
+                    assert_eq!(
+                        actual, expected,
+                        "{data:02X?}, digits={digits}, sign={sign}, lsb={lsb_order}"
+                    );
+                    if let Ok(Data {
+                        value: Some(DataType::Number(value)),
+                        ..
+                    }) = actual
+                    {
+                        if value == 0.0 {
+                            assert!(value.is_sign_positive());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Exhaust all short encodings, including misplaced signs and invalid digits.
+        for raw in 0..=u16::MAX {
+            check(&raw.to_le_bytes(), 4);
+        }
+        let mut state = 0x1234_5678_u32;
+        for digits in 0_usize..=18 {
+            let length = digits.div_ceil(2);
+            for _ in 0..128 {
+                let mut data = [0_u8; 9];
+                for byte in &mut data[..length] {
+                    state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    *byte = ((state % 10) as u8) | (((state / 10 % 10) as u8) << 4);
+                }
+                check(&data[..length], digits);
+                for index in 0..length {
+                    let saved = data[index];
+                    for invalid in [0xA0, 0xF0, 0x0F] {
+                        data[index] = saved | invalid;
+                        check(&data[..length], digits);
+                    }
+                    data[index] = saved;
+                }
+            }
+            check(&[0x99; 9][..length], digits);
+            check(&[0x00; 9][..length], digits);
+            if length > 0 {
+                check(&[0x00; 9][..length - 1], digits);
+            }
+        }
     }
 
     #[test]
