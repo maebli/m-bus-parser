@@ -15,7 +15,7 @@
             line-height: 1.5;
             color: #1f2328;
             margin: 0;
-            padding: 24px 16px;
+            padding: 16px;
             background-color: #f6f8fa;
         }
 
@@ -23,17 +23,17 @@
             display: flex;
             flex-direction: row;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             justify-content: flex-start;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             max-width: 1100px;
             margin-left: auto;
             margin-right: auto;
         }
 
         #banner {
-            width: 80px;
-            height: 80px;
+            width: 64px;
+            height: 64px;
             object-fit: contain;
             flex-shrink: 0;
         }
@@ -53,7 +53,7 @@
 
         .header-text h1 {
             margin: 0;
-            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-size: clamp(1.35rem, 2.5vw, 1.7rem);
             letter-spacing: -0.035em;
             line-height: 1.2;
             color: #1f2328;
@@ -76,35 +76,57 @@
             text-decoration: underline;
         }
 
-        .project-badges {
+        .title-row {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 4px;
-            margin-top: 8px;
+            gap: 6px 16px;
         }
 
-        .project-badges a {
+        #manufacturer-parser-request {
             display: inline-flex;
-            line-height: 0;
+            align-items: center;
+            padding: 5px 10px;
+            border: 1px solid #0969da;
+            border-radius: 5px;
+            background: #0969da;
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-decoration: none;
         }
 
-        .project-badges img {
-            height: 20px;
+        #manufacturer-parser-request:hover { background: #0550ae; }
+        body.dark-mode #manufacturer-parser-request { background: #1f6feb; border-color: #4493f8; }
+        body.dark-mode #manufacturer-parser-request:hover { background: #388bfd; }
+
+        .header-meta,
+        .project-links {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 10px;
         }
 
-        .parser-version {
-            font-size: 0.55em;
-            letter-spacing: 0;
-            white-space: nowrap;
+        .header-meta { margin-top: 5px; }
+        .header-meta .subtitle { margin-top: 0; }
+        .project-links { gap: 4px; }
+        .project-links a {
+            padding: 1px 6px;
+            border: 1px solid #d1d9e0;
+            border-radius: 4px;
             color: #59636e;
-            font-weight: normal;
-            margin-left: 8px;
+            font-size: 0.65rem;
+            line-height: 1.5;
+            text-decoration: none;
         }
+        .project-links a:hover { color: #0969da; border-color: #0969da; }
+        body.dark-mode .project-links a { color: #9198a1; border-color: #3d444d; }
+        body.dark-mode .project-links a:hover { color: #4493f8; border-color: #4493f8; }
 
         form {
             background: #fff;
-            padding: 20px;
+            padding: 14px 16px;
             border: 1px solid #d1d9e0;
             border-radius: 12px;
             box-shadow: 0 4px 18px rgba(31, 35, 40, 0.04);
@@ -133,7 +155,7 @@
             font-size: 14px;
             line-height: 1.5;
             resize: vertical;
-            min-height: 96px;
+            min-height: 76px;
         }
 
         input[type="text"],
@@ -182,7 +204,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-top: 12px;
+            margin-top: 10px;
         }
 
         input[type="button"] {
@@ -240,9 +262,9 @@
         .header-controls button {
             display: grid;
             place-items: center;
-            width: 40px;
-            height: 40px;
-            padding: 8px;
+            width: 32px;
+            height: 32px;
+            padding: 6px;
             border: 0;
             border-radius: 8px;
             background: transparent;
@@ -252,6 +274,7 @@
 
         .header-controls button:hover { background: #eff2f5; }
         .header-controls #report_issue { color: #cf222e; }
+        .header-controls svg { width: 20px; height: 20px; }
         .header-controls svg,
         #copy_output svg,
         #download_output svg { stroke: currentColor; }
@@ -295,7 +318,7 @@
         #output-container {
             position: relative;
             max-width: 1100px;
-            margin: 16px auto 0;
+            margin: 12px auto 0;
             background: #fff;
             border: 1px solid #d1d9e0;
             border-radius: 12px;
@@ -478,8 +501,7 @@
             color: #f0f6fc;
         }
 
-        body.dark-mode .header-text .subtitle,
-        body.dark-mode .parser-version {
+        body.dark-mode .header-text .subtitle {
             color: #9198a1;
         }
 
@@ -940,11 +962,11 @@
 
         @media (max-width: 600px) {
             body { padding: 16px 12px; }
-            .header { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px 12px; }
-            #banner { width: 64px; height: 64px; align-self: start; }
+            .header { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 6px 10px; }
+            #banner { width: 48px; height: 48px; align-self: start; }
             .header-controls { grid-column: 2; margin-top: 0; }
             .header-text .subtitle { font-size: 0.75rem; overflow-wrap: anywhere; }
-            form { padding: 16px; }
+            form { padding: 12px; }
             .parse-actions input { flex: 1 1 125px; }
             .hex-viewer { margin: 12px 16px 20px; }
             .hex-viewer-left, .hex-viewer-right { padding: 16px; }
@@ -975,34 +997,24 @@
 
 <body>
     <div class="header">
-        <img id="banner" src="./emeter.png" alt="Electric meter" width="88" height="88">
+        <img id="banner" src="./emeter.png" alt="Electric meter" width="64" height="64">
         <div class="header-text">
-            <h1>Online M-Bus Parser <span class="parser-version" id="parser-version"></span></h1>
-            <div class="subtitle">
-                <a href="https://maebli.github.io/m-bus-parser/">maebli.github.io/m-bus-parser</a> •
-                <a href="https://github.com/maebli" target="_blank" rel="noopener noreferrer">Michael Aebli</a> •
-                <a href="./dev/bench/">Benchmarks</a>
-            </div>
-            <div class="project-badges" aria-label="Project status">
-                <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/crates/v/m-bus-parser.svg" alt="m-bus-parser version on crates.io">
-                </a>
-                <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/crates/d/m-bus-parser.svg" alt="m-bus-parser downloads on crates.io">
-                </a>
-                <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">
-                    <img src="https://docs.rs/m-bus-parser/badge.svg" alt="m-bus-parser documentation on docs.rs">
-                </a>
-                <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">
-                    <img src="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml/badge.svg" alt="Rust build status">
-                </a>
-                <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/crates/l/m-bus-parser.svg" alt="m-bus-parser license">
-                </a>
+            <div class="title-row">
+                <h1>Online M-Bus Parser</h1>
                 <a id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
-                    target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/badge/add-manufacturer--specific_parser-007ec6" alt="Add manufacturer-specific parser">
-                </a>
+                    target="_blank" rel="noopener noreferrer">Add manufacturer-specific parser</a>
+            </div>
+            <div class="header-meta">
+                <div class="subtitle">
+                    <a href="https://github.com/maebli" target="_blank" rel="noopener noreferrer">Michael Aebli</a> ·
+                    <a href="./dev/bench/">Benchmarks</a>
+                </div>
+                <nav class="project-links" aria-label="Project resources">
+                    <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Crate</a>
+                    <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">Docs</a>
+                    <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">Build</a>
+                    <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>
+                </nav>
             </div>
         </div>
         <div class="header-controls">
@@ -1029,7 +1041,7 @@
     </div>
     <form>
         <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
-        <textarea rows="3" cols="80"
+        <textarea rows="2" cols="80"
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
         <div class="key-input-container">
@@ -1248,7 +1260,6 @@
             });
 
             await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.3", import.meta.url));
-            document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
 
