@@ -1,45 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="./emeter.png">
     <title>M-Bus Parser (Wired & Wireless)</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.5;
+            color: #28332e;
             margin: 0;
-            padding: 20px;
-            background-color: #ffffff;
+            padding: 32px 20px;
+            background-color: #f5f7f5;
         }
 
         .header {
             display: flex;
             flex-direction: row;
-            align-items: flex-start;
+            align-items: center;
+            gap: 18px;
             justify-content: flex-start;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
             max-width: 1100px;
             margin-left: auto;
             margin-right: auto;
         }
 
+        #banner {
+            width: 88px;
+            height: 88px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
         .header-text {
+            flex: 1;
+            min-width: 0;
             text-align: left;
-            margin-left: 16px;
         }
 
         .header-controls {
             display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            margin-left: 0;
+            gap: 4px;
+            align-self: flex-start;
+            margin-top: 8px;
         }
 
         .header-text h1 {
             margin: 0;
-            font-size: 2em;
-            color: #333;
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            letter-spacing: -0.035em;
+            line-height: 1.2;
+            color: #28332e;
         }
 
         .header-text .subtitle {
@@ -77,17 +92,21 @@
         }
 
         .parser-version {
-            font-size: 0.7em;
-            color: #888;
+            font-size: 0.55em;
+            letter-spacing: 0;
+            white-space: nowrap;
+            color: #78847c;
             font-weight: normal;
             margin-left: 8px;
         }
 
         form {
             background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            border: 1px solid #dfe5df;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(35, 55, 43, 0.04);
+            box-sizing: border-box;
             max-width: 1100px;
             margin: 0 auto;
         }
@@ -95,25 +114,34 @@
         label {
             display: block;
             margin-bottom: 8px;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.9rem;
         }
 
         textarea {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 12px;
+            border: 1px solid #cdd7cf;
+            background: #fafcfb;
+            color: inherit;
+            border-radius: 8px;
             box-sizing: border-box;
             margin-bottom: 10px;
-            font-family: monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.7;
+            resize: vertical;
+            min-height: 120px;
         }
 
         input[type="text"],
         input[type="password"] {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 12px;
+            border: 1px solid #cdd7cf;
+            background: #fafcfb;
+            color: inherit;
+            border-radius: 8px;
             box-sizing: border-box;
             margin-bottom: 10px;
             font-family: monospace;
@@ -122,7 +150,7 @@
 
         .key-input-container {
             position: relative;
-            margin-bottom: 15px;
+            margin-bottom: 0;
         }
 
         .key-help {
@@ -147,18 +175,89 @@
             color: #333;
         }
 
+        .parse-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
         input[type="button"] {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
+            background-color: #edf2ee;
+            color: #365343;
+            padding: 10px 16px;
+            border: 1px solid #d3ded5;
+            border-radius: 7px;
             cursor: pointer;
-            margin-right: 10px;
+            font: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            min-height: 42px;
+            transition: background-color 120ms, border-color 120ms;
         }
 
         input[type="button"]:hover {
-            background-color: #45a049;
+            background-color: #dfe9e1;
+            border-color: #a6bcae;
+        }
+
+        input[type="button"][aria-pressed="true"] {
+            background-color: #365b45;
+            border-color: #365b45;
+            color: #fff;
+        }
+
+        :is(button, a, input):focus-visible {
+            outline: 3px solid #658d74;
+            outline-offset: 3px;
+        }
+
+        textarea:focus-visible,
+        input[type="text"]:focus-visible,
+        input[type="password"]:focus-visible {
+            outline: 2px solid #658d74;
+            outline-offset: 2px;
+        }
+
+        .key-input-container input { padding-right: 48px; }
+
+        .header-controls button {
+            display: grid;
+            place-items: center;
+            width: 40px;
+            height: 40px;
+            padding: 8px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #66766b;
+            cursor: pointer;
+        }
+
+        .header-controls button:hover { background: #e6ece7; }
+        .header-controls #report_issue { color: #b65348; }
+        .header-controls svg,
+        #copy_output svg,
+        #download_output svg { stroke: currentColor; }
+
+        .output-title {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            margin: 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #66766b;
+        }
+
+        #output > .key-help,
+        #output > .parse-report-actions { margin: 12px 20px; }
+
+        .output-placeholder {
+            margin: 0;
+            padding: 12px 20px 24px;
+            color: #78847c;
+            font-size: 0.9rem;
         }
 
         pre {
@@ -182,8 +281,11 @@
             max-width: 1100px;
             margin: 20px auto 0;
             background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border: 1px solid #dfe5df;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(35, 55, 43, 0.04);
+            box-sizing: border-box;
+            overflow: hidden;
         }
 
         .code-viewer {
@@ -309,11 +411,11 @@
         #copy_output {
             position: absolute;
             top: 10px;
-            right: 45px; /* Make space for download button */
+            right: 54px; /* Leave a gap before the download button. */
             background: #fff;
             border: 1px solid #ccc;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            color: #66766b;
             cursor: pointer;
             padding: 8px;
             z-index: 10;
@@ -326,8 +428,8 @@
             right: 10px;
             background: #fff;
             border: 1px solid #ccc;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            color: #66766b;
             cursor: pointer;
             padding: 8px;
             z-index: 10;
@@ -345,9 +447,11 @@
             display: block;
         }
 
-        body.dark-mode #share_button svg {
-            stroke: #aaa;
-        }
+        body.dark-mode .header-controls button,
+        body.dark-mode .output-title,
+        body.dark-mode .output-placeholder { color: #b1bdb5; }
+        body.dark-mode .header-controls button:hover { background: #2b342f; }
+        body.dark-mode .header-controls #report_issue { color: #ee978b; }
 
         body.dark-mode {
             background-color: #181a1b;
@@ -374,12 +478,14 @@
 
         body.dark-mode form {
             background: #23272a;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+            border-color: #37423b;
+            box-shadow: none;
         }
 
         body.dark-mode #output-container {
             background: #23272a;
-            border-radius: 8px;
+            border-color: #37423b;
+            box-shadow: none;
         }
 
         body.dark-mode textarea {
@@ -422,6 +528,7 @@
         body.dark-mode #download_output {
             background: #23272a;
             border: 1px solid #444;
+            color: #c5d1c9;
         }
 
         body.dark-mode #copy_output:hover,
@@ -430,12 +537,20 @@
         }
 
         body.dark-mode input[type="button"] {
-            background-color: #444;
-            color: #e0e0e0;
+            background-color: #29382f;
+            border-color: #3e5546;
+            color: #d2e3d7;
         }
 
         body.dark-mode input[type="button"]:hover {
-            background-color: #333;
+            background-color: #354b3d;
+            border-color: #6a8c76;
+        }
+
+        body.dark-mode input[type="button"][aria-pressed="true"] {
+            background-color: #a8cbb1;
+            border-color: #a8cbb1;
+            color: #162c1e;
         }
 
         body.dark-mode .code-viewer,
@@ -799,6 +914,16 @@
             }
         }
 
+        @media (max-width: 600px) {
+            body { padding: 20px 12px; }
+            .header { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px 12px; }
+            #banner { width: 64px; height: 64px; align-self: start; }
+            .header-controls { grid-column: 2; margin-top: 0; }
+            .header-text .subtitle { font-size: 0.8rem; overflow-wrap: anywhere; }
+            form { padding: 18px; }
+            .parse-actions input { flex: 1 1 125px; }
+        }
+
         @media (forced-colors: active) {
             .code-viewer,
             .code-scroll,
@@ -823,7 +948,7 @@
 
 <body>
     <div class="header">
-        <img id="banner" src="meter.png" alt="Meter Banner">
+        <img id="banner" src="./emeter.png" alt="Electric meter" width="88" height="88">
         <div class="header-text">
             <h1>Online M-Bus Parser <span class="parser-version" id="parser-version"></span></h1>
             <div class="subtitle">
@@ -854,19 +979,19 @@
             </div>
         </div>
         <div class="header-controls">
-            <button id="dark_mode_toggle" title="Toggle dark mode" style="background:none;border:none;cursor:pointer;padding:8px;">
+            <button id="dark_mode_toggle" title="Toggle dark mode">
                 <svg id="dark_mode_icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5" />
                     <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                 </svg>
             </button>
-            <button id="share_button" title="Copy share link" style="background:none;border:none;cursor:pointer;padding:8px;">
+            <button id="share_button" title="Copy share link">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
                 </svg>
             </button>
-            <button id="report_issue" title="Report Issue" style="background:none;border:none;cursor:pointer;padding:8px;">
+            <button id="report_issue" title="Report Issue">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />
@@ -893,15 +1018,18 @@
         </div>
         <div class="key-help">Leave empty for unencrypted frames. Format: 32 hexadecimal characters (e.g., 0123456789ABCDEF0123456789ABCDEF)</div>
 
-        <input id="parse_json" type="button" value="Parse to JSON" />
-        <input id="parse_yaml" type="button" value="Parse to YAML" />
-        <input id="parse_table" type="button" value="Parse to Table" />
-        <input id="parse_csv" type="button" value="Parse to CSV" />
-        <input id="parse_mermaid" type="button" value="Parse to Diagram" />
-        <input id="parse_xml" type="button" value="Parse to XML" />
-        <input id="parse_hexview" type="button" value="Hex View" />
+        <div class="parse-actions" role="group" aria-label="Output format">
+            <input id="parse_json" type="button" value="Parse to JSON" aria-pressed="false" />
+            <input id="parse_yaml" type="button" value="Parse to YAML" aria-pressed="false" />
+            <input id="parse_table" type="button" value="Parse to Table" aria-pressed="false" />
+            <input id="parse_csv" type="button" value="Parse to CSV" aria-pressed="false" />
+            <input id="parse_mermaid" type="button" value="Parse to Diagram" aria-pressed="false" />
+            <input id="parse_xml" type="button" value="Parse to XML" aria-pressed="false" />
+            <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
+        </div>
     </form>
     <div id="output-container">
+        <h2 class="output-title">Parser output</h2>
         <button id="copy_output" title="Copy Output">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -915,7 +1043,7 @@
                 <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
         </a>
-        <div id="output" aria-live="polite"></div>
+        <div id="output" aria-live="polite"><p class="output-placeholder">Choose an output format to parse your payload.</p></div>
     </div>
     <script type="module">
         import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, version } from "./m_bus_parser_wasm_pack.js?v=0.4.3";
@@ -1165,6 +1293,9 @@
             async function parseInput(format, updateHistory = true) {
                 format = format === 'table_format' ? 'table' : format;
                 currentFormat = format;
+                document.querySelectorAll('.parse-actions input').forEach(button => {
+                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
+                });
                 const inputString = document.getElementById('inputstring').value;
                 const aesKey = document.getElementById('aeskey').value.trim();
                 const outputContainer = document.getElementById('output');
