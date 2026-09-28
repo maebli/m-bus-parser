@@ -25,7 +25,7 @@ jobs:
       PARSER_RESOURCES_TOOLCHAIN: nightly-2026-05-16
       CARGO_TERM_COLOR: never
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Remove email addresses from benchmark metadata
         shell: bash
         run: |
@@ -150,7 +150,7 @@ jobs:
   publish:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: measure
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       pages: write
@@ -159,7 +159,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Release markers on the charts need the full history and all tags.
           fetch-depth: 0

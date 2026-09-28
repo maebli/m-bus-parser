@@ -1,93 +1,132 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="./emeter.png">
     <title>M-Bus Parser (Wired & Wireless)</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
+        /* UI palette: GitHub Primer light/dark neutrals and blue accents.
+           https://primer.style/product/primitives/color/ */
         body {
-            font-family: Arial, sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.5;
+            color: #1f2328;
             margin: 0;
-            padding: 20px;
-            background-color: #ffffff;
+            padding: 16px;
+            background-color: #f6f8fa;
         }
 
         .header {
+            position: relative;
             display: flex;
             flex-direction: row;
-            align-items: flex-start;
+            align-items: center;
+            gap: 10px;
             justify-content: flex-start;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             max-width: 1100px;
             margin-left: auto;
             margin-right: auto;
         }
 
+        #banner {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
         .header-text {
+            flex: 1;
+            min-width: 0;
             text-align: left;
-            margin-left: 16px;
         }
 
         .header-controls {
+            position: absolute;
+            top: 0;
+            right: 0;
             display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            margin-left: 0;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            align-self: flex-start;
+            margin-top: 3px;
         }
 
         .header-text h1 {
             margin: 0;
-            font-size: 2em;
-            color: #333;
+            padding-right: 300px;
+            font-size: clamp(1.35rem, 2.5vw, 1.7rem);
+            letter-spacing: -0.035em;
+            line-height: 1.2;
+            color: #1f2328;
         }
 
+        .parser-version {
+            margin-left: 8px;
+            font-size: 0.55em;
+            font-weight: normal;
+            letter-spacing: 0;
+            white-space: nowrap;
+            color: #59636e;
+        }
+        body.dark-mode .parser-version { color: #9198a1; }
+
         .header-text .subtitle {
-            font-size: 0.9em;
-            color: #666;
+            font-size: 0.8rem;
+            color: #59636e;
             margin-top: 4px;
         }
 
         .header-text .subtitle a {
-            color: #666;
+            color: #59636e;
             text-decoration: none;
         }
 
         .header-text .subtitle a:hover,
         .header-text .subtitle a:focus-visible {
-            color: #333;
+            color: #1f2328;
             text-decoration: underline;
         }
 
-        .project-badges {
+        #manufacturer-parser-request { margin-left: auto; color: #0969da; }
+        body.dark-mode #manufacturer-parser-request { color: #4493f8; }
+
+        .header-meta,
+        .project-links {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 4px;
-            margin-top: 8px;
+            gap: 4px 10px;
         }
 
-        .project-badges a {
-            display: inline-flex;
-            line-height: 0;
+        .header-meta { margin-top: 5px; }
+        .header-meta .subtitle { margin-top: 0; }
+        .project-links { gap: 4px; flex: 1 1 360px; }
+        .project-links a:not(#manufacturer-parser-request) {
+            padding: 1px 6px;
+            border: 1px solid #d1d9e0;
+            border-radius: 4px;
+            color: #59636e;
+            font-size: 0.65rem;
+            line-height: 1.5;
+            text-decoration: none;
         }
-
-        .project-badges img {
-            height: 20px;
-        }
-
-        .parser-version {
-            font-size: 0.7em;
-            color: #888;
-            font-weight: normal;
-            margin-left: 8px;
-        }
+        .project-links a:not(#manufacturer-parser-request):hover { color: #0969da; border-color: #0969da; }
+        body.dark-mode .project-links a:not(#manufacturer-parser-request) { color: #9198a1; border-color: #3d444d; }
+        body.dark-mode .project-links a:not(#manufacturer-parser-request):hover { color: #4493f8; border-color: #4493f8; }
 
         form {
             background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 8px 16px 14px;
+            border: 1px solid #d1d9e0;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(31, 35, 40, 0.04);
+            box-sizing: border-box;
             max-width: 1100px;
             margin: 0 auto;
         }
@@ -95,70 +134,173 @@
         label {
             display: block;
             margin-bottom: 8px;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.9rem;
         }
 
         textarea {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 12px;
+            border: 1px solid #d1d9e0;
+            background: #f6f8fa;
+            color: inherit;
+            border-radius: 8px;
             box-sizing: border-box;
-            margin-bottom: 10px;
-            font-family: monospace;
+            margin-bottom: 8px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            min-height: 76px;
         }
 
         input[type="text"],
         input[type="password"] {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 12px;
+            border: 1px solid #d1d9e0;
+            background: #f6f8fa;
+            color: inherit;
+            border-radius: 8px;
             box-sizing: border-box;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-family: monospace;
             font-size: 14px;
         }
 
         .key-input-container {
             position: relative;
-            margin-bottom: 15px;
+            margin-bottom: 0;
         }
 
         .key-help {
             font-size: 0.85em;
-            color: #666;
+            color: #59636e;
             margin-top: 4px;
             margin-bottom: 8px;
         }
 
+        #input-help { font-size: 0.75rem; margin-top: 0; }
+
         .key-toggle {
             position: absolute;
             right: 10px;
-            top: 10px;
+            top: 50%;
+            transform: translateY(-50%);
             background: none;
             border: none;
             cursor: pointer;
             padding: 4px;
-            color: #666;
+            color: #59636e;
         }
 
         .key-toggle:hover {
-            color: #333;
+            color: #1f2328;
+        }
+
+        .parse-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
         }
 
         input[type="button"] {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
+            background-color: #0969da;
+            color: #fff;
+            padding: 8px 16px;
+            border: 1px solid #0969da;
             border-radius: 4px;
             cursor: pointer;
-            margin-right: 10px;
+            font: inherit;
+            font-size: 0.82rem;
+            font-weight: 500;
+            min-height: 36px;
+            transition: background-color 120ms, border-color 120ms;
         }
 
         input[type="button"]:hover {
-            background-color: #45a049;
+            background-color: #0550ae;
+            border-color: #0550ae;
+        }
+
+        input[type="button"][aria-pressed="true"] {
+            background-color: #0a3069;
+            border-color: #0a3069;
+            box-shadow: inset 0 -2px #fff;
+            color: #fff;
+        }
+
+        #parse_mermaid,
+        #parse_hexview { padding-inline: 24px; }
+
+        #mermaid_diagram {
+            padding: 28px 32px 32px;
+            overflow-x: auto;
+        }
+
+        #mermaid_diagram svg { display: block; margin: 0 auto; }
+
+        :is(button, a, input):focus-visible {
+            outline: 3px solid #0969da;
+            outline-offset: 3px;
+        }
+
+        textarea:focus-visible,
+        input[type="text"]:focus-visible,
+        input[type="password"]:focus-visible {
+            outline: 2px solid #0969da;
+            outline-offset: 2px;
+        }
+
+        .key-input-container input { display: block; padding: 10px 44px 10px 12px; margin-bottom: 0; }
+        #aeskey::placeholder { font-family: system-ui, sans-serif; font-size: 0.8rem; color: #59636e; opacity: 1; }
+        body.dark-mode #aeskey::placeholder { color: #9198a1; }
+
+        .utility-control {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            min-height: 28px;
+            box-sizing: border-box;
+            padding: 4px 8px;
+            border: 1px solid #d1d9e0;
+            border-radius: 4px;
+            background: transparent;
+            color: #59636e;
+            font: inherit;
+            font-size: 0.72rem;
+            line-height: 1.4;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .utility-control:hover { background: #eff2f5; border-color: #818b98; }
+        body.dark-mode .utility-control { color: #9198a1; border-color: #3d444d; }
+        body.dark-mode .utility-control:hover { background: #212830; border-color: #9198a1; }
+        .utility-control svg { width: 14px; height: 14px; flex-shrink: 0; stroke: currentColor; }
+        #copy_output svg,
+        #download_output svg { stroke: currentColor; }
+
+        .output-summary {
+            min-height: 44px;
+            box-sizing: border-box;
+            padding: 12px 82px 10px 20px;
+            margin: 0;
+            font-size: 0.75rem;
+            font-style: italic;
+            line-height: 1.4;
+            color: #59636e;
+        }
+
+        #output > .key-help,
+        #output > .parse-report-actions { margin: 12px 20px; }
+
+        .output-placeholder {
+            margin: 0;
+            padding: 12px 20px 24px;
+            color: #59636e;
+            font-size: 0.9rem;
         }
 
         pre {
@@ -170,20 +312,22 @@
 
         #output {
             min-height: 84px;
-            padding-top: 48px;
             border-radius: 8px;
             overflow: hidden;
             background: #fff;
-            color: #222;
+            color: #1f2328;
         }
 
         #output-container {
             position: relative;
             max-width: 1100px;
-            margin: 20px auto 0;
+            margin: 12px auto 0;
             background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border: 1px solid #d1d9e0;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(31, 35, 40, 0.04);
+            box-sizing: border-box;
+            overflow: hidden;
         }
 
         .code-viewer {
@@ -306,65 +450,57 @@
         .parse-report-actions a { color: #0969da; }
         body.dark-mode .parse-report-actions a { color: #79c0ff; }
 
-        #copy_output {
-            position: absolute;
-            top: 10px;
-            right: 45px; /* Make space for download button */
-            background: #fff;
-            border: 1px solid #ccc;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-            cursor: pointer;
-            padding: 8px;
-            z-index: 10;
-            transition: background 0.2s, box-shadow 0.2s;
-        }
-
+        #copy_output,
         #download_output {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 8px;
+            display: grid;
+            place-items: center;
+            box-sizing: border-box;
+            width: 28px;
+            height: 28px;
+            padding: 5px;
             background: #fff;
-            border: 1px solid #ccc;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            border: 1px solid #d1d9e0;
+            border-radius: 4px;
+            color: #59636e;
             cursor: pointer;
-            padding: 8px;
             z-index: 10;
-            transition: background 0.2s, box-shadow 0.2s;
+            transition: background 0.2s;
         }
+        #copy_output { right: 42px; }
+        #download_output { right: 8px; }
 
         #copy_output:hover,
         #download_output:hover {
-            background: #f0f0f0;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            background: #f6f8fa;
         }
 
         #copy_output svg,
         #download_output svg {
             display: block;
+            width: 16px;
+            height: 16px;
         }
 
-        body.dark-mode #share_button svg {
-            stroke: #aaa;
-        }
+        body.dark-mode .output-summary,
+        body.dark-mode .output-placeholder { color: #9198a1; }
 
         body.dark-mode {
-            background-color: #181a1b;
-            color: #e0e0e0;
+            background-color: #0d1117;
+            color: #f0f6fc;
         }
 
         body.dark-mode .header-text h1 {
-            color: #e0e0e0;
+            color: #f0f6fc;
         }
 
-        body.dark-mode .header-text .subtitle,
-        body.dark-mode .parser-version {
-            color: #aaa;
+        body.dark-mode .header-text .subtitle {
+            color: #9198a1;
         }
 
         body.dark-mode .header-text .subtitle a {
-            color: #aaa;
+            color: #9198a1;
         }
 
         body.dark-mode .header-text .subtitle a:hover,
@@ -373,69 +509,81 @@
         }
 
         body.dark-mode form {
-            background: #23272a;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+            background: #151b23;
+            border-color: #3d444d;
+            box-shadow: none;
         }
 
         body.dark-mode #output-container {
-            background: #23272a;
-            border-radius: 8px;
+            background: #151b23;
+            border-color: #3d444d;
+            box-shadow: none;
         }
 
         body.dark-mode textarea {
-            background: #23272a;
-            color: #e0e0e0;
-            border: 1px solid #444;
+            background: #151b23;
+            color: #f0f6fc;
+            border: 1px solid #3d444d;
         }
 
         body.dark-mode input[type="text"],
         body.dark-mode input[type="password"] {
-            background: #23272a;
-            color: #e0e0e0;
-            border: 1px solid #444;
+            background: #151b23;
+            color: #f0f6fc;
+            border: 1px solid #3d444d;
         }
 
         body.dark-mode .key-help {
-            color: #aaa;
+            color: #9198a1;
         }
 
         body.dark-mode .key-toggle {
-            color: #aaa;
+            color: #9198a1;
         }
 
         body.dark-mode .key-toggle:hover {
-            color: #e0e0e0;
+            color: #f0f6fc;
         }
 
         body.dark-mode pre {
-            background: #23272a;
-            color: #e0e0e0;
+            background: #151b23;
+            color: #f0f6fc;
         }
 
         body.dark-mode #output {
             background: #0d1117;
-            color: #e0e0e0;
+            color: #f0f6fc;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
         }
 
         body.dark-mode #copy_output,
         body.dark-mode #download_output {
-            background: #23272a;
-            border: 1px solid #444;
+            background: #151b23;
+            border: 1px solid #3d444d;
+            color: #9198a1;
         }
 
         body.dark-mode #copy_output:hover,
         body.dark-mode #download_output:hover {
-            background: #181a1b;
+            background: #0d1117;
         }
 
         body.dark-mode input[type="button"] {
-            background-color: #444;
-            color: #e0e0e0;
+            background-color: #1f6feb;
+            border-color: #1f6feb;
+            color: #fff;
         }
 
         body.dark-mode input[type="button"]:hover {
-            background-color: #333;
+            background-color: #1158c7;
+            border-color: #4493f8;
+        }
+
+        body.dark-mode input[type="button"][aria-pressed="true"] {
+            background-color: #0d419d;
+            border-color: #4493f8;
+            box-shadow: inset 0 -2px #fff;
+            color: #fff;
         }
 
         body.dark-mode .code-viewer,
@@ -452,6 +600,10 @@
         body.dark-mode .line-gutter {
             border-right-color: #6e7681;
             color: #c7cdd5;
+        }
+
+        body.dark-mode :is(button, a, input, textarea):focus-visible {
+            outline-color: #4493f8;
         }
 
         body.dark-mode .code-scroll:focus-visible {
@@ -514,6 +666,9 @@
 
         /* ── Interactive Hex Viewer ─────────────────────────── */
         .hex-viewer {
+            margin: 16px 24px 24px;
+            border: 1px solid #d1d9e0;
+            border-radius: 8px;
             display: flex;
             gap: 0;
             font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
@@ -528,19 +683,21 @@
             min-width: 0;
             max-width: 100%;
             overflow-x: auto;
-            padding: 40px 12px 12px;
+            padding: 24px;
         }
         .hex-viewer-right {
             box-sizing: border-box;
             width: 420px;
             min-width: 340px;
-            border-left: 1px solid #ddd;
+            border-left: 1px solid #d1d9e0;
             overflow-y: auto;
             max-height: 600px;
-            padding: 40px 0 8px;
+            padding: 24px 12px;
         }
+        body.dark-mode .hex-viewer { border-color: #3d444d; }
+
         body.dark-mode .hex-viewer-right {
-            border-left-color: #444;
+            border-left-color: #3d444d;
         }
 
         /* Hex grid */
@@ -738,14 +895,11 @@
             color: #aaa;
         }
         body.dark-mode .hex-tree-item .tree-detail {
-            color: #e0e0e0;
+            color: #f0f6fc;
         }
-        .hex-tree-item.hex-kind-dif .tree-kind,
-        .hex-tree-item.hex-kind-dif .tree-detail,
-        .hex-tree-item.hex-kind-vif .tree-kind,
-        .hex-tree-item.hex-kind-vif .tree-detail,
-        .hex-tree-item.hex-kind-data .tree-kind,
-        .hex-tree-item.hex-kind-data .tree-detail {
+        /* Keep record labels in sync with byte colors in both themes. */
+        .hex-tree-item:is(.hex-kind-dif, .hex-kind-vif, .hex-kind-data) :is(.tree-kind, .tree-detail),
+        body.dark-mode .hex-tree-item:is(.hex-kind-dif, .hex-kind-vif, .hex-kind-data) :is(.tree-kind, .tree-detail) {
             color: inherit;
         }
         .hex-tree-item .tree-offset {
@@ -788,15 +942,31 @@
         }
 
         @media (max-width: 800px) {
+            .header-controls { position: static; }
+            .header-text h1 { padding-right: 0; }
             .hex-viewer {
                 flex-direction: column;
             }
             .hex-viewer-right {
                 width: 100%;
+                min-width: 0;
                 border-left: none;
                 border-top: 1px solid #ddd;
                 max-height: 400px;
             }
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 16px 12px; }
+            .header { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 6px 10px; }
+            #banner { width: 48px; height: 48px; align-self: start; }
+            .header-controls { grid-column: 2; margin-top: 0; justify-content: flex-start; }
+            .header-text .subtitle { font-size: 0.75rem; overflow-wrap: anywhere; }
+            form { padding: 8px 12px 12px; }
+            .parse-actions input { flex: 1 1 125px; }
+            .hex-viewer { margin: 12px 16px 20px; }
+            .hex-viewer-left, .hex-viewer-right { padding: 16px; }
+            #mermaid_diagram { padding: 20px; }
         }
 
         @media (forced-colors: active) {
@@ -823,67 +993,59 @@
 
 <body>
     <div class="header">
-        <img id="banner" src="meter.png" alt="Meter Banner">
+        <img id="banner" src="./emeter.png" alt="Electric meter" width="64" height="64">
         <div class="header-text">
             <h1>Online M-Bus Parser <span class="parser-version" id="parser-version"></span></h1>
-            <div class="subtitle">
-                <a href="https://maebli.github.io/m-bus-parser/">maebli.github.io/m-bus-parser</a> •
-                <a href="https://github.com/maebli" target="_blank" rel="noopener noreferrer">Michael Aebli</a> •
-                <a href="./dev/bench/">Benchmarks</a>
-            </div>
-            <div class="project-badges" aria-label="Project status">
-                <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/crates/v/m-bus-parser.svg" alt="m-bus-parser version on crates.io">
-                </a>
-                <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/crates/d/m-bus-parser.svg" alt="m-bus-parser downloads on crates.io">
-                </a>
-                <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">
-                    <img src="https://docs.rs/m-bus-parser/badge.svg" alt="m-bus-parser documentation on docs.rs">
-                </a>
-                <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">
-                    <img src="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml/badge.svg" alt="Rust build status">
-                </a>
-                <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/crates/l/m-bus-parser.svg" alt="m-bus-parser license">
-                </a>
-                <a id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
-                    target="_blank" rel="noopener noreferrer">
-                    <img src="https://img.shields.io/badge/add-manufacturer--specific_parser-007ec6" alt="Add manufacturer-specific parser">
-                </a>
+            <div class="header-meta">
+                <div class="subtitle">
+                    <a href="https://github.com/maebli" target="_blank" rel="noopener noreferrer">Michael Aebli</a>
+                </div>
+                <nav class="project-links" aria-label="Project resources">
+                    <a href="./dev/bench/">Benchmarks</a>
+                    <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Crate</a>
+                    <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">Docs</a>
+                    <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">Build</a>
+                    <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>
+                    <a class="utility-control" id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
+                        target="_blank" rel="noopener noreferrer">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                        <span>Add manufacturer-specific parser</span>
+                    </a>
+                </nav>
             </div>
         </div>
-        <div class="header-controls">
-            <button id="dark_mode_toggle" title="Toggle dark mode" style="background:none;border:none;cursor:pointer;padding:8px;">
-                <svg id="dark_mode_icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="header-controls" role="group" aria-label="Page actions">
+            <button class="utility-control" id="dark_mode_toggle" type="button" title="Switch to dark mode">
+                <svg aria-hidden="true" id="dark_mode_icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5" />
                     <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                 </svg>
+            <span id="theme-label">Dark mode</span>
             </button>
-            <button id="share_button" title="Copy share link" style="background:none;border:none;cursor:pointer;padding:8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button class="utility-control" id="share_button" type="button" title="Copy share link">
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
                 </svg>
+            <span>Share</span>
             </button>
-            <button id="report_issue" title="Report Issue" style="background:none;border:none;cursor:pointer;padding:8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button class="utility-control" id="report_issue" type="button" title="Report a bug on GitHub">
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />
                     <circle cx="12" cy="16" r="1" />
                 </svg>
+            <span>Report bug</span>
             </button>
         </div>
     </div>
     <form>
-        <label for="inputstring">Input String:</label>
-        <p class="key-help">Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</p>
-        <textarea rows="5" cols="80"
-            id="inputstring">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
+        <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
+        <textarea rows="2" cols="80"
+            id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
-        <label for="aeskey">AES-128 Decryption Key (optional):</label>
         <div class="key-input-container">
-            <input type="password" id="aeskey" placeholder="Enter 32 hex characters (16 bytes)" maxlength="32" pattern="[0-9A-Fa-f]{32}" />
+            <input type="password" id="aeskey" aria-label="AES-128 decryption key (optional)" aria-describedby="aeskey-help" placeholder="AES-128 key (optional) · 32 hex digits" maxlength="32" pattern="[0-9A-Fa-f]{32}" />
             <button type="button" class="key-toggle" id="key-toggle" title="Show/Hide key">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -891,17 +1053,20 @@
                 </svg>
             </button>
         </div>
-        <div class="key-help">Leave empty for unencrypted frames. Format: 32 hexadecimal characters (e.g., 0123456789ABCDEF0123456789ABCDEF)</div>
+        <span id="aeskey-help" hidden>Enter 32 hexadecimal characters (16 bytes). Leave empty for unencrypted frames.</span>
 
-        <input id="parse_json" type="button" value="Parse to JSON" />
-        <input id="parse_yaml" type="button" value="Parse to YAML" />
-        <input id="parse_table" type="button" value="Parse to Table" />
-        <input id="parse_csv" type="button" value="Parse to CSV" />
-        <input id="parse_mermaid" type="button" value="Parse to Diagram" />
-        <input id="parse_xml" type="button" value="Parse to XML" />
-        <input id="parse_hexview" type="button" value="Hex View" />
+        <div class="parse-actions" role="group" aria-label="Output format">
+            <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
+            <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
+            <input id="parse_table" type="button" value="Table" aria-pressed="false" />
+            <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
+            <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
+            <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
+            <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
+        </div>
     </form>
     <div id="output-container">
+        <p class="output-summary" id="output-summary" aria-live="polite"></p>
         <button id="copy_output" title="Copy Output">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -915,7 +1080,7 @@
                 <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
         </a>
-        <div id="output" aria-live="polite"></div>
+        <div id="output" aria-live="polite"><p class="output-placeholder">Choose an output format to parse your payload.</p></div>
     </div>
     <script type="module">
         import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, version } from "./m_bus_parser_wasm_pack.js?v=0.4.3";
@@ -1064,13 +1229,13 @@
             const body = document.body;
             const icon = document.getElementById('dark_mode_icon');
             function setDarkMode(on) {
-                if (on) {
-                    body.classList.add('dark-mode');
-                    icon.innerHTML = '<path d="M21.64 13.64A9 9 0 1 1 12 3v0a7 7 0 0 0 9.64 10.64z" />';
-                } else {
-                    body.classList.remove('dark-mode');
-                    icon.innerHTML = '<circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />';
-                }
+                body.classList.toggle('dark-mode', on);
+                const label = on ? 'Light mode' : 'Dark mode';
+                document.getElementById('theme-label').textContent = label;
+                document.getElementById('dark_mode_toggle').title = `Switch to ${label.toLowerCase()}`;
+                icon.innerHTML = on
+                    ? '<circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />'
+                    : '<path d="M21.64 13.64A9 9 0 1 1 12 3v0a7 7 0 0 0 9.64 10.64z" />';
             }
             let darkMode = savedMode === null ? prefersDark : savedMode === 'true';
             setDarkMode(darkMode);
@@ -1165,9 +1330,14 @@
             async function parseInput(format, updateHistory = true) {
                 format = format === 'table_format' ? 'table' : format;
                 currentFormat = format;
+                document.querySelectorAll('.parse-actions input').forEach(button => {
+                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
+                });
                 const inputString = document.getElementById('inputstring').value;
                 const aesKey = document.getElementById('aeskey').value.trim();
                 const outputContainer = document.getElementById('output');
+                const outputSummary = document.getElementById('output-summary');
+                outputSummary.textContent = '';
 
                 const attempt = {
                     payload: inputString, format, version: version(), keySupplied: Boolean(aesKey),
@@ -1177,6 +1347,7 @@
                 window._lastRawOutput = '';
                 updateDownload('', 'txt', 'text/plain');
                 const fail = error => {
+                    outputSummary.textContent = '';
                     lastFailure = { ...attempt, error };
                     renderOutputError(outputContainer, error);
                     appendReportActions(outputContainer, lastFailure);
@@ -1240,12 +1411,9 @@
                         );
                     }
 
-                    if (result.mode === 'application') {
-                        const notice = document.createElement('p');
-                        notice.className = 'key-help';
-                        notice.textContent = 'Parsed as application-layer data without a link-layer frame.';
-                        outputContainer.prepend(notice);
-                    }
+                    outputSummary.textContent = result.mode === 'application'
+                        ? 'Parsed as application-layer data without a link-layer frame.'
+                        : '';
                     if (result.diagnostics.length) {
                         const warning = document.createElement('pre');
                         warning.className = 'output-error';
