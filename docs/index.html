@@ -76,29 +76,9 @@
             text-decoration: underline;
         }
 
-        .title-row {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 6px 16px;
-        }
-
-        #manufacturer-parser-request {
-            display: inline-flex;
-            align-items: center;
-            padding: 5px 10px;
-            border: 1px solid #0969da;
-            border-radius: 5px;
-            background: #0969da;
-            color: #fff;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-decoration: none;
-        }
-
-        #manufacturer-parser-request:hover { background: #0550ae; }
-        body.dark-mode #manufacturer-parser-request { background: #1f6feb; border-color: #4493f8; }
-        body.dark-mode #manufacturer-parser-request:hover { background: #388bfd; }
+        #manufacturer-parser-request { display: inline-flex; line-height: 0; max-width: 100%; margin-left: auto; }
+        #manufacturer-parser-request img { height: 18px; max-width: 100%; filter: saturate(0.65); }
+        #manufacturer-parser-request:is(:hover, :focus-visible) img { filter: none; }
 
         .header-meta,
         .project-links {
@@ -110,8 +90,8 @@
 
         .header-meta { margin-top: 5px; }
         .header-meta .subtitle { margin-top: 0; }
-        .project-links { gap: 4px; }
-        .project-links a {
+        .project-links { gap: 4px; flex: 1 1 360px; }
+        .project-links a:not(#manufacturer-parser-request) {
             padding: 1px 6px;
             border: 1px solid #d1d9e0;
             border-radius: 4px;
@@ -120,9 +100,9 @@
             line-height: 1.5;
             text-decoration: none;
         }
-        .project-links a:hover { color: #0969da; border-color: #0969da; }
-        body.dark-mode .project-links a { color: #9198a1; border-color: #3d444d; }
-        body.dark-mode .project-links a:hover { color: #4493f8; border-color: #4493f8; }
+        .project-links a:not(#manufacturer-parser-request):hover { color: #0969da; border-color: #0969da; }
+        body.dark-mode .project-links a:not(#manufacturer-parser-request) { color: #9198a1; border-color: #3d444d; }
+        body.dark-mode .project-links a:not(#manufacturer-parser-request):hover { color: #4493f8; border-color: #4493f8; }
 
         form {
             background: #fff;
@@ -183,6 +163,8 @@
             margin-top: 4px;
             margin-bottom: 8px;
         }
+
+        #input-help { font-size: 0.75rem; }
 
         .key-toggle {
             position: absolute;
@@ -279,13 +261,13 @@
         #copy_output svg,
         #download_output svg { stroke: currentColor; }
 
-        .output-title {
-            position: absolute;
-            top: 15px;
-            left: 20px;
+        .output-summary {
+            min-height: 44px;
+            box-sizing: border-box;
+            padding: 12px 82px 10px 20px;
             margin: 0;
-            font-size: 0.8rem;
-            font-weight: 600;
+            font-size: 0.75rem;
+            line-height: 1.4;
             color: #59636e;
         }
 
@@ -308,7 +290,6 @@
 
         #output {
             min-height: 84px;
-            padding-top: 48px;
             border-radius: 8px;
             overflow: hidden;
             background: #fff;
@@ -447,47 +428,41 @@
         .parse-report-actions a { color: #0969da; }
         body.dark-mode .parse-report-actions a { color: #79c0ff; }
 
-        #copy_output {
-            position: absolute;
-            top: 10px;
-            right: 54px; /* Leave a gap before the download button. */
-            background: #fff;
-            border: 1px solid #d1d9e0;
-            border-radius: 8px;
-            color: #59636e;
-            cursor: pointer;
-            padding: 8px;
-            z-index: 10;
-            transition: background 0.2s, box-shadow 0.2s;
-        }
-
+        #copy_output,
         #download_output {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 8px;
+            display: grid;
+            place-items: center;
+            box-sizing: border-box;
+            width: 28px;
+            height: 28px;
+            padding: 5px;
             background: #fff;
             border: 1px solid #d1d9e0;
-            border-radius: 8px;
+            border-radius: 4px;
             color: #59636e;
             cursor: pointer;
-            padding: 8px;
             z-index: 10;
-            transition: background 0.2s, box-shadow 0.2s;
+            transition: background 0.2s;
         }
+        #copy_output { right: 42px; }
+        #download_output { right: 8px; }
 
         #copy_output:hover,
         #download_output:hover {
             background: #f6f8fa;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         #copy_output svg,
         #download_output svg {
             display: block;
+            width: 16px;
+            height: 16px;
         }
 
         body.dark-mode .header-controls button,
-        body.dark-mode .output-title,
+        body.dark-mode .output-summary,
         body.dark-mode .output-placeholder { color: #9198a1; }
         body.dark-mode .header-controls button:hover { background: #212830; }
         body.dark-mode .header-controls #report_issue { color: #f85149; }
@@ -999,21 +974,21 @@
     <div class="header">
         <img id="banner" src="./emeter.png" alt="Electric meter" width="64" height="64">
         <div class="header-text">
-            <div class="title-row">
-                <h1>Online M-Bus Parser</h1>
-                <a id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
-                    target="_blank" rel="noopener noreferrer">Add manufacturer-specific parser</a>
-            </div>
+            <h1>Online M-Bus Parser</h1>
             <div class="header-meta">
                 <div class="subtitle">
-                    <a href="https://github.com/maebli" target="_blank" rel="noopener noreferrer">Michael Aebli</a> ·
-                    <a href="./dev/bench/">Benchmarks</a>
+                    <a href="https://github.com/maebli" target="_blank" rel="noopener noreferrer">Michael Aebli</a>
                 </div>
                 <nav class="project-links" aria-label="Project resources">
+                    <a href="./dev/bench/">Benchmarks</a>
                     <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Crate</a>
                     <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">Docs</a>
                     <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">Build</a>
                     <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>
+                    <a id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
+                        target="_blank" rel="noopener noreferrer">
+                        <img src="https://img.shields.io/badge/add-manufacturer--specific_parser-007ec6" alt="Add manufacturer-specific parser">
+                    </a>
                 </nav>
             </div>
         </div>
@@ -1066,7 +1041,7 @@
         </div>
     </form>
     <div id="output-container">
-        <h2 class="output-title">Parser output</h2>
+        <p class="output-summary" id="output-summary" aria-live="polite"></p>
         <button id="copy_output" title="Copy Output">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1335,6 +1310,8 @@
                 const inputString = document.getElementById('inputstring').value;
                 const aesKey = document.getElementById('aeskey').value.trim();
                 const outputContainer = document.getElementById('output');
+                const outputSummary = document.getElementById('output-summary');
+                outputSummary.textContent = '';
 
                 const attempt = {
                     payload: inputString, format, version: version(), keySupplied: Boolean(aesKey),
@@ -1344,6 +1321,7 @@
                 window._lastRawOutput = '';
                 updateDownload('', 'txt', 'text/plain');
                 const fail = error => {
+                    outputSummary.textContent = '';
                     lastFailure = { ...attempt, error };
                     renderOutputError(outputContainer, error);
                     appendReportActions(outputContainer, lastFailure);
@@ -1407,12 +1385,9 @@
                         );
                     }
 
-                    if (result.mode === 'application') {
-                        const notice = document.createElement('p');
-                        notice.className = 'key-help';
-                        notice.textContent = 'Parsed as application-layer data without a link-layer frame.';
-                        outputContainer.prepend(notice);
-                    }
+                    outputSummary.textContent = result.mode === 'application'
+                        ? 'Parsed as application-layer data without a link-layer frame.'
+                        : '';
                     if (result.diagnostics.length) {
                         const warning = document.createElement('pre');
                         warning.className = 'output-error';
