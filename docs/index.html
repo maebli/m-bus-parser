@@ -8,13 +8,15 @@
     <title>M-Bus Parser (Wired & Wireless)</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
+        /* UI palette: GitHub Primer light/dark neutrals and blue accents.
+           https://primer.style/product/primitives/color/ */
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             line-height: 1.5;
-            color: #28332e;
+            color: #1f2328;
             margin: 0;
             padding: 32px 20px;
-            background-color: #f5f7f5;
+            background-color: #f6f8fa;
         }
 
         .header {
@@ -54,23 +56,23 @@
             font-size: clamp(1.5rem, 3vw, 2rem);
             letter-spacing: -0.035em;
             line-height: 1.2;
-            color: #28332e;
+            color: #1f2328;
         }
 
         .header-text .subtitle {
             font-size: 0.8rem;
-            color: #666;
+            color: #59636e;
             margin-top: 4px;
         }
 
         .header-text .subtitle a {
-            color: #666;
+            color: #59636e;
             text-decoration: none;
         }
 
         .header-text .subtitle a:hover,
         .header-text .subtitle a:focus-visible {
-            color: #333;
+            color: #1f2328;
             text-decoration: underline;
         }
 
@@ -95,7 +97,7 @@
             font-size: 0.55em;
             letter-spacing: 0;
             white-space: nowrap;
-            color: #78847c;
+            color: #59636e;
             font-weight: normal;
             margin-left: 8px;
         }
@@ -103,9 +105,9 @@
         form {
             background: #fff;
             padding: 24px;
-            border: 1px solid #dfe5df;
+            border: 1px solid #d1d9e0;
             border-radius: 12px;
-            box-shadow: 0 4px 18px rgba(35, 55, 43, 0.04);
+            box-shadow: 0 4px 18px rgba(31, 35, 40, 0.04);
             box-sizing: border-box;
             max-width: 1100px;
             margin: 0 auto;
@@ -121,8 +123,8 @@
         textarea {
             width: 100%;
             padding: 12px;
-            border: 1px solid #cdd7cf;
-            background: #fafcfb;
+            border: 1px solid #d1d9e0;
+            background: #f6f8fa;
             color: inherit;
             border-radius: 8px;
             box-sizing: border-box;
@@ -138,8 +140,8 @@
         input[type="password"] {
             width: 100%;
             padding: 12px;
-            border: 1px solid #cdd7cf;
-            background: #fafcfb;
+            border: 1px solid #d1d9e0;
+            background: #f6f8fa;
             color: inherit;
             border-radius: 8px;
             box-sizing: border-box;
@@ -155,7 +157,7 @@
 
         .key-help {
             font-size: 0.85em;
-            color: #666;
+            color: #59636e;
             margin-top: 4px;
             margin-bottom: 8px;
         }
@@ -168,11 +170,11 @@
             border: none;
             cursor: pointer;
             padding: 4px;
-            color: #666;
+            color: #59636e;
         }
 
         .key-toggle:hover {
-            color: #333;
+            color: #1f2328;
         }
 
         .parse-actions {
@@ -184,9 +186,9 @@
 
         input[type="button"] {
             background-color: transparent;
-            color: #46534b;
+            color: #1f2328;
             padding: 9px 18px;
-            border: 1px solid #c5cec8;
+            border: 1px solid #d1d9e0;
             border-radius: 4px;
             cursor: pointer;
             font: inherit;
@@ -197,15 +199,15 @@
         }
 
         input[type="button"]:hover {
-            background-color: #f4f6f4;
-            border-color: #829589;
+            background-color: #f6f8fa;
+            border-color: #818b98;
         }
 
         input[type="button"][aria-pressed="true"] {
             background-color: transparent;
-            border-color: #52745e;
-            box-shadow: inset 0 -2px #52745e;
-            color: #2f553c;
+            border-color: #0969da;
+            box-shadow: inset 0 -2px #0969da;
+            color: #0969da;
         }
 
         #parse_mermaid,
@@ -219,14 +221,14 @@
         #mermaid_diagram svg { display: block; margin: 0 auto; }
 
         :is(button, a, input):focus-visible {
-            outline: 3px solid #658d74;
+            outline: 3px solid #0969da;
             outline-offset: 3px;
         }
 
         textarea:focus-visible,
         input[type="text"]:focus-visible,
         input[type="password"]:focus-visible {
-            outline: 2px solid #658d74;
+            outline: 2px solid #0969da;
             outline-offset: 2px;
         }
 
@@ -241,12 +243,12 @@
             border: 0;
             border-radius: 8px;
             background: transparent;
-            color: #66766b;
+            color: #59636e;
             cursor: pointer;
         }
 
-        .header-controls button:hover { background: #e6ece7; }
-        .header-controls #report_issue { color: #b65348; }
+        .header-controls button:hover { background: #eff2f5; }
+        .header-controls #report_issue { color: #cf222e; }
         .header-controls svg,
         #copy_output svg,
         #download_output svg { stroke: currentColor; }
@@ -258,7 +260,7 @@
             margin: 0;
             font-size: 0.8rem;
             font-weight: 600;
-            color: #66766b;
+            color: #59636e;
         }
 
         #output > .key-help,
@@ -267,7 +269,7 @@
         .output-placeholder {
             margin: 0;
             padding: 12px 20px 24px;
-            color: #78847c;
+            color: #59636e;
             font-size: 0.9rem;
         }
 
@@ -284,7 +286,7 @@
             border-radius: 8px;
             overflow: hidden;
             background: #fff;
-            color: #222;
+            color: #1f2328;
         }
 
         #output-container {
@@ -292,9 +294,9 @@
             max-width: 1100px;
             margin: 20px auto 0;
             background: #fff;
-            border: 1px solid #dfe5df;
+            border: 1px solid #d1d9e0;
             border-radius: 12px;
-            box-shadow: 0 4px 18px rgba(35, 55, 43, 0.04);
+            box-shadow: 0 4px 18px rgba(31, 35, 40, 0.04);
             box-sizing: border-box;
             overflow: hidden;
         }
@@ -424,9 +426,9 @@
             top: 10px;
             right: 54px; /* Leave a gap before the download button. */
             background: #fff;
-            border: 1px solid #ccc;
+            border: 1px solid #d1d9e0;
             border-radius: 8px;
-            color: #66766b;
+            color: #59636e;
             cursor: pointer;
             padding: 8px;
             z-index: 10;
@@ -438,9 +440,9 @@
             top: 10px;
             right: 10px;
             background: #fff;
-            border: 1px solid #ccc;
+            border: 1px solid #d1d9e0;
             border-radius: 8px;
-            color: #66766b;
+            color: #59636e;
             cursor: pointer;
             padding: 8px;
             z-index: 10;
@@ -449,7 +451,7 @@
 
         #copy_output:hover,
         #download_output:hover {
-            background: #f0f0f0;
+            background: #f6f8fa;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
@@ -460,26 +462,26 @@
 
         body.dark-mode .header-controls button,
         body.dark-mode .output-title,
-        body.dark-mode .output-placeholder { color: #b1bdb5; }
-        body.dark-mode .header-controls button:hover { background: #2b342f; }
-        body.dark-mode .header-controls #report_issue { color: #ee978b; }
+        body.dark-mode .output-placeholder { color: #9198a1; }
+        body.dark-mode .header-controls button:hover { background: #212830; }
+        body.dark-mode .header-controls #report_issue { color: #f85149; }
 
         body.dark-mode {
-            background-color: #181a1b;
-            color: #e0e0e0;
+            background-color: #0d1117;
+            color: #f0f6fc;
         }
 
         body.dark-mode .header-text h1 {
-            color: #e0e0e0;
+            color: #f0f6fc;
         }
 
         body.dark-mode .header-text .subtitle,
         body.dark-mode .parser-version {
-            color: #aaa;
+            color: #9198a1;
         }
 
         body.dark-mode .header-text .subtitle a {
-            color: #aaa;
+            color: #9198a1;
         }
 
         body.dark-mode .header-text .subtitle a:hover,
@@ -488,81 +490,81 @@
         }
 
         body.dark-mode form {
-            background: #23272a;
-            border-color: #37423b;
+            background: #151b23;
+            border-color: #3d444d;
             box-shadow: none;
         }
 
         body.dark-mode #output-container {
-            background: #23272a;
-            border-color: #37423b;
+            background: #151b23;
+            border-color: #3d444d;
             box-shadow: none;
         }
 
         body.dark-mode textarea {
-            background: #23272a;
-            color: #e0e0e0;
-            border: 1px solid #444;
+            background: #151b23;
+            color: #f0f6fc;
+            border: 1px solid #3d444d;
         }
 
         body.dark-mode input[type="text"],
         body.dark-mode input[type="password"] {
-            background: #23272a;
-            color: #e0e0e0;
-            border: 1px solid #444;
+            background: #151b23;
+            color: #f0f6fc;
+            border: 1px solid #3d444d;
         }
 
         body.dark-mode .key-help {
-            color: #aaa;
+            color: #9198a1;
         }
 
         body.dark-mode .key-toggle {
-            color: #aaa;
+            color: #9198a1;
         }
 
         body.dark-mode .key-toggle:hover {
-            color: #e0e0e0;
+            color: #f0f6fc;
         }
 
         body.dark-mode pre {
-            background: #23272a;
-            color: #e0e0e0;
+            background: #151b23;
+            color: #f0f6fc;
         }
 
         body.dark-mode #output {
             background: #0d1117;
-            color: #e0e0e0;
+            color: #f0f6fc;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
         }
 
         body.dark-mode #copy_output,
         body.dark-mode #download_output {
-            background: #23272a;
-            border: 1px solid #444;
-            color: #c5d1c9;
+            background: #151b23;
+            border: 1px solid #3d444d;
+            color: #9198a1;
         }
 
         body.dark-mode #copy_output:hover,
         body.dark-mode #download_output:hover {
-            background: #181a1b;
+            background: #0d1117;
         }
 
         body.dark-mode input[type="button"] {
             background-color: transparent;
-            border-color: #58635c;
-            color: #c8d1cb;
+            border-color: #3d444d;
+            color: #f0f6fc;
         }
 
         body.dark-mode input[type="button"]:hover {
-            background-color: #2c332f;
-            border-color: #92a698;
+            background-color: #212830;
+            border-color: #9198a1;
         }
 
         body.dark-mode input[type="button"][aria-pressed="true"] {
             background-color: transparent;
-            border-color: #a8cbb1;
-            box-shadow: inset 0 -2px #a8cbb1;
-            color: #c8e7d0;
+            border-color: #4493f8;
+            box-shadow: inset 0 -2px #4493f8;
+            color: #4493f8;
         }
 
         body.dark-mode .code-viewer,
@@ -579,6 +581,10 @@
         body.dark-mode .line-gutter {
             border-right-color: #6e7681;
             color: #c7cdd5;
+        }
+
+        body.dark-mode :is(button, a, input, textarea):focus-visible {
+            outline-color: #4493f8;
         }
 
         body.dark-mode .code-scroll:focus-visible {
@@ -642,7 +648,7 @@
         /* ── Interactive Hex Viewer ─────────────────────────── */
         .hex-viewer {
             margin: 16px 24px 24px;
-            border: 1px solid #dfe5df;
+            border: 1px solid #d1d9e0;
             border-radius: 8px;
             display: flex;
             gap: 0;
@@ -664,15 +670,15 @@
             box-sizing: border-box;
             width: 420px;
             min-width: 340px;
-            border-left: 1px solid #ddd;
+            border-left: 1px solid #d1d9e0;
             overflow-y: auto;
             max-height: 600px;
             padding: 24px 12px;
         }
-        body.dark-mode .hex-viewer { border-color: #37423b; }
+        body.dark-mode .hex-viewer { border-color: #3d444d; }
 
         body.dark-mode .hex-viewer-right {
-            border-left-color: #444;
+            border-left-color: #3d444d;
         }
 
         /* Hex grid */
@@ -870,7 +876,7 @@
             color: #aaa;
         }
         body.dark-mode .hex-tree-item .tree-detail {
-            color: #e0e0e0;
+            color: #f0f6fc;
         }
         .hex-tree-item.hex-kind-dif .tree-kind,
         .hex-tree-item.hex-kind-dif .tree-detail,
