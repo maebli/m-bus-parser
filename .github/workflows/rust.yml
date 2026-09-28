@@ -95,6 +95,12 @@ jobs:
         run: |
           cd wasm
           cargo build --verbose
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Test website parsing and failure reports
+        run: node --test .github/scripts/test-parser-ui.mjs
       - name: Run WASM Tests
         run: |
           cd wasm

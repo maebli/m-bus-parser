@@ -107,6 +107,23 @@ pub fn m_bus_render(
     render_hex(data, format, &options).map_err(error_to_js)
 }
 
+/// Render CI-prefixed application data or bare DIF/VIF records without a link frame.
+#[wasm_bindgen]
+pub fn m_bus_render_application(
+    data: &str,
+    format: &str,
+    key_hex: Option<String>,
+    width: Option<usize>,
+    include_enrichment: Option<bool>,
+) -> Result<String, JsValue> {
+    let format = OutputFormat::from_str(format).map_err(error_to_js)?;
+    let options = RenderOptions {
+        decode: decode_options(key_hex.as_deref(), include_enrichment).map_err(error_to_js)?,
+        table_width: width,
+    };
+    m_bus_parser::output::render_application_hex(data, format, &options).map_err(error_to_js)
+}
+
 /// Compatibility wrapper returning errors as text. Prefer `m_bus_render`.
 #[wasm_bindgen]
 pub fn m_bus_parse(data: &str, format: &str) -> String {

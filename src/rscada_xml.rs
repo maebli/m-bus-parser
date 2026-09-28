@@ -302,6 +302,45 @@ fn render_wireless_variable(
     out
 }
 
+/// Render an application block without inventing link-layer meter metadata.
+pub(crate) fn render_application(
+    block: Option<&user_data::UserDataBlock<'_>>,
+    records: Option<&user_data::DataRecords<'_>>,
+) -> String {
+    match block {
+        Some(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+            long_tpl_header,
+            ..
+        }) => render_variable(long_tpl_header, records),
+        Some(user_data::UserDataBlock::FixedDataStructure {
+            identification_number,
+            access_number,
+            status,
+            device_type_and_unit,
+            counter1,
+            counter2,
+        }) => render_fixed(
+            identification_number.number,
+            *access_number,
+            status.bits(),
+            *device_type_and_unit,
+            counter1,
+            counter2,
+        ),
+        _ => {
+            let mut out = String::from(XML_PROCESSING_INSTRUCTION);
+            out.push_str("<MBusData>\n");
+            if let Some(records) = records {
+                for (i, record) in records.clone().flatten().enumerate() {
+                    out.push_str(&render_variable_record(i, &record));
+                }
+            }
+            out.push_str("</MBusData>\n");
+            out
+        }
+    }
+}
+
 fn render_variable(
     header: &user_data::LongTplHeader,
     records: Option<&user_data::DataRecords>,

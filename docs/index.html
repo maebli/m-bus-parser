@@ -303,6 +303,9 @@
             white-space: pre-wrap;
         }
 
+        .parse-report-actions a { color: #0969da; }
+        body.dark-mode .parse-report-actions a { color: #79c0ff; }
+
         #copy_output {
             position: absolute;
             top: 10px;
@@ -874,6 +877,7 @@
     </div>
     <form>
         <label for="inputstring">Input String:</label>
+        <p class="key-help">Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</p>
         <textarea rows="5" cols="80"
             id="inputstring">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
@@ -914,7 +918,8 @@
         <div id="output" aria-live="polite"></div>
     </div>
     <script type="module">
-        import init, { m_bus_highlight, m_bus_render, version } from "./m_bus_parser_wasm_pack.js?v=0.4.3";
+        import { renderWithFallback, appendReportActions, issueLink } from "./parser-ui.mjs?v=0.4.3";
+        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, version } from "./m_bus_parser_wasm_pack.js?v=0.4.3";
 
         let currentFormat = "json";
         let lastTableWidth = null;
@@ -1003,6 +1008,8 @@
             await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.3", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
+            let lastFailure = null;
+
             // Load data and format from URL params and auto-parse if present
             const urlParams = new URLSearchParams(window.location.search);
             const urlData = urlParams.get('data');
@@ -1055,7 +1062,7 @@
             });
 
             document.getElementById('report_issue').addEventListener('click', () => {
-                window.open('https://github.com/maebli/m-bus-parser/issues/new', '_blank');
+                window.open(lastFailure ? issueLink(lastFailure) : 'https://github.com/maebli/m-bus-parser/issues/new', '_blank', 'noopener,noreferrer');
             });
 
             new ResizeObserver(() => {
@@ -1073,13 +1080,26 @@
                 const aesKey = document.getElementById('aeskey').value.trim();
                 const outputContainer = document.getElementById('output');
 
+                const attempt = {
+                    payload: inputString, format, version: version(), keySupplied: Boolean(aesKey),
+                    page: `${location.origin}${location.pathname}`, userAgent: navigator.userAgent,
+                };
+                lastFailure = null;
+                window._lastRawOutput = '';
+                updateDownload('', 'txt', 'text/plain');
+                const fail = error => {
+                    lastFailure = { ...attempt, error };
+                    renderOutputError(outputContainer, error);
+                    appendReportActions(outputContainer, lastFailure);
+                };
+
                 if (updateHistory) {
                     const params = new URLSearchParams({ data: inputString, format });
                     history.replaceState(null, '', `?${params}`);
                 }
 
                 if (aesKey && !/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
-                    renderOutputError(outputContainer, {
+                    fail({
                         code: 'option.invalid',
                         message: 'AES key must contain exactly 32 hexadecimal characters.',
                     });
@@ -1106,13 +1126,11 @@
                 try {
                     const width = format === 'table' ? measureTableWidth() : undefined;
                     if (format === 'table') lastTableWidth = width;
-                    const formattedResult = m_bus_render(
-                        inputString,
-                        format,
-                        aesKey || undefined,
-                        width,
-                        true,
-                    );
+                    const result = renderWithFallback({
+                        decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application,
+                    }, inputString, format, aesKey || undefined, width);
+                    attempt.mode = result.mode;
+                    const formattedResult = result.output;
                     window._lastRawOutput = formattedResult;
 
                     if (format === 'hexview') {
@@ -1133,10 +1151,27 @@
                         );
                     }
 
+                    if (result.mode === 'application') {
+                        const notice = document.createElement('p');
+                        notice.className = 'key-help';
+                        notice.textContent = 'Parsed as application-layer data without a link-layer frame.';
+                        outputContainer.prepend(notice);
+                    }
+                    if (result.diagnostics.length) {
+                        const warning = document.createElement('pre');
+                        warning.className = 'output-error';
+                        warning.textContent = result.diagnostics.map(item => `[${item.code}] ${item.message}`).join('\n');
+                        outputContainer.append(warning);
+                        lastFailure = { ...attempt, error: {
+                            code: result.diagnostics[0].code,
+                            attempts: result.diagnostics,
+                        } };
+                        appendReportActions(outputContainer, lastFailure);
+                    }
                     updateDownload(formattedResult, extension, mimeType);
                 } catch (error) {
                     window._lastRawOutput = '';
-                    renderOutputError(outputContainer, error);
+                    fail(error);
                     updateDownload('', extension, mimeType);
                 }
             }
@@ -1168,6 +1203,7 @@
             output.className = 'output-error';
             output.setAttribute('role', 'alert');
             output.textContent = `[${code}] ${message}`;
+            if (error?.attempts) output.textContent += '\n' + error.attempts.map(item => `${item.mode}: [${item.code}] ${item.message}`).join('\n');
             container.replaceChildren(output);
         }
 

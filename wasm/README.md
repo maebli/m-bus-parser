@@ -7,6 +7,9 @@ Browser bindings for the wired and wireless M-Bus parser.
 - `m_bus_render(data, format, key?, width?, includeEnrichment?)` renders
   `table`, `json`, `yaml`, `csv`, `mermaid`, `xml`, `annotated`, or
   `annotated-text`.
+- `m_bus_render_application(data, format, key?, width?, includeEnrichment?)` renders
+  CI-prefixed application blocks or bare DIF/VIF records with no link frame.
+  The website uses it only after wired and wireless frame detection fails.
 - `m_bus_highlight(source, language)` highlights JSON, YAML, CSV, or XML with
   the Rust-only `syntect` grammar bundle and returns escaped, prefixed
   span-only markup.
