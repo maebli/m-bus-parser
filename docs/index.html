@@ -15,7 +15,7 @@
             line-height: 1.5;
             color: #1f2328;
             margin: 0;
-            padding: 32px 20px;
+            padding: 24px 16px;
             background-color: #f6f8fa;
         }
 
@@ -23,17 +23,17 @@
             display: flex;
             flex-direction: row;
             align-items: center;
-            gap: 18px;
+            gap: 14px;
             justify-content: flex-start;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
             max-width: 1100px;
             margin-left: auto;
             margin-right: auto;
         }
 
         #banner {
-            width: 88px;
-            height: 88px;
+            width: 80px;
+            height: 80px;
             object-fit: contain;
             flex-shrink: 0;
         }
@@ -104,7 +104,7 @@
 
         form {
             background: #fff;
-            padding: 24px;
+            padding: 20px;
             border: 1px solid #d1d9e0;
             border-radius: 12px;
             box-shadow: 0 4px 18px rgba(31, 35, 40, 0.04);
@@ -128,12 +128,12 @@
             color: inherit;
             border-radius: 8px;
             box-sizing: border-box;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 14px;
-            line-height: 1.7;
+            line-height: 1.5;
             resize: vertical;
-            min-height: 120px;
+            min-height: 96px;
         }
 
         input[type="text"],
@@ -145,7 +145,7 @@
             color: inherit;
             border-radius: 8px;
             box-sizing: border-box;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-family: monospace;
             font-size: 14px;
         }
@@ -165,7 +165,8 @@
         .key-toggle {
             position: absolute;
             right: 10px;
-            top: 10px;
+            top: 50%;
+            transform: translateY(-50%);
             background: none;
             border: none;
             cursor: pointer;
@@ -181,20 +182,20 @@
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-top: 20px;
+            margin-top: 12px;
         }
 
         input[type="button"] {
             background-color: transparent;
             color: #1f2328;
-            padding: 9px 18px;
+            padding: 8px 16px;
             border: 1px solid #d1d9e0;
             border-radius: 4px;
             cursor: pointer;
             font: inherit;
             font-size: 0.82rem;
             font-weight: 500;
-            min-height: 40px;
+            min-height: 36px;
             transition: background-color 120ms, border-color 120ms;
         }
 
@@ -232,7 +233,9 @@
             outline-offset: 2px;
         }
 
-        .key-input-container input { padding-right: 48px; }
+        .key-input-container input { display: block; padding: 10px 44px 10px 12px; margin-bottom: 0; }
+        #aeskey::placeholder { font-family: system-ui, sans-serif; font-size: 0.8rem; color: #59636e; opacity: 1; }
+        body.dark-mode #aeskey::placeholder { color: #9198a1; }
 
         .header-controls button {
             display: grid;
@@ -292,7 +295,7 @@
         #output-container {
             position: relative;
             max-width: 1100px;
-            margin: 20px auto 0;
+            margin: 16px auto 0;
             background: #fff;
             border: 1px solid #d1d9e0;
             border-radius: 12px;
@@ -878,12 +881,9 @@
         body.dark-mode .hex-tree-item .tree-detail {
             color: #f0f6fc;
         }
-        .hex-tree-item.hex-kind-dif .tree-kind,
-        .hex-tree-item.hex-kind-dif .tree-detail,
-        .hex-tree-item.hex-kind-vif .tree-kind,
-        .hex-tree-item.hex-kind-vif .tree-detail,
-        .hex-tree-item.hex-kind-data .tree-kind,
-        .hex-tree-item.hex-kind-data .tree-detail {
+        /* Keep record labels in sync with byte colors in both themes. */
+        .hex-tree-item:is(.hex-kind-dif, .hex-kind-vif, .hex-kind-data) :is(.tree-kind, .tree-detail),
+        body.dark-mode .hex-tree-item:is(.hex-kind-dif, .hex-kind-vif, .hex-kind-data) :is(.tree-kind, .tree-detail) {
             color: inherit;
         }
         .hex-tree-item .tree-offset {
@@ -939,12 +939,12 @@
         }
 
         @media (max-width: 600px) {
-            body { padding: 20px 12px; }
+            body { padding: 16px 12px; }
             .header { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px 12px; }
             #banner { width: 64px; height: 64px; align-self: start; }
             .header-controls { grid-column: 2; margin-top: 0; }
             .header-text .subtitle { font-size: 0.75rem; overflow-wrap: anywhere; }
-            form { padding: 18px; }
+            form { padding: 16px; }
             .parse-actions input { flex: 1 1 125px; }
             .hex-viewer { margin: 12px 16px 20px; }
             .hex-viewer-left, .hex-viewer-right { padding: 16px; }
@@ -1029,12 +1029,11 @@
     </div>
     <form>
         <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
-        <textarea rows="5" cols="80"
+        <textarea rows="3" cols="80"
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
-        <label for="aeskey">AES-128 Decryption Key (optional):</label>
         <div class="key-input-container">
-            <input type="password" id="aeskey" placeholder="Enter 32 hex characters (16 bytes)" maxlength="32" pattern="[0-9A-Fa-f]{32}" />
+            <input type="password" id="aeskey" aria-label="AES-128 decryption key (optional)" aria-describedby="aeskey-help" placeholder="AES-128 key (optional) · 32 hex digits" maxlength="32" pattern="[0-9A-Fa-f]{32}" />
             <button type="button" class="key-toggle" id="key-toggle" title="Show/Hide key">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -1042,7 +1041,7 @@
                 </svg>
             </button>
         </div>
-        <div class="key-help">Leave empty for unencrypted frames. Format: 32 hexadecimal characters (e.g., 0123456789ABCDEF0123456789ABCDEF)</div>
+        <span id="aeskey-help" hidden>Enter 32 hexadecimal characters (16 bytes). Leave empty for unencrypted frames.</span>
 
         <div class="parse-actions" role="group" aria-label="Output format">
             <input id="parse_json" type="button" value="Parse to JSON" aria-pressed="false" />
