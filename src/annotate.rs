@@ -368,7 +368,7 @@ fn annotate_long_or_control_frame(
 
 // ── Application layer annotation ────────────────────────────────────────────
 
-fn annotate_application_layer(
+pub(crate) fn annotate_application_layer(
     segments: &mut Vec<ByteSegment>,
     frame_data: &[u8],
     base: usize,

@@ -152,3 +152,42 @@ fn rust_highlighter_preserves_lines_in_the_browser_target() {
         }
     }
 }
+
+#[wasm_bindgen_test]
+fn application_only_rendering_supports_the_website_formats() {
+    for input in ["0313153100", "780313153100"] {
+        for format in ["json", "yaml", "table", "csv", "mermaid", "xml", "hexview"] {
+            let output = m_bus_parser_wasm_pack::m_bus_render_application(
+                input,
+                format,
+                None,
+                Some(48),
+                Some(false),
+            )
+            .expect("application-only input");
+            assert!(!output.is_empty());
+        }
+        assert!(m_bus_parser_wasm_pack::m_bus_render(input, "json", None, None, None).is_err());
+    }
+}
+
+#[wasm_bindgen_test]
+fn malformed_application_records_return_typed_errors() {
+    let error =
+        m_bus_parser_wasm_pack::m_bus_render_application("78031315", "json", None, None, None)
+            .expect_err("truncated record");
+    assert_eq!(
+        Reflect::get(&error, &JsValue::from_str("code"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("application.records_invalid")
+    );
+    assert_eq!(
+        Reflect::get(&error, &JsValue::from_str("layer"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("application")
+    );
+}

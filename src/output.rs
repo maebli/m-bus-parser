@@ -20,6 +20,9 @@ use crate::user_data::data_information::{
 };
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
+mod application;
+pub use application::render_application_hex;
+
 const SCHEMA_VERSION: u8 = 3;
 const DEFAULT_TABLE_WIDTH: usize = 100;
 const MINIMUM_TABLE_WIDTH: usize = 32;
@@ -522,27 +525,35 @@ pub fn render_bytes(
         }
         _ => {
             let decoded = decode_bytes(data, &options.decode)?;
-            match format {
-                OutputFormat::Json => serde_json::to_string_pretty(&decoded).map_err(|error| {
-                    OutputError::Serialization {
-                        format: "json",
-                        message: error.to_string(),
-                    }
-                }),
-                OutputFormat::Yaml => {
-                    serde_yaml::to_string(&decoded).map_err(|error| OutputError::Serialization {
-                        format: "yaml",
-                        message: error.to_string(),
-                    })
-                }
-                OutputFormat::Csv => render_csv(&decoded),
-                OutputFormat::Table => {
-                    render_table(&decoded, options.table_width.unwrap_or(DEFAULT_TABLE_WIDTH))
-                }
-                OutputFormat::Mermaid => Ok(render_mermaid(&decoded)),
-                _ => unreachable!("specialized formats handled above"),
-            }
+            render_decoded(&decoded, format, options)
         }
+    }
+}
+
+fn render_decoded(
+    decoded: &DecodedOutput,
+    format: OutputFormat,
+    options: &RenderOptions,
+) -> Result<String, OutputError> {
+    match format {
+        OutputFormat::Json => {
+            serde_json::to_string_pretty(decoded).map_err(|error| OutputError::Serialization {
+                format: "json",
+                message: error.to_string(),
+            })
+        }
+        OutputFormat::Yaml => {
+            serde_yaml::to_string(decoded).map_err(|error| OutputError::Serialization {
+                format: "yaml",
+                message: error.to_string(),
+            })
+        }
+        OutputFormat::Csv => render_csv(decoded),
+        OutputFormat::Table => {
+            render_table(decoded, options.table_width.unwrap_or(DEFAULT_TABLE_WIDTH))
+        }
+        OutputFormat::Mermaid => Ok(render_mermaid(decoded)),
+        _ => unreachable!("specialized formats handled by caller"),
     }
 }
 
