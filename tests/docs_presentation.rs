@@ -8,22 +8,28 @@ const DOCS_HTML: &str = include_str!("../docs/index.html");
 const RUST_WORKFLOW: &str = include_str!("../.github/workflows/rust.yml");
 
 #[test]
-fn docs_header_links_to_benchmarks_and_project_status() {
+fn docs_header_links_to_project_resources() {
+    let project_links = DOCS_HTML
+        .split_once("aria-label=\"Project resources\">")
+        .unwrap()
+        .1
+        .split_once("</nav>")
+        .unwrap()
+        .0;
+
     for destination in [
         "./dev/bench/",
         "https://crates.io/crates/m-bus-parser",
         "https://docs.rs/m-bus-parser",
         "https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml",
         "https://github.com/maebli/m-bus-parser/blob/main/LICENSE",
+        "https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml",
     ] {
         assert!(
-            DOCS_HTML.contains(destination),
+            project_links.contains(&format!("href=\"{destination}\"")),
             "missing header link to {destination}"
         );
     }
-
-    assert!(DOCS_HTML.contains("class=\"project-badges\""));
-    assert!(DOCS_HTML.contains("aria-label=\"Project status\""));
 }
 
 #[test]
