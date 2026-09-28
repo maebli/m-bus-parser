@@ -1,6 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { renderWithFallback, issueLink, appendReportActions } from '../../docs/parser-ui.mjs';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+
+// Exercise the actual inline website code without publishing a test-only module.
+const html = readFileSync(new URL('../../docs/index.html', import.meta.url), 'utf8');
+const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1]
+    .replace(/^\s*import .*;$/gm, '')
+    .replaceAll('import.meta.url', '"http://example.test/index.html"');
+const { renderWithFallback, issueLink, appendReportActions } = runInNewContext(
+    script.replace(/^\s*setup\(\);.*$/m, '') + '\n({ renderWithFallback, issueLink, appendReportActions });',
+    {
+        URL, URLSearchParams, mermaid: { initialize() {} },
+        get document() { return globalThis.document; },
+    },
+);
 
 const invalidFrame = Object.assign(new Error('wired: checksum; wireless: length'), { code: 'frame.invalid', layer: 'link' });
 
@@ -89,13 +103,6 @@ test('failure actions expose one safe, prefilled GitHub issue link', () => {
 });
 
 test('page replay initializes, failures capture their input, and recovery clears stale errors', async () => {
-    const { readFileSync } = await import('node:fs');
-    const { runInNewContext } = await import('node:vm');
-    const html = readFileSync(new URL('../../docs/index.html', import.meta.url), 'utf8');
-    const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1]
-        .replace(/^\s*import .*;$/gm, '')
-        .replaceAll('import.meta.url', '"http://example.test/index.html"')
-        .replace('setup(); // Set up', 'globalThis.ready = setup(); // Set up');
     const element = () => ({
         value: '', children: [], listeners: {}, classList: { add() {}, remove() {}, contains() { return false; } },
         append(...children) { this.children.push(...children); },
@@ -122,11 +129,10 @@ test('page replay initializes, failures capture their input, and recovery clears
         m_bus_highlight: source => source,
         m_bus_decode() { throw invalidFrame; }, m_bus_render() { assert.fail('frame render'); },
         m_bus_render_application(input) { if (input === 'bad') throw new Error('bad record'); return '{"protocol":"application"}'; },
-        renderWithFallback, appendReportActions, issueLink,
     };
     globalThis.document = document;
     try {
-        runInNewContext(script, context);
+        runInNewContext(script.replace('setup(); // Set up', 'globalThis.ready = setup(); // Set up'), context);
         await context.ready;
         await new Promise(setImmediate);
         assert.equal(context.window._lastRawOutput, '{"protocol":"application"}');
