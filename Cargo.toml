@@ -25,7 +25,8 @@ bindgen = "0.73.2"
 
 [features]
 default = []
-std = ["prettytable-rs", "serde_json", "serde_yaml", "serde", "unicode-width", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std", "m-bus-application-layer/std"]
+std = ["prettytable-rs", "serde_json", "dep:serde_norway", "serde", "unicode-width", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std", "m-bus-application-layer/std"]
+serde_yaml = ["dep:serde_norway"]
 plaintext-before-extension = ["m-bus-application-layer/plaintext-before-extension"]
 serde = ["dep:serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde", "m-bus-application-layer/serde"]
 defmt = ["dep:defmt", "wired-mbus-link-layer/defmt", "wireless-mbus-link-layer/defmt", "m-bus-core/defmt", "m-bus-application-layer/defmt"]
@@ -42,7 +43,7 @@ opt-level = "s"
 [dependencies]
 prettytable-rs = { version = "^0.10", optional = true }
 serde_json = { version = "1.0.138", optional = true }
-serde_yaml = { version = "0.9", optional = true }
+serde_norway = { version = "0.9.42", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 unicode-width = { version = "0.2", optional = true }
 bitflags = "2.8.0"

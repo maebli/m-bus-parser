@@ -528,9 +528,9 @@ fn build_output<T: serde::Serialize>(
             serde_json::to_string_pretty(&json).unwrap_or_default()
         }
         LegacyOutputFormat::Yaml => {
-            let mut yaml = serde_yaml::to_string(parsed).unwrap_or_default();
+            let mut yaml = serde_norway::to_string(parsed).unwrap_or_default();
             yaml.push_str(
-                &serde_yaml::to_string(&SummarySection { summary: &summary }).unwrap_or_default(),
+                &serde_norway::to_string(&SummarySection { summary: &summary }).unwrap_or_default(),
             );
             yaml
         }
