@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-manufacturer"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2021"
 description = "Allocation-free framework for manufacturer-specific M-Bus decoders"
 license = "MIT"
@@ -9,5 +9,5 @@ readme = "README.md"
 include = ["src/**", "examples/**", "Cargo.toml", "README.md"]
 
 [dependencies]
-m-bus-core = { version = "0.5.2", path = "../m-bus-core" }
-m-bus-application-layer = { version = "0.5.2", path = "../m-bus-application-layer" }
+m-bus-core = { version = "0.5.3", path = "../m-bus-core" }
+m-bus-application-layer = { version = "0.5.3", path = "../m-bus-application-layer" }
