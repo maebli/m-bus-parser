@@ -132,7 +132,7 @@ fn formats_and_compatibility_aliases_share_one_parser() {
     assert!(csv.contains("6-digit BCD"));
 
     let yaml = render_hex(WIRED_FRAME, OutputFormat::Yaml, &RenderOptions::default()).unwrap();
-    let yaml_value: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+    let yaml_value: serde_norway::Value = serde_norway::from_str(&yaml).unwrap();
     assert_eq!(yaml_value["records"][3]["quantities"][0], "Volume flow");
     assert_eq!(yaml_value["records"][3]["unit"], "m3.h-1");
 }

@@ -60,8 +60,8 @@ fn borrowed_vif_fields_preserve_their_logical_serde_shape() {
 fn legacy_json_and_yaml_preserve_borrowed_vif_field_shapes() {
     let json_output: Value =
         serde_json::from_str(&serialize_mbus_data(LEGACY_FRAME, "json-legacy", None)).unwrap();
-    let yaml_output: serde_yaml::Value =
-        serde_yaml::from_str(&serialize_mbus_data(LEGACY_FRAME, "yaml-legacy", None)).unwrap();
+    let yaml_output: serde_norway::Value =
+        serde_norway::from_str(&serialize_mbus_data(LEGACY_FRAME, "yaml-legacy", None)).unwrap();
 
     let expected_extensions = json!([{ "data": 116 }]);
     let encoded_extensions = json!([116]);
@@ -89,10 +89,10 @@ fn legacy_json_and_yaml_preserve_borrowed_vif_field_shapes() {
         &encoded_plaintext
     ));
 
-    let expected_extensions = serde_yaml::from_str("[{data: 116}]").unwrap();
-    let encoded_extensions = serde_yaml::from_str("[116]").unwrap();
-    let expected_plaintext = serde_yaml::from_str("[H, R, '%']").unwrap();
-    let encoded_plaintext = serde_yaml::from_str("[3, 72, 82, 37]").unwrap();
+    let expected_extensions = serde_norway::from_str("[{data: 116}]").unwrap();
+    let encoded_extensions = serde_norway::from_str("[116]").unwrap();
+    let expected_plaintext = serde_norway::from_str("[H, R, '%']").unwrap();
+    let encoded_plaintext = serde_norway::from_str("[3, 72, 82, 37]").unwrap();
 
     assert!(yaml_contains_property(
         &yaml_output,
@@ -132,21 +132,21 @@ fn json_contains_property(value: &Value, key: &str, expected: &Value) -> bool {
 }
 
 fn yaml_contains_property(
-    value: &serde_yaml::Value,
+    value: &serde_norway::Value,
     key: &str,
-    expected: &serde_yaml::Value,
+    expected: &serde_norway::Value,
 ) -> bool {
     match value {
-        serde_yaml::Value::Mapping(properties) => {
+        serde_norway::Value::Mapping(properties) => {
             properties.get(key) == Some(expected)
                 || properties
                     .values()
                     .any(|value| yaml_contains_property(value, key, expected))
         }
-        serde_yaml::Value::Sequence(values) => values
+        serde_norway::Value::Sequence(values) => values
             .iter()
             .any(|value| yaml_contains_property(value, key, expected)),
-        serde_yaml::Value::Tagged(tagged) => yaml_contains_property(&tagged.value, key, expected),
+        serde_norway::Value::Tagged(tagged) => yaml_contains_property(&tagged.value, key, expected),
         _ => false,
     }
 }
