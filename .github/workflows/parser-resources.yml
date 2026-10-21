@@ -25,7 +25,7 @@ jobs:
       PARSER_RESOURCES_TOOLCHAIN: nightly-2026-05-16
       CARGO_TERM_COLOR: never
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Remove email addresses from benchmark metadata
         shell: bash
         run: |
@@ -86,7 +86,7 @@ jobs:
         continue-on-error: true
         run: python3 benches/instructions.py instruction-counts.json cache/benchmark-data.json
       - name: Summarize parser resources
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser stack and footprint
           tool: customSmallerIsBetter
@@ -95,7 +95,7 @@ jobs:
           summary-always: true
           max-items-in-chart: 100
       - name: Summarize decode speed
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser decode speed
           tool: cargo
@@ -104,7 +104,7 @@ jobs:
           summary-always: true
           max-items-in-chart: 100
       - name: Summarize optimization comparison
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser optimization comparison
           tool: customSmallerIsBetter
@@ -113,7 +113,7 @@ jobs:
           summary-always: true
           max-items-in-chart: 100
       - name: Summarize corpus and libmbus
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser library comparison
           tool: customSmallerIsBetter
@@ -122,7 +122,7 @@ jobs:
           summary-always: true
           max-items-in-chart: 100
       - name: Summarize instruction counts
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser instruction counts
           tool: customSmallerIsBetter
@@ -131,7 +131,7 @@ jobs:
           summary-always: true
           max-items-in-chart: 100
       - name: Upload measurement
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: parser-resources
           path: |
@@ -159,7 +159,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Release markers on the charts need the full history and all tags.
           fetch-depth: 0
@@ -172,7 +172,7 @@ jobs:
             "$GITHUB_EVENT_PATH" > "$sanitized_event"
           cp "$sanitized_event" "$GITHUB_EVENT_PATH"
       - name: Download measurement
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: parser-resources
       - name: Restore benchmark history
@@ -181,7 +181,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: .github/scripts/restore-benchmark-history.sh
       - name: Append parser resources to history
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser stack and footprint
           tool: customSmallerIsBetter
@@ -194,7 +194,7 @@ jobs:
           max-items-in-chart: 100
       - name: Append decode speed to history
         if: ${{ !cancelled() }}
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser decode speed
           tool: cargo
@@ -204,7 +204,7 @@ jobs:
           max-items-in-chart: 100
       - name: Append optimization comparison to history
         if: ${{ !cancelled() }}
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser optimization comparison
           tool: customSmallerIsBetter
@@ -214,7 +214,7 @@ jobs:
           max-items-in-chart: 100
       - name: Append corpus and libmbus to history
         if: ${{ !cancelled() }}
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser library comparison
           tool: customSmallerIsBetter
@@ -224,7 +224,7 @@ jobs:
           max-items-in-chart: 100
       - name: Append instruction counts to history
         if: ${{ !cancelled() }}
-        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc
         with:
           name: Parser instruction counts
           tool: customSmallerIsBetter
@@ -281,10 +281,10 @@ jobs:
           sed -i "s/?v=[0-9A-Za-z._-]*\"/?v=${GITHUB_SHA:0:7}\"/g" docs/index.html
       - name: Upload site artifact
         if: ${{ !cancelled() }}
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs
       - name: Deploy to GitHub Pages
         if: ${{ !cancelled() }}
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

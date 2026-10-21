@@ -1,4 +1,4 @@
-name: Python Bindings CI 
+name: Python Bindings CI
 
 on:
   push:
@@ -36,8 +36,8 @@ jobs:
       run:
         working-directory: ./python
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Validate package versions and release tag
@@ -97,8 +97,8 @@ jobs:
           - runner: ubuntu-24.04
             target: ppc64le
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
       - name: Build wheels
@@ -110,7 +110,7 @@ jobs:
           manylinux: auto
           working-directory: ./python
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-linux-${{ matrix.platform.target }}
           path: ./python/dist
@@ -134,8 +134,8 @@ jobs:
           - runner: ubuntu-24.04
             target: armv7
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
       - name: Build wheels
@@ -147,7 +147,7 @@ jobs:
           manylinux: musllinux_1_2
           working-directory: ./python
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-musllinux-${{ matrix.platform.target }}
           path: ./python/dist
@@ -167,8 +167,8 @@ jobs:
           - runner: windows-latest
             target: x86
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
           architecture: ${{ matrix.platform.target }}
@@ -180,7 +180,7 @@ jobs:
           sccache: 'true'
           working-directory: ./python
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-windows-${{ matrix.platform.target }}
           path: ./python/dist
@@ -195,13 +195,13 @@ jobs:
     strategy:
       matrix:
         platform:
-          - runner: macos-14
+          - runner: macos-26
             target: x86_64
-          - runner: macos-14
+          - runner: macos-26
             target: aarch64
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
       - name: Build wheels
@@ -212,7 +212,7 @@ jobs:
           sccache: 'true'
           working-directory: ./python
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-${{ matrix.platform.target }}
           path: ./python/dist
@@ -225,7 +225,7 @@ jobs:
       run:
         working-directory: ./python
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
@@ -233,7 +233,7 @@ jobs:
           args: --out dist
           working-directory: ./python
       - name: Upload sdist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-sdist
           path: ./python/dist
@@ -244,7 +244,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/python-v')
     needs: [linux, musllinux, windows, macos, sdist]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: ./python/dist
           merge-multiple: true
