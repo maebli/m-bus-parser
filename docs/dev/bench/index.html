@@ -148,7 +148,7 @@
       <summary>Detailed benchmarks</summary>
       <p class="history-intro">Current results and past runs, including comparisons between build settings.
         Each point is a benchmark run. Select a point to see the code change behind it.
-        The table above is the latest Rust vs libmbus comparison.</p>
+        The table above is the latest m-bus-parser vs libmbus comparison.</p>
       <main id="main"></main>
     </details>
     <footer>
@@ -190,7 +190,7 @@
             parent.appendChild(element);
             return element;
           };
-          append(parent, 'h1', 'Rust vs libmbus');
+          append(parent, 'h1', 'm-bus-parser vs libmbus');
           const description = append(parent, 'p', 'How quickly do the parsers read meter messages, and how much memory do they need? Smaller values and shorter bars are better.');
           const runs = entries['Parser library comparison'] || [];
           const latest = runs.slice().sort((a, b) => a.date - b.date).slice(-1)[0];
@@ -200,7 +200,7 @@
           if (count) description.textContent = 'Both parsers process the same ' + count[1] + ' wired meter messages, including known error cases. Smaller values and shorter bars are better.';
           const table = append(parent, 'table', '', 'comparison-table');
           const header = append(table, 'tr');
-          for (const text of ['Measurement', 'Rust', 'libmbus']) {
+          for (const text of ['Measurement', 'm-bus-parser (Rust)', 'libmbus (C)']) {
             append(header, 'th', text).scope = 'col';
           }
           for (const [metric, label, help] of [
@@ -302,7 +302,7 @@
             plot.appendChild(canvas);
 
             const profileColors = {z: '#3273dc', s: '#159957', '3': '#d17a00', rust: '#b85c38', libmbus: '#3273dc', copy: '#159957', view: '#7d4fd1'};
-            const profileLabels = {z: 'Size (z)', s: 'Size (s)', '3': 'Speed (3)', rust: 'Rust (O3)', libmbus: 'libmbus (O3)', copy: 'Copy to buffer', view: 'Borrowed view'};
+            const profileLabels = {z: 'Size (z)', s: 'Size (s)', '3': 'Speed (3)', rust: 'm-bus-parser (Rust, O3)', libmbus: 'libmbus (C, O3)', copy: 'Copy to buffer', view: 'Borrowed view'};
             const variantOrder = ['default', 'z', 's', '3', 'rust', 'libmbus', 'copy', 'view'];
             const series = [...variants.entries()].sort((a, b) => variantOrder.indexOf(a[0]) - variantOrder.indexOf(b[0]));
             // Align by run, not array position: older commits can lack variants.
