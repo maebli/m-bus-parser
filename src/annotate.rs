@@ -636,43 +636,50 @@ pub(crate) fn annotate_application_layer(
             }
         }
 
-        // Extended Link Layer I (CI=0x8C): CI + 2 ELL bytes, then nested application data
-        0x8C => {
-            let ell_size = 2;
-            let total_header = 1 + ell_size; // CI + ELL
+        0x8C | 0x8E => {
+            let (ell_size, ci_detail, ell_detail, incomplete_detail) = if ci == 0x8C {
+                (
+                    2,
+                    "CI: 0x8C (ELL I)",
+                    "ELL I: CC + Access Number",
+                    "Incomplete ELL I header",
+                )
+            } else {
+                (
+                    10,
+                    "CI: 0x8E (ELL III)",
+                    "ELL III: CC + ACC + MFR[2] + ADDR[6]",
+                    "Incomplete ELL III header",
+                )
+            };
+            let total_header = 1 + ell_size;
             if app_data.len() < total_header {
                 segments.push(ByteSegment {
                     start: base,
                     end: base + app_data.len(),
                     kind: SegmentKind::Unknown,
-                    detail: Cow::Borrowed("Incomplete ELL I header"),
+                    detail: Cow::Borrowed(incomplete_detail),
                     group: None,
                     layer: Layer::AppHeader,
                 });
                 return;
             }
-
-            // CI
             segments.push(ByteSegment {
                 start: base,
                 end: base + 1,
                 kind: SegmentKind::CiField,
-                detail: Cow::Borrowed("CI: 0x8C (ELL I)"),
+                detail: Cow::Borrowed(ci_detail),
                 group: None,
                 layer: Layer::AppHeader,
             });
-
-            // ELL bytes
             segments.push(ByteSegment {
                 start: base + 1,
                 end: base + total_header,
                 kind: SegmentKind::ExtendedLinkLayer,
-                detail: Cow::Borrowed("ELL I: CC + Access Number"),
+                detail: Cow::Borrowed(ell_detail),
                 group: None,
                 layer: Layer::AppHeader,
             });
-
-            // The rest is nested application data parsed by the application layer
             let inner_data = &app_data[total_header..];
             let inner_base = base + total_header;
             if !inner_data.is_empty() {
@@ -715,47 +722,6 @@ pub(crate) fn annotate_application_layer(
             });
 
             // No inner CI/TPL header; remaining bytes are variable data block
-            let remaining = &app_data[total_header..];
-            let remaining_base = base + total_header;
-            if !remaining.is_empty() {
-                annotate_data_records(segments, remaining_base, remaining);
-            }
-        }
-
-        // Extended Link Layer III (CI=0x8E): CI + 16 ELL bytes, then variable data block
-        0x8E => {
-            let ell_size = 16;
-            let total_header = 1 + ell_size;
-            if app_data.len() < total_header {
-                segments.push(ByteSegment {
-                    start: base,
-                    end: base + app_data.len(),
-                    kind: SegmentKind::Unknown,
-                    detail: Cow::Borrowed("Incomplete ELL III header"),
-                    group: None,
-                    layer: Layer::AppHeader,
-                });
-                return;
-            }
-
-            segments.push(ByteSegment {
-                start: base,
-                end: base + 1,
-                kind: SegmentKind::CiField,
-                detail: Cow::Borrowed("CI: 0x8E (ELL III)"),
-                group: None,
-                layer: Layer::AppHeader,
-            });
-
-            segments.push(ByteSegment {
-                start: base + 1,
-                end: base + total_header,
-                kind: SegmentKind::ExtendedLinkLayer,
-                detail: Cow::Borrowed("ELL III: CC + ACC + MFR[2] + ADDR[6] + SN[4] + CRC[2]"),
-                group: None,
-                layer: Layer::AppHeader,
-            });
-
             let remaining = &app_data[total_header..];
             let remaining_base = base + total_header;
             if !remaining.is_empty() {

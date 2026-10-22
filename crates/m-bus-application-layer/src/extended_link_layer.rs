@@ -32,7 +32,6 @@ pub enum EllFormat {
     FormatI,
     /// Extended Link Layer II (8 bytes: CC, ACC, `SN[4]`, `CRC[2]`)
     FormatII,
-    /// Extended Link Layer III (16 bytes: CC, ACC, `MFR[2]`, `ADDR[6]`, `SN[4]`, `CRC[2]`)
     FormatIII,
 }
 
@@ -82,7 +81,7 @@ impl ExtendedLinkLayer {
     }
 
     fn parse_format_iii(data: &[u8]) -> Result<(Self, usize), ApplicationLayerError> {
-        if data.len() < 16 {
+        if data.len() < 10 {
             return Err(ApplicationLayerError::InsufficientData);
         }
 
@@ -94,12 +93,9 @@ impl ExtendedLinkLayer {
                     manufacturer: u16::from_le_bytes([data[2], data[3]]),
                     address: [data[4], data[5], data[6], data[7], data[8], data[9]],
                 }),
-                encryption: Some(EncryptionFields {
-                    session_number: [data[10], data[11], data[12], data[13]],
-                    payload_crc: u16::from_le_bytes([data[14], data[15]]),
-                }),
+                encryption: None,
             },
-            16,
+            10,
         ))
     }
 }
