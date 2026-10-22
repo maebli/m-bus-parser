@@ -29,38 +29,34 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
         let frame = frames::WiredFrame::try_from(data)?;
         let mut user_data = None;
-        let mut data_records = None;
         let mut application_error = None;
         match &frame {
             frames::WiredFrame::LongFrame { data, .. }
             | frames::WiredFrame::ControlFrame { data, .. } => {
                 match user_data::UserDataBlock::try_from(*data) {
-                    Ok(x) => {
-                        match &x {
-                            user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                variable_data_block,
-                                ..
-                            }
-                            | user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
-                                variable_data_block,
-                                ..
-                            }
-                            | user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
-                                variable_data_block,
-                                ..
-                            } => {
-                                data_records = Some((*variable_data_block).into());
-                            }
-                            _ => {}
-                        }
-                        user_data = Some(x);
-                    }
+                    Ok(block) => user_data = Some(block),
                     Err(error) => application_error = Some(error),
                 }
             }
             frames::WiredFrame::SingleCharacter { .. } => (),
             frames::WiredFrame::ShortFrame { .. } => (),
             _ => (),
+        };
+
+        let data_records = match &user_data {
+            Some(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                variable_data_block,
+                ..
+            })
+            | Some(user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                variable_data_block,
+                ..
+            })
+            | Some(user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                variable_data_block,
+                ..
+            }) => Some((*variable_data_block).into()),
+            _ => None,
         };
 
         Ok(MbusData {
