@@ -359,18 +359,42 @@ contracts.
 
 ### CI field types
 
-#### Implemented
-- `ResponseWithVariableDataStructure` (CI: 0x72, 0x76, 0x7A)
-- `ResponseWithFixedDataStructure` (CI: 0x73)
-- `ApplicationLayerShortTransport` (CI: 0x7D)
-- `ApplicationLayerLongTransport` (CI: 0x7E)
-- `ExtendedLinkLayerI` (CI: 0x8A)
-- `ResetAtApplicationLevel`
+| Type | CI bytes | Coverage |
+|------|----------|----------|
+| Variable data | 0x72, 0x76, 0x78, 0x7A | Transport headers and DIF/VIF records |
+| Fixed data | 0x73, 0x77 | Legacy fixed-data interpretation |
+| SendData | 0x51, 0x5A, 0x5B | Written records with no, short or long transport header |
+| Slave selection | 0x52 | Secondary-address mask, including wildcards |
+| Reset / application request / synchronization | 0x50, 0x54, 0x5C | Typed commands |
+| Baud-rate commands | 0xB8–0xBF | All eight rates from 300 to 38400 baud |
+| Application errors / alarms | 0x6E–0x71, 0x74, 0x75 | Status codes and extension bytes |
+| Clock set / adjustment | 0x6C, 0x6D | Time values, operation and command verification |
+| Format / compact frames | 0x69–0x6B, 0x79, 0x7B | Format descriptors and CRC-checked reconstruction with `CompactFrame::expand` |
+| Extended link layer I / II / III | 0x8C, 0x8D, 0x8E | Headers parsed; I/III decode the following CI; encrypted ELL payloads remain undecoded |
+| DLMS/COSEM / SML wrappers | 0x60, 0x61, 0x64, 0x65, 0x7C–0x7F | M-Bus transport headers and raw external payloads |
+| Transport-only / frame-format requests | 0x80, 0x84, 0x85, 0x8A, 0x8B | Headers and command identity |
+| Network / manufacturer / legacy hash commands | 0x81–0x83, 0x89, 0xB1–0xB4, 0xB6, 0x90–0x97 | Protocol identity and raw payloads |
 
-#### Not yet implemented
-Returns `ApplicationLayerError::Unimplemented` for: `SendData`, `SelectSlave`, `SynchronizeSlave`, baud-rate commands, `ExtendedLinkLayerII/III`, COSEM/OBIS data, and various transport/network layer types.
+### Remaining coverage limits
 
-Most common value information unit codes are supported. Contributions for additional CI types and VIF codes are welcome.
+- DLMS/COSEM, SML, network and manufacturer-specific command bodies remain raw.
+  Nonempty external payloads are marked as partially decoded in canonical output.
+- Compact frames require the caller to supply a matching format frame to
+  `CompactFrame::expand`; the CLI and rendering APIs do not cache or match formats.
+- Decryption supports AES-CBC modes 5 and 7. Encrypted ELL payloads, other security
+  modes, message authentication and fragment reassembly are not implemented.
+- Modern CI coverage is incomplete. For example, application selection variants
+  (0x53, 0x55–0x57, 0x66–0x68), short-header clock synchronization (0x62),
+  network management responses (0x87, 0x88) and TLS messages (0x5F, 0x9E, 0x9F)
+  are not recognized. See the CI table in the
+  [OMS specification](https://oms-group.org/wp-content/uploads/2024/10/OMS-Spec_Vol2_Primary_v501_01.pdf).
+- CI 0x73 retains its legacy fixed-data meaning rather than the modern long-header
+  compact format. CI 0x90–0x97 retain legacy hash-command meanings, including bytes
+  assigned to authentication/fragmentation and other services in newer protocols.
+- Primary VIF 0x6F/0xEF and reserved variable-length encodings still return
+  `DataInformationError::Unimplemented`. Command-specific VIFE object actions are
+  labeled without decoding their individual operation semantics. Compact-profile
+  VIFEs are labeled but their payloads are not expanded into individual samples.
 
 ---
 

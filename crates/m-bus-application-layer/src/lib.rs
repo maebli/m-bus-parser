@@ -1078,18 +1078,23 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 ApplicationMessage::parse(control_information, data)
                     .map(UserDataBlock::ApplicationMessage)
             }
-            ControlInformation::ExtendedLinkLayerI => {
-                let mut iter = data.iter();
-                iter.next();
-                let extended_link_layer = Some(ExtendedLinkLayer {
-                    communication_control: *iter
-                        .next()
+            ControlInformation::ExtendedLinkLayerI | ControlInformation::ExtendedLinkLayerIII => {
+                let format = match control_information {
+                    ControlInformation::ExtendedLinkLayerI => {
+                        extended_link_layer::EllFormat::FormatI
+                    }
+                    _ => extended_link_layer::EllFormat::FormatIII,
+                };
+                let (ell, ell_size) = ExtendedLinkLayer::parse(
+                    data.get(1..)
                         .ok_or(ApplicationLayerError::InsufficientData)?,
-                    access_number: *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    receiver_address: None,
-                    encryption: None,
-                });
-                match UserDataBlock::try_from(iter.as_slice()) {
+                    format,
+                )?;
+                let extended_link_layer = Some(ell);
+                let application_data = data
+                    .get(1 + ell_size..)
+                    .ok_or(ApplicationLayerError::InsufficientData)?;
+                match UserDataBlock::try_from(application_data) {
                     Ok(UserDataBlock::ApplicationMessage(mut message)) => {
                         message.extended_link_layer = extended_link_layer;
                         Ok(UserDataBlock::ApplicationMessage(message))
@@ -1128,31 +1133,6 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     data.get(1..)
                         .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer::EllFormat::FormatII,
-                )?;
-                let app_data_offset = 1 + ell_size;
-
-                // Create a ShortTplHeader from ELL fields
-                // For encrypted ELL frames, the ELL fields become the "header"
-                let short_tpl_header = ShortTplHeader {
-                    access_number: ell.access_number,
-                    status: StatusField::from_bits_truncate(ell.communication_control),
-                    configuration_field: ConfigurationField::from_bytes(0x00, 0x00),
-                };
-
-                Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
-                    extended_link_layer: Some(ell),
-                    short_tpl_header,
-                    variable_data_block: data
-                        .get(app_data_offset..)
-                        .ok_or(ApplicationLayerError::InsufficientData)?,
-                })
-            }
-            ControlInformation::ExtendedLinkLayerIII => {
-                // CI byte + ELL III (16 bytes) = 17 bytes total before application data
-                let (ell, ell_size) = ExtendedLinkLayer::parse(
-                    data.get(1..)
-                        .ok_or(ApplicationLayerError::InsufficientData)?,
-                    extended_link_layer::EllFormat::FormatIII,
                 )?;
                 let app_data_offset = 1 + ell_size;
 
