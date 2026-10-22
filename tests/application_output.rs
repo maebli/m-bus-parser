@@ -1,16 +1,41 @@
 #![cfg(feature = "std")]
 
 use m_bus_parser::{
-    decode_hex, output::render_application_hex, DecodeOptions, OutputFormat, RenderOptions,
+    decode_hex, output::render_application_hex, render_hex, DecodeOptions, OutputFormat,
+    RenderOptions,
 };
 
 const RECORDS: &str = "03 13 15 31 00";
 const CI_RECORDS: &str = "78 03 13 15 31 00";
+const SEND_DATA_RECORDS: &str = "51 03 13 15 31 00";
 const LONG_HEADER: &str = "72 00 51 20 02 82 4D 02 04 00 00 00 00 03 13 15 31 00";
 
 #[test]
+fn send_data_frame_renders_written_values_and_record_annotations() {
+    let input = "68 06 06 68 53 FE 51 01 7A 08 25 16";
+    let output = render_hex(input, OutputFormat::Json, &RenderOptions::default()).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(parsed["decode_state"], "complete");
+    assert_eq!(parsed["frame"]["function"], "SND_UD (FCB: false)");
+    assert_eq!(parsed["transport"]["header_kind"], "none");
+    assert_eq!(parsed["records"].as_array().unwrap().len(), 1);
+    assert_eq!(parsed["records"][0]["value"]["value"], "8");
+
+    let output = render_hex(input, OutputFormat::Annotated, &RenderOptions::default()).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+    let segments = parsed["segments"].as_array().unwrap();
+    let payload = segments
+        .iter()
+        .find(|segment| segment["kind"] == "data_payload")
+        .unwrap();
+    assert_eq!(payload["start"], 9);
+    assert_eq!(payload["end"], 10);
+    assert!(!segments.iter().any(|segment| segment["kind"] == "unknown"));
+}
+
+#[test]
 fn application_only_inputs_render_in_every_website_format() {
-    for input in [RECORDS, CI_RECORDS, LONG_HEADER] {
+    for input in [RECORDS, CI_RECORDS, SEND_DATA_RECORDS, LONG_HEADER] {
         assert!(decode_hex(input, &DecodeOptions::default()).is_err());
         for format in [
             OutputFormat::Json,
@@ -42,9 +67,12 @@ fn application_only_inputs_render_in_every_website_format() {
 
 #[test]
 fn annotations_keep_offsets_relative_to_the_submitted_payload() {
-    for (input, length, payload_start) in
-        [(RECORDS, 5, 2), (CI_RECORDS, 6, 3), (LONG_HEADER, 18, 15)]
-    {
+    for (input, length, payload_start) in [
+        (RECORDS, 5, 2),
+        (CI_RECORDS, 6, 3),
+        (SEND_DATA_RECORDS, 6, 3),
+        (LONG_HEADER, 18, 15),
+    ] {
         let output =
             render_application_hex(input, OutputFormat::Annotated, &RenderOptions::default())
                 .unwrap();
@@ -69,6 +97,7 @@ fn invalid_partial_and_empty_records_do_not_look_like_successful_fallbacks() {
         "zz",
         "03 13 15",
         "78 03 13 15",
+        "51 03 13 15",
         "72 00",
         "2F 2F",
         "03 13 15 31 00 03 13",

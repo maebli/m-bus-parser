@@ -324,7 +324,7 @@ fn annotate_long_or_control_frame(
     let user_data_start = 6;
     let user_data_end = user_data_start + user_data_slice.len();
 
-    if !is_control && !user_data_slice.is_empty() {
+    if (!is_control || user_data_slice.first() == Some(&0x51)) && !user_data_slice.is_empty() {
         annotate_application_layer(segments, data, user_data_start, user_data_slice);
     } else if !user_data_slice.is_empty() {
         segments.push(ByteSegment {
@@ -522,13 +522,16 @@ pub(crate) fn annotate_application_layer(
             }
         }
 
-        // Application layer without TPL header (CI=0x78)
-        0x78 => {
+        0x51 | 0x78 => {
             segments.push(ByteSegment {
                 start: base,
                 end: base + 1,
                 kind: SegmentKind::CiField,
-                detail: Cow::Borrowed("CI: 0x78 (Application Layer, no TPL header)"),
+                detail: Cow::Borrowed(if ci == 0x51 {
+                    "CI: 0x51 (Send Data, no TPL header)"
+                } else {
+                    "CI: 0x78 (Application Layer, no TPL header)"
+                }),
                 group: None,
                 layer: Layer::AppHeader,
             });

@@ -32,31 +32,33 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
         let mut data_records = None;
         let mut application_error = None;
         match &frame {
-            frames::WiredFrame::LongFrame { data, .. } => {
-                match user_data::UserDataBlock::try_from(*data) {
-                    Ok(x) => {
-                        match &x {
-                            user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                variable_data_block,
-                                ..
-                            }
-                            | user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
-                                variable_data_block,
-                                ..
-                            }
-                            | user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
-                                variable_data_block,
-                                ..
-                            } => {
-                                data_records = Some((*variable_data_block).into());
-                            }
-                            _ => {}
+            frames::WiredFrame::LongFrame { data, .. }
+            | frames::WiredFrame::ControlFrame {
+                data: data @ [0x51, ..],
+                ..
+            } => match user_data::UserDataBlock::try_from(*data) {
+                Ok(x) => {
+                    match &x {
+                        user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                            variable_data_block,
+                            ..
                         }
-                        user_data = Some(x);
+                        | user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                            variable_data_block,
+                            ..
+                        }
+                        | user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                            variable_data_block,
+                            ..
+                        } => {
+                            data_records = Some((*variable_data_block).into());
+                        }
+                        _ => {}
                     }
-                    Err(error) => application_error = Some(error),
+                    user_data = Some(x);
                 }
-            }
+                Err(error) => application_error = Some(error),
+            },
             frames::WiredFrame::SingleCharacter { .. } => (),
             frames::WiredFrame::ShortFrame { .. } => (),
             frames::WiredFrame::ControlFrame { .. } => (),

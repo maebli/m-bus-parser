@@ -7,6 +7,34 @@ use m_bus_parser::user_data::{
 use m_bus_parser::{mbus_data::MbusData, WiredFrame};
 
 #[test]
+fn send_data_wired_frame_exposes_the_primary_address_write() {
+    for bytes in [
+        [
+            0x68, 0x06, 0x06, 0x68, 0x53, 0xFE, 0x51, 0x01, 0x7A, 0x08, 0x25, 0x16,
+        ],
+        [
+            0x68, 0x06, 0x06, 0x68, 0x73, 0xFE, 0x51, 0x01, 0x7A, 0x08, 0x45, 0x16,
+        ],
+    ] {
+        let parsed = MbusData::<WiredFrame>::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(parsed.application_error, None);
+        assert!(matches!(
+            parsed.user_data,
+            Some(UserDataBlock::VariableDataStructureWithoutTplHeader { .. })
+        ));
+
+        let records = parsed
+            .data_records
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].raw_bytes(), &[0x01, 0x7A, 0x08]);
+        assert_eq!(records[0].value(), Some(&DataType::Number(8.0)));
+    }
+}
+
+#[test]
 fn vif_7d_does_not_interrupt_wired_frame_record_iteration() {
     // Issue #143: the benchmark fixture with the second VIF changed to 0x7D
     // and the checksum corrected.

@@ -787,9 +787,6 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 );
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
-            ControlInformation::SendData => Err(ApplicationLayerError::Unimplemented {
-                feature: "SendData control information",
-            }),
             ControlInformation::SelectSlave => Err(ApplicationLayerError::Unimplemented {
                 feature: "SelectSlave control information",
             }),
@@ -1001,7 +998,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             ControlInformation::AlarmLongTransport => Err(ApplicationLayerError::Unimplemented {
                 feature: "AlarmLongTransport control information",
             }),
-            ControlInformation::ApplicationLayerNoTransport => {
+            ControlInformation::SendData | ControlInformation::ApplicationLayerNoTransport => {
                 Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
                     extended_link_layer: None,
                     variable_data_block: data
