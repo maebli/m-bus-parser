@@ -98,6 +98,11 @@ pub enum ApplicationLayerError {
     InsufficientData,
     Unimplemented { feature: &'static str },
     InvalidDataLength { expected: usize, actual: usize },
+    InvalidPayload { field: &'static str },
+    EncryptedPayload,
+    ChecksumMismatch { expected: u16, actual: u16 },
+    FormatSignatureMismatch,
+    OutputBufferTooSmall,
 }
 
 #[cfg(feature = "std")]
@@ -132,6 +137,18 @@ impl fmt::Display for ApplicationLayerError {
             ApplicationLayerError::Unimplemented { feature } => {
                 write!(f, "Unimplemented feature: {}", feature)
             }
+            ApplicationLayerError::InvalidPayload { field } => write!(f, "Invalid {field}"),
+            ApplicationLayerError::EncryptedPayload => {
+                write!(f, "Decrypt the application payload before decoding it")
+            }
+            ApplicationLayerError::ChecksumMismatch { expected, actual } => write!(
+                f,
+                "Checksum mismatch: expected {expected:04X}, got {actual:04X}"
+            ),
+            ApplicationLayerError::FormatSignatureMismatch => {
+                write!(f, "Compact frame requires a matching format signature")
+            }
+            ApplicationLayerError::OutputBufferTooSmall => write!(f, "Output buffer is too small"),
         }
     }
 }

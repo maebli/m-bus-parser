@@ -464,13 +464,23 @@ fn error_frames_have_explicit_outcomes() {
             | "too_many_vifes"
             | "unimplemented_ci"
             | "unspecified_error" => {
-                // These are valid CI=70 error-status telegrams, not malformed
-                // DIF/VIF streams. Decoding the reported status is unsupported.
+                let code = match name {
+                    "unimplemented_ci" => 1,
+                    "buffer_too_long" => 2,
+                    "too_many_records" => 3,
+                    "premature_end_of_record" => 4,
+                    "too_many_difes" => 5,
+                    "too_many_vifes" => 6,
+                    "application_busy" => 8,
+                    "too_many_readouts" => 9,
+                    _ => 0,
+                };
+                let UserDataBlock::ApplicationMessage(message) = block.unwrap() else {
+                    panic!("{name}: expected application error report")
+                };
                 assert_eq!(
-                    block,
-                    Err(ApplicationLayerError::Unimplemented {
-                        feature: "SendErrorStatus control information"
-                    }),
+                    message.decode().unwrap(),
+                    m_bus_parser::user_data::ApplicationPayload::Error { code, details: &[] },
                     "{name}"
                 );
             }

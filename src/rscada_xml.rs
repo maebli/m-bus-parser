@@ -53,6 +53,9 @@ pub(crate) fn render_from_bytes(data: &[u8], key: Option<&[u8; 16]>) -> Result<S
                 counter1,
                 counter2,
             )),
+            Some(user_data::UserDataBlock::ApplicationMessage(_)) => {
+                render_message_with_optional_decryption(parsed.user_data.as_ref(), None, key)
+            }
             _ => Err("unsupported wired frame type for legacy XML output".to_string()),
         };
     }
@@ -70,6 +73,11 @@ fn render_wireless(
 ) -> Result<String, String> {
     use user_data::UserDataBlock;
     match &parsed.user_data {
+        Some(UserDataBlock::ApplicationMessage(_)) => render_message_with_optional_decryption(
+            parsed.user_data.as_ref(),
+            Some(&parsed.frame.manufacturer_id),
+            key,
+        ),
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header, ..
         }) => render_with_optional_decryption(
@@ -133,6 +141,51 @@ fn render_wireless(
             None,
         )),
     }
+}
+
+fn render_message_with_optional_decryption(
+    block: Option<&user_data::UserDataBlock<'_>>,
+    wireless_id: Option<&wireless::ManufacturerId>,
+    key: Option<&[u8; 16]>,
+) -> Result<String, String> {
+    let Some(user_data::UserDataBlock::ApplicationMessage(message)) = block else {
+        return Err("missing application message".to_string());
+    };
+    if !message.transport_header.is_encrypted() || key.is_none() {
+        return Ok(render_message(message, None));
+    }
+    #[cfg(feature = "decryption")]
+    {
+        let mut output = [0; 512];
+        let block = block.ok_or_else(|| "missing application message".to_string())?;
+        let key = key.ok_or_else(|| "missing decryption key".to_string())?;
+        let length = crate::output::decrypt_user_data(block, wireless_id, key, &mut output)
+            .map_err(|error| error.to_string())?;
+        let plaintext = output
+            .get(..length)
+            .ok_or_else(|| "invalid decryption length".to_string())?;
+        message
+            .decode_payload(plaintext)
+            .map_err(|error| error.to_string())?;
+        Ok(render_message(message, Some(plaintext)))
+    }
+    #[cfg(not(feature = "decryption"))]
+    {
+        let _ = wireless_id;
+        Err("this build does not include decryption support".to_string())
+    }
+}
+
+pub(crate) fn render_message(
+    message: &user_data::ApplicationMessage<'_>,
+    plaintext: Option<&[u8]>,
+) -> String {
+    format!(
+        "{XML_PROCESSING_INSTRUCTION}<MBusData>\n  <Application protocol=\"{}\">\n    <ControlInformation>{:02X}</ControlInformation>\n    <Payload encrypted=\"{}\">{}</Payload>\n  </Application>\n</MBusData>\n",
+        message.protocol.name(), message.control_information,
+        message.transport_header.is_encrypted() && plaintext.is_none(),
+        m_bus_core::hex::encode_upper(plaintext.unwrap_or(message.payload), false),
+    )
 }
 
 fn render_with_optional_decryption(
@@ -308,6 +361,9 @@ pub(crate) fn render_application(
     records: Option<&user_data::DataRecords<'_>>,
 ) -> String {
     match block {
+        Some(user_data::UserDataBlock::ApplicationMessage(message)) => {
+            render_message(message, None)
+        }
         Some(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header,
             ..
