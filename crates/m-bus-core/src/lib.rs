@@ -97,6 +97,7 @@ pub enum ApplicationLayerError {
     InvalidManufacturerCode { code: u16 },
     InsufficientData,
     Unimplemented { feature: &'static str },
+    InvalidDataLength { expected: usize, actual: usize },
 }
 
 #[cfg(feature = "std")]
@@ -121,6 +122,12 @@ impl fmt::Display for ApplicationLayerError {
             }
             ApplicationLayerError::InsufficientData => {
                 write!(f, "Insufficient data")
+            }
+            ApplicationLayerError::InvalidDataLength { expected, actual } => {
+                write!(
+                    f,
+                    "Invalid data length: expected {expected} bytes, got {actual}"
+                )
             }
             ApplicationLayerError::Unimplemented { feature } => {
                 write!(f, "Unimplemented feature: {}", feature)

@@ -518,6 +518,28 @@ impl Counter {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SecondaryAddressMask {
+    pub identification_number_bcd: [u8; 4],
+    pub manufacturer_bytes: [u8; 2],
+    pub version: u8,
+    pub device_type: u8,
+}
+
+impl core::fmt::Display for SecondaryAddressMask {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for byte in self.identification_number_bcd.iter().rev() {
+            write!(f, "{byte:02X}")?;
+        }
+        for byte in self.manufacturer_bytes {
+            write!(f, "{byte:02X}")?;
+        }
+        write!(f, "{:02X}{:02X}", self.version, self.device_type)
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -552,6 +574,9 @@ pub enum UserDataBlock<'a> {
         extended_link_layer: Option<ExtendedLinkLayer>,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
+    },
+    SelectSlave {
+        secondary_address: SecondaryAddressMask,
     },
 }
 
@@ -787,9 +812,24 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 );
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
-            ControlInformation::SelectSlave => Err(ApplicationLayerError::Unimplemented {
-                feature: "SelectSlave control information",
-            }),
+            ControlInformation::SelectSlave => {
+                let [_, id0, id1, id2, id3, manufacturer0, manufacturer1, version, device_type] =
+                    data
+                else {
+                    return Err(ApplicationLayerError::InvalidDataLength {
+                        expected: 9,
+                        actual: data.len(),
+                    });
+                };
+                Ok(UserDataBlock::SelectSlave {
+                    secondary_address: SecondaryAddressMask {
+                        identification_number_bcd: [*id0, *id1, *id2, *id3],
+                        manufacturer_bytes: [*manufacturer0, *manufacturer1],
+                        version: *version,
+                        device_type: *device_type,
+                    },
+                })
+            }
             ControlInformation::SynchronizeSlave => Err(ApplicationLayerError::Unimplemented {
                 feature: "SynchronizeSlave control information",
             }),

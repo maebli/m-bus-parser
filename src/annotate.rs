@@ -324,7 +324,9 @@ fn annotate_long_or_control_frame(
     let user_data_start = 6;
     let user_data_end = user_data_start + user_data_slice.len();
 
-    if (!is_control || user_data_slice.first() == Some(&0x51)) && !user_data_slice.is_empty() {
+    if (!is_control || matches!(user_data_slice.first(), Some(0x51 | 0x52)))
+        && !user_data_slice.is_empty()
+    {
         annotate_application_layer(segments, data, user_data_start, user_data_slice);
     } else if !user_data_slice.is_empty() {
         segments.push(ByteSegment {
@@ -519,6 +521,77 @@ pub(crate) fn annotate_application_layer(
                 }
             } else {
                 annotate_data_records(segments, offset, records_data);
+            }
+        }
+
+        0x52 => {
+            segments.push(ByteSegment {
+                start: base,
+                end: base + 1,
+                kind: SegmentKind::CiField,
+                detail: Cow::Borrowed("CI: 0x52 (Select Slave)"),
+                group: None,
+                layer: Layer::AppHeader,
+            });
+            let Ok(crate::user_data::UserDataBlock::SelectSlave { secondary_address }) =
+                crate::user_data::parse_application_layer(app_data)
+            else {
+                if app_data.len() > 1 {
+                    segments.push(ByteSegment {
+                        start: base + 1,
+                        end: base + app_data.len(),
+                        kind: SegmentKind::Unknown,
+                        detail: Cow::Borrowed("Invalid secondary address mask length"),
+                        group: None,
+                        layer: Layer::AppHeader,
+                    });
+                }
+                return;
+            };
+            for (start, end, kind, label, value) in [
+                (
+                    1,
+                    5,
+                    SegmentKind::IdentificationNumber,
+                    "Identification mask",
+                    format!(
+                        "{:08X}",
+                        u32::from_le_bytes(secondary_address.identification_number_bcd)
+                    ),
+                ),
+                (
+                    5,
+                    7,
+                    SegmentKind::ManufacturerCode,
+                    "Manufacturer mask",
+                    format!(
+                        "{:04X}",
+                        u16::from_be_bytes(secondary_address.manufacturer_bytes)
+                    ),
+                ),
+                (
+                    7,
+                    8,
+                    SegmentKind::Version,
+                    "Version mask",
+                    format!("{:02X}", secondary_address.version),
+                ),
+                (
+                    8,
+                    9,
+                    SegmentKind::DeviceType,
+                    "Device type mask",
+                    format!("{:02X}", secondary_address.device_type),
+                ),
+            ] {
+                segments.push(ByteSegment {
+                    start: base + start,
+                    end: base + end,
+                    kind,
+                    detail: Cow::Owned(format!("{label}: {value}")),
+                    group: None,
+                    layer: Layer::AppHeader,
+                });
             }
         }
 

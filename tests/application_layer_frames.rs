@@ -7,6 +7,32 @@ use m_bus_parser::user_data::{
 use m_bus_parser::{mbus_data::MbusData, WiredFrame};
 
 #[test]
+fn select_slave_decodes_libmbus_frames_with_either_frame_count_bit() {
+    for (frame, mask) in [
+        ("680B0B6873FD5201104914105701069E16", "1449100110570106"),
+        ("680B0B6873FD5278F6F412FFFF01FF3416", "12F4F678FFFF01FF"),
+        ("680B0B6873FD52FFFFFFFFFFFFFFFFBA16", "FFFFFFFFFFFFFFFF"),
+        ("680B0B6873FD52010000002D2C00072316", "000000012D2C0007"),
+    ] {
+        let bytes = hex::decode(frame).unwrap();
+        for control in [0x53, 0x73] {
+            let mut bytes = bytes.clone();
+            bytes[4] = control;
+            bytes[15] = bytes[4..15]
+                .iter()
+                .fold(0u8, |sum, byte| sum.wrapping_add(*byte));
+            let parsed = MbusData::<WiredFrame>::try_from(bytes.as_slice()).unwrap();
+            assert_eq!(parsed.application_error, None);
+            assert!(parsed.data_records.is_none());
+            let Some(UserDataBlock::SelectSlave { secondary_address }) = parsed.user_data else {
+                panic!("expected a slave selection");
+            };
+            assert_eq!(secondary_address.to_string(), mask);
+        }
+    }
+}
+
+#[test]
 fn send_data_wired_frame_exposes_the_primary_address_write() {
     for bytes in [
         [

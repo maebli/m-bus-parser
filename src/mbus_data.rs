@@ -34,7 +34,7 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
         match &frame {
             frames::WiredFrame::LongFrame { data, .. }
             | frames::WiredFrame::ControlFrame {
-                data: data @ [0x51, ..],
+                data: data @ [0x51 | 0x52, ..],
                 ..
             } => match user_data::UserDataBlock::try_from(*data) {
                 Ok(x) => {

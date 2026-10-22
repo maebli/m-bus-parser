@@ -11,6 +11,73 @@ const SEND_DATA_RECORDS: &str = "51 03 13 15 31 00";
 const LONG_HEADER: &str = "72 00 51 20 02 82 4D 02 04 00 00 00 00 03 13 15 31 00";
 
 #[test]
+fn select_slave_renders_the_mask_without_claiming_a_meter_identity() {
+    let frame = "680B0B6873FD5278F6F412FFFF01FF3416";
+    let application = "5278F6F412FFFF01FF";
+    for input in [frame, application] {
+        for format in [
+            OutputFormat::Json,
+            OutputFormat::Yaml,
+            OutputFormat::Table,
+            OutputFormat::Csv,
+            OutputFormat::Mermaid,
+        ] {
+            let output = if input == frame {
+                render_hex(input, format, &RenderOptions::default())
+            } else {
+                render_application_hex(input, format, &RenderOptions::default())
+            }
+            .unwrap();
+            assert!(output.contains("12F4F678FFFF01FF"), "{input} / {format}");
+            if format == OutputFormat::Json {
+                let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+                assert_eq!(parsed["decode_state"], "complete");
+                assert_eq!(parsed["transport"]["header_kind"], "slave_selection");
+                assert_eq!(
+                    parsed["transport"]["secondary_address_mask"],
+                    "12F4F678FFFF01FF"
+                );
+                assert!(parsed["meter"]["identity"].is_null());
+                assert!(parsed["records"].as_array().unwrap().is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn select_slave_annotations_cover_the_address_fields() {
+    for (input, base) in [
+        ("680B0B6873FD5278F6F412FFFF01FF3416", 6),
+        ("680B0B6853FD5278F6F412FFFF01FF1416", 6),
+        ("5278F6F412FFFF01FF", 0),
+    ] {
+        let output = if base == 0 {
+            render_application_hex(input, OutputFormat::Annotated, &RenderOptions::default())
+        } else {
+            render_hex(input, OutputFormat::Annotated, &RenderOptions::default())
+        }
+        .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+        let segments = parsed["segments"].as_array().unwrap();
+        for (kind, start, end, value) in [
+            ("identification_number", 1, 5, "12F4F678"),
+            ("manufacturer_code", 5, 7, "FFFF"),
+            ("version", 7, 8, "01"),
+            ("device_type", 8, 9, "FF"),
+        ] {
+            let segment = segments
+                .iter()
+                .find(|segment| segment["kind"] == kind)
+                .unwrap();
+            assert_eq!(segment["start"], base + start);
+            assert_eq!(segment["end"], base + end);
+            assert!(segment["detail"].as_str().unwrap().ends_with(value));
+        }
+        assert!(!segments.iter().any(|segment| segment["kind"] == "unknown"));
+    }
+}
+
+#[test]
 fn send_data_frame_renders_written_values_and_record_annotations() {
     let input = "68 06 06 68 53 FE 51 01 7A 08 25 16";
     let output = render_hex(input, OutputFormat::Json, &RenderOptions::default()).unwrap();
@@ -98,6 +165,8 @@ fn invalid_partial_and_empty_records_do_not_look_like_successful_fallbacks() {
         "03 13 15",
         "78 03 13 15",
         "51 03 13 15",
+        "52 78 F6 F4 12 FF FF 01",
+        "52 78 F6 F4 12 FF FF 01 FF 00",
         "72 00",
         "2F 2F",
         "03 13 15 31 00 03 13",

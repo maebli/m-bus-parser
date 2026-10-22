@@ -299,6 +299,8 @@ pub struct EllOutput {
 pub struct TransportOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_address_mask: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub access_numbers: Vec<SourcedU8>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -1071,6 +1073,7 @@ fn meter_and_transport(
     let mut alternates = Vec::new();
     let mut transport = TransportOutput {
         header_kind: None,
+        secondary_address_mask: None,
         access_numbers: Vec::new(),
         statuses: Vec::new(),
         configuration: None,
@@ -1171,6 +1174,10 @@ fn meter_and_transport(
         }
         Some(UserDataBlock::ResetAtApplicationLevel { .. }) => {
             transport.header_kind = Some("application_reset".to_string());
+        }
+        Some(UserDataBlock::SelectSlave { secondary_address }) => {
+            transport.header_kind = Some("slave_selection".to_string());
+            transport.secondary_address_mask = Some(secondary_address.to_string());
         }
         None => {}
         Some(_) => {}
@@ -1979,6 +1986,9 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
     ]
     .map(str::to_string)
     .to_vec();
+    if decoded.transport.secondary_address_mask.is_some() {
+        headers.push("secondary_address_mask".to_string());
+    }
     for record in &decoded.records {
         headers.extend(
             RECORD_FIELDS
@@ -1994,6 +2004,9 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
         })?;
 
     let mut row = csv_frame_row(decoded);
+    if let Some(mask) = &decoded.transport.secondary_address_mask {
+        row.push(mask.clone());
+    }
     for record in &decoded.records {
         row.extend(csv_record_values(record));
     }
@@ -2169,6 +2182,9 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
             ),
         ),
     ];
+    if let Some(mask) = &decoded.transport.secondary_address_mask {
+        summary.push(("Secondary address mask".to_string(), mask.clone()));
+    }
     if let Some(enrichment) = &decoded.enrichment {
         summary.push((
             "Manufacturer name".to_string(),
@@ -2433,6 +2449,13 @@ fn render_mermaid(decoded: &DecodedOutput) -> String {
             mermaid_escape(address)
         ));
         frame_nodes.push("FRAME_ADDRESS");
+    }
+    if let Some(mask) = &decoded.transport.secondary_address_mask {
+        output.push_str(&format!(
+            "        SLAVE_SELECTION[\"Secondary address mask · {}\"]\n",
+            mermaid_escape(mask)
+        ));
+        frame_nodes.push("SLAVE_SELECTION");
     }
     for pair in frame_nodes.windows(2) {
         if let [from, to] = pair {
