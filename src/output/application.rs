@@ -83,6 +83,20 @@ pub fn render_application_hex(
         });
     }
     if format == OutputFormat::Xml {
+        if let Some(user_data::UserDataBlock::ApplicationMessage(message)) = &block {
+            if let Some(plaintext) = security.decrypted_payload.as_deref() {
+                message
+                    .decode_payload(plaintext)
+                    .map_err(|error| OutputError::Rendering {
+                        code: "application.payload_invalid",
+                        message: error.to_string(),
+                    })?;
+            }
+            return Ok(crate::rscada_xml::render_message(
+                message,
+                security.decrypted_payload.as_deref(),
+            ));
+        }
         return Ok(crate::rscada_xml::render_application(
             block.as_ref(),
             records.as_ref(),

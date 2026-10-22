@@ -32,7 +32,8 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
         let mut data_records = None;
         let mut application_error = None;
         match &frame {
-            frames::WiredFrame::LongFrame { data, .. } => {
+            frames::WiredFrame::LongFrame { data, .. }
+            | frames::WiredFrame::ControlFrame { data, .. } => {
                 match user_data::UserDataBlock::try_from(*data) {
                     Ok(x) => {
                         match &x {
@@ -59,7 +60,6 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
             }
             frames::WiredFrame::SingleCharacter { .. } => (),
             frames::WiredFrame::ShortFrame { .. } => (),
-            frames::WiredFrame::ControlFrame { .. } => (),
             _ => (),
         };
 
@@ -289,6 +289,7 @@ fn hex_string(data: &[u8]) -> String {
 fn user_data_is_encrypted(user_data: Option<&user_data::UserDataBlock>) -> bool {
     use user_data::UserDataBlock;
     match user_data {
+        Some(UserDataBlock::ApplicationMessage(message)) => message.transport_header.is_encrypted(),
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header, ..
         }) => long_tpl_header.is_encrypted(),
@@ -303,6 +304,7 @@ fn user_data_is_encrypted(user_data: Option<&user_data::UserDataBlock>) -> bool 
 fn variable_data_block<'a>(user_data: Option<&user_data::UserDataBlock<'a>>) -> Option<&'a [u8]> {
     use user_data::UserDataBlock;
     match user_data {
+        Some(UserDataBlock::ApplicationMessage(message)) => Some(message.payload),
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             variable_data_block,
             ..
@@ -382,7 +384,11 @@ fn apply_user_data_summary(
     match user_data {
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header, ..
-        }) => {
+        })
+        | Some(UserDataBlock::ApplicationMessage(user_data::ApplicationMessage {
+            transport_header: user_data::TransportHeader::Long(long_tpl_header),
+            ..
+        })) => {
             summary.identification_number = Some(long_tpl_header.identification_number.to_string());
             summary.manufacturer = Some(manufacturer_summary(
                 long_tpl_header
@@ -404,7 +410,11 @@ fn apply_user_data_summary(
         }
         Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
             short_tpl_header, ..
-        }) => {
+        })
+        | Some(UserDataBlock::ApplicationMessage(user_data::ApplicationMessage {
+            transport_header: user_data::TransportHeader::Short(short_tpl_header),
+            ..
+        })) => {
             summary.access_number = Some(short_tpl_header.access_number);
             summary.status = Some(short_tpl_header.status.to_string());
             summary.security_mode = Some(
@@ -583,6 +593,12 @@ fn parse_frame_output(
                             Some(long_tpl_header),
                         ));
                         decrypted = true;
+                    } else if let Some(user_data::UserDataBlock::ApplicationMessage(message)) =
+                        &parsed.user_data
+                    {
+                        decrypted = decrypted_buffer
+                            .get(..len)
+                            .is_some_and(|data| message.decode_payload(data).is_ok());
                     }
                 }
             }
@@ -619,9 +635,15 @@ fn parse_frame_output(
                             ) => Some(long_tpl_header),
                             _ => None,
                         };
-                        parsed.data_records =
-                            Some(user_data::DataRecords::new(decrypted_data, long_header));
-                        decrypted = true;
+                        if let Some(user_data::UserDataBlock::ApplicationMessage(message)) =
+                            &parsed.user_data
+                        {
+                            decrypted = message.decode_payload(decrypted_data).is_ok();
+                        } else {
+                            parsed.data_records =
+                                Some(user_data::DataRecords::new(decrypted_data, long_header));
+                            decrypted = true;
+                        }
                     }
                 }
             }
@@ -1293,6 +1315,41 @@ fn replace_encrypted_payload_segments(
     segments: &mut Vec<crate::annotate::ByteSegment>,
     display_data: &[u8],
 ) {
+    let replace_message = |segments: &mut Vec<crate::annotate::ByteSegment>,
+                           block: Option<&user_data::UserDataBlock<'_>>| {
+        let Some(user_data::UserDataBlock::ApplicationMessage(message)) = block else {
+            return false;
+        };
+        let mut rewritten = Vec::with_capacity(segments.len());
+        for segment in segments.drain(..) {
+            if segment.kind == crate::annotate::SegmentKind::EncryptedPayload {
+                if let Some(payload) = display_data.get(segment.start..segment.end) {
+                    crate::annotate::annotate_message_payload(
+                        &mut rewritten,
+                        segment.start,
+                        message,
+                        payload,
+                        true,
+                    );
+                    continue;
+                }
+            }
+            rewritten.push(segment);
+        }
+        *segments = rewritten;
+        true
+    };
+    if let Ok(parsed) = MbusData::<frames::WiredFrame>::try_from(display_data) {
+        if replace_message(segments, parsed.user_data.as_ref()) {
+            return;
+        }
+    } else if let Ok(parsed) =
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(display_data)
+    {
+        if replace_message(segments, parsed.user_data.as_ref()) {
+            return;
+        }
+    }
     let mut rewritten = Vec::with_capacity(segments.len());
 
     for segment in segments.drain(..) {
@@ -1408,53 +1465,10 @@ fn decrypt_variable_data_with_key(
     key: &[u8; 16],
     output: &mut [u8],
 ) -> Option<usize> {
-    use user_data::UserDataBlock;
-
-    let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-    match user_data {
-        UserDataBlock::VariableDataStructureWithLongTplHeader {
-            long_tpl_header, ..
-        } => {
-            if !long_tpl_header.is_encrypted() {
-                return None;
-            }
-            let manufacturer = long_tpl_header.manufacturer.as_ref().ok()?;
-            provider
-                .add_key(
-                    manufacturer.to_id(),
-                    long_tpl_header.identification_number.number,
-                    *key,
-                )
-                .ok()?;
-            user_data.decrypt_variable_data(&provider, output).ok()
-        }
-        UserDataBlock::VariableDataStructureWithShortTplHeader {
-            short_tpl_header, ..
-        } => {
-            if !short_tpl_header.is_encrypted() {
-                return None;
-            }
-            let manufacturer_id = wireless_manufacturer_id?;
-            provider
-                .add_key(
-                    manufacturer_id.manufacturer_code.to_id(),
-                    manufacturer_id.identification_number.number,
-                    *key,
-                )
-                .ok()?;
-            user_data
-                .decrypt_variable_data_with_context(
-                    &provider,
-                    manufacturer_id.manufacturer_code,
-                    manufacturer_id.identification_number.number,
-                    manufacturer_id.version,
-                    manufacturer_id.device_type,
-                    output,
-                )
-                .ok()
-        }
-        _ => None,
+    if !user_data_is_encrypted(Some(user_data)) {
+        return None;
     }
+    crate::output::decrypt_user_data(user_data, wireless_manufacturer_id, key, output).ok()
 }
 
 #[cfg(feature = "std")]

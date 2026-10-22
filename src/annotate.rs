@@ -54,6 +54,18 @@ pub enum SegmentKind {
     // Fallback
     IdleFiller,
     Unknown,
+    ApplicationPayload,
+    ApplicationErrorCode,
+    AlarmStatus,
+    ClockControl,
+    ClockTime,
+    Reserved,
+    CommandVerification,
+    FormatLength,
+    FormatSignature,
+    FormatDescriptor,
+    FullFrameCrc,
+    CompactPayload,
 }
 
 impl fmt::Display for SegmentKind {
@@ -88,6 +100,18 @@ impl fmt::Display for SegmentKind {
             Self::ManufacturerSpecific => write!(f, "Manufacturer Specific"),
             Self::IdleFiller => write!(f, "Idle Filler"),
             Self::Unknown => write!(f, "Unknown"),
+            Self::ApplicationPayload => write!(f, "Application Payload"),
+            Self::ApplicationErrorCode => write!(f, "Application Error Code"),
+            Self::AlarmStatus => write!(f, "Alarm Status"),
+            Self::ClockControl => write!(f, "Clock Control"),
+            Self::ClockTime => write!(f, "Clock Time"),
+            Self::Reserved => write!(f, "Reserved"),
+            Self::CommandVerification => write!(f, "Command Verification"),
+            Self::FormatLength => write!(f, "Format Length"),
+            Self::FormatSignature => write!(f, "Format Signature"),
+            Self::FormatDescriptor => write!(f, "Format Descriptor"),
+            Self::FullFrameCrc => write!(f, "Full Frame CRC"),
+            Self::CompactPayload => write!(f, "Compact Payload"),
         }
     }
 }
@@ -324,17 +348,8 @@ fn annotate_long_or_control_frame(
     let user_data_start = 6;
     let user_data_end = user_data_start + user_data_slice.len();
 
-    if !is_control && !user_data_slice.is_empty() {
+    if !user_data_slice.is_empty() {
         annotate_application_layer(segments, data, user_data_start, user_data_slice);
-    } else if !user_data_slice.is_empty() {
-        segments.push(ByteSegment {
-            start: user_data_start,
-            end: user_data_end,
-            kind: SegmentKind::Unknown,
-            detail: Cow::Borrowed("Control frame data"),
-            group: None,
-            layer: Layer::AppHeader,
-        });
     }
 
     // Checksum
@@ -377,10 +392,18 @@ pub(crate) fn annotate_application_layer(
     let Some(&ci) = app_data.first() else {
         return;
     };
+    if let Ok(crate::user_data::UserDataBlock::ApplicationMessage(message)) =
+        crate::user_data::parse_application_layer(app_data)
+    {
+        if ci == message.control_information {
+            annotate_message(segments, frame_data, base, app_data, &message);
+            return;
+        }
+    }
 
     match ci {
         // Long TPL header (CI=0x72 or CI=0x76)
-        0x72 | 0x76 => {
+        0x5B | 0x72 | 0x76 => {
             if app_data.len() < 13 {
                 segments.push(ByteSegment {
                     start: base,
@@ -415,7 +438,7 @@ pub(crate) fn annotate_application_layer(
         }
 
         // Short TPL header (CI=0x7A or encrypted CI=0xA0..=0xAF)
-        0x7A | 0xA0..=0xAF => {
+        0x5A | 0x7A | 0xA0..=0xAF => {
             let has_enc_config = ci == 0xA0;
             let skip_count: usize = if has_enc_config { 2 } else { 1 };
             let data_block_offset: usize = if has_enc_config { 6 } else { 5 };
@@ -522,13 +545,87 @@ pub(crate) fn annotate_application_layer(
             }
         }
 
-        // Application layer without TPL header (CI=0x78)
-        0x78 => {
+        0x52 => {
             segments.push(ByteSegment {
                 start: base,
                 end: base + 1,
                 kind: SegmentKind::CiField,
-                detail: Cow::Borrowed("CI: 0x78 (Application Layer, no TPL header)"),
+                detail: Cow::Borrowed("CI: 0x52 (Select Slave)"),
+                group: None,
+                layer: Layer::AppHeader,
+            });
+            let Ok(crate::user_data::UserDataBlock::SelectSlave { secondary_address }) =
+                crate::user_data::parse_application_layer(app_data)
+            else {
+                if app_data.len() > 1 {
+                    segments.push(ByteSegment {
+                        start: base + 1,
+                        end: base + app_data.len(),
+                        kind: SegmentKind::Unknown,
+                        detail: Cow::Borrowed("Invalid secondary address mask length"),
+                        group: None,
+                        layer: Layer::AppHeader,
+                    });
+                }
+                return;
+            };
+            for (start, end, kind, label, value) in [
+                (
+                    1,
+                    5,
+                    SegmentKind::IdentificationNumber,
+                    "Identification mask",
+                    format!(
+                        "{:08X}",
+                        u32::from_le_bytes(secondary_address.identification_number_bcd)
+                    ),
+                ),
+                (
+                    5,
+                    7,
+                    SegmentKind::ManufacturerCode,
+                    "Manufacturer mask",
+                    format!(
+                        "{:04X}",
+                        u16::from_be_bytes(secondary_address.manufacturer_bytes)
+                    ),
+                ),
+                (
+                    7,
+                    8,
+                    SegmentKind::Version,
+                    "Version mask",
+                    format!("{:02X}", secondary_address.version),
+                ),
+                (
+                    8,
+                    9,
+                    SegmentKind::DeviceType,
+                    "Device type mask",
+                    format!("{:02X}", secondary_address.device_type),
+                ),
+            ] {
+                segments.push(ByteSegment {
+                    start: base + start,
+                    end: base + end,
+                    kind,
+                    detail: Cow::Owned(format!("{label}: {value}")),
+                    group: None,
+                    layer: Layer::AppHeader,
+                });
+            }
+        }
+
+        0x51 | 0x78 => {
+            segments.push(ByteSegment {
+                start: base,
+                end: base + 1,
+                kind: SegmentKind::CiField,
+                detail: Cow::Borrowed(if ci == 0x51 {
+                    "CI: 0x51 (Send Data, no TPL header)"
+                } else {
+                    "CI: 0x78 (Application Layer, no TPL header)"
+                }),
                 group: None,
                 layer: Layer::AppHeader,
             });
@@ -676,6 +773,247 @@ pub(crate) fn annotate_application_layer(
                 layer: Layer::AppHeader,
             });
         }
+    }
+}
+
+fn annotate_message(
+    segments: &mut Vec<ByteSegment>,
+    frame_data: &[u8],
+    base: usize,
+    app_data: &[u8],
+    message: &crate::user_data::ApplicationMessage<'_>,
+) {
+    use crate::user_data::TransportHeader;
+    let first_segment = segments.len();
+    if matches!(message.transport_header, TransportHeader::Long(_)) {
+        annotate_long_tpl_header(segments, frame_data, base, app_data);
+    } else {
+        segments.push(ByteSegment {
+            start: base,
+            end: base + 1,
+            kind: SegmentKind::CiField,
+            detail: Cow::Borrowed("Application control information"),
+            group: None,
+            layer: Layer::AppHeader,
+        });
+        if let TransportHeader::Short(header) = &message.transport_header {
+            for (start, end, kind, detail) in [
+                (
+                    1,
+                    2,
+                    SegmentKind::AccessNumber,
+                    format!("Access Number: {}", header.access_number),
+                ),
+                (
+                    2,
+                    3,
+                    SegmentKind::Status,
+                    format!("Status: {}", header.status),
+                ),
+                (
+                    3,
+                    5,
+                    SegmentKind::ConfigurationField,
+                    "Configuration Field".to_string(),
+                ),
+            ] {
+                segments.push(ByteSegment {
+                    start: base + start,
+                    end: base + end,
+                    kind,
+                    detail: Cow::Owned(detail),
+                    group: None,
+                    layer: Layer::AppHeader,
+                });
+            }
+        }
+    }
+    if let Some(segment) = segments.get_mut(first_segment) {
+        segment.detail = Cow::Owned(format!(
+            "CI: 0x{:02X} ({})",
+            message.control_information,
+            message.protocol.name()
+        ));
+    }
+    annotate_message_payload(
+        segments,
+        base + 1 + message.transport_header.size(),
+        message,
+        message.payload,
+        false,
+    );
+}
+
+pub(crate) fn annotate_message_payload(
+    segments: &mut Vec<ByteSegment>,
+    mut payload_base: usize,
+    message: &crate::user_data::ApplicationMessage<'_>,
+    original_payload: &[u8],
+    decrypted: bool,
+) {
+    use crate::user_data::{ApplicationPayload, ApplicationProtocol};
+    let mut payload = original_payload;
+    let has_verification = decrypted
+        || matches!(
+            message.protocol,
+            ApplicationProtocol::ClockSet | ApplicationProtocol::ClockAdjust
+        ) && !message.transport_header.is_encrypted();
+    if has_verification {
+        if let Some(rest) = payload.strip_prefix(&[0x2F, 0x2F]) {
+            segments.push(ByteSegment {
+                start: payload_base,
+                end: payload_base + 2,
+                kind: SegmentKind::CommandVerification,
+                detail: Cow::Borrowed("Decryption verification: 2F 2F"),
+                group: None,
+                layer: Layer::AppHeader,
+            });
+            payload_base += 2;
+            payload = rest;
+        }
+    }
+    let mut push = |start, end, kind, detail: String| {
+        if start < end {
+            segments.push(ByteSegment {
+                start: payload_base + start,
+                end: payload_base + end,
+                kind,
+                detail: Cow::Owned(detail),
+                group: None,
+                layer: Layer::AppHeader,
+            });
+        }
+    };
+    if message.transport_header.is_encrypted() && !decrypted {
+        push(
+            0,
+            payload.len(),
+            SegmentKind::EncryptedPayload,
+            "Encrypted application payload".to_string(),
+        );
+        return;
+    }
+    match message.decode_payload(original_payload) {
+        Ok(ApplicationPayload::Error { code, .. }) => {
+            push(
+                0,
+                payload.len().min(1),
+                SegmentKind::ApplicationErrorCode,
+                format!("Application error: 0x{code:02X}"),
+            );
+            push(
+                1,
+                payload.len(),
+                SegmentKind::ApplicationPayload,
+                "Additional error information".to_string(),
+            );
+        }
+        Ok(ApplicationPayload::Alarm { status, .. }) => {
+            if let Some(status) = status {
+                push(
+                    0,
+                    1,
+                    SegmentKind::AlarmStatus,
+                    format!("Alarm status: 0x{status:02X}"),
+                );
+                push(
+                    1,
+                    payload.len(),
+                    SegmentKind::ApplicationPayload,
+                    "Additional alarm information".to_string(),
+                );
+            }
+        }
+        Ok(ApplicationPayload::Clock { operation, value }) => {
+            let time_end =
+                if operation == crate::user_data::application_message::ClockOperation::Set {
+                    7
+                } else {
+                    4
+                };
+            push(
+                0,
+                1,
+                SegmentKind::ClockControl,
+                format!("Clock operation: {operation:?}"),
+            );
+            push(
+                1,
+                time_end,
+                SegmentKind::ClockTime,
+                format!("Clock time: {value:?}"),
+            );
+            push(
+                time_end,
+                10,
+                SegmentKind::Reserved,
+                "Reserved: zero".to_string(),
+            );
+            push(
+                10,
+                14,
+                SegmentKind::CommandVerification,
+                "Command verification: 2F 2F 2F 2F".to_string(),
+            );
+        }
+        Ok(ApplicationPayload::Format(format)) => {
+            push(
+                0,
+                1,
+                SegmentKind::FormatLength,
+                format!("Format length: {}", format.length),
+            );
+            push(
+                1,
+                3,
+                SegmentKind::FormatSignature,
+                format!("Format signature: {:04X}", format.signature),
+            );
+            let mut offset = 3;
+            for record in format.records().flatten() {
+                let end = offset + record.raw_bytes.len();
+                push(
+                    offset,
+                    end,
+                    SegmentKind::FormatDescriptor,
+                    "DIF/VIF format descriptor".to_string(),
+                );
+                offset = end;
+            }
+            push(
+                offset,
+                payload.len(),
+                SegmentKind::IdleFiller,
+                "Format padding".to_string(),
+            );
+        }
+        Ok(ApplicationPayload::Compact(frame)) => {
+            push(
+                0,
+                2,
+                SegmentKind::FormatSignature,
+                format!("Format signature: {:04X}", frame.signature),
+            );
+            push(
+                2,
+                4,
+                SegmentKind::FullFrameCrc,
+                format!("Full-frame CRC: {:04X}", frame.full_frame_crc),
+            );
+            push(
+                4,
+                payload.len(),
+                SegmentKind::CompactPayload,
+                "Compact values; matching format required".to_string(),
+            );
+        }
+        Ok(ApplicationPayload::Command | ApplicationPayload::BaudRate(_)) => {}
+        _ => push(
+            0,
+            payload.len(),
+            SegmentKind::ApplicationPayload,
+            format!("{} payload", message.protocol.name()),
+        ),
     }
 }
 
