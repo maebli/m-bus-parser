@@ -122,7 +122,7 @@
 
         form {
             background: #fff;
-            padding: 8px 16px 14px;
+            padding: 8px 12px;
             border: 1px solid #d1d9e0;
             border-radius: 12px;
             box-shadow: 0 4px 18px rgba(31, 35, 40, 0.04);
@@ -140,18 +140,19 @@
 
         textarea {
             width: 100%;
-            padding: 12px;
+            padding: 7px 9px;
             border: 1px solid #d1d9e0;
             background: #f6f8fa;
             color: inherit;
             border-radius: 8px;
             box-sizing: border-box;
-            margin-bottom: 8px;
+            margin-bottom: 0;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 14px;
             line-height: 1.5;
             resize: vertical;
-            min-height: 76px;
+            min-height: 52px;
+            display: block;
         }
 
         input[type="text"],
@@ -168,14 +169,52 @@
             font-size: 14px;
         }
 
-        .tls-panel { margin: 16px 0; padding: 14px; border: 1px solid #8b949e; border-radius: 8px; }
-        .tls-panel summary { cursor: pointer; }
-        .tls-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0; }
-        .tls-fields label { display: grid; gap: 6px; font-size: 0.85rem; }
+        .tls-panel { margin: 0; flex: 0 0 auto; max-width: 100%; }
+        .input-tools { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
+        #meter-key-fields { flex: 1 0 420px; min-width: 0; max-width: 100%; }
+        .input-help { flex: 0 0 auto; font-size: 0.75rem; color: #59636e; }
+        .input-help summary { cursor: pointer; }
+        .input-help p { margin: 6px 0 0; }
+        .disclosure-content {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: min(660px, 100%);
+            z-index: 20;
+            box-sizing: border-box;
+            max-height: min(65vh, 640px);
+            overflow: auto;
+            padding: 12px;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(31, 35, 40, 0.12);
+        }
+        body.dark-mode .disclosure-content { background: #151b23; border-color: #3d444d; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+        .input-tools details[name="parser-disclosure"] > summary { cursor: pointer; width: fit-content; color: #59636e; font-size: 0.75rem; }
+        .input-tools details[name="parser-disclosure"] > summary::marker { font-size: 0.65rem; }
+        .input-tools details[name="parser-disclosure"] > summary:hover { color: #0969da; }
+        .example-options { display: grid; gap: 4px; }
+        .example-option { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 0; font-size: 0.8rem; }
+        .example-description { display: grid; flex: 1 1 240px; gap: 2px; }
+        .example-protocols { display: flex; gap: 4px; }
+        .example-options button { padding: 5px 8px; border: 1px solid #d1d9e0; border-radius: 4px; background: transparent; color: inherit; font: inherit; font-size: 0.75rem; cursor: pointer; }
+        .example-options button:hover { background: #eff2f5; }
+        .example-options span { color: #59636e; font-size: 0.75rem; }
+        body.dark-mode .example-options button { border-color: #3d444d; }
+        body.dark-mode .example-options button:hover { background: #212830; }
+        body.dark-mode .example-options span { color: #9198a1; }
+        .tls-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 12px; margin: 12px 0; }
+        .tls-fields label { display: grid; min-width: 0; gap: 6px; font-size: 0.85rem; }
+        .tls-fields .tls-key-field { grid-column: 1 / -1; }
         .tls-fields input, .tls-fields select { box-sizing: border-box; width: 100%; padding: 8px; margin: 0; }
         .tls-panel pre { overflow-x: auto; font-size: 0.8rem; }
         #tls-enabled { width: auto; display: inline; }
         body.dark-mode .tls-fields input, body.dark-mode .tls-fields select { background: #161b22; color: #e6edf3; border: 1px solid #8b949e; }
+        body.dark-mode .input-tools details[name="parser-disclosure"] > summary,
+        body.dark-mode .input-help { color: #9198a1; }
+        body.dark-mode .input-tools details[name="parser-disclosure"] > summary:hover { color: #79c0ff; }
 
         .key-input-container {
             position: relative;
@@ -190,6 +229,84 @@
         }
 
         #input-help { font-size: 0.75rem; margin-top: 0; }
+
+        .input-heading,
+        .decode-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 12px;
+            margin-top: 0;
+        }
+
+        .input-heading { justify-content: space-between; margin-bottom: 4px; }
+        .input-heading label { margin: 0; font-size: 0.8rem; }
+        #detected-meter { font-size: 0.75rem; color: #59636e; overflow-wrap: anywhere; }
+        .decode-actions .key-help { margin: 0; }
+
+        #decode-button {
+            padding: 5px 12px;
+            min-height: 32px;
+            border: 1px solid #0969da;
+            border-radius: 6px;
+            background: #0969da;
+            color: #fff;
+            font: inherit;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        #decode-button:hover { background: #0550ae; }
+        #decode-button:disabled { opacity: 0.6; cursor: wait; }
+        #aeskey-error { color: #b42318; font-size: 0.8rem; margin: 4px 0; }
+        #aeskey[aria-invalid="true"] { border-color: #b42318; }
+
+        .security-panel {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 4px 12px;
+            flex: 0 0 100%;
+            margin: 0;
+            font-size: 0.75rem;
+            overflow-wrap: anywhere;
+        }
+
+        .security-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+        #security-mode { color: #59636e; }
+        #security-message { margin: 4px 0 0; color: #59636e; }
+        .security-panel[data-tone="verified"] #security-status { color: #1a7f37; }
+        .security-panel[data-tone="warning"] #security-status { color: #7d4e00; }
+        .security-panel[data-tone="error"] #security-status { color: #b42318; }
+        #security-details { margin: 0; flex: 0 0 auto; }
+        #security-fields { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 4px 18px; margin: 8px 0 0; }
+        #security-fields dt { color: #59636e; }
+        #security-fields dd { margin: 0; }
+        .output-toolbar { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; }
+        .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
+        .result-views { min-width: 0; }
+        .result-views .parse-actions { margin: 0; gap: 4px; }
+        .result-views input[type="button"] { background: transparent; border-color: transparent; color: #59636e; padding: 4px 10px; min-height: 28px; }
+        .result-views #parse_mermaid,
+        .result-views #parse_hexview { padding-inline: 10px; }
+        .result-views input[type="button"]:hover { background: #eff2f5; }
+        .result-views input[type="button"][aria-pressed="true"] { background: #ddf4ff; border-color: #0969da; color: #0550ae; box-shadow: none; }
+        .result-views input[type="button"]:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
+        #copy_output[hidden],
+        #download_output[hidden],
+        #security-panel[hidden] { display: none; }
+        body.dark-mode #detected-meter,
+        body.dark-mode #security-mode,
+        body.dark-mode #security-message,
+        body.dark-mode #security-fields dt { color: #b1bac4; }
+        body.dark-mode .security-panel[data-tone="verified"] #security-status { color: #7ee787; }
+        body.dark-mode .security-panel[data-tone="warning"] #security-status { color: #e3b341; }
+        body.dark-mode .security-panel[data-tone="error"] #security-status { color: #ff8182; }
+        body.dark-mode #aeskey-error { color: #ff8182; }
+        body.dark-mode .result-views input[type="button"] { background: transparent; color: #b1bac4; border-color: transparent; }
+        body.dark-mode .result-views input[type="button"]:hover { background: #212830; }
+        body.dark-mode .result-views input[type="button"][aria-pressed="true"] { background: #132c49; color: #79c0ff; border-color: #4493f8; box-shadow: none; }
 
         .key-toggle {
             position: absolute;
@@ -262,7 +379,7 @@
             outline-offset: 2px;
         }
 
-        .key-input-container input { display: block; padding: 10px 44px 10px 12px; margin-bottom: 0; }
+        .key-input-container input { display: block; padding: 5px 38px 5px 9px; min-height: 32px; margin-bottom: 0; }
         #aeskey::placeholder { font-family: system-ui, sans-serif; font-size: 0.8rem; color: #59636e; opacity: 1; }
         body.dark-mode #aeskey::placeholder { color: #9198a1; }
 
@@ -292,9 +409,8 @@
         #download_output svg { stroke: currentColor; }
 
         .output-summary {
-            min-height: 44px;
             box-sizing: border-box;
-            padding: 12px 82px 10px 20px;
+            padding: 0;
             margin: 0;
             font-size: 0.75rem;
             font-style: italic;
@@ -330,7 +446,7 @@
         #output-container {
             position: relative;
             max-width: 1100px;
-            margin: 12px auto 0;
+            margin: 8px auto 0;
             background: #fff;
             border: 1px solid #d1d9e0;
             border-radius: 12px;
@@ -461,8 +577,7 @@
 
         #copy_output,
         #download_output {
-            position: absolute;
-            top: 8px;
+            position: static;
             display: grid;
             place-items: center;
             box-sizing: border-box;
@@ -477,8 +592,6 @@
             z-index: 10;
             transition: background 0.2s;
         }
-        #copy_output { right: 42px; }
-        #download_output { right: 8px; }
 
         #copy_output:hover,
         #download_output:hover {
@@ -674,6 +787,10 @@
         }
 
         /* ── Interactive Hex Viewer ─────────────────────────── */
+        .hex-view-title {
+            margin: 20px 24px 8px;
+            font-size: 14px;
+        }
         .hex-viewer {
             margin: 16px 24px 24px;
             border: 1px solid #d1d9e0;
@@ -810,7 +927,8 @@
             pointer-events: none;
             z-index: 1000;
             max-width: 350px;
-            white-space: nowrap;
+            white-space: normal;
+            overflow-wrap: anywhere;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             display: none;
         }
@@ -877,7 +995,7 @@
             border-radius: 4px;
             margin: 0 4px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 8px;
         }
         .hex-tree-item:hover,
@@ -896,9 +1014,8 @@
             color: #333;
             flex: 1;
             min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
         body.dark-mode .hex-tree-item .tree-kind {
             color: #aaa;
@@ -971,8 +1088,8 @@
             #banner { width: 48px; height: 48px; align-self: start; }
             .header-controls { grid-column: 2; margin-top: 0; justify-content: flex-start; }
             .header-text .subtitle { font-size: 0.75rem; overflow-wrap: anywhere; }
-            form { padding: 8px 12px 12px; }
-            .parse-actions input { flex: 1 1 125px; }
+            form { padding: 8px 10px; }
+            .parse-actions input { flex: 0 0 auto; }
             .hex-viewer { margin: 12px 16px 20px; }
             .hex-viewer-left, .hex-viewer-right { padding: 16px; }
             #mermaid_diagram { padding: 20px; }
@@ -1048,39 +1165,92 @@
             </button>
         </div>
     </div>
-    <form autocomplete="off">
-        <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
+    <form id="parser-form" autocomplete="off" novalidate>
+        <div class="input-heading">
+            <label for="inputstring">Telegram</label>
+            <span id="detected-meter" aria-live="polite">Meter and security mode are detected automatically</span>
+        </div>
         <textarea rows="2" cols="80"
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
-        <div class="key-input-container">
-            <input type="password" id="aeskey" aria-label="AES-128 decryption key (optional)" aria-describedby="aeskey-help" placeholder="AES-128 key (optional) · 32 hex digits" maxlength="32" pattern="[0-9A-Fa-f]{32}" />
-            <button type="button" class="key-toggle" id="key-toggle" title="Show/Hide key">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-            </button>
-        </div>
-        <p class="key-help" id="aeskey-help">Supports AES-128 modes 5 and 7, and mode 10 (OMS profile D) with authentication. Enter 32 hex digits, or leave empty for unencrypted frames.</p>
-
-        <details id="tls-panel" class="tls-panel">
-            <summary>TLS session · mode 13</summary>
-            <p class="key-help">Decode complete TLS 1.2 application records with exported session keys. Session data stays in this page and is cleared on reload. For AFL captures, first reassemble and remove the AFL framing. TLS handshakes are not supported.</p>
-            <label><input type="checkbox" id="tls-enabled" autocomplete="off" /> Use TLS session</label>
-            <div class="tls-fields">
-                <label>Import session JSON<input type="file" id="tls-import" accept=".json,application/json" /></label>
-                <label>Session<select id="tls-session"><option value="">Manual session</option></select></label>
-                <label>Cipher suite<select id="tls-cipher"><option value="TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256">ECDHE-ECDSA · AES-128-GCM · SHA-256</option><option value="TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384">ECDHE-ECDSA · AES-256-GCM · SHA-384</option></select></label>
-                <label>Direction<select id="tls-direction"><option value="client_to_server">Meter → gateway (client → server)</option><option value="server_to_client">Gateway → meter (server → client)</option></select></label>
-                <label>Encryption key (hex)<input type="password" id="tls-key" autocomplete="off" spellcheck="false" placeholder="32 or 64 hex digits" /></label>
-                <label>Fixed nonce salt (hex)<input type="text" id="tls-iv" autocomplete="off" spellcheck="false" placeholder="8 hex digits" /></label>
-                <label>First record counter (decimal)<input type="text" id="tls-counter" autocomplete="off" inputmode="numeric" placeholder="Counter for this captured record" /></label>
+        <div class="input-tools">
+            <div id="meter-key-fields">
+                <label for="aeskey" id="aeskey-label" class="visually-hidden">Meter key <span class="key-help">(optional)</span></label>
+                <div class="key-input-container">
+                    <input type="password" id="aeskey" aria-describedby="aeskey-help aeskey-error" placeholder="Meter key · 32 hex digits" pattern="[0-9A-Fa-f]{32}" autocomplete="off" spellcheck="false" />
+                    <button type="button" class="key-toggle" id="key-toggle" title="Show key" aria-label="Show key" aria-pressed="false">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
+                <p id="aeskey-error" role="alert" hidden></p>
             </div>
-            <p class="key-help">Use the key and salt for the selected direction. The counter counts TLS records, including encrypted handshake records. Repeating a decode does not advance it. TLS session output supports JSON, YAML, Table, CSV, and Diagram.</p>
-            <button type="button" id="tls-clear">Clear session</button>
-            <p id="tls-status" class="key-help" role="status"></p>
-            <details><summary>Session JSON fields</summary><pre>{
+            <div class="decode-actions">
+                <button type="submit" id="decode-button" disabled>Loading parser…</button>
+            </div>
+            <details id="examples-panel" name="parser-disclosure">
+                <summary>Examples</summary>
+                <div class="disclosure-content">
+                    <p class="key-help">Choose Wired or Wireless to decode an example. Public test keys and TLS sessions are included when available.</p>
+                    <div class="example-options">
+                        <div class="example-option">
+                            <div class="example-description"><strong>Mode 5 · AES-CBC</strong><span>Decrypted readings · no authentication</span></div>
+                            <div class="example-protocols">
+                                <button type="button" data-example="5" data-protocol="wired" aria-label="Load wired mode 5 example">Wired</button>
+                                <button type="button" data-example="5" data-protocol="wireless" aria-label="Load wireless mode 5 example">Wireless</button>
+                            </div>
+                        </div>
+                        <div class="example-option">
+                            <div class="example-description"><strong>Mode 7 · AES-CBC</strong><span>Synthetic header example · verification unavailable</span></div>
+                            <div class="example-protocols">
+                                <button type="button" data-example="7" data-protocol="wired" aria-label="Load wired mode 7 header example">Wired</button>
+                                <button type="button" data-example="7" data-protocol="wireless" aria-label="Load wireless mode 7 header example">Wireless</button>
+                            </div>
+                        </div>
+                        <div class="example-option">
+                            <div class="example-description"><strong>Mode 10 · AES-CCM</strong><span>Authenticated readings</span></div>
+                            <div class="example-protocols">
+                                <button type="button" data-example="10" data-protocol="wired" aria-label="Load wired mode 10 example">Wired</button>
+                                <button type="button" data-example="10" data-protocol="wireless" aria-label="Load wireless mode 10 example">Wireless</button>
+                            </div>
+                        </div>
+                        <div class="example-option">
+                            <div class="example-description"><strong>Mode 13 · TLS</strong><span>Authenticated readings · includes test session</span></div>
+                            <div class="example-protocols">
+                                <button type="button" data-example="13" data-protocol="wired" aria-label="Load wired mode 13 example">Wired</button>
+                                <button type="button" data-example="13" data-protocol="wireless" aria-label="Load wireless mode 13 example">Wireless</button>
+                            </div>
+                        </div>
+                        <div class="example-option">
+                            <div class="example-description"><strong>Unencrypted</strong><span>No key needed</span></div>
+                            <div class="example-protocols">
+                                <button type="button" data-example="cleartext" data-protocol="wired" aria-label="Load unencrypted wired example">Wired</button>
+                                <button type="button" data-example="cleartext" data-protocol="wireless" aria-label="Load unencrypted wireless example">Wireless</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+            <details id="tls-panel" class="tls-panel" name="parser-disclosure">
+                <summary id="tls-summary">TLS session · mode 13</summary>
+                <div class="disclosure-content">
+                    <p class="key-help">Decode complete TLS 1.2 application records with exported session keys. Session data stays in this page and is cleared on reload. For AFL captures, first reassemble and remove the AFL framing. TLS handshakes are not supported.</p>
+                    <label><input type="checkbox" id="tls-enabled" autocomplete="off" /> Use TLS session</label>
+                    <div class="tls-fields">
+                        <label>Import session JSON<input type="file" id="tls-import" accept=".json,application/json" /></label>
+                        <label>Session<select id="tls-session"><option value="">Manual session</option></select></label>
+                        <label>Cipher suite<select id="tls-cipher"><option value="TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256">ECDHE-ECDSA · AES-128-GCM · SHA-256</option><option value="TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384">ECDHE-ECDSA · AES-256-GCM · SHA-384</option></select></label>
+                        <label>Direction<select id="tls-direction"><option value="client_to_server">Meter → gateway (client → server)</option><option value="server_to_client">Gateway → meter (server → client)</option></select></label>
+                        <label class="tls-key-field">Encryption key (hex)<input type="password" id="tls-key" autocomplete="off" spellcheck="false" placeholder="32 or 64 hex digits" /></label>
+                        <label>Fixed nonce salt (hex)<input type="text" id="tls-iv" autocomplete="off" spellcheck="false" placeholder="8 hex digits" /></label>
+                        <label>First record counter (decimal)<input type="text" id="tls-counter" autocomplete="off" inputmode="numeric" placeholder="Counter for this captured record" /></label>
+                    </div>
+                    <p class="key-help">Use the key and salt for the selected direction. The counter counts TLS records, including encrypted handshake records. Repeating a decode does not advance it. TLS session output supports JSON, YAML, Table, CSV, and Diagram.</p>
+                    <button type="button" class="utility-control" id="tls-clear">Clear session</button>
+                    <p id="tls-status" class="key-help" role="status"></p>
+                    <details><summary>Session JSON fields</summary><pre>{
   "name": "Meter session",
   "cipher_suite": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
   "direction": "client_to_server",
@@ -1088,41 +1258,111 @@
   "fixed_iv_hex": "",
   "sequence_number": "0"
 }</pre></details>
-        </details>
-
-        <div class="parse-actions" role="group" aria-label="Output format">
-            <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
-            <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
-            <input id="parse_table" type="button" value="Table" aria-pressed="false" />
-            <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
-            <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
-            <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
-            <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
+                </div>
+            </details>
+            <details class="input-help" name="parser-disclosure">
+                <summary>Help</summary>
+                <div class="disclosure-content">
+                    <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
+                    <p class="key-help" id="aeskey-help">Enter the key supplied with the meter. Leave empty to inspect the telegram headers.</p>
+                    <p class="key-help">Keys stay in this browser tab and are excluded from share links and reports.</p>
+                </div>
+            </details>
+            <section class="security-panel" id="security-panel" aria-label="Telegram security" hidden>
+                <div role="status" aria-live="polite">
+                    <div class="security-heading"><strong id="security-status"></strong><span id="security-mode"></span></div>
+                </div>
+                <details id="security-details" name="parser-disclosure" hidden>
+                    <summary>Details</summary>
+                    <div class="disclosure-content">
+                        <p id="security-message"></p>
+                        <dl id="security-fields"></dl>
+                    </div>
+                </details>
+            </section>
         </div>
     </form>
     <div id="output-container">
-        <p class="output-summary" id="output-summary" aria-live="polite"></p>
-        <button id="copy_output" title="Copy Output">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1-2 2v1" />
-            </svg>
-        </button>
-        <a id="download_output" title="Download Output" href="#" download="">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-        </a>
-        <div id="output" aria-live="polite"><p class="output-placeholder">Choose an output format to parse your payload.</p></div>
+        <div class="output-toolbar">
+            <div class="result-views">
+                <div class="parse-actions" role="group" aria-label="Output format">
+                    <input id="parse_json" type="button" value="JSON" aria-pressed="true" />
+                    <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
+                    <input id="parse_table" type="button" value="Table" aria-pressed="false" />
+                    <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
+                    <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
+                    <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
+                    <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
+                </div>
+            </div>
+            <div class="output-actions">
+                <button id="copy_output" title="Copy Output" hidden>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1-2 2v1" />
+                    </svg>
+                </button>
+                <a id="download_output" title="Download Output" href="#" download="" hidden>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+        <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
+        <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.0";
+        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.1";
 
         import { createTlsSessionPanel } from "./tls-session.js";
 
         const REPOSITORY = 'https://github.com/maebli/m-bus-parser';
+
+        const telegramExamples = {
+            cleartext: {
+                telegrams: {
+                    wired: '683D3D6808017200512002824D0204008800000407000000000C15030000000B2E0000000B3B0000000A5A88120A5E16050B61237700026C8C110227370D0F60006716',
+                    wireless: '1844AE4C4455223368077A55000000041389E20100023B0000',
+                },
+            },
+            5: {
+                telegrams: {
+                    wired: '682F2F6808017278563412931533032A0020255923C95AAA26D1B2E7493B013EC4A6F6D3529B520EDFF0EA6DEFC99D6D69EBF32716',
+                    wireless: '2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A',
+                },
+                key: '0102030405060708090A0B0C0D0E0F11',
+            },
+            7: {
+                telegrams: {
+                    wired: '6820206808017278563412931533032A0010071066E94BD4EF8A2C3B884CFA59CA342B2E8A16',
+                    wireless: '1F4493157856341233037A2A0010071066E94BD4EF8A2C3B884CFA59CA342B2E',
+                },
+            },
+            10: {
+                telegrams: {
+                    wired: '682E2E6808017278563412931533037500112A1001B30A0000C882038E223BBC1091CEB8C0A1009D388AC0A1B2EEF92EA7D46916',
+                    wireless: '304493157856341233038C20757A7500112A1001B30A0000C882038E223BBC1091CEB8C0A1009D388A5AF7883A5B5A7FD6',
+                },
+                key: '000102030405060708090A0B0C0D0E0F',
+            },
+            13: {
+                telegrams: {
+                    wired: '6830306808017278563412931533030100FF0D01170303001BA0A1A2A3A4A5A6A79BBAAD16C9503D86625A3A66E44E7F876BF808C216',
+                    wireless: '2f4493157856341233037a0100ff0d01170303001ba0a1a2a3a4a5a6a79bbaad16c9503d86625a3a66e44e7f876bf808',
+                },
+                session: {
+                    name: 'Public TLS example',
+                    cipher_suite: 'TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256',
+                    direction: 'client_to_server',
+                    key_hex: '000102030405060708090a0b0c0d0e0f',
+                    fixed_iv_hex: '01020304',
+                    sequence_number: '5',
+                },
+            },
+        };
 
         function errorDetails(error) {
             return {
@@ -1133,21 +1373,20 @@
             };
         }
 
-        // Decide fallback eligibility using the decoder, independently of output format.
-        // A format/decryption failure on an identified frame must not reinterpret bytes.
-        function renderWithFallback(api, input, format, key, width) {
-            let decoded;
+        function inspectTelegram(api, input, width) {
             try {
-                decoded = api.decode(input, key, true);
+                return api.decode(input, undefined, true);
             } catch (error) {
                 if (error.code !== 'frame.invalid') throw error;
                 try {
-                    return {
-                        output: api.application(input, format, key, width, true),
-                        mode: 'application',
-                        diagnostics: [],
-                    };
+                    return JSON.parse(api.application(input, 'json', undefined, width, true));
                 } catch (applicationError) {
+                    if (applicationError.code === 'security.key_missing') {
+                        const failure = new Error('Paste the complete telegram to detect its security mode and verify decryption.');
+                        failure.code = 'security.frame_required';
+                        failure.layer = 'security';
+                        throw failure;
+                    }
                     const failure = new Error('Full-frame and application-only parsing failed.');
                     failure.code = 'parse.failed';
                     failure.layer = 'application';
@@ -1158,12 +1397,145 @@
                     throw failure;
                 }
             }
+        }
+
+        function renderWithFallback(api, input, format, key, width) {
+            const inspected = inspectTelegram(api, input, width);
+            const isApplication = inspected.protocol === 'application';
+            const usableKey = inspected.security?.mode_code === 7 || isApplication ? undefined : key;
+            const decoded = usableKey ? api.decode(input, usableKey, true) : inspected;
             return {
-                output: api.frame(input, format, key, width, true),
+                output: isApplication
+                    ? api.application(input, format, undefined, width, true)
+                    : api.frame(input, format, usableKey, width, true),
                 mode: decoded.protocol,
                 security: decoded.security,
+                decoded,
+                diagnostics: decoded.diagnostics.filter(item =>
+                    !['security.key_missing', 'security.tls_session_required'].includes(item.code)
+                    && (item.severity === 'warning' || item.severity === 'error')
+                ),
+            };
+        }
+
+        function renderTlsPayload(input, format, sessionJson, width, inspected) {
+            const isApplication = inspected.protocol === 'application';
+            const decoded = isApplication
+                ? JSON.parse(m_bus_render_tls(input, 'json', sessionJson, width, true))
+                : m_bus_decode_tls(input, sessionJson);
+            let output;
+            let plaintext;
+            if (format === 'hexview') {
+                const renderOriginal = isApplication ? m_bus_render_application : m_bus_render;
+                output = renderOriginal(input, format, undefined, width, true);
+                const plaintextHex = decoded.security.decrypted_payload_hex;
+                if (decoded.security.decryption_state === 'decrypted_authenticated' && plaintextHex) {
+                    const annotated = JSON.parse(m_bus_render_application(`78${plaintextHex}`, format));
+                    annotated.bytes = annotated.bytes.slice(1);
+                    annotated.segments = annotated.segments
+                        .filter(segment => segment.start >= 1)
+                        .map(segment => ({ ...segment, start: segment.start - 1, end: segment.end - 1 }));
+                    annotated.decrypted = true;
+                    plaintext = { output: JSON.stringify(annotated), input: plaintextHex };
+                }
+            } else {
+                output = m_bus_render_tls(input, format, sessionJson, width, isApplication);
+            }
+            return {
+                output,
+                plaintext,
+                mode: decoded.protocol,
+                security: decoded.security,
+                decoded,
                 diagnostics: decoded.diagnostics.filter(item => item.severity === 'warning' || item.severity === 'error'),
             };
+        }
+
+        function securityPresentation(decoded, error, tlsEnabled = false) {
+            if (error?.code === 'security.authentication_failed') {
+                const message = decoded?.security?.mode_code === 13
+                    ? 'Check the TLS session key, direction, record counter, and complete telegram. No readings are shown.'
+                    : 'Check the meter key and the complete telegram. No readings are shown.';
+                return { status: 'Verification failed', tone: 'error', message };
+            }
+            if (error?.code === 'security.frame_required') {
+                return { status: 'Complete telegram required', tone: 'warning', message: error.message };
+            }
+            if (error) {
+                return { status: 'Unable to decode', tone: 'error', message: error.message || 'Check the telegram and try again.' };
+            }
+            const security = decoded?.security;
+            if (security?.mode_code === 7) {
+                return { status: 'Mode 7 verification unavailable', tone: 'warning', message: 'This parser cannot yet derive mode 7 keys or verify authentication. Only headers are shown; the key is not used.' };
+            }
+            if (security?.decryption_state === 'decrypted_authenticated') {
+                return { status: 'Decrypted and authenticated', tone: 'verified', message: 'The authentication tag was verified. Readings are available below.' };
+            }
+            if (security?.decryption_state === 'decrypted_unverified') {
+                return { status: 'Decrypted without authentication', tone: 'warning', message: 'The payload was decrypted, but its authenticity and the key cannot be verified.' };
+            }
+            if (security?.decryption_state === 'session_required') {
+                if (tlsEnabled) {
+                    return { status: 'TLS session not verified', tone: 'neutral', message: 'Select Decrypt and verify to check this session against the telegram.' };
+                }
+                return { status: 'TLS session required', tone: 'warning', message: 'Open TLS session to import session keys or enter them manually. You can inspect the record headers without a session.' };
+            }
+            if (security?.payload_protection === 'unknown') {
+                return { status: 'Verification unavailable', tone: 'warning', message: 'This telegram uses protection that the parser cannot yet decrypt. Only headers are available.' };
+            }
+            if (security?.decryption_state === 'key_missing') {
+                return { status: 'Key required', tone: 'warning', message: 'Enter the meter key to decrypt the readings. You can inspect the headers without a key.' };
+            }
+            if (security?.payload_protection === 'cleartext') {
+                return { status: 'Unencrypted telegram', tone: 'neutral', message: 'No key is required. These readings are not authenticated.' };
+            }
+            return { status: 'Security status unavailable', tone: 'neutral', message: 'The parser did not return a security status for this input.' };
+        }
+
+        function showSecurity(decoded, error) {
+            const presentation = securityPresentation(decoded, error, document.getElementById('tls-enabled').checked);
+            const security = decoded?.security;
+            const mode = security?.mode_code;
+            const identity = decoded?.meter?.identity;
+            const profile = mode === 7 ? ' · OMS profile B' : mode === 10 ? ' · OMS profile D' : mode === 13 ? ' · TLS 1.2' : '';
+            const panel = document.getElementById('security-panel');
+            panel.hidden = false;
+            panel.dataset.tone = presentation.tone;
+            document.getElementById('security-status').textContent = presentation.status;
+            document.getElementById('security-mode').textContent = mode ? `Mode ${mode}${profile}` : '';
+            document.getElementById('security-message').textContent = presentation.message;
+            document.getElementById('detected-meter').textContent = identity
+                ? [identity.manufacturer_code, identity.id, identity.device_type].filter(Boolean).join(' · ')
+                : 'Meter identity unavailable';
+            const fields = document.getElementById('security-fields');
+            fields.replaceChildren();
+            const details = [
+                ['Mode', mode !== undefined ? `${mode} · ${security.mode}` : 'Not reported'],
+                ['Authentication', presentation.status],
+                ['Configuration', decoded?.transport?.configuration?.raw],
+            ];
+            if (mode === 7 || mode === 10) {
+                details.push(['Key ID', 'Not reported by the parser'], ['Message counter', 'Not reported by the parser']);
+            }
+            if (security?.tls) {
+                details.push(['TLS records', security.tls.records.map(record => `${record.content_type} · ${record.length} bytes`).join(', ')]);
+            }
+            for (const [label, value] of details) {
+                if (!value) continue;
+                const term = document.createElement('dt');
+                const description = document.createElement('dd');
+                term.textContent = label;
+                description.textContent = value;
+                fields.append(term, description);
+            }
+            document.getElementById('security-details').hidden = false;
+            document.getElementById('meter-key-fields').hidden = mode === 13;
+            document.getElementById('aeskey-label').textContent = mode === 7 || mode === 10 ? 'Meter master key' : 'Meter key (optional)';
+            document.getElementById('aeskey-help').textContent = mode === 7
+                ? '32 hexadecimal digits. Mode 7 master-key decryption is not available in this version.'
+                : mode === 10
+                    ? '32 hexadecimal digits. The parser derives the required keys and verifies authentication.'
+                    : '32 hexadecimal digits. Leave empty to inspect headers or read an unencrypted telegram.';
         }
 
         function failureReport(attempt) {
@@ -1261,6 +1633,21 @@
         }
 
         async function setup() {
+            const disclosureMenus = [...document.querySelectorAll('details[name="parser-disclosure"]')];
+            document.addEventListener('keydown', event => {
+                if (event.key !== 'Escape') return;
+                const menu = disclosureMenus.find(disclosure => disclosure.open);
+                if (!menu) return;
+                menu.open = false;
+                menu.querySelector('summary').focus();
+                event.preventDefault();
+            });
+            document.addEventListener('click', event => {
+                for (const menu of disclosureMenus) {
+                    if (menu.open && !menu.contains(event.target)) menu.open = false;
+                }
+            });
+
             // Dark mode setup
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             const savedMode = localStorage.getItem('darkMode');
@@ -1288,6 +1675,9 @@
             const keyToggle = document.getElementById('key-toggle');
             keyToggle.addEventListener('click', () => {
                 const type = keyInput.getAttribute('type');
+                keyToggle.setAttribute('aria-pressed', String(type === 'password'));
+                keyToggle.setAttribute('aria-label', type === 'password' ? 'Hide key' : 'Show key');
+                keyToggle.title = type === 'password' ? 'Hide key' : 'Show key';
                 if (type === 'password') {
                     keyInput.setAttribute('type', 'text');
                     keyToggle.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
@@ -1297,12 +1687,134 @@
                 }
             });
 
-            const tlsPanel = createTlsSessionPanel(document);
-
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.7.0", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.7.1", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
+            let inspectedTelegram = null;
+            let hasDecoded = false;
+            let renderGeneration = 0;
+            let inspectionTimer;
+            const telegramInput = document.getElementById('inputstring');
+            const decodeButton = document.getElementById('decode-button');
+            const parserApi = { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
+            decodeButton.disabled = false;
+
+            function updateDecodeButton() {
+                const security = inspectedTelegram?.security;
+                const isTls = security?.mode_code === 13;
+                const tlsEnabled = document.getElementById('tls-enabled').checked;
+                if (isTls) {
+                    decodeButton.textContent = tlsEnabled ? 'Decrypt and verify' : 'Inspect TLS records';
+                } else if (security?.mode_code === 7) {
+                    decodeButton.textContent = 'Inspect headers';
+                } else if (security?.decryption_state !== 'key_missing') {
+                    decodeButton.textContent = 'Decode telegram';
+                } else if (!keyInput.value.trim()) {
+                    decodeButton.textContent = 'Inspect headers';
+                } else {
+                    decodeButton.textContent = security.mode_code === 10 ? 'Decrypt and verify' : 'Decrypt telegram';
+                }
+                document.getElementById('tls-summary').textContent = isTls
+                    ? tlsEnabled ? 'TLS session · enabled' : 'TLS session · required for decryption'
+                    : 'TLS session · mode 13';
+                if (isTls && currentFormat === 'xml') currentFormat = 'json';
+                document.querySelectorAll('.parse-actions input').forEach(button => {
+                    button.disabled = isTls && button.id === 'parse_xml';
+                    button.title = button.disabled ? 'TLS output supports JSON, YAML, Table, CSV, and Diagram.' : '';
+                    button.setAttribute('aria-pressed', String(button.id === `parse_${currentFormat}`));
+                });
+            }
+
+            function inspectCurrentTelegram() {
+                clearTimeout(inspectionTimer);
+                inspectedTelegram = null;
+                if (!telegramInput.value.trim()) {
+                    document.getElementById('security-panel').hidden = true;
+                    document.getElementById('security-details').hidden = true;
+                    document.getElementById('security-details').open = false;
+                    document.getElementById('meter-key-fields').hidden = false;
+                    document.getElementById('detected-meter').textContent = 'Meter and security mode are detected automatically';
+                } else {
+                    try {
+                        inspectedTelegram = inspectTelegram(parserApi, telegramInput.value);
+                        showSecurity(inspectedTelegram);
+                    } catch (error) {
+                        showSecurity(null, error);
+                    }
+                }
+                updateDecodeButton();
+            }
+
+            function clearResult() {
+                clearTimeout(tableResizeTimer);
+                renderGeneration += 1;
+                hasDecoded = false;
+                lastFailure = null;
+                window._lastRawOutput = '';
+                updateDownload('', 'txt', 'text/plain');
+                document.getElementById('output-summary').textContent = '';
+                const placeholder = document.createElement('p');
+                placeholder.className = 'output-placeholder';
+                placeholder.textContent = 'Select the main action above to decode this telegram.';
+                document.getElementById('output').replaceChildren(placeholder);
+            }
+
+            telegramInput.addEventListener('input', () => {
+                clearResult();
+                inspectedTelegram = null;
+                document.getElementById('security-panel').hidden = true;
+                document.getElementById('security-details').hidden = true;
+                document.getElementById('security-details').open = false;
+                document.getElementById('detected-meter').textContent = 'Detecting meter and security mode…';
+                updateDecodeButton();
+                clearTimeout(inspectionTimer);
+                inspectionTimer = setTimeout(inspectCurrentTelegram, 250);
+            });
+
+            keyInput.addEventListener('input', () => {
+                clearResult();
+                keyInput.removeAttribute('aria-invalid');
+                document.getElementById('aeskey-error').hidden = true;
+                if (inspectedTelegram) showSecurity(inspectedTelegram);
+                updateDecodeButton();
+            });
+
+            document.getElementById('parser-form').addEventListener('submit', event => {
+                event.preventDefault();
+                parseInput(currentFormat);
+            });
+
+            function selectFormat(format) {
+                currentFormat = format;
+                document.querySelectorAll('.parse-actions input').forEach(button => {
+                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
+                });
+                if (hasDecoded) parseInput(format);
+            }
+
+            const tlsPanel = createTlsSessionPanel(document, () => {
+                clearResult();
+                if (inspectedTelegram) showSecurity(inspectedTelegram);
+                updateDecodeButton();
+            });
+
+            document.querySelectorAll('[data-example]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const example = telegramExamples[button.dataset.example];
+                    inspectedTelegram = null;
+                    tlsPanel.clear();
+                    telegramInput.value = example.telegrams[button.dataset.protocol];
+                    keyInput.value = example.key || '';
+                    keyInput.removeAttribute('aria-invalid');
+                    document.getElementById('aeskey-error').hidden = true;
+                    if (keyInput.type === 'text') keyToggle.click();
+                    if (example.session) tlsPanel.loadSession(example.session);
+                    for (const menu of disclosureMenus) menu.open = false;
+                    document.querySelector('#examples-panel > summary').focus();
+                    parseInput(currentFormat);
+                });
+            });
 
             // Load data and format from URL params and auto-parse if present
             const urlParams = new URLSearchParams(window.location.search);
@@ -1311,34 +1823,36 @@
             if (urlData) {
                 document.getElementById('inputstring').value = urlData;
                 parseInput(urlFormat === 'table_format' ? 'table' : (urlFormat || 'mermaid'));
+            } else {
+                inspectCurrentTelegram();
             }
 
             document.getElementById('parse_json').addEventListener('click', () => {
-                parseInput("json");
+                selectFormat("json");
             });
 
             document.getElementById('parse_yaml').addEventListener('click', () => {
-                parseInput("yaml");
+                selectFormat("yaml");
             });
 
             document.getElementById('parse_table').addEventListener('click', () => {
-                parseInput("table");
+                selectFormat("table");
             });
 
             document.getElementById('parse_csv').addEventListener('click', () => {
-                parseInput("csv");
+                selectFormat("csv");
             });
 
             document.getElementById('parse_mermaid').addEventListener('click', () => {
-                parseInput("mermaid");
+                selectFormat("mermaid");
             });
 
             document.getElementById('parse_xml').addEventListener('click', () => {
-                parseInput("xml");
+                selectFormat("xml");
             });
 
             document.getElementById('parse_hexview').addEventListener('click', () => {
-                parseInput("hexview");
+                selectFormat("hexview");
             });
 
             document.getElementById('copy_output').addEventListener('click', () => {
@@ -1360,15 +1874,23 @@
             });
 
             new ResizeObserver(() => {
-                if (currentFormat !== 'table') return;
+                if (currentFormat !== 'table' || !hasDecoded) return;
                 const width = measureTableWidth();
                 if (width === lastTableWidth) return;
                 clearTimeout(tableResizeTimer);
-                tableResizeTimer = setTimeout(() => parseInput('table', false), 120);
+                tableResizeTimer = setTimeout(() => {
+                    if (hasDecoded && currentFormat === 'table') parseInput('table', false);
+                }, 120);
             }).observe(document.getElementById('output-container'));
 
             async function parseInput(format, updateHistory = true) {
+                const generation = ++renderGeneration;
+                hasDecoded = false;
+                inspectCurrentTelegram();
+                const isTls = inspectedTelegram?.security?.mode_code === 13;
                 format = format === 'table_format' ? 'table' : format;
+                if (!['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview'].includes(format)) format = 'json';
+                if (isTls && format === 'xml') format = 'json';
                 currentFormat = format;
                 document.querySelectorAll('.parse-actions input').forEach(button => {
                     button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
@@ -1388,6 +1910,8 @@
                 updateDownload('', 'txt', 'text/plain');
                 const fail = error => {
                     outputSummary.textContent = '';
+                    hasDecoded = false;
+                    showSecurity(inspectedTelegram, error);
                     lastFailure = { ...attempt, error };
                     renderOutputError(outputContainer, error);
                     appendReportActions(outputContainer, lastFailure);
@@ -1396,6 +1920,19 @@
                 if (updateHistory) {
                     const params = new URLSearchParams({ data: inputString, format });
                     history.replaceState(null, '', `?${params}`);
+                }
+
+                if (!isTls && aesKey && !/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
+                    keyInput.setAttribute('aria-invalid', 'true');
+                    const keyError = document.getElementById('aeskey-error');
+                    keyError.textContent = 'Enter exactly 32 hexadecimal digits (0–9 and A–F).';
+                    keyError.hidden = false;
+                    keyInput.focus();
+                    fail({
+                        code: 'option.invalid',
+                        message: 'AES key must contain exactly 32 hexadecimal characters.',
+                    });
+                    return;
                 }
 
                 let language = 'plaintext';
@@ -1418,27 +1955,20 @@
                 try {
                     const width = format === 'table' ? measureTableWidth() : undefined;
                     if (format === 'table') lastTableWidth = width;
-                    const sessionJson = tlsPanel.sessionJson();
-                    if (!sessionJson && aesKey && !/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
-                        fail({
-                            code: 'option.invalid',
-                            message: 'AES key must contain exactly 32 hexadecimal characters.',
-                        });
-                        return;
-                    }
-                    const api = sessionJson ? {
-                        decode: data => m_bus_decode_tls(data, sessionJson),
-                        frame: (data, outputFormat, key, outputWidth) => m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, false),
-                        application: (data, outputFormat, key, outputWidth) => m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, true),
-                    } : { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
-                    const result = renderWithFallback(api, inputString, format, aesKey || undefined, width);
+                    const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
+                    const result = sessionJson
+                        ? renderTlsPayload(inputString, format, sessionJson, width, inspectedTelegram)
+                        : renderWithFallback(parserApi, inputString, format, isTls ? undefined : aesKey || undefined, width);
                     attempt.mode = result.mode;
                     const formattedResult = result.output;
-                    window._lastRawOutput = formattedResult;
+                    hasDecoded = true;
 
                     if (format === 'hexview') {
                         outputContainer.replaceChildren();
-                        renderHexViewer(outputContainer, formattedResult, inputString);
+                        renderHexViewer(outputContainer, formattedResult, inputString, result.decoded, isTls ? 'Captured TLS telegram' : '');
+                        if (result.plaintext) {
+                            renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
+                        }
                     } else if (format === 'mermaid') {
                         const mermaidDiv = document.createElement('div');
                         mermaidDiv.id = 'mermaid_diagram';
@@ -1454,19 +1984,16 @@
                         );
                     }
 
-                    if (result.security?.mode_code === 13) {
-                        document.getElementById('tls-panel').open = true;
-                        const records = result.security.tls?.records || [];
-                        const recordSummary = records.map(record => `${record.content_type}: ${record.length} bytes`).join(', ');
-                        outputSummary.textContent = result.security.decryption_state === 'decrypted_authenticated'
-                            ? `Mode 13 payload decrypted. Authentication verified. ${recordSummary}`
-                            : `TLS session required. ${recordSummary}`;
-                    } else if (result.security?.mode_code === 10 && result.security.decryption_state === 'decrypted_authenticated') {
-                        outputSummary.textContent = 'Mode 10 payload decrypted. Authentication tag verified.';
+                    if (generation !== renderGeneration) return;
+                    showSecurity(result.decoded);
+                    hasDecoded = true;
+                    window._lastRawOutput = formattedResult;
+                    if (['key_missing', 'session_required'].includes(result.security?.decryption_state)) {
+                        outputSummary.textContent = 'Header information only. The payload remains encrypted.';
+                    } else if (result.mode === 'application') {
+                        outputSummary.textContent = 'Parsed as application-layer data without a link-layer frame.';
                     } else {
-                        outputSummary.textContent = result.mode === 'application'
-                            ? 'Parsed as application-layer data without a link-layer frame.'
-                            : '';
+                        outputSummary.textContent = `${result.mode === 'wireless' ? 'Wireless' : 'Wired'} telegram · ${format === 'hexview' ? 'Hex View' : format.toUpperCase()}`;
                     }
                     if (result.diagnostics.length) {
                         const warning = document.createElement('pre');
@@ -1481,9 +2008,7 @@
                     }
                     updateDownload(formattedResult, extension, mimeType);
                 } catch (error) {
-                    if (error.code?.startsWith('security.tls') || error.code === 'security.authentication_failed') {
-                        document.getElementById('tls-panel').open = true;
-                    }
+                    if (generation !== renderGeneration) return;
                     window._lastRawOutput = '';
                     fail(error);
                     updateDownload('', extension, mimeType);
@@ -1502,6 +2027,8 @@
         }
 
         function updateDownload(content, extension, mimeType) {
+            document.getElementById('copy_output').hidden = !content;
+            document.getElementById('download_output').hidden = !content;
             if (window._lastDownloadUrl) URL.revokeObjectURL(window._lastDownloadUrl);
             const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
             const downloadLink = document.getElementById('download_output');
@@ -1521,7 +2048,123 @@
             container.replaceChildren(output);
         }
 
-        function renderHexViewer(container, annotatedJson, inputString) {
+        function annotateTlsSegments(segments, bytes, tls) {
+            if (!tls?.records?.length) return segments;
+            const payload = [];
+            const payloadOffsets = new Map();
+            for (const segment of segments) {
+                if (segment.kind !== 'encrypted_payload') continue;
+                if (segment.start < 0 || segment.end > bytes.length || segment.start >= segment.end) return segments;
+                payloadOffsets.set(segment, payload.length);
+                for (let index = segment.start; index < segment.end; index++) payload.push(bytes[index]);
+            }
+
+            const isChannelRequest = tls.protocol === 'channel_request';
+            if (payload[0] !== (isChannelRequest ? 0 : 1)) return segments;
+            const contentTypes = {
+                channel_request: 0,
+                change_cipher_spec: 20,
+                alert: 21,
+                handshake: 22,
+                application_data: 23,
+            };
+            const fields = [{
+                start: 0,
+                end: 1,
+                kind: 'tls_extension',
+                detail: isChannelRequest ? 'Channel request' : 'TLS record stream',
+            }];
+            let offset = 1;
+            for (const [index, record] of tls.records.entries()) {
+                const end = offset + 5 + record.length;
+                const version = record.content_type === 'channel_request' ? [0, 0] : [3, 3];
+                if (end > payload.length
+                    || payload[offset] !== contentTypes[record.content_type]
+                    || payload[offset + 1] !== version[0]
+                    || payload[offset + 2] !== version[1]
+                    || payload[offset + 3] * 256 + payload[offset + 4] !== record.length) return segments;
+
+                const label = `TLS record ${index + 1}`;
+                fields.push(
+                    { start: offset, end: offset + 1, kind: 'tls_content_type', detail: `${label}: ${record.content_type.replaceAll('_', ' ')}` },
+                    { start: offset + 1, end: offset + 3, kind: 'tls_version', detail: isChannelRequest ? 'Channel request version: 0x0000' : 'TLS 1.2 (0x0303)' },
+                    { start: offset + 3, end: offset + 5, kind: 'tls_length', detail: `${label} fragment: ${record.length} bytes` },
+                );
+                if (record.length > 0) {
+                    fields.push({
+                        start: offset + 5,
+                        end,
+                        kind: 'tls_fragment',
+                        detail: `${label}: ${record.content_type.replaceAll('_', ' ')} fragment (${record.length} bytes)`,
+                    });
+                }
+                offset = end;
+            }
+            if (offset !== payload.length) return segments;
+
+            return segments.flatMap(segment => {
+                const payloadOffset = payloadOffsets.get(segment);
+                if (payloadOffset === undefined) return [segment];
+                const payloadEnd = payloadOffset + segment.end - segment.start;
+                return fields.filter(field => field.start < payloadEnd && field.end > payloadOffset)
+                    .map(field => ({
+                        start: segment.start + Math.max(field.start - payloadOffset, 0),
+                        end: segment.start + Math.min(field.end, payloadEnd) - payloadOffset,
+                        kind: field.kind,
+                        detail: field.detail,
+                        group: null,
+                        layer: 'tls',
+                    }));
+            });
+        }
+
+        function enrichHexSegments(segments, bytes, records) {
+            const groupHex = new Map();
+            for (const segment of segments) {
+                if (segment.layer !== 'record_field' || segment.group == null) continue;
+                const hex = bytes.slice(segment.start, segment.end)
+                    .map(byte => byte.toString(16).padStart(2, '0')).join('');
+                groupHex.set(segment.group, (groupHex.get(segment.group) || '') + hex);
+            }
+
+            const recordHex = records.map(record =>
+                `${record.header_hex}${record.data_hex}`.replace(/\s/g, '').toLowerCase()
+            );
+            const groupRecords = new Map();
+            let nextRecord = 0;
+            for (const [group, hex] of groupHex) {
+                const index = recordHex.indexOf(hex, nextRecord);
+                if (index === -1) continue;
+                groupRecords.set(group, records[index]);
+                nextRecord = index + 1;
+            }
+
+            return segments.map(segment => {
+                const record = groupRecords.get(segment.group);
+                if (!record || segment.layer !== 'record_field') return segment;
+
+                let detail;
+                if (segment.kind === 'dif' || segment.kind === 'dife') {
+                    detail = `${record.data_coding}; ${record.function}; storage: ${record.storage_number}; tariff: ${record.tariff}; subunit: ${record.subunit}`;
+                } else if (['vif', 'vife', 'plaintext_vif'].includes(segment.kind)) {
+                    detail = `${record.quantities.join(', ') || 'Value'}; unit: ${record.unit || 'none'}`;
+                } else if (segment.kind === 'data_payload') {
+                    const value = record.value.value;
+                    const formatted = value == null
+                        ? (record.value.kind === 'none' ? 'No data' : 'Unsupported value type')
+                        : typeof value === 'object'
+                            ? Object.entries(value).map(([name, component]) => `${name}=${component}`).join(', ')
+                            : String(value);
+                    detail = `${record.quantities.join(', ') || 'Value'}: ${formatted}${record.unit ? ` ${record.unit}` : ''}`;
+                    return { ...segment, detail };
+                } else {
+                    return segment;
+                }
+                return { ...segment, detail: `${segment.detail}; ${detail}` };
+            });
+        }
+
+        function renderHexViewer(container, annotatedJson, inputString, decoded, title = '') {
             let segments;
             let displayBytes = null;
             let errorMessage = null;
@@ -1571,6 +2214,9 @@
                 return;
             }
 
+            segments = annotateTlsSegments(segments, rawBytes, decoded?.security?.tls);
+            segments = enrichHexSegments(segments, rawBytes, decoded?.records || []);
+
             // Build byte-to-segment lookup
             const byteToSeg = new Array(rawBytes.length).fill(null);
             segments.forEach((seg, idx) => {
@@ -1582,7 +2228,7 @@
             // Layer CSS class
             function layerClass(layer) {
                 if (layer === 'frame') return 'hex-layer-frame';
-                if (layer === 'app_header') return 'hex-layer-appheader';
+                if (layer === 'app_header' || layer === 'tls') return 'hex-layer-appheader';
                 return 'hex-layer-record';
             }
             function segmentKindClass(kind) {
@@ -1593,6 +2239,12 @@
             }
 
             // Create viewer structure
+            if (title) {
+                const heading = document.createElement('h3');
+                heading.className = 'hex-view-title';
+                heading.textContent = title;
+                container.appendChild(heading);
+            }
             const viewer = document.createElement('div');
             viewer.className = 'hex-viewer';
 
@@ -1780,7 +2432,7 @@
                     currentGroup = null;
                     const layerLabel = document.createElement('div');
                     layerLabel.className = 'hex-tree-layer';
-                    const layerNames = { 'frame': 'Frame', 'app_header': 'Application Header', 'record_field': 'Data Records' };
+                    const layerNames = { 'frame': 'Frame', 'app_header': 'Application Header', 'record_field': 'Data Records', 'tls': 'TLS Records' };
                     layerLabel.textContent = layerNames[seg.layer] || seg.layer;
                     rightPanel.appendChild(layerLabel);
                     groupBody = null;
