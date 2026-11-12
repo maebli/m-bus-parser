@@ -5,7 +5,10 @@ use std::process::ExitCode;
 use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
-use m_bus_parser::{render_hex, DecodeOptions, OutputFormat, RenderOptions};
+use m_bus_parser::{
+    decode_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
+    OutputFormat, RenderOptions,
+};
 use terminal_size::{terminal_size, Width};
 
 #[derive(Parser)]
@@ -92,7 +95,7 @@ fn run() -> Result<(), String> {
                     Some(100)
                 }
             });
-            let rendered = render_hex(
+            let rendered = render_auto_detected(
                 &input,
                 output_format,
                 &RenderOptions {
@@ -107,6 +110,17 @@ fn run() -> Result<(), String> {
             print!("{rendered}");
             Ok(())
         }
+    }
+}
+
+fn render_auto_detected(
+    input: &str,
+    format: OutputFormat,
+    options: &RenderOptions,
+) -> Result<String, OutputError> {
+    match decode_hex(input, &options.decode) {
+        Err(OutputError::InvalidFrame { .. }) => render_application_hex(input, format, options),
+        _ => render_hex(input, format, options),
     }
 }
 
