@@ -674,6 +674,10 @@
         }
 
         /* ── Interactive Hex Viewer ─────────────────────────── */
+        .hex-view-title {
+            margin: 20px 24px 8px;
+            font-size: 14px;
+        }
         .hex-viewer {
             margin: 16px 24px 24px;
             border: 1px solid #d1d9e0;
@@ -810,7 +814,8 @@
             pointer-events: none;
             z-index: 1000;
             max-width: 350px;
-            white-space: nowrap;
+            white-space: normal;
+            overflow-wrap: anywhere;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             display: none;
         }
@@ -877,7 +882,7 @@
             border-radius: 4px;
             margin: 0 4px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 8px;
         }
         .hex-tree-item:hover,
@@ -896,9 +901,8 @@
             color: #333;
             flex: 1;
             min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
         body.dark-mode .hex-tree-item .tree-kind {
             color: #aaa;
@@ -1142,9 +1146,12 @@
             } catch (error) {
                 if (error.code !== 'frame.invalid') throw error;
                 try {
+                    decoded = JSON.parse(api.application(input, 'json', key, width, true));
                     return {
                         output: api.application(input, format, key, width, true),
                         mode: 'application',
+                        security: decoded.security,
+                        decoded,
                         diagnostics: [],
                     };
                 } catch (applicationError) {
@@ -1162,8 +1169,33 @@
                 output: api.frame(input, format, key, width, true),
                 mode: decoded.protocol,
                 security: decoded.security,
+                decoded,
                 diagnostics: decoded.diagnostics.filter(item => item.severity === 'warning' || item.severity === 'error'),
             };
+        }
+
+        function renderTlsPayload(input, format, sessionJson, width) {
+            const api = {
+                decode: data => m_bus_decode_tls(data, sessionJson),
+                frame: (data, outputFormat, key, outputWidth) => outputFormat === 'hexview'
+                    ? m_bus_render(data, outputFormat, undefined, outputWidth, true)
+                    : m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, false),
+                application: (data, outputFormat, key, outputWidth) => outputFormat === 'hexview'
+                    ? m_bus_render_application(data, outputFormat, undefined, outputWidth, true)
+                    : m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, true),
+            };
+            const result = renderWithFallback(api, input, format, undefined, width);
+            const plaintextHex = result.security?.decrypted_payload_hex;
+            if (format === 'hexview' && result.security?.decryption_state === 'decrypted_authenticated' && plaintextHex) {
+                const annotated = JSON.parse(m_bus_render_application(`78${plaintextHex}`, format));
+                annotated.bytes = annotated.bytes.slice(1);
+                annotated.segments = annotated.segments
+                    .filter(segment => segment.start >= 1)
+                    .map(segment => ({ ...segment, start: segment.start - 1, end: segment.end - 1 }));
+                annotated.decrypted = true;
+                result.plaintext = { output: JSON.stringify(annotated), input: plaintextHex };
+            }
+            return result;
         }
 
         function failureReport(attempt) {
@@ -1426,19 +1458,19 @@
                         });
                         return;
                     }
-                    const api = sessionJson ? {
-                        decode: data => m_bus_decode_tls(data, sessionJson),
-                        frame: (data, outputFormat, key, outputWidth) => m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, false),
-                        application: (data, outputFormat, key, outputWidth) => m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, true),
-                    } : { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
-                    const result = renderWithFallback(api, inputString, format, aesKey || undefined, width);
+                    const result = sessionJson
+                        ? renderTlsPayload(inputString, format, sessionJson, width)
+                        : renderWithFallback({ decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application }, inputString, format, aesKey || undefined, width);
                     attempt.mode = result.mode;
                     const formattedResult = result.output;
                     window._lastRawOutput = formattedResult;
 
                     if (format === 'hexview') {
                         outputContainer.replaceChildren();
-                        renderHexViewer(outputContainer, formattedResult, inputString);
+                        renderHexViewer(outputContainer, formattedResult, inputString, result.decoded, result.security?.mode_code === 13 ? 'Captured TLS telegram' : '');
+                        if (result.plaintext) {
+                            renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
+                        }
                     } else if (format === 'mermaid') {
                         const mermaidDiv = document.createElement('div');
                         mermaidDiv.id = 'mermaid_diagram';
@@ -1521,7 +1553,123 @@
             container.replaceChildren(output);
         }
 
-        function renderHexViewer(container, annotatedJson, inputString) {
+        function annotateTlsSegments(segments, bytes, tls) {
+            if (!tls?.records?.length) return segments;
+            const payload = [];
+            const payloadOffsets = new Map();
+            for (const segment of segments) {
+                if (segment.kind !== 'encrypted_payload') continue;
+                if (segment.start < 0 || segment.end > bytes.length || segment.start >= segment.end) return segments;
+                payloadOffsets.set(segment, payload.length);
+                for (let index = segment.start; index < segment.end; index++) payload.push(bytes[index]);
+            }
+
+            const isChannelRequest = tls.protocol === 'channel_request';
+            if (payload[0] !== (isChannelRequest ? 0 : 1)) return segments;
+            const contentTypes = {
+                channel_request: 0,
+                change_cipher_spec: 20,
+                alert: 21,
+                handshake: 22,
+                application_data: 23,
+            };
+            const fields = [{
+                start: 0,
+                end: 1,
+                kind: 'tls_extension',
+                detail: isChannelRequest ? 'Channel request' : 'TLS record stream',
+            }];
+            let offset = 1;
+            for (const [index, record] of tls.records.entries()) {
+                const end = offset + 5 + record.length;
+                const version = record.content_type === 'channel_request' ? [0, 0] : [3, 3];
+                if (end > payload.length
+                    || payload[offset] !== contentTypes[record.content_type]
+                    || payload[offset + 1] !== version[0]
+                    || payload[offset + 2] !== version[1]
+                    || payload[offset + 3] * 256 + payload[offset + 4] !== record.length) return segments;
+
+                const label = `TLS record ${index + 1}`;
+                fields.push(
+                    { start: offset, end: offset + 1, kind: 'tls_content_type', detail: `${label}: ${record.content_type.replaceAll('_', ' ')}` },
+                    { start: offset + 1, end: offset + 3, kind: 'tls_version', detail: isChannelRequest ? 'Channel request version: 0x0000' : 'TLS 1.2 (0x0303)' },
+                    { start: offset + 3, end: offset + 5, kind: 'tls_length', detail: `${label} fragment: ${record.length} bytes` },
+                );
+                if (record.length > 0) {
+                    fields.push({
+                        start: offset + 5,
+                        end,
+                        kind: 'tls_fragment',
+                        detail: `${label}: ${record.content_type.replaceAll('_', ' ')} fragment (${record.length} bytes)`,
+                    });
+                }
+                offset = end;
+            }
+            if (offset !== payload.length) return segments;
+
+            return segments.flatMap(segment => {
+                const payloadOffset = payloadOffsets.get(segment);
+                if (payloadOffset === undefined) return [segment];
+                const payloadEnd = payloadOffset + segment.end - segment.start;
+                return fields.filter(field => field.start < payloadEnd && field.end > payloadOffset)
+                    .map(field => ({
+                        start: segment.start + Math.max(field.start - payloadOffset, 0),
+                        end: segment.start + Math.min(field.end, payloadEnd) - payloadOffset,
+                        kind: field.kind,
+                        detail: field.detail,
+                        group: null,
+                        layer: 'tls',
+                    }));
+            });
+        }
+
+        function enrichHexSegments(segments, bytes, records) {
+            const groupHex = new Map();
+            for (const segment of segments) {
+                if (segment.layer !== 'record_field' || segment.group == null) continue;
+                const hex = bytes.slice(segment.start, segment.end)
+                    .map(byte => byte.toString(16).padStart(2, '0')).join('');
+                groupHex.set(segment.group, (groupHex.get(segment.group) || '') + hex);
+            }
+
+            const recordHex = records.map(record =>
+                `${record.header_hex}${record.data_hex}`.replace(/\s/g, '').toLowerCase()
+            );
+            const groupRecords = new Map();
+            let nextRecord = 0;
+            for (const [group, hex] of groupHex) {
+                const index = recordHex.indexOf(hex, nextRecord);
+                if (index === -1) continue;
+                groupRecords.set(group, records[index]);
+                nextRecord = index + 1;
+            }
+
+            return segments.map(segment => {
+                const record = groupRecords.get(segment.group);
+                if (!record || segment.layer !== 'record_field') return segment;
+
+                let detail;
+                if (segment.kind === 'dif' || segment.kind === 'dife') {
+                    detail = `${record.data_coding}; ${record.function}; storage: ${record.storage_number}; tariff: ${record.tariff}; subunit: ${record.subunit}`;
+                } else if (['vif', 'vife', 'plaintext_vif'].includes(segment.kind)) {
+                    detail = `${record.quantities.join(', ') || 'Value'}; unit: ${record.unit || 'none'}`;
+                } else if (segment.kind === 'data_payload') {
+                    const value = record.value.value;
+                    const formatted = value == null
+                        ? (record.value.kind === 'none' ? 'No data' : 'Unsupported value type')
+                        : typeof value === 'object'
+                            ? Object.entries(value).map(([name, component]) => `${name}=${component}`).join(', ')
+                            : String(value);
+                    detail = `${record.quantities.join(', ') || 'Value'}: ${formatted}${record.unit ? ` ${record.unit}` : ''}`;
+                    return { ...segment, detail };
+                } else {
+                    return segment;
+                }
+                return { ...segment, detail: `${segment.detail}; ${detail}` };
+            });
+        }
+
+        function renderHexViewer(container, annotatedJson, inputString, decoded, title = '') {
             let segments;
             let displayBytes = null;
             let errorMessage = null;
@@ -1571,6 +1719,9 @@
                 return;
             }
 
+            segments = annotateTlsSegments(segments, rawBytes, decoded?.security?.tls);
+            segments = enrichHexSegments(segments, rawBytes, decoded?.records || []);
+
             // Build byte-to-segment lookup
             const byteToSeg = new Array(rawBytes.length).fill(null);
             segments.forEach((seg, idx) => {
@@ -1582,7 +1733,7 @@
             // Layer CSS class
             function layerClass(layer) {
                 if (layer === 'frame') return 'hex-layer-frame';
-                if (layer === 'app_header') return 'hex-layer-appheader';
+                if (layer === 'app_header' || layer === 'tls') return 'hex-layer-appheader';
                 return 'hex-layer-record';
             }
             function segmentKindClass(kind) {
@@ -1593,6 +1744,12 @@
             }
 
             // Create viewer structure
+            if (title) {
+                const heading = document.createElement('h3');
+                heading.className = 'hex-view-title';
+                heading.textContent = title;
+                container.appendChild(heading);
+            }
             const viewer = document.createElement('div');
             viewer.className = 'hex-viewer';
 
@@ -1780,7 +1937,7 @@
                     currentGroup = null;
                     const layerLabel = document.createElement('div');
                     layerLabel.className = 'hex-tree-layer';
-                    const layerNames = { 'frame': 'Frame', 'app_header': 'Application Header', 'record_field': 'Data Records' };
+                    const layerNames = { 'frame': 'Frame', 'app_header': 'Application Header', 'record_field': 'Data Records', 'tls': 'TLS Records' };
                     layerLabel.textContent = layerNames[seg.layer] || seg.layer;
                     rightPanel.appendChild(layerLabel);
                     groupBody = null;
