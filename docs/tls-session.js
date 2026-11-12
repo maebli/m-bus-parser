@@ -40,7 +40,7 @@ export function parseSessionImport(text) {
     };
 }
 
-export function createTlsSessionPanel(document) {
+export function createTlsSessionPanel(document, onChange = () => {}) {
     const element = id => document.getElementById(`tls-${id}`);
     const sessions = [];
     const fields = {
@@ -54,12 +54,15 @@ export function createTlsSessionPanel(document) {
         for (const [name, input] of Object.entries(fields)) input.value = session[name];
         element('enabled').checked = true;
         element('status').textContent = 'Session loaded in memory. The counter stays fixed for repeated decoding.';
+        onChange();
     };
     let importGeneration = 0;
     element('import').addEventListener('change', async event => {
         const generation = ++importGeneration;
         const file = event.target.files[0];
         if (!file) return;
+        element('enabled').checked = false;
+        onChange();
         try {
             if (file.size > 16_384) throw new Error('Session JSON must be smaller than 16 KB.');
             const text = await file.text();
@@ -75,6 +78,7 @@ export function createTlsSessionPanel(document) {
         } catch (error) {
             element('enabled').checked = false;
             element('status').textContent = error.message;
+            onChange();
         } finally {
             event.target.value = '';
         }
@@ -86,8 +90,10 @@ export function createTlsSessionPanel(document) {
         input.addEventListener('input', () => {
             element('session').value = '';
             element('status').textContent = 'Manual session values. Decode again to apply changes.';
+            onChange();
         });
     }
+    element('enabled').addEventListener('change', onChange);
     const clear = () => {
         importGeneration++;
         sessions.length = 0;
@@ -104,11 +110,18 @@ export function createTlsSessionPanel(document) {
         element('enabled').checked = false;
         element('import').value = '';
         element('status').textContent = 'Session data cleared.';
+        onChange();
     };
     element('clear').addEventListener('click', clear);
     document.defaultView?.addEventListener('pagehide', clear);
     clear();
     return {
+        loadSession(session) {
+            const validated = parseSessionImport(JSON.stringify(session));
+            importGeneration++;
+            element('session').value = '';
+            show(validated);
+        },
         sessionJson() {
             if (!element('enabled').checked) return undefined;
             const session = Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value.trim()]));

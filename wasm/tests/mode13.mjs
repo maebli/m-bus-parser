@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { initSync, m_bus_decode, m_bus_decode_tls, m_bus_render_tls } from '../../docs/m_bus_parser_wasm_pack.js';
+import {
+    initSync,
+    m_bus_decode,
+    m_bus_render,
+    m_bus_render_application,
+    m_bus_decode_tls,
+    m_bus_render_tls,
+} from '../../docs/m_bus_parser_wasm_pack.js';
 import { createTlsSessionPanel, parseSessionImport } from '../../docs/tls-session.js';
 
 initSync({ module: await readFile(new URL('../../docs/m_bus_parser_wasm_pack_bg.wasm', import.meta.url)) });
@@ -24,9 +31,14 @@ class Element {
     textContent = '';
     children = [];
     listeners = new Map();
+    dataset = {};
+    attributes = new Map();
     addEventListener(name, handler) { this.listeners.set(name, handler); }
     append(child) { this.children.push(child); }
     replaceChildren() { this.children = []; this.value = ''; }
+    setAttribute(name, value) { this.attributes.set(name, value); }
+    removeAttribute(name) { this.attributes.delete(name); }
+    focus() {}
     async dispatch(name, event = { target: this }) { await this.listeners.get(name)?.(event); }
 }
 
@@ -125,15 +137,16 @@ test('clearing a session cancels an unfinished file import', async () => {
 });
 
 
-test('page ignores a stale static key when a TLS session is active', async () => {
+test('page ignores a stale static key for detected TLS telegrams', async () => {
     const html = await readFile(new URL('../../docs/index.html', import.meta.url), 'utf8');
-    const fallback = html.slice(html.indexOf('        function renderWithFallback('), html.indexOf('        function failureReport('));
+    const fallback = html.slice(html.indexOf('        function inspectTelegram('), html.indexOf('        function failureReport('));
     const handler = html.slice(html.indexOf('            async function parseInput('), html.indexOf('        }\n\n        function measureTableWidth('));
     for (const tlsActive of [true, false]) {
         const doc = document();
         doc.querySelectorAll = () => [];
         doc.getElementById('inputstring').value = frame;
         doc.getElementById('aeskey').value = 'invalid-stale-key';
+        doc.getElementById('tls-enabled').checked = tlsActive;
         let rendered;
         let failure;
         await runInNewContext(`${fallback}\n${handler}\nparseInput('json', false)`, {
@@ -144,6 +157,12 @@ test('page ignores a stale static key when a TLS session is active', async () =>
             currentFormat: 'json',
             lastFailure: null,
             lastTableWidth: null,
+            renderGeneration: 0,
+            hasDecoded: false,
+            inspectedTelegram: m_bus_decode(frame),
+            inspectCurrentTelegram() {},
+            parserApi: { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application },
+            keyInput: doc.getElementById('aeskey'),
             version: () => 'test',
             tlsPanel: { sessionJson: () => tlsActive ? JSON.stringify(session) : undefined },
             m_bus_decode_tls,
@@ -153,12 +172,10 @@ test('page ignores a stale static key when a TLS session is active', async () =>
             appendReportActions() {},
             async renderCodeViewer(element, source) { rendered = source; },
         });
-        if (tlsActive) {
-            assert.equal(failure, undefined);
-            assert.equal(JSON.parse(rendered).security.decryption_state, 'decrypted_authenticated');
-        } else {
-            assert.equal(failure.code, 'option.invalid');
-            assert.equal(rendered, undefined);
-        }
+        assert.equal(failure, undefined);
+        assert.equal(
+            JSON.parse(rendered).security.decryption_state,
+            tlsActive ? 'decrypted_authenticated' : 'session_required',
+        );
     }
 });
