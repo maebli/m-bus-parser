@@ -154,7 +154,7 @@ fn render_message_with_optional_decryption(
     if !message.transport_header.is_encrypted() || key.is_none() {
         return Ok(render_message(message, None));
     }
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     {
         let mut output = [0; 512];
         let block = block.ok_or_else(|| "missing application message".to_string())?;
@@ -169,7 +169,7 @@ fn render_message_with_optional_decryption(
             .map_err(|error| error.to_string())?;
         Ok(render_message(message, Some(plaintext)))
     }
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     {
         let _ = wireless_id;
         Err("this build does not include decryption support".to_string())
@@ -201,7 +201,7 @@ fn render_with_optional_decryption(
     let Some(key) = key else {
         return Ok(render_variable(header, None));
     };
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     {
         let mut decrypted = [0u8; 512];
         let block = user_data.ok_or_else(|| "encrypted XML frame has no user data".to_string())?;
@@ -213,7 +213,7 @@ fn render_with_optional_decryption(
         let records = user_data::DataRecords::new(data, Some(header));
         Ok(render_variable(header, Some(&records)))
     }
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     {
         let _ = (user_data, wireless_id, key);
         Err("this build does not include decryption support".to_string())
@@ -258,7 +258,7 @@ fn render_wireless_with_optional_decryption(
             None,
         ));
     };
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     {
         let mut decrypted = [0u8; 512];
         let block = parsed
@@ -284,7 +284,7 @@ fn render_wireless_with_optional_decryption(
             Some(&records),
         ))
     }
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     {
         let _ = key;
         Err("this build does not include decryption support".to_string())

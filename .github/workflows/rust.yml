@@ -44,6 +44,14 @@ jobs:
           cargo test -p m-bus-manufacturer --all-targets
           rustup target add thumbv7em-none-eabi
           cargo build -p m-bus-manufacturer --target thumbv7em-none-eabi
+      - name: Test individual decryption modes
+        run: |
+          for mode in 5 7 10; do
+            cargo test -p m-bus-core --no-default-features --features "decryption-mode-$mode"
+            cargo test --no-default-features --features "std,decryption-mode-$mode"
+            cargo check --no-default-features --features "decryption-mode-$mode" --target thumbv7em-none-eabi
+            cargo check -p m-bus-parser-cli -p m-bus-parser-wasm-pack -p pymbusparser --no-default-features --features "decryption-mode-$mode"
+          done
       - name: Lint with Clippy
         run: |
           rustup component add clippy

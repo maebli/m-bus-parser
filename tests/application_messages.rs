@@ -139,7 +139,7 @@ fn malformed_application_payloads_remain_visible_as_partial_frames() {
     }
 }
 
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-mode-5")]
 #[test]
 fn oms_clock_vector_decrypts_without_becoming_measurement_records() {
     let application =

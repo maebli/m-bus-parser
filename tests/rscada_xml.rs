@@ -12,7 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-mode-5")]
 use m_bus_parser::DecodeOptions;
 use m_bus_parser::{render_hex, OutputFormat, RenderOptions};
 
@@ -158,7 +158,7 @@ fn wireless_ell_xml_uses_real_ell_access_without_inventing_tpl_fields() {
     assert!(xml.contains("<DataRecord id=\"0\">"));
 }
 
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-mode-5")]
 #[test]
 fn wireless_encrypted_xml_is_header_only_without_key_and_decodes_with_key() {
     let input = concat!(
