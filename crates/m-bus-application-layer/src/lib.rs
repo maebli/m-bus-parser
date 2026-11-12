@@ -590,6 +590,45 @@ pub enum UserDataBlock<'a> {
 }
 
 impl<'a> UserDataBlock<'a> {
+    #[cfg(feature = "decryption-mode-13")]
+    pub fn mode13_payload(
+        &self,
+    ) -> Result<Option<decryption::mode13::Mode13Payload<'a>>, decryption::mode13::Mode13Error>
+    {
+        let Some((header, data)) = self.transport_payload() else {
+            return Ok(None);
+        };
+        if header.configuration_field.security_mode() != m_bus_core::SecurityMode::SpecificUsage13 {
+            return Ok(None);
+        }
+        let payload = decryption::mode13::Mode13Payload::parse(header.configuration_field, data)?;
+        if payload.is_channel_request() && header.control_information != 0x5f {
+            return Err(decryption::mode13::Mode13Error::InvalidConfiguration);
+        }
+        Ok(Some(payload))
+    }
+
+    #[cfg(feature = "decryption-mode-13")]
+    pub fn transport_payload(&self) -> Option<(&ShortTplHeader, &'a [u8])> {
+        match self {
+            Self::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                variable_data_block,
+                ..
+            } => Some((&long_tpl_header.short_tpl_header, variable_data_block)),
+            Self::VariableDataStructureWithShortTplHeader {
+                short_tpl_header,
+                variable_data_block,
+                ..
+            } => Some((short_tpl_header, variable_data_block)),
+            Self::ApplicationMessage(message) => message
+                .transport_header
+                .short_header()
+                .map(|header| (header, message.payload)),
+            _ => None,
+        }
+    }
+
     /// Returns an iterator over the variable data records in this block.
     ///
     /// Fixed data structures, control messages, and encrypted payloads do not
@@ -845,6 +884,11 @@ impl LongTplHeader {
 }
 
 impl ShortTplHeader {
+    #[cfg(feature = "decryption-mode-13")]
+    pub fn direction(&self) -> Result<Direction, ApplicationLayerError> {
+        ControlInformation::from(self.control_information).map(Direction::from)
+    }
+
     pub(crate) fn parse(
         data: &[u8],
         control_information: u8,

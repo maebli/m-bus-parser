@@ -715,7 +715,7 @@ impl fmt::Display for SecurityMode {
             Self::AesCcm128 => write!(f, "AES-CCM-128"),
             Self::Reserved11 => write!(f, "Reserved for future use"),
             Self::Reserved12 => write!(f, "Reserved for future use"),
-            Self::SpecificUsage13 => write!(f, "Specific usage (Bibliographical Entry [8])"),
+            Self::SpecificUsage13 => write!(f, "TLS (mode 13)"),
             Self::Reserved14 => write!(f, "Reserved for future use"),
             Self::SpecificUsage15 => write!(f, "Specific usage (Bibliographical Entry [7])"),
             Self::ReservedHigher(mode) => write!(f, "Reserved for future use (mode {})", mode),

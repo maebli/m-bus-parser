@@ -46,7 +46,7 @@ jobs:
           cargo build -p m-bus-manufacturer --target thumbv7em-none-eabi
       - name: Test individual decryption modes
         run: |
-          for mode in 5 7 10; do
+          for mode in 5 7 10 13; do
             cargo test -p m-bus-core --no-default-features --features "decryption-mode-$mode"
             cargo test --no-default-features --features "std,decryption-mode-$mode"
             cargo check --no-default-features --features "decryption-mode-$mode" --target thumbv7em-none-eabi
@@ -109,6 +109,11 @@ jobs:
           cargo test --verbose
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Test mode 13 browser sessions
+        run: node --test wasm/tests/mode13.mjs
       - name: Run WASM browser tests
         run: |
           cd wasm

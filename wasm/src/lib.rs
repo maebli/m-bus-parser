@@ -8,6 +8,10 @@ use m_bus_parser::{
 use wasm_bindgen::prelude::*;
 
 mod highlight;
+#[cfg(feature = "decryption-mode-13")]
+mod tls;
+#[cfg(feature = "decryption-mode-13")]
+pub use tls::{m_bus_decode_tls, m_bus_render_tls};
 
 #[wasm_bindgen]
 pub fn version() -> String {

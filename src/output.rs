@@ -22,7 +22,21 @@ use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
 mod messages;
+#[cfg(feature = "decryption-mode-13")]
+mod tls;
+#[cfg(feature = "decryption-mode-13")]
+mod tls_session;
+#[cfg(feature = "decryption-mode-13")]
+use m_bus_core::decryption::mode13::TlsSession;
+#[cfg(feature = "decryption-mode-13")]
+pub use tls::{decode_hex_with_tls_session, render_hex_with_tls_session};
+#[cfg(feature = "decryption-mode-13")]
+pub use tls_session::ImportedTlsSession;
+#[cfg(not(feature = "decryption-mode-13"))]
+struct TlsSession<'a>(core::marker::PhantomData<&'a ()>);
 pub use application::render_application_hex;
+#[cfg(feature = "decryption-mode-13")]
+pub use application::render_application_hex_with_tls_session;
 use messages::application_output;
 
 const SCHEMA_VERSION: u8 = 3;
@@ -325,6 +339,18 @@ pub struct ApplicationOutput {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct TlsRecordOutput {
+    pub content_type: String,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TlsOutput {
+    pub protocol: String,
+    pub records: Vec<TlsRecordOutput>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct SecurityOutput {
     pub payload_protection: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -333,6 +359,8 @@ pub struct SecurityOutput {
     pub mode_code: Option<u8>,
     pub decryption_state: String,
     pub key_supplied: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls: Option<TlsOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypted_payload_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -409,11 +437,16 @@ struct SecurityContext {
     decrypted: bool,
     key_supplied: bool,
     decrypted_payload: Option<Vec<u8>>,
+    tls: Option<TlsOutput>,
 }
 
 impl SecurityContext {
     fn authenticated(&self) -> bool {
-        self.decrypted && matches!(self.mode, Some(SecurityMode::AesCcm128))
+        self.decrypted
+            && matches!(
+                self.mode,
+                Some(SecurityMode::AesCcm128 | SecurityMode::SpecificUsage13)
+            )
     }
 }
 
@@ -427,6 +460,14 @@ pub fn decode_hex(input: &str, options: &DecodeOptions) -> Result<DecodedOutput,
 
 /// Decode an already materialized frame.
 pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
+    decode_bytes_with_session(data, options, None)
+}
+
+fn decode_bytes_with_session(
+    data: &[u8],
+    options: &DecodeOptions,
+    session: Option<&TlsSession<'_>>,
+) -> Result<DecodedOutput, OutputError> {
     if data.is_empty() {
         return Err(OutputError::EmptyInput);
     }
@@ -438,6 +479,7 @@ pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutpu
                 parsed.user_data.as_ref(),
                 None,
                 options.key.as_ref(),
+                session,
                 &mut decrypted_buffer,
             )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
@@ -465,6 +507,7 @@ pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutpu
                 parsed.user_data.as_ref(),
                 Some(&parsed.frame.manufacturer_id),
                 options.key.as_ref(),
+                session,
                 &mut decrypted_buffer,
             )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
@@ -664,9 +707,23 @@ fn prepare_security(
     user_data: Option<&user_data::UserDataBlock<'_>>,
     wireless_id: Option<&wireless::ManufacturerId>,
     key: Option<&[u8; 16]>,
+    session: Option<&TlsSession<'_>>,
     output: &mut [u8],
 ) -> Result<SecurityContext, OutputError> {
     let (encrypted, mode, ell_encrypted) = security_fields(user_data);
+    #[cfg(not(feature = "decryption-mode-13"))]
+    let _ = session;
+    #[cfg(feature = "decryption-mode-13")]
+    if mode == Some(SecurityMode::SpecificUsage13) {
+        return tls::prepare_mode13(user_data, session);
+    }
+    #[cfg(feature = "decryption-mode-13")]
+    if session.is_some() {
+        return Err(OutputError::Decryption {
+            code: "security.tls_transport_required",
+            message: "TLS session decoding requires a mode 13 transport header; remove AFL framing after reassembly".to_string(),
+        });
+    }
     if !encrypted {
         return Ok(SecurityContext {
             encrypted: false,
@@ -675,6 +732,7 @@ fn prepare_security(
             decrypted: false,
             key_supplied: key.is_some(),
             decrypted_payload: None,
+            tls: None,
         });
     }
     let Some(key) = key else {
@@ -685,6 +743,7 @@ fn prepare_security(
             decrypted: false,
             key_supplied: false,
             decrypted_payload: None,
+            tls: None,
         });
     };
     if ell_encrypted && mode.is_none() {
@@ -734,6 +793,7 @@ fn prepare_security(
             decrypted: true,
             key_supplied: true,
             decrypted_payload: Some(decrypted),
+            tls: None,
         })
     }
 
@@ -994,12 +1054,19 @@ fn build_output(
         });
     }
     if security_context.encrypted && !security_context.decrypted {
+        let (code, message) = if security_context.tls.is_some() {
+            ("security.tls_session_required", "TLS records are available; application decryption requires session keys and a record counter. Handshake and channel records require an external TLS endpoint.")
+        } else {
+            (
+                "security.key_missing",
+                "payload is encrypted; header metadata is available but records require a key",
+            )
+        };
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
-            code: "security.key_missing".to_string(),
+            code: code.to_string(),
             layer: "security".to_string(),
-            message: "payload is encrypted; header metadata is available but records require a key"
-                .to_string(),
+            message: message.to_string(),
             offset_start: None,
             offset_end: None,
         });
@@ -1008,8 +1075,12 @@ fn build_output(
             severity: "info".to_string(),
             code: "security.authenticated".to_string(),
             layer: "security".to_string(),
-            message: "AES-CCM payload was decrypted and its authentication tag was verified"
-                .to_string(),
+            message: if security_context.tls.is_some() {
+                "TLS payload was decrypted and its authentication tags were verified"
+            } else {
+                "AES-CCM payload was decrypted and its authentication tag was verified"
+            }
+            .to_string(),
             offset_start: None,
             offset_end: None,
         });
@@ -1075,6 +1146,8 @@ fn build_output(
         "decrypted_authenticated"
     } else if security_context.decrypted {
         "decrypted_unverified"
+    } else if security_context.tls.is_some() {
+        "session_required"
     } else {
         "key_missing"
     };
@@ -1105,6 +1178,7 @@ fn build_output(
             mode_code: mode.map(|value| value.to_bits()),
             decryption_state: decryption_state.to_string(),
             key_supplied: security_context.key_supplied,
+            tls: security_context.tls,
             encrypted_payload_hex,
             decrypted_payload_hex,
         },
