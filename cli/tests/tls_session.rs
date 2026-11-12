@@ -134,6 +134,44 @@ mod enabled {
     }
 
     #[test]
+    fn tls_application_only_input_uses_the_fallback() {
+        let fixture = Fixture::new(SESSION);
+        let application = format!("7a0100ff0d01{}", OPENSSL_AES128_RECORD);
+        fs::write(fixture.directory.join("frame.hex"), application).unwrap();
+
+        let output = fixture.command().output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let decoded = String::from_utf8(output.stdout).unwrap();
+        assert!(decoded.contains("\"protocol\": \"application\""));
+        assert!(decoded.contains("decrypted_authenticated"));
+        assert!(decoded.contains("01132A"));
+    }
+
+    #[test]
+    fn tls_authentication_errors_do_not_use_the_application_fallback() {
+        let fixture = Fixture::new(SESSION);
+        let mut frame = Fixture::frame();
+        frame.pop();
+        frame.push('9');
+        fs::write(fixture.directory.join("frame.hex"), frame).unwrap();
+
+        let output = fixture.command().output().unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            error.contains("[security.authentication_failed]"),
+            "{error}"
+        );
+        assert!(!error.contains("security.tls_transport_required"));
+        assert!(!error.contains("application.invalid"));
+    }
+
+    #[test]
     fn conflicting_keys_and_missing_session_files_are_rejected() {
         let fixture = Fixture::new(SESSION);
         let conflict = fixture
