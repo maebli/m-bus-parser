@@ -18,11 +18,12 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["console_error_panic_hook", "decryption"]
-decryption = ["decryption-mode-5", "decryption-mode-7", "decryption-mode-10"]
+decryption = ["decryption-mode-5", "decryption-mode-7", "decryption-mode-10", "decryption-mode-13"]
 decryption-api = ["m-bus-parser/decryption-api"]
 decryption-mode-5 = ["decryption-api", "m-bus-parser/decryption-mode-5"]
 decryption-mode-7 = ["decryption-api", "m-bus-parser/decryption-mode-7"]
 decryption-mode-10 = ["decryption-api", "m-bus-parser/decryption-mode-10"]
+decryption-mode-13 = ["decryption-api", "m-bus-parser/decryption-mode-13"]
 
 [dependencies]
 wasm-bindgen = "0.2.84"

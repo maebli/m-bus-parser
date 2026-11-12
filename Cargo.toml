@@ -30,11 +30,12 @@ serde_yaml = ["dep:serde_norway"]
 plaintext-before-extension = ["m-bus-application-layer/plaintext-before-extension"]
 serde = ["dep:serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde", "m-bus-application-layer/serde"]
 defmt = ["dep:defmt", "wired-mbus-link-layer/defmt", "wireless-mbus-link-layer/defmt", "m-bus-core/defmt", "m-bus-application-layer/defmt"]
-decryption = ["decryption-mode-5", "decryption-mode-7", "decryption-mode-10"]
+decryption = ["decryption-mode-5", "decryption-mode-7", "decryption-mode-10", "decryption-mode-13"]
 decryption-api = ["m-bus-application-layer/decryption-api"]
 decryption-mode-5 = ["decryption-api", "m-bus-application-layer/decryption-mode-5"]
 decryption-mode-7 = ["decryption-api", "m-bus-application-layer/decryption-mode-7"]
 decryption-mode-10 = ["decryption-api", "m-bus-application-layer/decryption-mode-10"]
+decryption-mode-13 = ["decryption-api", "m-bus-application-layer/decryption-mode-13", "dep:zeroize"]
 
 [profile.release]
 opt-level = 'z'   # Optimize for size
@@ -45,6 +46,7 @@ codegen-units = 1 # Reduce codegen units to improve optimizations
 opt-level = "s"
 
 [dependencies]
+zeroize = { version = "1.9", optional = true, default-features = false, features = ["alloc"] }
 prettytable-rs = { version = "^0.10", optional = true }
 serde_json = { version = "1.0.138", optional = true }
 serde_norway = { version = "0.9.42", optional = true }

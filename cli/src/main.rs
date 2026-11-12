@@ -35,6 +35,14 @@ enum Command {
         #[arg(short = 'k', long)]
         key: Option<String>,
 
+        #[cfg(feature = "decryption-mode-13")]
+        #[arg(
+            long,
+            conflicts_with = "key",
+            help = "JSON file containing TLS session data for mode 13"
+        )]
+        tls_session: Option<PathBuf>,
+
         /// Table width in terminal columns (auto-detected for interactive output)
         #[arg(long)]
         width: Option<usize>,
@@ -63,6 +71,8 @@ fn run() -> Result<(), String> {
             data,
             format,
             key,
+            #[cfg(feature = "decryption-mode-13")]
+            tls_session,
             width,
             no_enrichment,
         } => {
@@ -92,18 +102,36 @@ fn run() -> Result<(), String> {
                     Some(100)
                 }
             });
-            let rendered = render_hex(
-                &input,
-                output_format,
-                &RenderOptions {
-                    decode: DecodeOptions {
-                        key,
-                        include_enrichment: !no_enrichment,
-                    },
-                    table_width: width,
+            let options = RenderOptions {
+                decode: DecodeOptions {
+                    key,
+                    include_enrichment: !no_enrichment,
                 },
-            )
-            .map_err(|error| format!("[{}] {error}", error.code()))?;
+                table_width: width,
+            };
+            #[cfg(feature = "decryption-mode-13")]
+            let rendered = match tls_session {
+                Some(path) => {
+                    let json = fs::read_to_string(&path).map_err(|error| {
+                        format!(
+                            "[input.tls_session] failed to read {}: {error}",
+                            path.display()
+                        )
+                    })?;
+                    let imported = m_bus_parser::output::ImportedTlsSession::from_json(&json)
+                        .map_err(|error| format!("[{}] {error}", error.code()))?;
+                    m_bus_parser::output::render_hex_with_tls_session(
+                        &input,
+                        output_format,
+                        &options,
+                        &imported.session(),
+                    )
+                }
+                None => render_hex(&input, output_format, &options),
+            };
+            #[cfg(not(feature = "decryption-mode-13"))]
+            let rendered = render_hex(&input, output_format, &options);
+            let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
             print!("{rendered}");
             Ok(())
         }

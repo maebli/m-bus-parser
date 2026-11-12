@@ -168,6 +168,15 @@
             font-size: 14px;
         }
 
+        .tls-panel { margin: 16px 0; padding: 14px; border: 1px solid #8b949e; border-radius: 8px; }
+        .tls-panel summary { cursor: pointer; }
+        .tls-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0; }
+        .tls-fields label { display: grid; gap: 6px; font-size: 0.85rem; }
+        .tls-fields input, .tls-fields select { box-sizing: border-box; width: 100%; padding: 8px; margin: 0; }
+        .tls-panel pre { overflow-x: auto; font-size: 0.8rem; }
+        #tls-enabled { width: auto; display: inline; }
+        body.dark-mode .tls-fields input, body.dark-mode .tls-fields select { background: #161b22; color: #e6edf3; border: 1px solid #8b949e; }
+
         .key-input-container {
             position: relative;
             margin-bottom: 0;
@@ -1039,7 +1048,7 @@
             </button>
         </div>
     </div>
-    <form>
+    <form autocomplete="off">
         <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
         <textarea rows="2" cols="80"
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
@@ -1054,6 +1063,32 @@
             </button>
         </div>
         <p class="key-help" id="aeskey-help">Supports AES-128 modes 5 and 7, and mode 10 (OMS profile D) with authentication. Enter 32 hex digits, or leave empty for unencrypted frames.</p>
+
+        <details id="tls-panel" class="tls-panel">
+            <summary>TLS session · mode 13</summary>
+            <p class="key-help">Decode complete TLS 1.2 application records with exported session keys. Session data stays in this page and is cleared on reload. For AFL captures, first reassemble and remove the AFL framing. TLS handshakes are not supported.</p>
+            <label><input type="checkbox" id="tls-enabled" autocomplete="off" /> Use TLS session</label>
+            <div class="tls-fields">
+                <label>Import session JSON<input type="file" id="tls-import" accept=".json,application/json" /></label>
+                <label>Session<select id="tls-session"><option value="">Manual session</option></select></label>
+                <label>Cipher suite<select id="tls-cipher"><option value="TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256">ECDHE-ECDSA · AES-128-GCM · SHA-256</option><option value="TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384">ECDHE-ECDSA · AES-256-GCM · SHA-384</option></select></label>
+                <label>Direction<select id="tls-direction"><option value="client_to_server">Meter → gateway (client → server)</option><option value="server_to_client">Gateway → meter (server → client)</option></select></label>
+                <label>Encryption key (hex)<input type="password" id="tls-key" autocomplete="off" spellcheck="false" placeholder="32 or 64 hex digits" /></label>
+                <label>Fixed nonce salt (hex)<input type="text" id="tls-iv" autocomplete="off" spellcheck="false" placeholder="8 hex digits" /></label>
+                <label>First record counter (decimal)<input type="text" id="tls-counter" autocomplete="off" inputmode="numeric" placeholder="Counter for this captured record" /></label>
+            </div>
+            <p class="key-help">Use the key and salt for the selected direction. The counter counts TLS records, including encrypted handshake records. Repeating a decode does not advance it. TLS session output supports JSON, YAML, Table, CSV, and Diagram.</p>
+            <button type="button" id="tls-clear">Clear session</button>
+            <p id="tls-status" class="key-help" role="status"></p>
+            <details><summary>Session JSON fields</summary><pre>{
+  "name": "Meter session",
+  "cipher_suite": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+  "direction": "client_to_server",
+  "key_hex": "",
+  "fixed_iv_hex": "",
+  "sequence_number": "0"
+}</pre></details>
+        </details>
 
         <div class="parse-actions" role="group" aria-label="Output format">
             <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
@@ -1083,7 +1118,9 @@
         <div id="output" aria-live="polite"><p class="output-placeholder">Choose an output format to parse your payload.</p></div>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, version } from "./m_bus_parser_wasm_pack.js?v=0.6.0";
+        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.6.0-mode13";
+
+        import { createTlsSessionPanel } from "./tls-session.js";
 
         const REPOSITORY = 'https://github.com/maebli/m-bus-parser';
 
@@ -1260,7 +1297,9 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.6.0", import.meta.url));
+            const tlsPanel = createTlsSessionPanel(document);
+
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.6.0-mode13", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
@@ -1359,14 +1398,6 @@
                     history.replaceState(null, '', `?${params}`);
                 }
 
-                if (aesKey && !/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
-                    fail({
-                        code: 'option.invalid',
-                        message: 'AES key must contain exactly 32 hexadecimal characters.',
-                    });
-                    return;
-                }
-
                 let language = 'plaintext';
                 let extension = 'txt';
                 let mimeType = 'text/plain';
@@ -1387,9 +1418,20 @@
                 try {
                     const width = format === 'table' ? measureTableWidth() : undefined;
                     if (format === 'table') lastTableWidth = width;
-                    const result = renderWithFallback({
-                        decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application,
-                    }, inputString, format, aesKey || undefined, width);
+                    const sessionJson = tlsPanel.sessionJson();
+                    if (!sessionJson && aesKey && !/^[0-9A-Fa-f]{32}$/.test(aesKey)) {
+                        fail({
+                            code: 'option.invalid',
+                            message: 'AES key must contain exactly 32 hexadecimal characters.',
+                        });
+                        return;
+                    }
+                    const api = sessionJson ? {
+                        decode: data => m_bus_decode_tls(data, sessionJson),
+                        frame: (data, outputFormat, key, outputWidth) => m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, false),
+                        application: (data, outputFormat, key, outputWidth) => m_bus_render_tls(data, outputFormat, sessionJson, outputWidth, true),
+                    } : { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
+                    const result = renderWithFallback(api, inputString, format, aesKey || undefined, width);
                     attempt.mode = result.mode;
                     const formattedResult = result.output;
                     window._lastRawOutput = formattedResult;
@@ -1412,7 +1454,14 @@
                         );
                     }
 
-                    if (result.security?.mode_code === 10 && result.security.decryption_state === 'decrypted_authenticated') {
+                    if (result.security?.mode_code === 13) {
+                        document.getElementById('tls-panel').open = true;
+                        const records = result.security.tls?.records || [];
+                        const recordSummary = records.map(record => `${record.content_type}: ${record.length} bytes`).join(', ');
+                        outputSummary.textContent = result.security.decryption_state === 'decrypted_authenticated'
+                            ? `Mode 13 payload decrypted. Authentication verified. ${recordSummary}`
+                            : `TLS session required. ${recordSummary}`;
+                    } else if (result.security?.mode_code === 10 && result.security.decryption_state === 'decrypted_authenticated') {
                         outputSummary.textContent = 'Mode 10 payload decrypted. Authentication tag verified.';
                     } else {
                         outputSummary.textContent = result.mode === 'application'
@@ -1432,6 +1481,9 @@
                     }
                     updateDownload(formattedResult, extension, mimeType);
                 } catch (error) {
+                    if (error.code?.startsWith('security.tls') || error.code === 'security.authentication_failed') {
+                        document.getElementById('tls-panel').open = true;
+                    }
                     window._lastRawOutput = '';
                     fail(error);
                     updateDownload('', extension, mimeType);

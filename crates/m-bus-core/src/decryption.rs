@@ -1,3 +1,6 @@
+#[cfg(feature = "decryption-mode-13")]
+pub mod mode13;
+
 use crate::{DeviceType, ManufacturerCode, SecurityMode};
 
 #[cfg(feature = "decryption-mode-10")]
