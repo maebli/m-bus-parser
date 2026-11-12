@@ -5,7 +5,10 @@ use std::process::ExitCode;
 use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
-use m_bus_parser::{render_hex, DecodeOptions, OutputFormat, RenderOptions};
+use m_bus_parser::{
+    decode_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
+    OutputFormat, RenderOptions,
+};
 use terminal_size::{terminal_size, Width};
 
 #[derive(Parser)]
@@ -120,21 +123,43 @@ fn run() -> Result<(), String> {
                     })?;
                     let imported = m_bus_parser::output::ImportedTlsSession::from_json(&json)
                         .map_err(|error| format!("[{}] {error}", error.code()))?;
-                    m_bus_parser::output::render_hex_with_tls_session(
+                    let session = imported.session();
+                    match m_bus_parser::output::render_hex_with_tls_session(
                         &input,
                         output_format,
                         &options,
-                        &imported.session(),
-                    )
+                        &session,
+                    ) {
+                        Err(OutputError::InvalidFrame { .. }) => {
+                            m_bus_parser::output::render_application_hex_with_tls_session(
+                                &input,
+                                output_format,
+                                &options,
+                                &session,
+                            )
+                        }
+                        result => result,
+                    }
                 }
-                None => render_hex(&input, output_format, &options),
+                None => render_auto_detected(&input, output_format, &options),
             };
             #[cfg(not(feature = "decryption-mode-13"))]
-            let rendered = render_hex(&input, output_format, &options);
+            let rendered = render_auto_detected(&input, output_format, &options);
             let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
             print!("{rendered}");
             Ok(())
         }
+    }
+}
+
+fn render_auto_detected(
+    input: &str,
+    format: OutputFormat,
+    options: &RenderOptions,
+) -> Result<String, OutputError> {
+    match decode_hex(input, &options.decode) {
+        Err(OutputError::InvalidFrame { .. }) => render_application_hex(input, format, options),
+        _ => render_hex(input, format, options),
     }
 }
 
