@@ -103,6 +103,30 @@ class BindingsTests(unittest.TestCase):
         display_hex = "".join(f"{byte:02X}" for byte in parsed["bytes"])
         self.assertIn("0C1427048502046D32371F1502FD170000", display_hex)
 
+    def test_mode10_authenticates_payloads_and_rejects_incorrect_keys(self):
+        frame = (
+            "304493157856341233038C20757A7500112A1001B30A0000"
+            "C882038E223BBC1091CEB8C0A1009D388A5AF7883A5B5A7FD6"
+        )
+        key = bytes.fromhex("000102030405060708090A0B0C0D0E0F")
+        parsed = pymbusparser.parse(frame, key=key)
+
+        self.assertEqual(parsed["decode_state"], "complete")
+        self.assertEqual(
+            parsed["security"]["decryption_state"], "decrypted_authenticated"
+        )
+        self.assertEqual(
+            parsed["security"]["decrypted_payload_hex"],
+            "0C1427048502046D32371F1502FD170000",
+        )
+        self.assertEqual(len(parsed["records"]), 3)
+        self.assertEqual(parsed["records"][0]["value"]["value"], "28504.27")
+
+        with self.assertRaisesRegex(
+            pymbusparser.MbusParserError, r"\[security.authentication_failed\]"
+        ):
+            pymbusparser.parse(frame, key=bytes(16))
+
 
 if __name__ == "__main__":
     unittest.main()

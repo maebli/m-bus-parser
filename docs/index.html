@@ -1053,7 +1053,7 @@
                 </svg>
             </button>
         </div>
-        <span id="aeskey-help" hidden>Enter 32 hexadecimal characters (16 bytes). Leave empty for unencrypted frames.</span>
+        <p class="key-help" id="aeskey-help">Supports AES-128 modes 5 and 7, and mode 10 (OMS profile D) with authentication. Enter 32 hex digits, or leave empty for unencrypted frames.</p>
 
         <div class="parse-actions" role="group" aria-label="Output format">
             <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
@@ -1083,7 +1083,7 @@
         <div id="output" aria-live="polite"><p class="output-placeholder">Choose an output format to parse your payload.</p></div>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, version } from "./m_bus_parser_wasm_pack.js?v=0.4.3";
+        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, version } from "./m_bus_parser_wasm_pack.js?v=0.6.0";
 
         const REPOSITORY = 'https://github.com/maebli/m-bus-parser';
 
@@ -1124,6 +1124,7 @@
             return {
                 output: api.frame(input, format, key, width, true),
                 mode: decoded.protocol,
+                security: decoded.security,
                 diagnostics: decoded.diagnostics.filter(item => item.severity === 'warning' || item.severity === 'error'),
             };
         }
@@ -1259,7 +1260,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.4.3", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.6.0", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
@@ -1411,9 +1412,13 @@
                         );
                     }
 
-                    outputSummary.textContent = result.mode === 'application'
-                        ? 'Parsed as application-layer data without a link-layer frame.'
-                        : '';
+                    if (result.security?.mode_code === 10 && result.security.decryption_state === 'decrypted_authenticated') {
+                        outputSummary.textContent = 'Mode 10 payload decrypted. Authentication tag verified.';
+                    } else {
+                        outputSummary.textContent = result.mode === 'application'
+                            ? 'Parsed as application-layer data without a link-layer frame.'
+                            : '';
+                    }
                     if (result.diagnostics.length) {
                         const warning = document.createElement('pre');
                         warning.className = 'output-error';

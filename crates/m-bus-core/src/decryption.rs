@@ -1,8 +1,13 @@
 use crate::{DeviceType, ManufacturerCode, SecurityMode};
 
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-mode-10")]
+mod mode10;
+#[cfg(feature = "decryption-mode-10")]
+pub use mode10::Mode10Payload;
+
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 use aes::Aes128Dec;
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 use cbc::{
     Decryptor,
     cipher::{BlockModeDecrypt, KeyIvInit},
@@ -21,6 +26,8 @@ pub struct KeyContext {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DecryptionError {
     UnsupportedMode(SecurityMode),
+    UnsupportedConfiguration,
+    AuthenticationFailed,
     KeyNotFound,
     DecryptionFailed,
     InvalidKeyLength,
@@ -33,6 +40,8 @@ impl core::fmt::Display for DecryptionError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::UnsupportedMode(mode) => write!(f, "Unsupported security mode: {:?}", mode),
+            Self::UnsupportedConfiguration => write!(f, "Unsupported security configuration"),
+            Self::AuthenticationFailed => write!(f, "Payload authentication failed"),
             Self::KeyNotFound => write!(f, "Decryption key not found"),
             Self::DecryptionFailed => write!(f, "Decryption operation failed"),
             Self::InvalidKeyLength => write!(f, "Invalid key length"),
@@ -63,7 +72,7 @@ impl<'a> EncryptedPayload<'a> {
     }
 
     /// Return plaintext bytes lazily without a payload-sized destination buffer.
-    #[cfg(feature = "decryption")]
+    #[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
     pub fn decrypted_bytes<K: KeyProvider>(
         &self,
         provider: &K,
@@ -71,7 +80,9 @@ impl<'a> EncryptedPayload<'a> {
         let key = provider.get_key(&self.context)?;
         match self.context.security_mode {
             SecurityMode::NoEncryption => Ok(DecryptedBytes::plaintext(self.data)),
+            #[cfg(feature = "decryption-mode-7")]
             SecurityMode::AesCbc128IvZero => DecryptedBytes::cbc(self.data, key, &[0u8; 16]),
+            #[cfg(feature = "decryption-mode-5")]
             SecurityMode::AesCbc128IvNonZero => {
                 DecryptedBytes::cbc(self.data, key, &self._derive_iv())
             }
@@ -80,13 +91,15 @@ impl<'a> EncryptedPayload<'a> {
     }
 
     /// Decrypt into caller-provided contiguous storage.
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     pub fn decrypt_into<K: KeyProvider>(
         &self,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, DecryptionError> {
         let key = provider.get_key(&self.context)?;
+        #[cfg(not(any(feature = "decryption-mode-5", feature = "decryption-mode-7")))]
+        let _ = key;
 
         match self.context.security_mode {
             SecurityMode::NoEncryption => {
@@ -97,9 +110,11 @@ impl<'a> EncryptedPayload<'a> {
                 dest.copy_from_slice(self.data);
                 Ok(len)
             }
+            #[cfg(feature = "decryption-mode-7")]
             SecurityMode::AesCbc128IvZero => {
                 decrypt_aes_cbc_into(self.data, key, &[0u8; 16], output)
             }
+            #[cfg(feature = "decryption-mode-5")]
             SecurityMode::AesCbc128IvNonZero => {
                 let iv = self._derive_iv();
                 decrypt_aes_cbc_into(self.data, key, &iv, output)
@@ -108,7 +123,7 @@ impl<'a> EncryptedPayload<'a> {
         }
     }
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-mode-5")]
     fn _derive_iv(&self) -> [u8; 16] {
         let mut iv = [0u8; 16];
         // Bytes 0-1: Manufacturer ID (numeric, little-endian)
@@ -129,7 +144,7 @@ impl<'a> EncryptedPayload<'a> {
 
 /// Convert a decimal number to BCD bytes (little-endian, 4 bytes)
 /// e.g., 14639203 -> [0x03, 0x92, 0x63, 0x14]
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-10"))]
 fn decimal_to_bcd(mut value: u32) -> [u8; 4] {
     let mut bcd = [0u8; 4];
     for byte in &mut bcd {
@@ -204,7 +219,7 @@ impl<const N: usize> KeyProvider for StaticKeyProvider<N> {
 ///
 /// Contiguous-slice parsers still require a destination buffer; callers that
 /// consume bytes incrementally can use this iterator directly.
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 pub struct DecryptedBytes<'a> {
     input: &'a [u8],
     decryptor: Option<Decryptor<Aes128Dec>>,
@@ -213,7 +228,7 @@ pub struct DecryptedBytes<'a> {
     remaining: usize,
 }
 
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 impl<'a> DecryptedBytes<'a> {
     fn plaintext(input: &'a [u8]) -> Self {
         Self {
@@ -241,7 +256,7 @@ impl<'a> DecryptedBytes<'a> {
     }
 }
 
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 impl Iterator for DecryptedBytes<'_> {
     type Item = u8;
 
@@ -275,13 +290,13 @@ impl Iterator for DecryptedBytes<'_> {
     }
 }
 
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 impl ExactSizeIterator for DecryptedBytes<'_> {}
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 impl core::iter::FusedIterator for DecryptedBytes<'_> {}
 
 // Keep the AES key schedule off the unencrypted caller's stack.
-#[cfg(feature = "decryption")]
+#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 #[inline(never)]
 fn decrypt_aes_cbc_into(
     data: &[u8],
@@ -310,10 +325,11 @@ fn decrypt_aes_cbc_into(
     Ok(data.len())
 }
 
-#[cfg(all(test, feature = "decryption"))]
+#[cfg(all(test, feature = "decryption-api"))]
 mod tests {
     use super::*;
 
+    #[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
     #[test]
     fn test_decrypt_aes_cbc_basic() {
         // Test vector: simple AES-128-CBC decryption
@@ -374,6 +390,7 @@ mod tests {
         assert_eq!(retrieved_key, &key);
     }
 
+    #[cfg(feature = "decryption-mode-5")]
     #[test]
     fn test_derive_iv() {
         let manufacturer_code = ManufacturerCode::from_id(0x1ee6).unwrap(); // GWF
@@ -410,6 +427,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "decryption-mode-5")]
     #[test]
     fn test_mode5_decryption_real_frame() {
         // Test vector from real wMBus Mode 5 encrypted frame
@@ -535,6 +553,7 @@ mod tests {
         let empty = EncryptedPayload::new(&[], plaintext.context);
         assert_eq!(empty.decrypt_into(&provider, &mut []), Ok(0));
     }
+    #[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
     #[test]
     fn lazy_decryption_rejects_invalid_parameters() {
         assert_eq!(
@@ -550,5 +569,70 @@ mod tests {
             Some(DecryptionError::InvalidDataLength)
         );
         assert_eq!(DecryptedBytes::plaintext(&[]).next(), None);
+    }
+
+    fn context_for_mode(security_mode: SecurityMode) -> KeyContext {
+        KeyContext {
+            manufacturer: ManufacturerCode::from_id(0x0421).unwrap(),
+            identification_number: 12345678,
+            version: 1,
+            device_type: DeviceType::WaterMeter,
+            security_mode,
+            access_number: 0,
+        }
+    }
+
+    #[cfg(feature = "decryption-mode-7")]
+    #[test]
+    fn mode7_decrypts_with_buffered_and_lazy_apis() {
+        let ciphertext = [
+            0x66, 0xe9, 0x4b, 0xd4, 0xef, 0x8a, 0x2c, 0x3b, 0x88, 0x4c, 0xfa, 0x59, 0xca, 0x34,
+            0x2b, 0x2e,
+        ];
+        let mut provider = StaticKeyProvider::<1>::new();
+        provider.add_key(0x0421, 12345678, [0; 16]).unwrap();
+        let payload =
+            EncryptedPayload::new(&ciphertext, context_for_mode(SecurityMode::AesCbc128IvZero));
+        let mut output = [0xaa; 16];
+
+        assert_eq!(payload.decrypt_into(&provider, &mut output), Ok(16));
+        assert_eq!(output, [0; 16]);
+        assert!(payload.decrypted_bytes(&provider).unwrap().eq([0; 16]));
+    }
+
+    #[test]
+    fn plaintext_copy_does_not_require_a_cipher_feature() {
+        let mut provider = StaticKeyProvider::<1>::new();
+        provider.add_key(0x0421, 12345678, [0; 16]).unwrap();
+        let payload = EncryptedPayload::new(
+            &[0x01, 0x13, 0x2a],
+            context_for_mode(SecurityMode::NoEncryption),
+        );
+        let mut output = [0xaa; 4];
+
+        assert_eq!(payload.decrypt_into(&provider, &mut output), Ok(3));
+        assert_eq!(output, [0x01, 0x13, 0x2a, 0xaa]);
+    }
+
+    #[test]
+    fn disabled_cbc_modes_are_rejected_without_changing_output() {
+        let mut provider = StaticKeyProvider::<1>::new();
+        provider.add_key(0x0421, 12345678, [0; 16]).unwrap();
+        let disabled_modes: &[SecurityMode] = &[
+            #[cfg(not(feature = "decryption-mode-5"))]
+            SecurityMode::AesCbc128IvNonZero,
+            #[cfg(not(feature = "decryption-mode-7"))]
+            SecurityMode::AesCbc128IvZero,
+        ];
+
+        for &mode in disabled_modes {
+            let payload = EncryptedPayload::new(&[0; 16], context_for_mode(mode));
+            let mut output = [0xaa; 16];
+            assert_eq!(
+                payload.decrypt_into(&provider, &mut output),
+                Err(DecryptionError::UnsupportedMode(mode))
+            );
+            assert_eq!(output, [0xaa; 16]);
+        }
     }
 }

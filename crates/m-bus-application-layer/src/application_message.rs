@@ -226,15 +226,20 @@ impl<'a> ApplicationMessage<'a> {
         let header_bytes = data
             .get(1..)
             .ok_or(ApplicationLayerError::InsufficientData)?;
+        let control_information = *data
+            .first()
+            .ok_or(ApplicationLayerError::MissingControlInformation)?;
         let transport_header = match header_size {
-            4 => TransportHeader::Short(ShortTplHeader::parse(header_bytes)?),
-            12 => TransportHeader::Long(LongTplHeader::parse(header_bytes, false)?),
+            4 => TransportHeader::Short(ShortTplHeader::parse(header_bytes, control_information)?),
+            12 => TransportHeader::Long(LongTplHeader::parse(
+                header_bytes,
+                false,
+                control_information,
+            )?),
             _ => TransportHeader::None,
         };
         let message = Self {
-            control_information: *data
-                .first()
-                .ok_or(ApplicationLayerError::MissingControlInformation)?,
+            control_information,
             protocol,
             transport_header,
             extended_link_layer: None,
@@ -261,7 +266,14 @@ impl<'a> ApplicationMessage<'a> {
     ) -> Result<ApplicationPayload<'b>, ApplicationLayerError> {
         use ApplicationPayload as V;
         use ApplicationProtocol as P;
-        let payload = if self.transport_header.is_encrypted() {
+        let requires_verification = self.transport_header.short_header().is_some_and(|header| {
+            header.is_encrypted()
+                && !matches!(
+                    header.configuration_field.security_mode(),
+                    m_bus_core::SecurityMode::AesCcm128
+                )
+        });
+        let payload = if requires_verification {
             payload
                 .strip_prefix(&[0x2F, 0x2F])
                 .ok_or(ApplicationLayerError::InvalidPayload {

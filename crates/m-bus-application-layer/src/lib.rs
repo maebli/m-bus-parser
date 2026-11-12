@@ -36,7 +36,7 @@ use m_bus_core::{
 pub use variable_user_data::DataRecordError;
 
 pub use self::data_record::DataRecord;
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-api")]
 use m_bus_core::decryption::DecryptionError::{NotEncrypted, UnknownEncryptionState};
 pub use m_bus_core::ApplicationLayerError;
 
@@ -650,13 +650,13 @@ impl<'a> UserDataBlock<'a> {
         }
     }
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     pub fn decrypt_variable_data<K: crate::decryption::KeyProvider>(
         &self,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
-        use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
+        use crate::decryption::{DecryptionError, KeyContext};
 
         match self {
             Self::VariableDataStructureWithLongTplHeader {
@@ -691,8 +691,12 @@ impl<'a> UserDataBlock<'a> {
                     access_number: long_tpl_header.short_tpl_header.access_number,
                 };
 
-                let payload = EncryptedPayload::new(variable_data_block, context);
-                payload.decrypt_into(provider, output)
+                long_tpl_header.short_tpl_header.decrypt_payload(
+                    variable_data_block,
+                    context,
+                    provider,
+                    output,
+                )
             }
             Self::VariableDataStructureWithShortTplHeader {
                 short_tpl_header, ..
@@ -715,7 +719,7 @@ impl<'a> UserDataBlock<'a> {
 
     /// Decrypt variable data when manufacturer info is not available in the TPL header.
     /// Use this for frames with Short TPL header where manufacturer info comes from the link layer.
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     pub fn decrypt_variable_data_with_context<K: crate::decryption::KeyProvider>(
         &self,
         provider: &K,
@@ -725,7 +729,7 @@ impl<'a> UserDataBlock<'a> {
         device_type: DeviceType,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
-        use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
+        use crate::decryption::{DecryptionError, KeyContext};
 
         match self {
             Self::VariableDataStructureWithShortTplHeader {
@@ -753,8 +757,7 @@ impl<'a> UserDataBlock<'a> {
                     access_number: short_tpl_header.access_number,
                 };
 
-                let payload = EncryptedPayload::new(variable_data_block, context);
-                payload.decrypt_into(provider, output)
+                short_tpl_header.decrypt_payload(variable_data_block, context, provider, output)
             }
             Self::VariableDataStructureWithLongTplHeader { .. }
             | Self::ApplicationMessage(ApplicationMessage {
@@ -794,6 +797,8 @@ fn default_manufacturer_result() -> Result<ManufacturerCode, ApplicationLayerErr
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ShortTplHeader {
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub control_information: u8,
     pub access_number: u8,
     pub status: StatusField,
     pub configuration_field: ConfigurationField,
@@ -811,7 +816,11 @@ impl LongTplHeader {
 }
 
 impl LongTplHeader {
-    pub(crate) fn parse(data: &[u8], lsb_order: bool) -> Result<Self, ApplicationLayerError> {
+    pub(crate) fn parse(
+        data: &[u8],
+        lsb_order: bool,
+        control_information: u8,
+    ) -> Result<Self, ApplicationLayerError> {
         let [id0, id1, id2, id3, manufacturer0, manufacturer1, version, device_type, rest @ ..] =
             data
         else {
@@ -829,18 +838,22 @@ impl LongTplHeader {
             ])),
             version: *version,
             device_type: DeviceType::from(*device_type),
-            short_tpl_header: ShortTplHeader::parse(rest)?,
+            short_tpl_header: ShortTplHeader::parse(rest, control_information)?,
             lsb_order,
         })
     }
 }
 
 impl ShortTplHeader {
-    pub(crate) fn parse(data: &[u8]) -> Result<Self, ApplicationLayerError> {
+    pub(crate) fn parse(
+        data: &[u8],
+        control_information: u8,
+    ) -> Result<Self, ApplicationLayerError> {
         let [access, status, config_low, config_high, ..] = data else {
             return Err(ApplicationLayerError::InsufficientData);
         };
         Ok(Self {
+            control_information,
             access_number: *access,
             status: StatusField::from_bits_truncate(*status),
             configuration_field: ConfigurationField::from_bytes(*config_low, *config_high),
@@ -855,6 +868,38 @@ impl ShortTplHeader {
             SecurityMode::NoEncryption
         )
     }
+
+    #[cfg(feature = "decryption-api")]
+    fn decrypt_payload<K: crate::decryption::KeyProvider>(
+        &self,
+        data: &[u8],
+        context: crate::decryption::KeyContext,
+        provider: &K,
+        output: &mut [u8],
+    ) -> Result<usize, crate::decryption::DecryptionError> {
+        use crate::decryption::EncryptedPayload;
+
+        #[cfg(feature = "decryption-mode-10")]
+        if matches!(context.security_mode, m_bus_core::SecurityMode::AesCcm128) {
+            use crate::decryption::{DecryptionError, Mode10Payload};
+
+            let control_information = ControlInformation::from(self.control_information)
+                .map_err(|_| DecryptionError::UnknownEncryptionState)?;
+            return Mode10Payload {
+                data,
+                context,
+                control_information: self.control_information,
+                status: self.status.bits(),
+                configuration: self.configuration_field,
+                from_meter: matches!(
+                    Direction::from(control_information),
+                    Direction::SlaveToMaster
+                ),
+            }
+            .decrypt_into(provider, output);
+        }
+        EncryptedPayload::new(data, context).decrypt_into(provider, output)
+    }
 }
 
 impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
@@ -864,11 +909,10 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
         if data.is_empty() {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
-        let control_information = ControlInformation::from(
-            *data
-                .first()
-                .ok_or(ApplicationLayerError::InsufficientData)?,
-        )?;
+        let control_information_byte = *data
+            .first()
+            .ok_or(ApplicationLayerError::InsufficientData)?;
+        let control_information = ControlInformation::from(control_information_byte)?;
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
@@ -926,6 +970,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ),
                         short_tpl_header: ShortTplHeader {
+                            control_information: control_information_byte,
                             access_number: *iter
                                 .next()
                                 .ok_or(ApplicationLayerError::InsufficientData)?,
@@ -1008,6 +1053,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 
                 Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     short_tpl_header: ShortTplHeader {
+                        control_information: control_information_byte,
                         access_number: *iter
                             .next()
                             .ok_or(ApplicationLayerError::InsufficientData)?,
@@ -1139,6 +1185,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 // Create a ShortTplHeader from ELL fields
                 // For encrypted ELL frames, the ELL fields become the "header"
                 let short_tpl_header = ShortTplHeader {
+                    control_information: control_information_byte,
                     access_number: ell.access_number,
                     status: StatusField::from_bits_truncate(ell.communication_control),
                     configuration_field: ConfigurationField::from_bytes(0x00, 0x00),

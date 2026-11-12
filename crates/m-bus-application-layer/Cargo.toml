@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-application-layer"
-version = "0.5.3"
+version = "0.6.0"
 edition = "2021"
 description = "M-Bus application layer parser (DIF/VIF, data records)"
 license = "MIT"
@@ -12,14 +12,18 @@ default = []
 std = ["m-bus-core/std"]
 serde = ["dep:serde", "bitflags/serde", "m-bus-core/serde"]
 defmt = ["dep:defmt", "m-bus-core/defmt"]
-decryption = ["m-bus-core/decryption"]
+decryption = ["decryption-mode-5", "decryption-mode-7", "decryption-mode-10"]
+decryption-api = ["m-bus-core/decryption-api"]
+decryption-mode-5 = ["decryption-api", "m-bus-core/decryption-mode-5"]
+decryption-mode-7 = ["decryption-api", "m-bus-core/decryption-mode-7"]
+decryption-mode-10 = ["decryption-api", "m-bus-core/decryption-mode-10"]
 plaintext-before-extension = []
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"], optional = true }
 defmt = { version = "1.0.1", optional = true }
 bitflags = "2.8.0"
-m-bus-core = { version = "0.5.3", path = "../m-bus-core" }
+m-bus-core = { version = "0.6.0", path = "../m-bus-core" }
 
 [dev-dependencies]
 bincode = "1.3.3"

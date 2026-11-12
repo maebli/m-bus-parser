@@ -551,23 +551,23 @@ fn build_output<T: serde::Serialize>(
 /// a key is provided, and builds the summary plus only the requested legacy
 /// serialization. Summary-only consumers do not serialize the parsed records.
 #[cfg(feature = "std")]
-#[cfg_attr(not(feature = "decryption"), allow(unused_mut))]
+#[cfg_attr(not(feature = "decryption-api"), allow(unused_mut))]
 fn parse_frame_output(
     input: &str,
     key: Option<&[u8; 16]>,
     format: LegacyOutputFormat,
 ) -> Option<ParsedOutput> {
     let data = clean_and_convert(input);
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     let mut decrypted_buffer = [0u8; 256];
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     let _ = key;
 
     // Try wired first
     if let Ok(mut parsed) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
         let encrypted = user_data_is_encrypted(parsed.user_data.as_ref());
         let mut decrypted = false;
-        #[cfg(feature = "decryption")]
+        #[cfg(feature = "decryption-api")]
         if encrypted {
             if let (Some(key_bytes), Some(user_data)) = (key, parsed.user_data.as_ref()) {
                 if let Some(len) = decrypt_variable_data_with_key(
@@ -612,7 +612,7 @@ fn parse_frame_output(
     {
         let encrypted = user_data_is_encrypted(parsed.user_data.as_ref());
         let mut decrypted = false;
-        #[cfg(feature = "decryption")]
+        #[cfg(feature = "decryption-api")]
         if encrypted {
             if let (Some(key_bytes), Some(user_data)) = (key, parsed.user_data.as_ref()) {
                 if let Some(len) = decrypt_variable_data_with_key(
@@ -1213,7 +1213,7 @@ fn parse_to_annotated(input: &str) -> String {
 fn parse_to_hexview(input: &str, key: Option<&[u8; 16]>) -> String {
     let data = clean_and_convert(input);
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     if let Some(key_bytes) = key {
         if let Some(display_data) = decrypted_hexview_data(&data, key_bytes) {
             return match crate::annotate::annotate_frame(&display_data) {
@@ -1231,7 +1231,7 @@ fn parse_to_hexview(input: &str, key: Option<&[u8; 16]>) -> String {
         }
     }
 
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     let _ = key;
 
     annotated_segments_to_json(&data)
@@ -1249,7 +1249,7 @@ pub(crate) fn render_annotated_bytes(
         }
     })?;
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     if let Some(key_bytes) = key {
         if let Some(display_data) = decrypted_hexview_data(data, key_bytes) {
             let mut display_segments =
@@ -1277,7 +1277,7 @@ pub(crate) fn render_annotated_bytes(
         }
     }
 
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     let _ = key;
 
     serde_json::to_string_pretty(&serde_json::json!({
@@ -1301,12 +1301,12 @@ fn annotated_segments_to_json(data: &[u8]) -> String {
     }
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypted_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
     decrypted_wired_hexview_data(data, key).or_else(|| decrypted_wireless_hexview_data(data, key))
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn replace_encrypted_payload_segments(
     segments: &mut Vec<crate::annotate::ByteSegment>,
     display_data: &[u8],
@@ -1365,7 +1365,7 @@ fn replace_encrypted_payload_segments(
     *segments = rewritten;
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypted_wired_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
     let parsed_data = MbusData::<frames::WiredFrame>::try_from(data).ok()?;
     let user_data = parsed_data.user_data.as_ref()?;
@@ -1413,7 +1413,7 @@ fn decrypted_wired_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> 
     Some(display_data)
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypted_wireless_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
     let mut crc_buf = [0u8; 512];
     let wireless_data =
@@ -1454,7 +1454,7 @@ fn decrypted_wireless_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8
     Some(display_data)
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypt_variable_data_with_key(
     user_data: &user_data::UserDataBlock<'_>,
     wireless_manufacturer_id: Option<&wireless_mbus_link_layer::ManufacturerId>,
@@ -1545,7 +1545,7 @@ mod tests {
         assert!(csv_output.contains("12345678"));
     }
 
-    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[cfg(all(feature = "std", feature = "decryption-mode-5"))]
     #[test]
     fn test_wireless_csv_with_key_contains_records() {
         let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
@@ -1894,7 +1894,7 @@ mod tests {
         assert!(table_output.contains("(3383)[day]"));
     }
 
-    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[cfg(all(feature = "std", feature = "decryption-mode-5"))]
     #[test]
     fn decrypted_utf8_text_is_not_rendered_as_latin1() {
         let input = "2E44931578563412330333637A2A00202557FB8016CA78E1243700B52E981E1918233AFE5E826DD0D4AD7854C697E7C8EB";
@@ -1988,7 +1988,7 @@ mod tests {
         }));
     }
 
-    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[cfg(all(feature = "std", feature = "decryption-mode-5"))]
     #[test]
     fn test_hexview_with_key_displays_decrypted_wireless_payload() {
         let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";

@@ -411,6 +411,12 @@ struct SecurityContext {
     decrypted_payload: Option<Vec<u8>>,
 }
 
+impl SecurityContext {
+    fn authenticated(&self) -> bool {
+        self.decrypted && matches!(self.mode, Some(SecurityMode::AesCcm128))
+    }
+}
+
 /// Decode a human-readable hexadecimal frame.
 pub fn decode_hex(input: &str, options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
     let bytes = decode_hex_bytes(input)?;
@@ -689,7 +695,7 @@ fn prepare_security(
         });
     }
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     {
         let block = user_data.ok_or_else(|| OutputError::Decryption {
             code: "security.unknown_state",
@@ -701,6 +707,12 @@ fn prepare_security(
                     "security.unsupported_mode"
                 }
                 crate::decryption::DecryptionError::InvalidKeyLength => "security.invalid_key",
+                crate::decryption::DecryptionError::UnsupportedConfiguration => {
+                    "security.unsupported_configuration"
+                }
+                crate::decryption::DecryptionError::AuthenticationFailed => {
+                    "security.authentication_failed"
+                }
                 _ => "security.decryption_failed",
             };
             OutputError::Decryption {
@@ -725,7 +737,7 @@ fn prepare_security(
         })
     }
 
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     {
         let _ = (user_data, wireless_id, key, output);
         Err(OutputError::Decryption {
@@ -783,7 +795,7 @@ fn security_fields(
     }
 }
 
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-api")]
 pub(crate) fn decrypt_user_data(
     user_data: &user_data::UserDataBlock<'_>,
     wireless_id: Option<&wireless::ManufacturerId>,
@@ -991,6 +1003,16 @@ fn build_output(
             offset_start: None,
             offset_end: None,
         });
+    } else if security_context.authenticated() {
+        diagnostics.push(Diagnostic {
+            severity: "info".to_string(),
+            code: "security.authenticated".to_string(),
+            layer: "security".to_string(),
+            message: "AES-CCM payload was decrypted and its authentication tag was verified"
+                .to_string(),
+            offset_start: None,
+            offset_end: None,
+        });
     } else if security_context.decrypted {
         diagnostics.push(Diagnostic {
             severity: "info".to_string(),
@@ -1049,6 +1071,8 @@ fn build_output(
         .map(hex_string);
     let decryption_state = if !security_context.encrypted {
         "not_applicable"
+    } else if security_context.authenticated() {
+        "decrypted_authenticated"
     } else if security_context.decrypted {
         "decrypted_unverified"
     } else {
