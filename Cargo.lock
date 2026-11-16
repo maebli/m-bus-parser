@@ -885,6 +885,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "m-bus-parser-c"
+version = "0.7.1"
+dependencies = [
+ "m-bus-parser",
+ "serde_json",
+]
+
+[[package]]
 name = "m-bus-parser-cli"
 version = "0.7.1"
 dependencies = [

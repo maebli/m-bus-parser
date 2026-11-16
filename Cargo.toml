@@ -60,7 +60,7 @@ m-bus-core = { version = "0.7.1", path = "crates/m-bus-core" }
 m-bus-application-layer = { version = "0.7.1", path = "crates/m-bus-application-layer" }
 
 [workspace]
-members = ["crates/m-bus-manufacturer", "cli", "wasm","python", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer", "crates/m-bus-core"]
+members = ["crates/m-bus-manufacturer", "cli", "wasm","python", "c", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer", "crates/m-bus-core"]
 exclude = ["examples/cortex-m"]
 
 [[bench]]
