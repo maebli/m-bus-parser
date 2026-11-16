@@ -567,8 +567,8 @@ pub enum UserDataBlock<'a> {
     },
     VariableDataStructureWithLongTplHeader {
         extended_link_layer: Option<ExtendedLinkLayer>,
-        #[cfg_attr(feature = "serde", serde(borrow))]
-        authentication: Option<AuthenticationHeader<'a>>,
+        #[cfg_attr(feature = "serde", serde(borrow, skip_serializing))]
+        authentication: Option<&'a [u8]>,
         long_tpl_header: LongTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
@@ -576,8 +576,8 @@ pub enum UserDataBlock<'a> {
 
     VariableDataStructureWithShortTplHeader {
         extended_link_layer: Option<ExtendedLinkLayer>,
-        #[cfg_attr(feature = "serde", serde(borrow))]
-        authentication: Option<AuthenticationHeader<'a>>,
+        #[cfg_attr(feature = "serde", serde(borrow, skip_serializing))]
+        authentication: Option<&'a [u8]>,
         short_tpl_header: ShortTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
@@ -595,15 +595,50 @@ pub enum UserDataBlock<'a> {
 }
 
 impl<'a> UserDataBlock<'a> {
-    pub fn authentication(&self) -> Option<&AuthenticationHeader<'a>> {
-        match self {
+    #[inline(never)]
+    fn parse_authenticated(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
+        let authentication = AuthenticationHeader::parse(data)?;
+        let mut block = Self::try_from(authentication.transport)?;
+        if !block.transport_payload().is_some_and(|(header, _)| {
+            header.configuration_field.security_mode() == m_bus_core::SecurityMode::AesCbc128IvZero
+        }) {
+            return Err(ApplicationLayerError::InvalidPayload {
+                field: "authenticated security mode",
+            });
+        }
+        match &mut block {
+            Self::VariableDataStructureWithLongTplHeader {
+                authentication: target,
+                ..
+            }
+            | Self::VariableDataStructureWithShortTplHeader {
+                authentication: target,
+                ..
+            } => *target = Some(data),
+            Self::ApplicationMessage(message)
+                if message.transport_header.short_header().is_some() =>
+            {
+                message.authentication = Some(data);
+            }
+            _ => {
+                return Err(ApplicationLayerError::InvalidPayload {
+                    field: "authenticated transport",
+                })
+            }
+        }
+        Ok(block)
+    }
+
+    pub fn authentication(&self) -> Option<AuthenticationHeader<'a>> {
+        let data = match self {
             Self::VariableDataStructureWithLongTplHeader { authentication, .. }
             | Self::VariableDataStructureWithShortTplHeader { authentication, .. } => {
-                authentication.as_ref()
+                *authentication
             }
-            Self::ApplicationMessage(message) => message.authentication.as_ref(),
+            Self::ApplicationMessage(message) => message.authentication,
             _ => None,
-        }
+        }?;
+        AuthenticationHeader::parse(data).ok()
     }
 
     #[cfg(feature = "decryption-mode-13")]
@@ -940,7 +975,7 @@ impl ShortTplHeader {
         &self,
         data: &[u8],
         context: crate::decryption::KeyContext,
-        authentication: Option<&AuthenticationHeader<'_>>,
+        authentication: Option<AuthenticationHeader<'_>>,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
@@ -959,7 +994,7 @@ impl ShortTplHeader {
                 context,
                 configuration: self.configuration_field,
                 from_meter: matches!(Direction::from(control), Direction::SlaveToMaster),
-                authentication,
+                authentication: &authentication,
             }
             .decrypt_into(provider, output);
         }
@@ -992,37 +1027,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 
     fn try_from(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
         if data.first() == Some(&0x90) {
-            let authentication = AuthenticationHeader::parse(data)?;
-            let mut block = Self::try_from(authentication.transport)?;
-            if !block.transport_payload().is_some_and(|(header, _)| {
-                header.configuration_field.security_mode()
-                    == m_bus_core::SecurityMode::AesCbc128IvZero
-            }) {
-                return Err(ApplicationLayerError::InvalidPayload {
-                    field: "authenticated security mode",
-                });
-            }
-            match &mut block {
-                Self::VariableDataStructureWithLongTplHeader {
-                    authentication: target,
-                    ..
-                }
-                | Self::VariableDataStructureWithShortTplHeader {
-                    authentication: target,
-                    ..
-                } => *target = Some(authentication),
-                Self::ApplicationMessage(message)
-                    if message.transport_header.short_header().is_some() =>
-                {
-                    message.authentication = Some(authentication);
-                }
-                _ => {
-                    return Err(ApplicationLayerError::InvalidPayload {
-                        field: "authenticated transport",
-                    })
-                }
-            }
-            return Ok(block);
+            return Self::parse_authenticated(data);
         }
         if data.is_empty() {
             return Err(ApplicationLayerError::MissingControlInformation);

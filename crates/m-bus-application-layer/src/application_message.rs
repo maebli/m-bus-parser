@@ -124,8 +124,8 @@ pub struct ApplicationMessage<'a> {
     pub protocol: ApplicationProtocol,
     pub transport_header: TransportHeader,
     pub extended_link_layer: Option<crate::extended_link_layer::ExtendedLinkLayer>,
-    #[cfg_attr(feature = "serde", serde(borrow))]
-    pub authentication: Option<m_bus_core::authentication::AuthenticationHeader<'a>>,
+    #[cfg_attr(feature = "serde", serde(borrow, skip_serializing))]
+    pub authentication: Option<&'a [u8]>,
     pub payload: &'a [u8],
 }
 
