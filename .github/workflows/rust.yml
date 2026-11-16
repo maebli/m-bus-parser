@@ -23,8 +23,6 @@ jobs:
           components: clippy, rustfmt
       - name: Check Formatting
         run: cargo fmt -- --check
-      - name: Check online Mode 7 examples
-        run: node --test .github/scripts/test-mode7.mjs
       - name: Security audit
         run: |
           cargo install cargo-audit
@@ -120,6 +118,8 @@ jobs:
         run: |
           cd wasm
           wasm-pack test --headless --firefox
+      - name: Test Mode 7 WebAssembly bindings
+        run: wasm-pack test --node wasm --test mode7
       - name: Lint WASM with Clippy
         run: |
           rustup component add clippy
