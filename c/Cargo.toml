@@ -1,6 +1,6 @@
 [package]
 name = "m-bus-parser-c"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 description = "C bindings for the M-Bus parser"
 license = "MIT"
@@ -12,7 +12,7 @@ name = "mbus_parser"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-m-bus-parser = { path = "..", version = "0.7.1", features = ["std", "serde", "decryption"] }
+m-bus-parser = { path = "..", version = "0.7.2", features = ["std", "serde", "decryption"] }
 serde_json = "1.0"
 
 [lints.rust]

@@ -39,6 +39,7 @@ fn main() {
                     long_tpl_header,
                     variable_data_block,
                     extended_link_layer: _,
+                    ..
                 }) = m_bus_parser::user_data::UserDataBlock::try_from(data)
                 {
                     println!("long_tpl_header: {:#?}", long_tpl_header);

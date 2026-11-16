@@ -8,6 +8,11 @@ mod mode10;
 #[cfg(feature = "decryption-mode-10")]
 pub use mode10::Mode10Payload;
 
+#[cfg(feature = "decryption-mode-7")]
+mod mode7;
+#[cfg(feature = "decryption-mode-7")]
+pub use mode7::Mode7Payload;
+
 #[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
 use aes::Aes128Dec;
 #[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-7"))]
@@ -147,7 +152,11 @@ impl<'a> EncryptedPayload<'a> {
 
 /// Convert a decimal number to BCD bytes (little-endian, 4 bytes)
 /// e.g., 14639203 -> [0x03, 0x92, 0x63, 0x14]
-#[cfg(any(feature = "decryption-mode-5", feature = "decryption-mode-10"))]
+#[cfg(any(
+    feature = "decryption-mode-5",
+    feature = "decryption-mode-7",
+    feature = "decryption-mode-10"
+))]
 fn decimal_to_bcd(mut value: u32) -> [u8; 4] {
     let mut bcd = [0u8; 4];
     for byte in &mut bcd {

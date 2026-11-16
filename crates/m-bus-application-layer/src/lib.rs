@@ -52,6 +52,7 @@ pub use application_message::{
     ApplicationMessage, ApplicationPayload, ApplicationProtocol, TransportHeader,
 };
 use extended_link_layer::ExtendedLinkLayer;
+use m_bus_core::authentication::AuthenticationHeader;
 
 /// Parses an application-layer user data block beginning with a CI field.
 pub fn parse_application_layer(data: &[u8]) -> Result<UserDataBlock<'_>, ApplicationLayerError> {
@@ -566,6 +567,8 @@ pub enum UserDataBlock<'a> {
     },
     VariableDataStructureWithLongTplHeader {
         extended_link_layer: Option<ExtendedLinkLayer>,
+        #[cfg_attr(feature = "serde", serde(borrow, skip_serializing))]
+        authentication: Option<&'a [u8]>,
         long_tpl_header: LongTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
@@ -573,6 +576,8 @@ pub enum UserDataBlock<'a> {
 
     VariableDataStructureWithShortTplHeader {
         extended_link_layer: Option<ExtendedLinkLayer>,
+        #[cfg_attr(feature = "serde", serde(borrow, skip_serializing))]
+        authentication: Option<&'a [u8]>,
         short_tpl_header: ShortTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
@@ -590,6 +595,52 @@ pub enum UserDataBlock<'a> {
 }
 
 impl<'a> UserDataBlock<'a> {
+    #[inline(never)]
+    fn parse_authenticated(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
+        let authentication = AuthenticationHeader::parse(data)?;
+        let mut block = Self::try_from(authentication.transport)?;
+        if !block.transport_payload().is_some_and(|(header, _)| {
+            header.configuration_field.security_mode() == m_bus_core::SecurityMode::AesCbc128IvZero
+        }) {
+            return Err(ApplicationLayerError::InvalidPayload {
+                field: "authenticated security mode",
+            });
+        }
+        match &mut block {
+            Self::VariableDataStructureWithLongTplHeader {
+                authentication: target,
+                ..
+            }
+            | Self::VariableDataStructureWithShortTplHeader {
+                authentication: target,
+                ..
+            } => *target = Some(data),
+            Self::ApplicationMessage(message)
+                if message.transport_header.short_header().is_some() =>
+            {
+                message.authentication = Some(data);
+            }
+            _ => {
+                return Err(ApplicationLayerError::InvalidPayload {
+                    field: "authenticated transport",
+                })
+            }
+        }
+        Ok(block)
+    }
+
+    pub fn authentication(&self) -> Option<AuthenticationHeader<'a>> {
+        let data = match self {
+            Self::VariableDataStructureWithLongTplHeader { authentication, .. }
+            | Self::VariableDataStructureWithShortTplHeader { authentication, .. } => {
+                *authentication
+            }
+            Self::ApplicationMessage(message) => message.authentication,
+            _ => None,
+        }?;
+        AuthenticationHeader::parse(data).ok()
+    }
+
     #[cfg(feature = "decryption-mode-13")]
     pub fn mode13_payload(
         &self,
@@ -608,7 +659,6 @@ impl<'a> UserDataBlock<'a> {
         Ok(Some(payload))
     }
 
-    #[cfg(feature = "decryption-mode-13")]
     pub fn transport_payload(&self) -> Option<(&ShortTplHeader, &'a [u8])> {
         match self {
             Self::VariableDataStructureWithLongTplHeader {
@@ -733,6 +783,7 @@ impl<'a> UserDataBlock<'a> {
                 long_tpl_header.short_tpl_header.decrypt_payload(
                     variable_data_block,
                     context,
+                    self.authentication(),
                     provider,
                     output,
                 )
@@ -796,7 +847,13 @@ impl<'a> UserDataBlock<'a> {
                     access_number: short_tpl_header.access_number,
                 };
 
-                short_tpl_header.decrypt_payload(variable_data_block, context, provider, output)
+                short_tpl_header.decrypt_payload(
+                    variable_data_block,
+                    context,
+                    self.authentication(),
+                    provider,
+                    output,
+                )
             }
             Self::VariableDataStructureWithLongTplHeader { .. }
             | Self::ApplicationMessage(ApplicationMessage {
@@ -918,10 +975,29 @@ impl ShortTplHeader {
         &self,
         data: &[u8],
         context: crate::decryption::KeyContext,
+        authentication: Option<AuthenticationHeader<'_>>,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
         use crate::decryption::EncryptedPayload;
+
+        #[cfg(not(feature = "decryption-mode-7"))]
+        let _ = authentication;
+        #[cfg(feature = "decryption-mode-7")]
+        if context.security_mode == m_bus_core::SecurityMode::AesCbc128IvZero {
+            use crate::decryption::{DecryptionError, Mode7Payload};
+            let authentication = authentication.ok_or(DecryptionError::UnsupportedConfiguration)?;
+            let control = ControlInformation::from(self.control_information)
+                .map_err(|_| DecryptionError::UnknownEncryptionState)?;
+            return Mode7Payload {
+                data,
+                context,
+                configuration: self.configuration_field,
+                from_meter: matches!(Direction::from(control), Direction::SlaveToMaster),
+                authentication: &authentication,
+            }
+            .decrypt_into(provider, output);
+        }
 
         #[cfg(feature = "decryption-mode-10")]
         if matches!(context.security_mode, m_bus_core::SecurityMode::AesCcm128) {
@@ -950,6 +1026,9 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
     type Error = ApplicationLayerError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
+        if data.first() == Some(&0x90) {
+            return Self::parse_authenticated(data);
+        }
         if data.is_empty() {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
@@ -1036,6 +1115,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         .get(13..data.len())
                         .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer: None,
+                    authentication: None,
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
@@ -1117,6 +1197,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         .get(data_block_offset..data.len())
                         .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer: None,
+                    authentication: None,
                 })
             }
             ControlInformation::SynchronizeSlave
@@ -1192,20 +1273,24 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     Ok(UserDataBlock::VariableDataStructureWithLongTplHeader {
                         long_tpl_header,
                         variable_data_block,
+                        authentication,
                         ..
                     }) => Ok(UserDataBlock::VariableDataStructureWithLongTplHeader {
                         extended_link_layer,
                         long_tpl_header,
                         variable_data_block,
+                        authentication,
                     }),
                     Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                         short_tpl_header,
                         variable_data_block,
+                        authentication,
                         ..
                     }) => Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                         extended_link_layer,
                         short_tpl_header,
                         variable_data_block,
+                        authentication,
                     }),
                     Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
                         variable_data_block,
@@ -1237,6 +1322,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 
                 Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     extended_link_layer: Some(ell),
+                    authentication: None,
                     short_tpl_header,
                     variable_data_block: data
                         .get(app_data_offset..)
