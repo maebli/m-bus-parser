@@ -360,6 +360,10 @@ pub struct SecurityOutput {
     pub decryption_state: String,
     pub key_supplied: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_counter: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tls: Option<TlsOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypted_payload_hex: Option<String>,
@@ -445,7 +449,11 @@ impl SecurityContext {
         self.decrypted
             && matches!(
                 self.mode,
-                Some(SecurityMode::AesCcm128 | SecurityMode::SpecificUsage13)
+                Some(
+                    SecurityMode::AesCbc128IvZero
+                        | SecurityMode::AesCcm128
+                        | SecurityMode::SpecificUsage13
+                )
             )
     }
 }
@@ -1178,6 +1186,14 @@ fn build_output(
             mode_code: mode.map(|value| value.to_bits()),
             decryption_state: decryption_state.to_string(),
             key_supplied: security_context.key_supplied,
+            key_id: user_data
+                .filter(|block| block.authentication().is_some())
+                .and_then(|block| block.transport_payload())
+                .and_then(|(_, data)| data.first())
+                .map(|extension| extension & 0x0f),
+            message_counter: user_data
+                .and_then(|block| block.authentication())
+                .map(|header| header.message_counter),
             tls: security_context.tls,
             encrypted_payload_hex,
             decrypted_payload_hex,

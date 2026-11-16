@@ -23,6 +23,8 @@ jobs:
           components: clippy, rustfmt
       - name: Check Formatting
         run: cargo fmt -- --check
+      - name: Check online Mode 7 examples
+        run: node --test .github/scripts/test-mode7.mjs
       - name: Security audit
         run: |
           cargo install cargo-audit

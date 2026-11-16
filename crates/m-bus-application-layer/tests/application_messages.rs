@@ -145,7 +145,7 @@ fn external_protocols_keep_their_identity_header_and_borrowed_payload() {
             assert!(parse_application_layer(&bytes[..length]).is_err());
         }
     }
-    for procedure in 0..8 {
+    for procedure in 1..8 {
         let bytes = [0x90 + procedure, 0x12, 0x34];
         let UserDataBlock::ApplicationMessage(message) = parse_application_layer(&bytes).unwrap()
         else {

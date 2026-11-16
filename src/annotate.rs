@@ -48,6 +48,7 @@ pub enum SegmentKind {
     Crc,
     // Extended link layer
     ExtendedLinkLayer,
+    AuthenticationFragmentationLayer,
     // Opaque payloads
     EncryptedPayload,
     ManufacturerSpecific,
@@ -71,6 +72,9 @@ pub enum SegmentKind {
 impl fmt::Display for SegmentKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::AuthenticationFragmentationLayer => {
+                write!(f, "Authentication and Fragmentation Layer")
+            }
             Self::StartByte => write!(f, "Start Byte"),
             Self::Length => write!(f, "Length"),
             Self::CField => write!(f, "C Field"),
@@ -402,6 +406,32 @@ pub(crate) fn annotate_application_layer(
     }
 
     match ci {
+        0x90 => {
+            if let Ok(header) = m_bus_core::authentication::AuthenticationHeader::parse(app_data) {
+                let length = app_data.len() - header.transport.len();
+                segments.push(ByteSegment {
+                    start: base,
+                    end: base + length,
+                    kind: SegmentKind::AuthenticationFragmentationLayer,
+                    detail: Cow::Owned(format!(
+                        "AES-CMAC authentication · message counter {}",
+                        header.message_counter
+                    )),
+                    group: None,
+                    layer: Layer::AppHeader,
+                });
+                annotate_application_layer(segments, frame_data, base + length, header.transport);
+            } else {
+                segments.push(ByteSegment {
+                    start: base,
+                    end: base + app_data.len(),
+                    kind: SegmentKind::Unknown,
+                    detail: Cow::Borrowed("Invalid or fragmented authentication header"),
+                    group: None,
+                    layer: Layer::AppHeader,
+                });
+            }
+        }
         // Long TPL header (CI=0x72 or CI=0x76)
         0x5B | 0x72 | 0x76 => {
             if app_data.len() < 13 {
