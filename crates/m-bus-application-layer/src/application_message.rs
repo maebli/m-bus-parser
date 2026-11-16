@@ -124,6 +124,8 @@ pub struct ApplicationMessage<'a> {
     pub protocol: ApplicationProtocol,
     pub transport_header: TransportHeader,
     pub extended_link_layer: Option<crate::extended_link_layer::ExtendedLinkLayer>,
+    #[cfg_attr(feature = "serde", serde(borrow))]
+    pub authentication: Option<m_bus_core::authentication::AuthenticationHeader<'a>>,
     pub payload: &'a [u8],
 }
 
@@ -243,6 +245,7 @@ impl<'a> ApplicationMessage<'a> {
             protocol,
             transport_header,
             extended_link_layer: None,
+            authentication: None,
             payload: data
                 .get(1 + header_size..)
                 .ok_or(ApplicationLayerError::InsufficientData)?,

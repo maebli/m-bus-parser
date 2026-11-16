@@ -118,6 +118,8 @@ jobs:
         run: |
           cd wasm
           wasm-pack test --headless --firefox
+      - name: Test Mode 7 WebAssembly bindings
+        run: wasm-pack test --node wasm --test mode7
       - name: Lint WASM with Clippy
         run: |
           rustup component add clippy

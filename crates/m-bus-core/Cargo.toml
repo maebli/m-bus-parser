@@ -14,7 +14,7 @@ defmt = ["dep:defmt"]
 decryption = ["decryption-mode-5", "decryption-mode-7", "decryption-mode-10", "decryption-mode-13"]
 decryption-api = []
 decryption-mode-5 = ["decryption-api", "dep:aes", "dep:cbc", "dep:cipher"]
-decryption-mode-7 = ["decryption-api", "dep:aes", "dep:cbc", "dep:cipher"]
+decryption-mode-7 = ["decryption-api", "dep:aes", "dep:cbc", "dep:cipher", "dep:cmac"]
 decryption-mode-10 = ["decryption-api", "dep:aes", "dep:ccm", "dep:cmac"]
 decryption-mode-13 = ["decryption-api", "dep:aes-gcm"]
 
