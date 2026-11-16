@@ -1203,10 +1203,10 @@
                             </div>
                         </div>
                         <div class="example-option">
-                            <div class="example-description"><strong>Mode 7 · AES-CBC</strong><span>Synthetic header example · verification unavailable</span></div>
+                            <div class="example-description"><strong>Mode 7 · AES-CBC</strong><span>Authenticated readings · OMS reference telegrams</span></div>
                             <div class="example-protocols">
-                                <button type="button" data-example="7" data-protocol="wired" aria-label="Load wired mode 7 header example">Wired</button>
-                                <button type="button" data-example="7" data-protocol="wireless" aria-label="Load wireless mode 7 header example">Wireless</button>
+                                <button type="button" data-example="7" data-protocol="wired" aria-label="Load wired mode 7 example">Wired</button>
+                                <button type="button" data-example="7" data-protocol="wireless" aria-label="Load wireless mode 7 example">Wireless</button>
                             </div>
                         </div>
                         <div class="example-option">
@@ -1315,7 +1315,7 @@
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.1";
+        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.2";
 
         import { createTlsSessionPanel } from "./tls-session.js";
 
@@ -1337,10 +1337,10 @@
             },
             7: {
                 telegrams: {
-                    wired: '6820206808017278563412931533032A0010071066E94BD4EF8A2C3B884CFA59CA342B2E8A16',
-                    wireless: '1F4493157856341233037A2A0010071066E94BD4EF8A2C3B884CFA59CA342B2E',
+                    wired: '683131680803900F002C25B30A0000A08518CCB022C5FD7278563412931533037500100710D371C801D409B0D928D5659759C2EC935B16',
+                    wireless: '434493157856341233037AC98C2075900F002C25B30A000021924D4FBA372FB66E017A75002007109058475F4BC9D1281DF878B80A1B0F98B629024AAC7279429398BFC549233C0140829B93BAA1',
                 },
-                key: '00000000000000000000000000000000',
+                key: '000102030405060708090A0B0C0D0E0F',
             },
             10: {
                 telegrams: {
@@ -1403,7 +1403,7 @@
         function renderWithFallback(api, input, format, key, width) {
             const inspected = inspectTelegram(api, input, width);
             const isApplication = inspected.protocol === 'application';
-            const usableKey = inspected.security?.mode_code === 7 || isApplication ? undefined : key;
+            const usableKey = isApplication ? undefined : key;
             const decoded = usableKey ? api.decode(input, usableKey, true) : inspected;
             return {
                 output: isApplication
@@ -1466,9 +1466,6 @@
                 return { status: 'Unable to decode', tone: 'error', message: error.message || 'Check the telegram and try again.' };
             }
             const security = decoded?.security;
-            if (security?.mode_code === 7) {
-                return { status: 'Mode 7 verification unavailable', tone: 'warning', message: 'This parser cannot yet derive mode 7 keys or verify authentication. Only headers are shown; the key is not used.' };
-            }
             if (security?.decryption_state === 'decrypted_authenticated') {
                 return { status: 'Decrypted and authenticated', tone: 'verified', message: 'The authentication tag was verified. Readings are available below.' };
             }
@@ -1516,7 +1513,7 @@
                 ['Configuration', decoded?.transport?.configuration?.raw],
             ];
             if (mode === 7 || mode === 10) {
-                details.push(['Key ID', 'Not reported by the parser'], ['Message counter', 'Not reported by the parser']);
+                details.push(['Key ID', security.key_id !== undefined ? String(security.key_id) : 'Not reported by the parser'], ['Message counter', security.message_counter !== undefined ? String(security.message_counter) : 'Not reported by the parser']);
             }
             if (security?.tls) {
                 details.push(['TLS records', security.tls.records.map(record => `${record.content_type} · ${record.length} bytes`).join(', ')]);
@@ -1532,9 +1529,7 @@
             document.getElementById('security-details').hidden = false;
             document.getElementById('meter-key-fields').hidden = mode === 13;
             document.getElementById('aeskey-label').textContent = mode === 7 || mode === 10 ? 'Meter master key' : 'Meter key (optional)';
-            document.getElementById('aeskey-help').textContent = mode === 7
-                ? '32 hexadecimal digits. Mode 7 master-key decryption is not available in this version.'
-                : mode === 10
+            document.getElementById('aeskey-help').textContent = mode === 7 || mode === 10
                     ? '32 hexadecimal digits. The parser derives the required keys and verifies authentication.'
                     : '32 hexadecimal digits. Leave empty to inspect headers or read an unencrypted telegram.';
         }
@@ -1688,7 +1683,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.7.1", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.7.2", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;

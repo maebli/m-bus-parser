@@ -129,6 +129,7 @@ fn valid_frames_match_xml_headers_and_records() {
                 long_tpl_header,
                 variable_data_block,
                 extended_link_layer,
+                ..
             } => {
                 assert!(extended_link_layer.is_none(), "{name}");
                 assert!(!long_tpl_header.lsb_order, "{name}");
