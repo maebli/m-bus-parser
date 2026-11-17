@@ -1174,6 +1174,13 @@
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
         <div class="input-tools">
+            <label for="input-format">Input encoding
+                <select id="input-format">
+                    <option value="auto">Auto (hex first)</option>
+                    <option value="hex">Hex</option>
+                    <option value="base64">Base64</option>
+                </select>
+            </label>
             <div id="meter-key-fields">
                 <label for="aeskey" id="aeskey-label" class="visually-hidden">Meter key <span class="key-help">(optional)</span></label>
                 <div class="key-input-container">
@@ -1316,6 +1323,8 @@
     </div>
     <script type="module">
         import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.3";
+
+        import { normalizeInput } from "./input-format.js";
 
         import { createTlsSessionPanel } from "./tls-session.js";
 
@@ -1537,7 +1546,7 @@
         function failureReport(attempt) {
             // Build from the captured attempt, never the current page URL or key field.
             const replay = new URL(attempt.page);
-            replay.search = new URLSearchParams({ data: attempt.payload, format: attempt.format });
+            replay.search = new URLSearchParams({ data: attempt.payload, format: attempt.format, encoding: attempt.encoding || 'auto' });
             replay.hash = '';
             const diagnostics = attempt.error?.attempts || [errorDetails(attempt.error)];
             const indented = value => String(value).split('\n').map(line => `    ${line}`).join('\n');
@@ -1692,6 +1701,11 @@
             let renderGeneration = 0;
             let inspectionTimer;
             const telegramInput = document.getElementById('inputstring');
+            const inputFormat = document.getElementById('input-format');
+            inputFormat.addEventListener('change', () => {
+                clearResult();
+                inspectCurrentTelegram();
+            });
             const decodeButton = document.getElementById('decode-button');
             const parserApi = { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
             decodeButton.disabled = false;
@@ -1733,7 +1747,7 @@
                     document.getElementById('detected-meter').textContent = 'Meter and security mode are detected automatically';
                 } else {
                     try {
-                        inspectedTelegram = inspectTelegram(parserApi, telegramInput.value);
+                        inspectedTelegram = inspectTelegram(parserApi, normalizeInput(telegramInput.value, inputFormat.value));
                         showSecurity(inspectedTelegram);
                     } catch (error) {
                         showSecurity(null, error);
@@ -1801,6 +1815,7 @@
                     inspectedTelegram = null;
                     tlsPanel.clear();
                     telegramInput.value = example.telegrams[button.dataset.protocol];
+                    inputFormat.value = 'auto';
                     keyInput.value = example.key || '';
                     keyInput.removeAttribute('aria-invalid');
                     document.getElementById('aeskey-error').hidden = true;
@@ -1816,6 +1831,8 @@
             const urlParams = new URLSearchParams(window.location.search);
             const urlData = urlParams.get('data');
             const urlFormat = urlParams.get('format');
+            const urlEncoding = urlParams.get('encoding');
+            inputFormat.value = ['hex', 'base64'].includes(urlEncoding) ? urlEncoding : 'auto';
             if (urlData) {
                 document.getElementById('inputstring').value = urlData;
                 parseInput(urlFormat === 'table_format' ? 'table' : (urlFormat || 'mermaid'));
@@ -1857,7 +1874,7 @@
 
             document.getElementById('share_button').addEventListener('click', () => {
                 const inputString = document.getElementById('inputstring').value;
-                const params = new URLSearchParams({ data: inputString, format: currentFormat });
+                const params = new URLSearchParams({ data: inputString, format: currentFormat, encoding: inputFormat.value });
                 const shareUrl = `${location.origin}${location.pathname}?${params}`;
                 navigator.clipboard.writeText(shareUrl);
                 const btn = document.getElementById('share_button');
@@ -1898,7 +1915,7 @@
                 outputSummary.textContent = '';
 
                 const attempt = {
-                    payload: inputString, format, version: version(), keySupplied: Boolean(aesKey),
+                    payload: inputString, format, encoding: inputFormat.value, version: version(), keySupplied: Boolean(aesKey),
                     page: `${location.origin}${location.pathname}`, userAgent: navigator.userAgent,
                 };
                 lastFailure = null;
@@ -1914,7 +1931,7 @@
                 };
 
                 if (updateHistory) {
-                    const params = new URLSearchParams({ data: inputString, format });
+                    const params = new URLSearchParams({ data: inputString, format, encoding: inputFormat.value });
                     history.replaceState(null, '', `?${params}`);
                 }
 
@@ -1949,19 +1966,20 @@
                 }
 
                 try {
+                    const normalizedInput = normalizeInput(inputString, inputFormat.value);
                     const width = format === 'table' ? measureTableWidth() : undefined;
                     if (format === 'table') lastTableWidth = width;
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
                     const result = sessionJson
-                        ? renderTlsPayload(inputString, format, sessionJson, width, inspectedTelegram)
-                        : renderWithFallback(parserApi, inputString, format, isTls ? undefined : aesKey || undefined, width);
+                        ? renderTlsPayload(normalizedInput, format, sessionJson, width, inspectedTelegram)
+                        : renderWithFallback(parserApi, normalizedInput, format, isTls ? undefined : aesKey || undefined, width);
                     attempt.mode = result.mode;
                     const formattedResult = result.output;
                     hasDecoded = true;
 
                     if (format === 'hexview') {
                         outputContainer.replaceChildren();
-                        renderHexViewer(outputContainer, formattedResult, inputString, result.decoded, isTls ? 'Captured TLS telegram' : '');
+                        renderHexViewer(outputContainer, formattedResult, normalizedInput, result.decoded, isTls ? 'Captured TLS telegram' : '');
                         if (result.plaintext) {
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
