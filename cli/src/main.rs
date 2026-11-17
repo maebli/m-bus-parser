@@ -11,6 +11,9 @@ use m_bus_parser::{
 };
 use terminal_size::{terminal_size, Width};
 
+mod input;
+use input::{normalize_input, InputFormat};
+
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
@@ -22,13 +25,29 @@ struct Cli {
 enum Command {
     /// Parse an M-Bus data file
     Parse {
-        /// File containing a hexadecimal M-Bus frame
-        #[arg(short = 'f', long, conflicts_with = "data")]
+        #[arg(
+            short = 'f',
+            long,
+            conflicts_with = "data",
+            help = "File containing a hex or Base64 M-Bus frame"
+        )]
         file: Option<PathBuf>,
 
-        /// Raw hexadecimal M-Bus frame
-        #[arg(short = 'd', long, conflicts_with = "file")]
+        #[arg(
+            short = 'd',
+            long,
+            conflicts_with = "file",
+            help = "Hex or Base64 M-Bus frame"
+        )]
         data: Option<String>,
+
+        #[arg(
+            long,
+            value_enum,
+            default_value = "auto",
+            help = "Input encoding (auto prefers valid hex)"
+        )]
+        input_format: InputFormat,
 
         /// Output format: table, json, yaml, csv, mermaid, xml, annotated, annotated-text
         #[arg(short = 't', long, default_value = "table")]
@@ -72,6 +91,7 @@ fn run() -> Result<(), String> {
         Command::Parse {
             file,
             data,
+            input_format,
             format,
             key,
             #[cfg(feature = "decryption-mode-13")]
@@ -91,6 +111,7 @@ fn run() -> Result<(), String> {
                 }
                 (Some(_), Some(_)) => unreachable!("clap enforces conflicts"),
             };
+            let input = normalize_input(&input, input_format)?;
             let output_format = OutputFormat::from_str(&format)
                 .map_err(|error| format!("[{}] {error}", error.code()))?;
             let key = key
