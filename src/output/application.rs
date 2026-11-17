@@ -11,6 +11,26 @@ pub fn render_application_hex(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
+    render_application_with_session(input, format, options, None)
+}
+
+#[cfg(feature = "decryption-mode-13")]
+pub fn render_application_hex_with_tls_session(
+    input: &str,
+    format: OutputFormat,
+    options: &RenderOptions,
+    session: &TlsSession<'_>,
+) -> Result<String, OutputError> {
+    tls::require_tls_output_format(format)?;
+    render_application_with_session(input, format, options, Some(session))
+}
+
+fn render_application_with_session(
+    input: &str,
+    format: OutputFormat,
+    options: &RenderOptions,
+    session: Option<&TlsSession<'_>>,
+) -> Result<String, OutputError> {
     let data = decode_hex_bytes(input)?;
     let block = match user_data::parse_application_layer(&data) {
         Ok(block) => Some(block),
@@ -31,9 +51,10 @@ pub fn render_application_hex(
         block.as_ref(),
         None,
         options.decode.key.as_ref(),
+        session,
         &mut buffer,
     )?;
-    if security.encrypted && !security.decrypted {
+    if security.encrypted && !security.decrypted && security.tls.is_none() {
         return Err(OutputError::Decryption {
             code: "security.key_missing",
             message: "application payload is encrypted; supply an AES key to decode its records"
@@ -83,6 +104,20 @@ pub fn render_application_hex(
         });
     }
     if format == OutputFormat::Xml {
+        if let Some(user_data::UserDataBlock::ApplicationMessage(message)) = &block {
+            if let Some(plaintext) = security.decrypted_payload.as_deref() {
+                message
+                    .decode_payload(plaintext)
+                    .map_err(|error| OutputError::Rendering {
+                        code: "application.payload_invalid",
+                        message: error.to_string(),
+                    })?;
+            }
+            return Ok(crate::rscada_xml::render_message(
+                message,
+                security.decrypted_payload.as_deref(),
+            ));
+        }
         return Ok(crate::rscada_xml::render_application(
             block.as_ref(),
             records.as_ref(),

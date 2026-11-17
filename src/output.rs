@@ -21,7 +21,23 @@ use crate::user_data::data_information::{
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
+mod messages;
+#[cfg(feature = "decryption-mode-13")]
+mod tls;
+#[cfg(feature = "decryption-mode-13")]
+mod tls_session;
+#[cfg(feature = "decryption-mode-13")]
+use m_bus_core::decryption::mode13::TlsSession;
+#[cfg(feature = "decryption-mode-13")]
+pub use tls::{decode_hex_with_tls_session, render_hex_with_tls_session};
+#[cfg(feature = "decryption-mode-13")]
+pub use tls_session::ImportedTlsSession;
+#[cfg(not(feature = "decryption-mode-13"))]
+struct TlsSession<'a>(core::marker::PhantomData<&'a ()>);
 pub use application::render_application_hex;
+#[cfg(feature = "decryption-mode-13")]
+pub use application::render_application_hex_with_tls_session;
+use messages::application_output;
 
 const SCHEMA_VERSION: u8 = 3;
 const DEFAULT_TABLE_WIDTH: usize = 100;
@@ -220,6 +236,8 @@ pub struct DecodedOutput {
     pub frame: FrameOutput,
     pub meter: MeterOutput,
     pub transport: TransportOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub application: Option<ApplicationOutput>,
     pub security: SecurityOutput,
     pub records: Vec<RecordOutput>,
     pub raw: RawOutput,
@@ -299,6 +317,8 @@ pub struct EllOutput {
 pub struct TransportOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_address_mask: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub access_numbers: Vec<SourcedU8>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -310,6 +330,27 @@ pub struct TransportOutput {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ApplicationOutput {
+    pub control_information: String,
+    pub protocol: String,
+    pub payload_hex: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decoded: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TlsRecordOutput {
+    pub content_type: String,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TlsOutput {
+    pub protocol: String,
+    pub records: Vec<TlsRecordOutput>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct SecurityOutput {
     pub payload_protection: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -318,6 +359,12 @@ pub struct SecurityOutput {
     pub mode_code: Option<u8>,
     pub decryption_state: String,
     pub key_supplied: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_counter: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls: Option<TlsOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypted_payload_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -394,6 +441,21 @@ struct SecurityContext {
     decrypted: bool,
     key_supplied: bool,
     decrypted_payload: Option<Vec<u8>>,
+    tls: Option<TlsOutput>,
+}
+
+impl SecurityContext {
+    fn authenticated(&self) -> bool {
+        self.decrypted
+            && matches!(
+                self.mode,
+                Some(
+                    SecurityMode::AesCbc128IvZero
+                        | SecurityMode::AesCcm128
+                        | SecurityMode::SpecificUsage13
+                )
+            )
+    }
 }
 
 /// Decode a human-readable hexadecimal frame.
@@ -406,6 +468,14 @@ pub fn decode_hex(input: &str, options: &DecodeOptions) -> Result<DecodedOutput,
 
 /// Decode an already materialized frame.
 pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
+    decode_bytes_with_session(data, options, None)
+}
+
+fn decode_bytes_with_session(
+    data: &[u8],
+    options: &DecodeOptions,
+    session: Option<&TlsSession<'_>>,
+) -> Result<DecodedOutput, OutputError> {
     if data.is_empty() {
         return Err(OutputError::EmptyInput);
     }
@@ -417,6 +487,7 @@ pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutpu
                 parsed.user_data.as_ref(),
                 None,
                 options.key.as_ref(),
+                session,
                 &mut decrypted_buffer,
             )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
@@ -444,6 +515,7 @@ pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutpu
                 parsed.user_data.as_ref(),
                 Some(&parsed.frame.manufacturer_id),
                 options.key.as_ref(),
+                session,
                 &mut decrypted_buffer,
             )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
@@ -643,9 +715,23 @@ fn prepare_security(
     user_data: Option<&user_data::UserDataBlock<'_>>,
     wireless_id: Option<&wireless::ManufacturerId>,
     key: Option<&[u8; 16]>,
+    session: Option<&TlsSession<'_>>,
     output: &mut [u8],
 ) -> Result<SecurityContext, OutputError> {
     let (encrypted, mode, ell_encrypted) = security_fields(user_data);
+    #[cfg(not(feature = "decryption-mode-13"))]
+    let _ = session;
+    #[cfg(feature = "decryption-mode-13")]
+    if mode == Some(SecurityMode::SpecificUsage13) {
+        return tls::prepare_mode13(user_data, session);
+    }
+    #[cfg(feature = "decryption-mode-13")]
+    if session.is_some() {
+        return Err(OutputError::Decryption {
+            code: "security.tls_transport_required",
+            message: "TLS session decoding requires a mode 13 transport header; remove AFL framing after reassembly".to_string(),
+        });
+    }
     if !encrypted {
         return Ok(SecurityContext {
             encrypted: false,
@@ -654,6 +740,7 @@ fn prepare_security(
             decrypted: false,
             key_supplied: key.is_some(),
             decrypted_payload: None,
+            tls: None,
         });
     }
     let Some(key) = key else {
@@ -664,6 +751,7 @@ fn prepare_security(
             decrypted: false,
             key_supplied: false,
             decrypted_payload: None,
+            tls: None,
         });
     };
     if ell_encrypted && mode.is_none() {
@@ -674,7 +762,7 @@ fn prepare_security(
         });
     }
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     {
         let block = user_data.ok_or_else(|| OutputError::Decryption {
             code: "security.unknown_state",
@@ -686,6 +774,12 @@ fn prepare_security(
                     "security.unsupported_mode"
                 }
                 crate::decryption::DecryptionError::InvalidKeyLength => "security.invalid_key",
+                crate::decryption::DecryptionError::UnsupportedConfiguration => {
+                    "security.unsupported_configuration"
+                }
+                crate::decryption::DecryptionError::AuthenticationFailed => {
+                    "security.authentication_failed"
+                }
                 _ => "security.decryption_failed",
             };
             OutputError::Decryption {
@@ -707,10 +801,11 @@ fn prepare_security(
             decrypted: true,
             key_supplied: true,
             decrypted_payload: Some(decrypted),
+            tls: None,
         })
     }
 
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     {
         let _ = (user_data, wireless_id, key, output);
         Err(OutputError::Decryption {
@@ -725,6 +820,13 @@ fn security_fields(
 ) -> (bool, Option<SecurityMode>, bool) {
     use user_data::UserDataBlock;
     match user_data {
+        Some(UserDataBlock::ApplicationMessage(message)) => {
+            let mode = message
+                .transport_header
+                .short_header()
+                .map(|header| header.configuration_field.security_mode());
+            (message.transport_header.is_encrypted(), mode, false)
+        }
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header, ..
         }) => {
@@ -761,7 +863,7 @@ fn security_fields(
     }
 }
 
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-api")]
 pub(crate) fn decrypt_user_data(
     user_data: &user_data::UserDataBlock<'_>,
     wireless_id: Option<&wireless::ManufacturerId>,
@@ -773,7 +875,11 @@ pub(crate) fn decrypt_user_data(
     match user_data {
         UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header, ..
-        } => {
+        }
+        | UserDataBlock::ApplicationMessage(user_data::ApplicationMessage {
+            transport_header: user_data::TransportHeader::Long(long_tpl_header),
+            ..
+        }) => {
             let manufacturer = long_tpl_header
                 .manufacturer
                 .map_err(|_| crate::decryption::DecryptionError::UnknownEncryptionState)?;
@@ -786,7 +892,11 @@ pub(crate) fn decrypt_user_data(
         }
         UserDataBlock::VariableDataStructureWithShortTplHeader {
             short_tpl_header, ..
-        } => {
+        }
+        | UserDataBlock::ApplicationMessage(user_data::ApplicationMessage {
+            transport_header: user_data::TransportHeader::Short(short_tpl_header),
+            ..
+        }) => {
             if matches!(
                 short_tpl_header.configuration_field.security_mode(),
                 SecurityMode::NoEncryption
@@ -952,12 +1062,33 @@ fn build_output(
         });
     }
     if security_context.encrypted && !security_context.decrypted {
+        let (code, message) = if security_context.tls.is_some() {
+            ("security.tls_session_required", "TLS records are available; application decryption requires session keys and a record counter. Handshake and channel records require an external TLS endpoint.")
+        } else {
+            (
+                "security.key_missing",
+                "payload is encrypted; header metadata is available but records require a key",
+            )
+        };
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
-            code: "security.key_missing".to_string(),
+            code: code.to_string(),
             layer: "security".to_string(),
-            message: "payload is encrypted; header metadata is available but records require a key"
-                .to_string(),
+            message: message.to_string(),
+            offset_start: None,
+            offset_end: None,
+        });
+    } else if security_context.authenticated() {
+        diagnostics.push(Diagnostic {
+            severity: "info".to_string(),
+            code: "security.authenticated".to_string(),
+            layer: "security".to_string(),
+            message: if security_context.tls.is_some() {
+                "TLS payload was decrypted and its authentication tags were verified"
+            } else {
+                "AES-CCM payload was decrypted and its authentication tag was verified"
+            }
+            .to_string(),
             offset_start: None,
             offset_end: None,
         });
@@ -994,6 +1125,11 @@ fn build_output(
     }
 
     let (meter, transport) = meter_and_transport(user_data, wireless_id);
+    let (application, application_diagnostic) = application_output(user_data, &security_context);
+    let application_partial = application_diagnostic.is_some();
+    if let Some(diagnostic) = application_diagnostic {
+        diagnostics.push(diagnostic);
+    }
     let enrichment = if include_enrichment {
         meter
             .identity
@@ -1014,8 +1150,12 @@ fn build_output(
         .map(hex_string);
     let decryption_state = if !security_context.encrypted {
         "not_applicable"
+    } else if security_context.authenticated() {
+        "decrypted_authenticated"
     } else if security_context.decrypted {
         "decrypted_unverified"
+    } else if security_context.tls.is_some() {
+        "session_required"
     } else {
         "key_missing"
     };
@@ -1028,6 +1168,7 @@ fn build_output(
     };
     let mode = security_context.mode;
     let partial = application_error.is_some()
+        || application_partial
         || record_error.is_some()
         || (security_context.encrypted && !security_context.decrypted);
 
@@ -1038,12 +1179,22 @@ fn build_output(
         frame,
         meter,
         transport,
+        application,
         security: SecurityOutput {
             payload_protection: payload_protection.to_string(),
             mode: mode.map(|value| value.to_string()),
             mode_code: mode.map(|value| value.to_bits()),
             decryption_state: decryption_state.to_string(),
             key_supplied: security_context.key_supplied,
+            key_id: user_data
+                .filter(|block| block.authentication().is_some())
+                .and_then(|block| block.transport_payload())
+                .and_then(|(_, data)| data.first())
+                .map(|extension| extension & 0x0f),
+            message_counter: user_data
+                .and_then(|block| block.authentication())
+                .map(|header| header.message_counter),
+            tls: security_context.tls,
             encrypted_payload_hex,
             decrypted_payload_hex,
         },
@@ -1071,6 +1222,7 @@ fn meter_and_transport(
     let mut alternates = Vec::new();
     let mut transport = TransportOutput {
         header_kind: None,
+        secondary_address_mask: None,
         access_numbers: Vec::new(),
         statuses: Vec::new(),
         configuration: None,
@@ -1171,6 +1323,39 @@ fn meter_and_transport(
         }
         Some(UserDataBlock::ResetAtApplicationLevel { .. }) => {
             transport.header_kind = Some("application_reset".to_string());
+        }
+        Some(UserDataBlock::SelectSlave { secondary_address }) => {
+            transport.header_kind = Some("slave_selection".to_string());
+            transport.secondary_address_mask = Some(secondary_address.to_string());
+        }
+        Some(UserDataBlock::ApplicationMessage(message)) => {
+            transport.header_kind = Some(
+                match &message.transport_header {
+                    user_data::TransportHeader::None => "none",
+                    user_data::TransportHeader::Short(_) => "short_tpl",
+                    user_data::TransportHeader::Long(_) => "long_tpl",
+                }
+                .to_string(),
+            );
+            if let Some(header) = message.transport_header.long_header() {
+                let identity = identity_from_long(header);
+                if let Some(link) = link_identity {
+                    if link != identity {
+                        alternates.push(link);
+                    }
+                }
+                primary = Some(identity);
+            }
+            if let Some(header) = message.transport_header.short_header() {
+                add_short_transport(&mut transport, "tpl", header);
+            }
+            if let Some(ell) = &message.extended_link_layer {
+                transport.access_numbers.push(SourcedU8 {
+                    source: "ell".to_string(),
+                    value: ell.access_number,
+                });
+                transport.ell = Some(ell_output(ell));
+            }
         }
         None => {}
         Some(_) => {}
@@ -1979,6 +2164,19 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
     ]
     .map(str::to_string)
     .to_vec();
+    if decoded.transport.secondary_address_mask.is_some() {
+        headers.push("secondary_address_mask".to_string());
+    }
+    if decoded.application.is_some() {
+        headers.extend(
+            [
+                "application_protocol",
+                "application_payload_hex",
+                "application_decoded",
+            ]
+            .map(str::to_string),
+        );
+    }
     for record in &decoded.records {
         headers.extend(
             RECORD_FIELDS
@@ -1994,6 +2192,20 @@ fn render_csv(decoded: &DecodedOutput) -> Result<String, OutputError> {
         })?;
 
     let mut row = csv_frame_row(decoded);
+    if let Some(mask) = &decoded.transport.secondary_address_mask {
+        row.push(mask.clone());
+    }
+    if let Some(application) = &decoded.application {
+        row.extend([
+            application.protocol.clone(),
+            application.payload_hex.clone(),
+            application
+                .decoded
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+        ]);
+    }
     for record in &decoded.records {
         row.extend(csv_record_values(record));
     }
@@ -2169,6 +2381,21 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
             ),
         ),
     ];
+    if let Some(mask) = &decoded.transport.secondary_address_mask {
+        summary.push(("Secondary address mask".to_string(), mask.clone()));
+    }
+    if let Some(application) = &decoded.application {
+        summary.push(("Application".to_string(), application.protocol.clone()));
+        if let Some(decoded) = &application.decoded {
+            summary.push(("Application data".to_string(), decoded.to_string()));
+        }
+        if !application.payload_hex.is_empty() {
+            summary.push((
+                "Application bytes".to_string(),
+                application.payload_hex.clone(),
+            ));
+        }
+    }
     if let Some(enrichment) = &decoded.enrichment {
         summary.push((
             "Manufacturer name".to_string(),
@@ -2433,6 +2660,20 @@ fn render_mermaid(decoded: &DecodedOutput) -> String {
             mermaid_escape(address)
         ));
         frame_nodes.push("FRAME_ADDRESS");
+    }
+    if let Some(mask) = &decoded.transport.secondary_address_mask {
+        output.push_str(&format!(
+            "        SLAVE_SELECTION[\"Secondary address mask · {}\"]\n",
+            mermaid_escape(mask)
+        ));
+        frame_nodes.push("SLAVE_SELECTION");
+    }
+    if let Some(application) = &decoded.application {
+        output.push_str(&format!(
+            "        APPLICATION[\"Application · {}\"]\n",
+            mermaid_escape(&application.protocol)
+        ));
+        frame_nodes.push("APPLICATION");
     }
     for pair in frame_nodes.windows(2) {
         if let [from, to] = pair {

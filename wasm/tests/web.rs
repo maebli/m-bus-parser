@@ -79,6 +79,7 @@ fn test_m_bus_parse_hexview_ci_78_annotations() {
     }));
 }
 
+#[cfg(feature = "decryption-mode-5")]
 #[wasm_bindgen_test]
 fn test_m_bus_parse_hexview_with_key_displays_decrypted_payload() {
     let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
@@ -117,6 +118,7 @@ fn test_m_bus_parse_hexview_with_key_displays_decrypted_payload() {
         .any(|seg| seg.get("kind").and_then(|v| v.as_str()) == Some("encrypted_payload")));
 }
 
+#[cfg(feature = "decryption-mode-5")]
 #[wasm_bindgen_test]
 fn test_m_bus_parse_with_key_preserves_utf8_text() {
     let input = "2E44931578563412330333637A2A00202557FB8016CA78E1243700B52E981E1918233AFE5E826DD0D4AD7854C697E7C8EB";
@@ -133,6 +135,48 @@ fn typed_render_rejects_invalid_keys_without_panicking() {
     let result =
         m_bus_parser_wasm_pack::m_bus_render(input, "json", Some("123".to_string()), None, None);
     assert!(result.is_err());
+}
+
+#[cfg(feature = "decryption-mode-10")]
+#[wasm_bindgen_test]
+fn mode10_authenticates_payloads_and_rejects_incorrect_keys() {
+    let input = "304493157856341233038C20757A7500112A1001B30A0000C882038E223BBC1091CEB8C0A1009D388A5AF7883A5B5A7FD6";
+    let key = "000102030405060708090A0B0C0D0E0F";
+    let output = m_bus_parser_wasm_pack::m_bus_render(
+        input,
+        "json",
+        Some(key.to_string()),
+        None,
+        Some(false),
+    )
+    .unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    assert_eq!(parsed["decode_state"], "complete");
+    assert_eq!(
+        parsed["security"]["decryption_state"],
+        "decrypted_authenticated"
+    );
+    assert_eq!(
+        parsed["security"]["decrypted_payload_hex"],
+        "0C1427048502046D32371F1502FD170000"
+    );
+    assert_eq!(parsed["records"].as_array().unwrap().len(), 3);
+    assert_eq!(parsed["records"][0]["value"]["value"], "28504.27");
+
+    let error = m_bus_parser_wasm_pack::m_bus_decode(
+        input,
+        Some("00000000000000000000000000000000".to_string()),
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(
+        Reflect::get(&error, &JsValue::from_str("code"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("security.authentication_failed")
+    );
 }
 
 #[wasm_bindgen_test]

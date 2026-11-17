@@ -36,17 +36,23 @@ use m_bus_core::{
 pub use variable_user_data::DataRecordError;
 
 pub use self::data_record::DataRecord;
-#[cfg(feature = "decryption")]
+#[cfg(feature = "decryption-api")]
 use m_bus_core::decryption::DecryptionError::{NotEncrypted, UnknownEncryptionState};
 pub use m_bus_core::ApplicationLayerError;
 
+pub mod application_message;
+pub mod compact;
 pub mod data_information;
 pub mod data_record;
 pub mod extended_link_layer;
 pub mod value_information;
 pub mod variable_user_data;
 
+pub use application_message::{
+    ApplicationMessage, ApplicationPayload, ApplicationProtocol, TransportHeader,
+};
 use extended_link_layer::ExtendedLinkLayer;
+use m_bus_core::authentication::AuthenticationHeader;
 
 /// Parses an application-layer user data block beginning with a CI field.
 pub fn parse_application_layer(data: &[u8]) -> Result<UserDataBlock<'_>, ApplicationLayerError> {
@@ -226,6 +232,7 @@ impl From<ControlInformation> for Direction {
             ControlInformation::SendData => Self::MasterToSlave,
             ControlInformation::SelectSlave => Self::MasterToSlave,
             ControlInformation::SynchronizeSlave => Self::MasterToSlave,
+            ControlInformation::RequestSelectedApplication => Self::MasterToSlave,
             ControlInformation::SetBaudRate300 => Self::MasterToSlave,
             ControlInformation::SetBaudRate600 => Self::MasterToSlave,
             ControlInformation::SetBaudRate1200 => Self::MasterToSlave,
@@ -347,6 +354,7 @@ pub enum ControlInformation {
     ExtendedLinkLayerI,
     ExtendedLinkLayerII,
     ExtendedLinkLayerIII,
+    RequestSelectedApplication,
 }
 
 impl ControlInformation {
@@ -355,7 +363,8 @@ impl ControlInformation {
             0x50 => Ok(Self::ResetAtApplicationLevel),
             0x51 => Ok(Self::SendData),
             0x52 => Ok(Self::SelectSlave),
-            0x54 => Ok(Self::SynchronizeSlave),
+            0x54 => Ok(Self::RequestSelectedApplication),
+            0x5C => Ok(Self::SynchronizeSlave),
             0x5A => Ok(Self::DataSentWithShortTransportLayer),
             0x5B => Ok(Self::DataSentWithLongTransportLayer),
             0x60 => Ok(Self::CosemDataWithLongTransportLayer),
@@ -518,6 +527,28 @@ impl Counter {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SecondaryAddressMask {
+    pub identification_number_bcd: [u8; 4],
+    pub manufacturer_bytes: [u8; 2],
+    pub version: u8,
+    pub device_type: u8,
+}
+
+impl core::fmt::Display for SecondaryAddressMask {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for byte in self.identification_number_bcd.iter().rev() {
+            write!(f, "{byte:02X}")?;
+        }
+        for byte in self.manufacturer_bytes {
+            write!(f, "{byte:02X}")?;
+        }
+        write!(f, "{:02X}{:02X}", self.version, self.device_type)
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -536,6 +567,8 @@ pub enum UserDataBlock<'a> {
     },
     VariableDataStructureWithLongTplHeader {
         extended_link_layer: Option<ExtendedLinkLayer>,
+        #[cfg_attr(feature = "serde", serde(borrow, skip_serializing))]
+        authentication: Option<&'a [u8]>,
         long_tpl_header: LongTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
@@ -543,6 +576,8 @@ pub enum UserDataBlock<'a> {
 
     VariableDataStructureWithShortTplHeader {
         extended_link_layer: Option<ExtendedLinkLayer>,
+        #[cfg_attr(feature = "serde", serde(borrow, skip_serializing))]
+        authentication: Option<&'a [u8]>,
         short_tpl_header: ShortTplHeader,
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
@@ -553,9 +588,97 @@ pub enum UserDataBlock<'a> {
         #[cfg_attr(feature = "serde", serde(skip_serializing))]
         variable_data_block: &'a [u8],
     },
+    SelectSlave {
+        secondary_address: SecondaryAddressMask,
+    },
+    ApplicationMessage(ApplicationMessage<'a>),
 }
 
 impl<'a> UserDataBlock<'a> {
+    #[inline(never)]
+    fn parse_authenticated(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
+        let authentication = AuthenticationHeader::parse(data)?;
+        let mut block = Self::try_from(authentication.transport)?;
+        if !block.transport_payload().is_some_and(|(header, _)| {
+            header.configuration_field.security_mode() == m_bus_core::SecurityMode::AesCbc128IvZero
+        }) {
+            return Err(ApplicationLayerError::InvalidPayload {
+                field: "authenticated security mode",
+            });
+        }
+        match &mut block {
+            Self::VariableDataStructureWithLongTplHeader {
+                authentication: target,
+                ..
+            }
+            | Self::VariableDataStructureWithShortTplHeader {
+                authentication: target,
+                ..
+            } => *target = Some(data),
+            Self::ApplicationMessage(message)
+                if message.transport_header.short_header().is_some() =>
+            {
+                message.authentication = Some(data);
+            }
+            _ => {
+                return Err(ApplicationLayerError::InvalidPayload {
+                    field: "authenticated transport",
+                })
+            }
+        }
+        Ok(block)
+    }
+
+    pub fn authentication(&self) -> Option<AuthenticationHeader<'a>> {
+        let data = match self {
+            Self::VariableDataStructureWithLongTplHeader { authentication, .. }
+            | Self::VariableDataStructureWithShortTplHeader { authentication, .. } => {
+                *authentication
+            }
+            Self::ApplicationMessage(message) => message.authentication,
+            _ => None,
+        }?;
+        AuthenticationHeader::parse(data).ok()
+    }
+
+    #[cfg(feature = "decryption-mode-13")]
+    pub fn mode13_payload(
+        &self,
+    ) -> Result<Option<decryption::mode13::Mode13Payload<'a>>, decryption::mode13::Mode13Error>
+    {
+        let Some((header, data)) = self.transport_payload() else {
+            return Ok(None);
+        };
+        if header.configuration_field.security_mode() != m_bus_core::SecurityMode::SpecificUsage13 {
+            return Ok(None);
+        }
+        let payload = decryption::mode13::Mode13Payload::parse(header.configuration_field, data)?;
+        if payload.is_channel_request() && header.control_information != 0x5f {
+            return Err(decryption::mode13::Mode13Error::InvalidConfiguration);
+        }
+        Ok(Some(payload))
+    }
+
+    pub fn transport_payload(&self) -> Option<(&ShortTplHeader, &'a [u8])> {
+        match self {
+            Self::VariableDataStructureWithLongTplHeader {
+                long_tpl_header,
+                variable_data_block,
+                ..
+            } => Some((&long_tpl_header.short_tpl_header, variable_data_block)),
+            Self::VariableDataStructureWithShortTplHeader {
+                short_tpl_header,
+                variable_data_block,
+                ..
+            } => Some((short_tpl_header, variable_data_block)),
+            Self::ApplicationMessage(message) => message
+                .transport_header
+                .short_header()
+                .map(|header| (header, message.payload)),
+            _ => None,
+        }
+    }
+
     /// Returns an iterator over the variable data records in this block.
     ///
     /// Fixed data structures, control messages, and encrypted payloads do not
@@ -590,6 +713,7 @@ impl<'a> UserDataBlock<'a> {
             Self::VariableDataStructureWithLongTplHeader {
                 long_tpl_header, ..
             } => Some(long_tpl_header.is_encrypted()),
+            Self::ApplicationMessage(message) => Some(message.transport_header.is_encrypted()),
             _ => None,
         }
     }
@@ -610,24 +734,30 @@ impl<'a> UserDataBlock<'a> {
                 variable_data_block,
                 ..
             } => variable_data_block.len(),
+            Self::ApplicationMessage(message) => message.payload.len(),
             _ => 0,
         }
     }
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     pub fn decrypt_variable_data<K: crate::decryption::KeyProvider>(
         &self,
         provider: &K,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
-        use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
+        use crate::decryption::{DecryptionError, KeyContext};
 
         match self {
             Self::VariableDataStructureWithLongTplHeader {
                 long_tpl_header,
                 variable_data_block,
                 ..
-            } => {
+            }
+            | Self::ApplicationMessage(ApplicationMessage {
+                transport_header: TransportHeader::Long(long_tpl_header),
+                payload: variable_data_block,
+                ..
+            }) => {
                 if !long_tpl_header.is_encrypted() {
                     return Err(NotEncrypted);
                 }
@@ -650,12 +780,21 @@ impl<'a> UserDataBlock<'a> {
                     access_number: long_tpl_header.short_tpl_header.access_number,
                 };
 
-                let payload = EncryptedPayload::new(variable_data_block, context);
-                payload.decrypt_into(provider, output)
+                long_tpl_header.short_tpl_header.decrypt_payload(
+                    variable_data_block,
+                    context,
+                    self.authentication(),
+                    provider,
+                    output,
+                )
             }
             Self::VariableDataStructureWithShortTplHeader {
                 short_tpl_header, ..
-            } => {
+            }
+            | Self::ApplicationMessage(ApplicationMessage {
+                transport_header: TransportHeader::Short(short_tpl_header),
+                ..
+            }) => {
                 if !short_tpl_header.is_encrypted() {
                     Err(NotEncrypted)
                 } else {
@@ -670,7 +809,7 @@ impl<'a> UserDataBlock<'a> {
 
     /// Decrypt variable data when manufacturer info is not available in the TPL header.
     /// Use this for frames with Short TPL header where manufacturer info comes from the link layer.
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     pub fn decrypt_variable_data_with_context<K: crate::decryption::KeyProvider>(
         &self,
         provider: &K,
@@ -680,14 +819,19 @@ impl<'a> UserDataBlock<'a> {
         device_type: DeviceType,
         output: &mut [u8],
     ) -> Result<usize, crate::decryption::DecryptionError> {
-        use crate::decryption::{DecryptionError, EncryptedPayload, KeyContext};
+        use crate::decryption::{DecryptionError, KeyContext};
 
         match self {
             Self::VariableDataStructureWithShortTplHeader {
                 short_tpl_header,
                 variable_data_block,
                 ..
-            } => {
+            }
+            | Self::ApplicationMessage(ApplicationMessage {
+                transport_header: TransportHeader::Short(short_tpl_header),
+                payload: variable_data_block,
+                ..
+            }) => {
                 if !short_tpl_header.is_encrypted() {
                     return Err(NotEncrypted);
                 }
@@ -703,10 +847,19 @@ impl<'a> UserDataBlock<'a> {
                     access_number: short_tpl_header.access_number,
                 };
 
-                let payload = EncryptedPayload::new(variable_data_block, context);
-                payload.decrypt_into(provider, output)
+                short_tpl_header.decrypt_payload(
+                    variable_data_block,
+                    context,
+                    self.authentication(),
+                    provider,
+                    output,
+                )
             }
-            Self::VariableDataStructureWithLongTplHeader { .. } => {
+            Self::VariableDataStructureWithLongTplHeader { .. }
+            | Self::ApplicationMessage(ApplicationMessage {
+                transport_header: TransportHeader::Long(_),
+                ..
+            }) => {
                 // Long TPL header has its own manufacturer info, use decrypt_variable_data() instead
                 self.decrypt_variable_data(provider, output)
             }
@@ -740,6 +893,8 @@ fn default_manufacturer_result() -> Result<ManufacturerCode, ApplicationLayerErr
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ShortTplHeader {
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub control_information: u8,
     pub access_number: u8,
     pub status: StatusField,
     pub configuration_field: ConfigurationField,
@@ -756,7 +911,56 @@ impl LongTplHeader {
     }
 }
 
+impl LongTplHeader {
+    pub(crate) fn parse(
+        data: &[u8],
+        lsb_order: bool,
+        control_information: u8,
+    ) -> Result<Self, ApplicationLayerError> {
+        let [id0, id1, id2, id3, manufacturer0, manufacturer1, version, device_type, rest @ ..] =
+            data
+        else {
+            return Err(ApplicationLayerError::InsufficientData);
+        };
+        let mut identification = [*id0, *id1, *id2, *id3];
+        if lsb_order {
+            identification.reverse();
+        }
+        Ok(Self {
+            identification_number: IdentificationNumber::from_bcd_hex_digits(identification)?,
+            manufacturer: ManufacturerCode::from_id(u16::from_le_bytes([
+                *manufacturer0,
+                *manufacturer1,
+            ])),
+            version: *version,
+            device_type: DeviceType::from(*device_type),
+            short_tpl_header: ShortTplHeader::parse(rest, control_information)?,
+            lsb_order,
+        })
+    }
+}
+
 impl ShortTplHeader {
+    #[cfg(feature = "decryption-mode-13")]
+    pub fn direction(&self) -> Result<Direction, ApplicationLayerError> {
+        ControlInformation::from(self.control_information).map(Direction::from)
+    }
+
+    pub(crate) fn parse(
+        data: &[u8],
+        control_information: u8,
+    ) -> Result<Self, ApplicationLayerError> {
+        let [access, status, config_low, config_high, ..] = data else {
+            return Err(ApplicationLayerError::InsufficientData);
+        };
+        Ok(Self {
+            control_information,
+            access_number: *access,
+            status: StatusField::from_bits_truncate(*status),
+            configuration_field: ConfigurationField::from_bytes(*config_low, *config_high),
+        })
+    }
+
     #[must_use]
     pub fn is_encrypted(&self) -> bool {
         use m_bus_core::SecurityMode;
@@ -765,20 +969,73 @@ impl ShortTplHeader {
             SecurityMode::NoEncryption
         )
     }
+
+    #[cfg(feature = "decryption-api")]
+    fn decrypt_payload<K: crate::decryption::KeyProvider>(
+        &self,
+        data: &[u8],
+        context: crate::decryption::KeyContext,
+        authentication: Option<AuthenticationHeader<'_>>,
+        provider: &K,
+        output: &mut [u8],
+    ) -> Result<usize, crate::decryption::DecryptionError> {
+        use crate::decryption::EncryptedPayload;
+
+        #[cfg(not(feature = "decryption-mode-7"))]
+        let _ = authentication;
+        #[cfg(feature = "decryption-mode-7")]
+        if context.security_mode == m_bus_core::SecurityMode::AesCbc128IvZero {
+            use crate::decryption::{DecryptionError, Mode7Payload};
+            let authentication = authentication.ok_or(DecryptionError::UnsupportedConfiguration)?;
+            let control = ControlInformation::from(self.control_information)
+                .map_err(|_| DecryptionError::UnknownEncryptionState)?;
+            return Mode7Payload {
+                data,
+                context,
+                configuration: self.configuration_field,
+                from_meter: matches!(Direction::from(control), Direction::SlaveToMaster),
+                authentication: &authentication,
+            }
+            .decrypt_into(provider, output);
+        }
+
+        #[cfg(feature = "decryption-mode-10")]
+        if matches!(context.security_mode, m_bus_core::SecurityMode::AesCcm128) {
+            use crate::decryption::{DecryptionError, Mode10Payload};
+
+            let control_information = ControlInformation::from(self.control_information)
+                .map_err(|_| DecryptionError::UnknownEncryptionState)?;
+            return Mode10Payload {
+                data,
+                context,
+                control_information: self.control_information,
+                status: self.status.bits(),
+                configuration: self.configuration_field,
+                from_meter: matches!(
+                    Direction::from(control_information),
+                    Direction::SlaveToMaster
+                ),
+            }
+            .decrypt_into(provider, output);
+        }
+        EncryptedPayload::new(data, context).decrypt_into(provider, output)
+    }
 }
 
 impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
     type Error = ApplicationLayerError;
 
     fn try_from(data: &'a [u8]) -> Result<Self, ApplicationLayerError> {
+        if data.first() == Some(&0x90) {
+            return Self::parse_authenticated(data);
+        }
         if data.is_empty() {
             return Err(ApplicationLayerError::MissingControlInformation);
         }
-        let control_information = ControlInformation::from(
-            *data
-                .first()
-                .ok_or(ApplicationLayerError::InsufficientData)?,
-        )?;
+        let control_information_byte = *data
+            .first()
+            .ok_or(ApplicationLayerError::InsufficientData)?;
+        let control_information = ControlInformation::from(control_information_byte)?;
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
@@ -787,66 +1044,30 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 );
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
-            ControlInformation::SendData => Err(ApplicationLayerError::Unimplemented {
-                feature: "SendData control information",
-            }),
-            ControlInformation::SelectSlave => Err(ApplicationLayerError::Unimplemented {
-                feature: "SelectSlave control information",
-            }),
-            ControlInformation::SynchronizeSlave => Err(ApplicationLayerError::Unimplemented {
-                feature: "SynchronizeSlave control information",
-            }),
-            ControlInformation::SetBaudRate300 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate300 control information",
-            }),
-            ControlInformation::SetBaudRate600 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate600 control information",
-            }),
-            ControlInformation::SetBaudRate1200 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate1200 control information",
-            }),
-            ControlInformation::SetBaudRate2400 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate2400 control information",
-            }),
-            ControlInformation::SetBaudRate4800 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate4800 control information",
-            }),
-            ControlInformation::SetBaudRate9600 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate9600 control information",
-            }),
-            ControlInformation::SetBaudRate19200 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate19200 control information",
-            }),
-            ControlInformation::SetBaudRate38400 => Err(ApplicationLayerError::Unimplemented {
-                feature: "SetBaudRate38400 control information",
-            }),
-            ControlInformation::OutputRAMContent => Err(ApplicationLayerError::Unimplemented {
-                feature: "OutputRAMContent control information",
-            }),
-            ControlInformation::WriteRAMContent => Err(ApplicationLayerError::Unimplemented {
-                feature: "WriteRAMContent control information",
-            }),
-            ControlInformation::StartCalibrationTestMode => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "StartCalibrationTestMode control information",
+            ControlInformation::SelectSlave => {
+                let [_, id0, id1, id2, id3, manufacturer0, manufacturer1, version, device_type] =
+                    data
+                else {
+                    return Err(ApplicationLayerError::InvalidDataLength {
+                        expected: 9,
+                        actual: data.len(),
+                    });
+                };
+                Ok(UserDataBlock::SelectSlave {
+                    secondary_address: SecondaryAddressMask {
+                        identification_number_bcd: [*id0, *id1, *id2, *id3],
+                        manufacturer_bytes: [*manufacturer0, *manufacturer1],
+                        version: *version,
+                        device_type: *device_type,
+                    },
                 })
             }
-            ControlInformation::ReadEEPROM => Err(ApplicationLayerError::Unimplemented {
-                feature: "ReadEEPROM control information",
-            }),
-            ControlInformation::StartSoftwareTest => Err(ApplicationLayerError::Unimplemented {
-                feature: "StartSoftwareTest control information",
-            }),
-            ControlInformation::HashProcedure(_) => Err(ApplicationLayerError::Unimplemented {
-                feature: "HashProcedure control information",
-            }),
-            ControlInformation::SendErrorStatus => Err(ApplicationLayerError::Unimplemented {
-                feature: "SendErrorStatus control information",
-            }),
-            ControlInformation::SendAlarmStatus => Err(ApplicationLayerError::Unimplemented {
-                feature: "SendAlarmStatus control information",
-            }),
-            ControlInformation::ResponseWithVariableDataStructure { lsb_order } => {
+            ControlInformation::ResponseWithVariableDataStructure { .. }
+            | ControlInformation::DataSentWithLongTransportLayer => {
+                let lsb_order = matches!(
+                    control_information,
+                    ControlInformation::ResponseWithVariableDataStructure { lsb_order: true }
+                );
                 let mut iter = data.iter().skip(1);
                 let mut identification_number_bytes = [
                     *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
@@ -872,6 +1093,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                             *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
                         ),
                         short_tpl_header: ShortTplHeader {
+                            control_information: control_information_byte,
                             access_number: *iter
                                 .next()
                                 .ok_or(ApplicationLayerError::InsufficientData)?,
@@ -893,6 +1115,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         .get(13..data.len())
                         .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer: None,
+                    authentication: None,
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
@@ -934,74 +1157,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                     counter2,
                 })
             }
-            ControlInformation::DataSentWithShortTransportLayer => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "DataSentWithShortTransportLayer control information",
-                })
-            }
-            ControlInformation::DataSentWithLongTransportLayer => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "DataSentWithLongTransportLayer control information",
-                })
-            }
-            ControlInformation::CosemDataWithLongTransportLayer => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "CosemDataWithLongTransportLayer control information",
-                })
-            }
-            ControlInformation::CosemDataWithShortTransportLayer => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "CosemDataWithShortTransportLayer control information",
-                })
-            }
-            ControlInformation::ObisDataReservedLongTransportLayer => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ObisDataReservedLongTransportLayer control information",
-                })
-            }
-            ControlInformation::ObisDataReservedShortTransportLayer => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ObisDataReservedShortTransportLayer control information",
-                })
-            }
-            ControlInformation::ApplicationLayerFormatFrameNoTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationLayerFormatFrameNoTransport control information",
-                })
-            }
-            ControlInformation::ApplicationLayerFormatFrameShortTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationLayerFormatFrameShortTransport control information",
-                })
-            }
-            ControlInformation::ApplicationLayerFormatFrameLongTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationLayerFormatFrameLongTransport control information",
-                })
-            }
-            ControlInformation::ClockSyncAbsolute => Err(ApplicationLayerError::Unimplemented {
-                feature: "ClockSyncAbsolute control information",
-            }),
-            ControlInformation::ClockSyncRelative => Err(ApplicationLayerError::Unimplemented {
-                feature: "ClockSyncRelative control information",
-            }),
-            ControlInformation::ApplicationErrorShortTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationErrorShortTransport control information",
-                })
-            }
-            ControlInformation::ApplicationErrorLongTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationErrorLongTransport control information",
-                })
-            }
-            ControlInformation::AlarmShortTransport => Err(ApplicationLayerError::Unimplemented {
-                feature: "AlarmShortTransport control information",
-            }),
-            ControlInformation::AlarmLongTransport => Err(ApplicationLayerError::Unimplemented {
-                feature: "AlarmLongTransport control information",
-            }),
-            ControlInformation::ApplicationLayerNoTransport => {
+            ControlInformation::SendData | ControlInformation::ApplicationLayerNoTransport => {
                 Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
                     extended_link_layer: None,
                     variable_data_block: data
@@ -1009,12 +1165,8 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         .ok_or(ApplicationLayerError::InsufficientData)?,
                 })
             }
-            ControlInformation::ApplicationLayerCompactFrameNoTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationLayerCompactFrameNoTransport control information",
-                })
-            }
-            ControlInformation::ApplicationLayerShortTransport => {
+            ControlInformation::ApplicationLayerShortTransport
+            | ControlInformation::DataSentWithShortTransportLayer => {
                 // CI=0xA0 (encryption mode 5) has an additional encryption configuration byte after CI
                 // Other encrypted CI codes (0xA2, 0xA4, etc.) do not have this byte
                 let has_encryption_config_byte = data[0] == 0xA0;
@@ -1025,6 +1177,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 
                 Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     short_tpl_header: ShortTplHeader {
+                        control_information: control_information_byte,
                         access_number: *iter
                             .next()
                             .ok_or(ApplicationLayerError::InsufficientData)?,
@@ -1044,94 +1197,100 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                         .get(data_block_offset..data.len())
                         .ok_or(ApplicationLayerError::InsufficientData)?,
                     extended_link_layer: None,
+                    authentication: None,
                 })
             }
-            ControlInformation::ApplicationLayerCompactFrameShortTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ApplicationLayerCompactFrameShortTransport control information",
-                })
+            ControlInformation::SynchronizeSlave
+            | ControlInformation::SetBaudRate300
+            | ControlInformation::SetBaudRate600
+            | ControlInformation::SetBaudRate1200
+            | ControlInformation::SetBaudRate2400
+            | ControlInformation::SetBaudRate4800
+            | ControlInformation::SetBaudRate9600
+            | ControlInformation::SetBaudRate19200
+            | ControlInformation::SetBaudRate38400
+            | ControlInformation::OutputRAMContent
+            | ControlInformation::WriteRAMContent
+            | ControlInformation::StartCalibrationTestMode
+            | ControlInformation::ReadEEPROM
+            | ControlInformation::StartSoftwareTest
+            | ControlInformation::HashProcedure(_)
+            | ControlInformation::SendErrorStatus
+            | ControlInformation::SendAlarmStatus
+            | ControlInformation::CosemDataWithLongTransportLayer
+            | ControlInformation::CosemDataWithShortTransportLayer
+            | ControlInformation::ObisDataReservedLongTransportLayer
+            | ControlInformation::ObisDataReservedShortTransportLayer
+            | ControlInformation::ApplicationLayerFormatFrameNoTransport
+            | ControlInformation::ApplicationLayerFormatFrameShortTransport
+            | ControlInformation::ApplicationLayerFormatFrameLongTransport
+            | ControlInformation::ClockSyncAbsolute
+            | ControlInformation::ClockSyncRelative
+            | ControlInformation::ApplicationErrorShortTransport
+            | ControlInformation::ApplicationErrorLongTransport
+            | ControlInformation::AlarmShortTransport
+            | ControlInformation::AlarmLongTransport
+            | ControlInformation::ApplicationLayerCompactFrameNoTransport
+            | ControlInformation::ApplicationLayerCompactFrameShortTransport
+            | ControlInformation::CosemApplicationLayerLongTransport
+            | ControlInformation::CosemApplicationLayerShortTransport
+            | ControlInformation::ObisApplicationLayerReservedLongTransport
+            | ControlInformation::ObisApplicationLayerReservedShortTransport
+            | ControlInformation::TransportLayerLongReadoutToMeter
+            | ControlInformation::NetworkLayerData
+            | ControlInformation::FutureUse
+            | ControlInformation::NetworkManagementApplication
+            | ControlInformation::TransportLayerCompactFrame
+            | ControlInformation::TransportLayerFormatFrame
+            | ControlInformation::NetworkManagementDataReserved
+            | ControlInformation::TransportLayerShortMeterToReadout
+            | ControlInformation::TransportLayerLongMeterToReadout
+            | ControlInformation::RequestSelectedApplication => {
+                ApplicationMessage::parse(control_information, data)
+                    .map(UserDataBlock::ApplicationMessage)
             }
-            ControlInformation::CosemApplicationLayerLongTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "CosemApplicationLayerLongTransport control information",
-                })
-            }
-            ControlInformation::CosemApplicationLayerShortTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "CosemApplicationLayerShortTransport control information",
-                })
-            }
-            ControlInformation::ObisApplicationLayerReservedLongTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ObisApplicationLayerReservedLongTransport control information",
-                })
-            }
-            ControlInformation::ObisApplicationLayerReservedShortTransport => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "ObisApplicationLayerReservedShortTransport control information",
-                })
-            }
-            ControlInformation::TransportLayerLongReadoutToMeter => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "TransportLayerLongReadoutToMeter control information",
-                })
-            }
-            ControlInformation::NetworkLayerData => Err(ApplicationLayerError::Unimplemented {
-                feature: "NetworkLayerData control information",
-            }),
-            ControlInformation::FutureUse => Err(ApplicationLayerError::Unimplemented {
-                feature: "FutureUse control information",
-            }),
-            ControlInformation::NetworkManagementApplication => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "NetworkManagementApplication control information",
-                })
-            }
-            ControlInformation::TransportLayerCompactFrame => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "TransportLayerCompactFrame control information",
-                })
-            }
-            ControlInformation::TransportLayerFormatFrame => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "TransportLayerFormatFrame control information",
-                })
-            }
-            ControlInformation::NetworkManagementDataReserved => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "NetworkManagementDataReserved control information",
-                })
-            }
-            ControlInformation::TransportLayerShortMeterToReadout => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "TransportLayerShortMeterToReadout control information",
-                })
-            }
-            ControlInformation::TransportLayerLongMeterToReadout => {
-                Err(ApplicationLayerError::Unimplemented {
-                    feature: "TransportLayerLongMeterToReadout control information",
-                })
-            }
-            ControlInformation::ExtendedLinkLayerI => {
-                let mut iter = data.iter();
-                iter.next();
-                let extended_link_layer = Some(ExtendedLinkLayer {
-                    communication_control: *iter
-                        .next()
+            ControlInformation::ExtendedLinkLayerI | ControlInformation::ExtendedLinkLayerIII => {
+                let format = match control_information {
+                    ControlInformation::ExtendedLinkLayerI => {
+                        extended_link_layer::EllFormat::FormatI
+                    }
+                    _ => extended_link_layer::EllFormat::FormatIII,
+                };
+                let (ell, ell_size) = ExtendedLinkLayer::parse(
+                    data.get(1..)
                         .ok_or(ApplicationLayerError::InsufficientData)?,
-                    access_number: *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    receiver_address: None,
-                    encryption: None,
-                });
-                match UserDataBlock::try_from(iter.as_slice()) {
+                    format,
+                )?;
+                let extended_link_layer = Some(ell);
+                let application_data = data
+                    .get(1 + ell_size..)
+                    .ok_or(ApplicationLayerError::InsufficientData)?;
+                match UserDataBlock::try_from(application_data) {
+                    Ok(UserDataBlock::ApplicationMessage(mut message)) => {
+                        message.extended_link_layer = extended_link_layer;
+                        Ok(UserDataBlock::ApplicationMessage(message))
+                    }
+                    Ok(UserDataBlock::VariableDataStructureWithLongTplHeader {
+                        long_tpl_header,
+                        variable_data_block,
+                        authentication,
+                        ..
+                    }) => Ok(UserDataBlock::VariableDataStructureWithLongTplHeader {
+                        extended_link_layer,
+                        long_tpl_header,
+                        variable_data_block,
+                        authentication,
+                    }),
                     Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                         short_tpl_header,
                         variable_data_block,
+                        authentication,
                         ..
                     }) => Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                         extended_link_layer,
                         short_tpl_header,
                         variable_data_block,
+                        authentication,
                     }),
                     Ok(UserDataBlock::VariableDataStructureWithoutTplHeader {
                         variable_data_block,
@@ -1155,6 +1314,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 // Create a ShortTplHeader from ELL fields
                 // For encrypted ELL frames, the ELL fields become the "header"
                 let short_tpl_header = ShortTplHeader {
+                    control_information: control_information_byte,
                     access_number: ell.access_number,
                     status: StatusField::from_bits_truncate(ell.communication_control),
                     configuration_field: ConfigurationField::from_bytes(0x00, 0x00),
@@ -1162,31 +1322,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 
                 Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
                     extended_link_layer: Some(ell),
-                    short_tpl_header,
-                    variable_data_block: data
-                        .get(app_data_offset..)
-                        .ok_or(ApplicationLayerError::InsufficientData)?,
-                })
-            }
-            ControlInformation::ExtendedLinkLayerIII => {
-                // CI byte + ELL III (16 bytes) = 17 bytes total before application data
-                let (ell, ell_size) = ExtendedLinkLayer::parse(
-                    data.get(1..)
-                        .ok_or(ApplicationLayerError::InsufficientData)?,
-                    extended_link_layer::EllFormat::FormatIII,
-                )?;
-                let app_data_offset = 1 + ell_size;
-
-                // Create a ShortTplHeader from ELL fields
-                // For encrypted ELL frames, the ELL fields become the "header"
-                let short_tpl_header = ShortTplHeader {
-                    access_number: ell.access_number,
-                    status: StatusField::from_bits_truncate(ell.communication_control),
-                    configuration_field: ConfigurationField::from_bytes(0x00, 0x00),
-                };
-
-                Ok(UserDataBlock::VariableDataStructureWithShortTplHeader {
-                    extended_link_layer: Some(ell),
+                    authentication: None,
                     short_tpl_header,
                     variable_data_block: data
                         .get(app_data_offset..)
@@ -1253,7 +1389,7 @@ mod tests {
             Ok(ControlInformation::SelectSlave)
         );
         assert_eq!(
-            ControlInformation::from(0x54),
+            ControlInformation::from(0x5C),
             Ok(ControlInformation::SynchronizeSlave)
         );
         assert_eq!(

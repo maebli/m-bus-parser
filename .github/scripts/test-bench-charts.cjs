@@ -85,7 +85,7 @@ test('single-run zero-valued profiles remain visible with separate chart contain
   assert.equal(elements.filter(e => e.className === 'benchmark-note' && e.textContent.includes('1 recorded run')).length, 2);
 });
 
-test('Rust/libmbus comparisons overlay only equivalent workloads and retain missing runs', () => {
+test('m-bus-parser/libmbus comparisons overlay only equivalent workloads and retain missing runs', () => {
   const {charts, opened} = render({'Parser corpus and libmbus': [
     entry('a', 1, [bench('Wired link-layer comparison [implementation=rust]', 20)]),
     entry('b', 2, [
@@ -96,11 +96,11 @@ test('Rust/libmbus comparisons overlay only equivalent workloads and retain miss
     ]),
   ]});
   assert.equal(charts.length, 2);
-  assert.deepEqual(Array.from(charts[0].data.datasets, d => d.label), ['Rust (O3)', 'libmbus (O3)']);
+  assert.deepEqual(Array.from(charts[0].data.datasets, d => d.label), ['m-bus-parser (Rust, O3)', 'libmbus (C, O3)']);
   assert.deepEqual(Array.from(charts[0].data.datasets, d => Array.from(d.data)), [[20, 21], [null, 45]]);
   assert.equal(charts[1].options.title.text, 'Wired equivalent XML comparison');
   const item = {datasetIndex: 1, index: 1, value: '45'};
-  assert.match(charts[0].options.tooltips.callbacks.label(item), /libmbus \(O3\): 45/);
+  assert.match(charts[0].options.tooltips.callbacks.label(item), /libmbus \(C, O3\): 45/);
   charts[0].options.onClick(null, [{_datasetIndex: 1, _index: 1}]);
   assert.deepEqual(opened, ['https://example.test/b']);
 });

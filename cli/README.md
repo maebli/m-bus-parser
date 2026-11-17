@@ -24,3 +24,44 @@ m-bus-parser-cli parse --file telegram.hex --format table --width 48
 
 Pass a 32-digit AES-128 key with `--key`. Use `--no-enrichment` when only
 protocol-derived data should be emitted.
+
+## Mode 13: imported TLS session
+
+From the repository root, decode a frame with session data exported by the
+meter or gateway:
+
+```sh
+cargo run -p m-bus-parser-cli --no-default-features --features decryption-mode-13 -- \
+  parse --file frame.hex --tls-session session.json --format json
+```
+
+The default CLI build also includes this feature. Use `--data "HEX"` instead of
+`--file` for inline input. Omit `--tls-session` to inspect TLS record metadata.
+
+`session.json` uses the same format as the browser. Replace the example values
+with the values for the captured traffic:
+
+```json
+{
+  "name": "Meter session",
+  "cipher_suite": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+  "direction": "client_to_server",
+  "key_hex": "000102030405060708090a0b0c0d0e0f",
+  "fixed_iv_hex": "01020304",
+  "sequence_number": "5"
+}
+```
+
+- `key_hex`: the selected direction's session encryption key, not the static meter key.
+- `fixed_iv_hex`: its four-byte nonce salt, as eight hex digits.
+- `sequence_number`: the first record's TLS counter, as a decimal string. It counts
+  encrypted handshake records too. Repeated commands do not advance it.
+- `direction`: `client_to_server` for meter → gateway, or `server_to_client` for
+  gateway → meter.
+- `cipher_suite`: the suite above requires a 16-byte key. The supported alternative,
+  `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384`, requires a 32-byte key.
+
+Do not combine `--tls-session` with `--key`. Supported outputs are `json`, `yaml`,
+`table`, `csv`, and `mermaid`. Input must contain complete TLS application records;
+reassemble and remove AFL framing first. This command does not perform a TLS handshake.
+Authentication failures return a nonzero exit code and no decoded output.

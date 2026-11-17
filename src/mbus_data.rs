@@ -29,38 +29,34 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, frames::WiredFrame<'a>> {
     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
         let frame = frames::WiredFrame::try_from(data)?;
         let mut user_data = None;
-        let mut data_records = None;
         let mut application_error = None;
         match &frame {
-            frames::WiredFrame::LongFrame { data, .. } => {
+            frames::WiredFrame::LongFrame { data, .. }
+            | frames::WiredFrame::ControlFrame { data, .. } => {
                 match user_data::UserDataBlock::try_from(*data) {
-                    Ok(x) => {
-                        match &x {
-                            user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
-                                variable_data_block,
-                                ..
-                            }
-                            | user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
-                                variable_data_block,
-                                ..
-                            }
-                            | user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
-                                variable_data_block,
-                                ..
-                            } => {
-                                data_records = Some((*variable_data_block).into());
-                            }
-                            _ => {}
-                        }
-                        user_data = Some(x);
-                    }
+                    Ok(block) => user_data = Some(block),
                     Err(error) => application_error = Some(error),
                 }
             }
             frames::WiredFrame::SingleCharacter { .. } => (),
             frames::WiredFrame::ShortFrame { .. } => (),
-            frames::WiredFrame::ControlFrame { .. } => (),
             _ => (),
+        };
+
+        let data_records = match &user_data {
+            Some(user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                variable_data_block,
+                ..
+            })
+            | Some(user_data::UserDataBlock::VariableDataStructureWithShortTplHeader {
+                variable_data_block,
+                ..
+            })
+            | Some(user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                variable_data_block,
+                ..
+            }) => Some((*variable_data_block).into()),
+            _ => None,
         };
 
         Ok(MbusData {
@@ -289,6 +285,7 @@ fn hex_string(data: &[u8]) -> String {
 fn user_data_is_encrypted(user_data: Option<&user_data::UserDataBlock>) -> bool {
     use user_data::UserDataBlock;
     match user_data {
+        Some(UserDataBlock::ApplicationMessage(message)) => message.transport_header.is_encrypted(),
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header, ..
         }) => long_tpl_header.is_encrypted(),
@@ -303,6 +300,7 @@ fn user_data_is_encrypted(user_data: Option<&user_data::UserDataBlock>) -> bool 
 fn variable_data_block<'a>(user_data: Option<&user_data::UserDataBlock<'a>>) -> Option<&'a [u8]> {
     use user_data::UserDataBlock;
     match user_data {
+        Some(UserDataBlock::ApplicationMessage(message)) => Some(message.payload),
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             variable_data_block,
             ..
@@ -382,7 +380,11 @@ fn apply_user_data_summary(
     match user_data {
         Some(UserDataBlock::VariableDataStructureWithLongTplHeader {
             long_tpl_header, ..
-        }) => {
+        })
+        | Some(UserDataBlock::ApplicationMessage(user_data::ApplicationMessage {
+            transport_header: user_data::TransportHeader::Long(long_tpl_header),
+            ..
+        })) => {
             summary.identification_number = Some(long_tpl_header.identification_number.to_string());
             summary.manufacturer = Some(manufacturer_summary(
                 long_tpl_header
@@ -404,7 +406,11 @@ fn apply_user_data_summary(
         }
         Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
             short_tpl_header, ..
-        }) => {
+        })
+        | Some(UserDataBlock::ApplicationMessage(user_data::ApplicationMessage {
+            transport_header: user_data::TransportHeader::Short(short_tpl_header),
+            ..
+        })) => {
             summary.access_number = Some(short_tpl_header.access_number);
             summary.status = Some(short_tpl_header.status.to_string());
             summary.security_mode = Some(
@@ -545,23 +551,23 @@ fn build_output<T: serde::Serialize>(
 /// a key is provided, and builds the summary plus only the requested legacy
 /// serialization. Summary-only consumers do not serialize the parsed records.
 #[cfg(feature = "std")]
-#[cfg_attr(not(feature = "decryption"), allow(unused_mut))]
+#[cfg_attr(not(feature = "decryption-api"), allow(unused_mut))]
 fn parse_frame_output(
     input: &str,
     key: Option<&[u8; 16]>,
     format: LegacyOutputFormat,
 ) -> Option<ParsedOutput> {
     let data = clean_and_convert(input);
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     let mut decrypted_buffer = [0u8; 256];
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     let _ = key;
 
     // Try wired first
     if let Ok(mut parsed) = MbusData::<frames::WiredFrame>::try_from(data.as_slice()) {
         let encrypted = user_data_is_encrypted(parsed.user_data.as_ref());
         let mut decrypted = false;
-        #[cfg(feature = "decryption")]
+        #[cfg(feature = "decryption-api")]
         if encrypted {
             if let (Some(key_bytes), Some(user_data)) = (key, parsed.user_data.as_ref()) {
                 if let Some(len) = decrypt_variable_data_with_key(
@@ -583,6 +589,12 @@ fn parse_frame_output(
                             Some(long_tpl_header),
                         ));
                         decrypted = true;
+                    } else if let Some(user_data::UserDataBlock::ApplicationMessage(message)) =
+                        &parsed.user_data
+                    {
+                        decrypted = decrypted_buffer
+                            .get(..len)
+                            .is_some_and(|data| message.decode_payload(data).is_ok());
                     }
                 }
             }
@@ -600,7 +612,7 @@ fn parse_frame_output(
     {
         let encrypted = user_data_is_encrypted(parsed.user_data.as_ref());
         let mut decrypted = false;
-        #[cfg(feature = "decryption")]
+        #[cfg(feature = "decryption-api")]
         if encrypted {
             if let (Some(key_bytes), Some(user_data)) = (key, parsed.user_data.as_ref()) {
                 if let Some(len) = decrypt_variable_data_with_key(
@@ -619,9 +631,15 @@ fn parse_frame_output(
                             ) => Some(long_tpl_header),
                             _ => None,
                         };
-                        parsed.data_records =
-                            Some(user_data::DataRecords::new(decrypted_data, long_header));
-                        decrypted = true;
+                        if let Some(user_data::UserDataBlock::ApplicationMessage(message)) =
+                            &parsed.user_data
+                        {
+                            decrypted = message.decode_payload(decrypted_data).is_ok();
+                        } else {
+                            parsed.data_records =
+                                Some(user_data::DataRecords::new(decrypted_data, long_header));
+                            decrypted = true;
+                        }
                     }
                 }
             }
@@ -1195,7 +1213,7 @@ fn parse_to_annotated(input: &str) -> String {
 fn parse_to_hexview(input: &str, key: Option<&[u8; 16]>) -> String {
     let data = clean_and_convert(input);
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     if let Some(key_bytes) = key {
         if let Some(display_data) = decrypted_hexview_data(&data, key_bytes) {
             return match crate::annotate::annotate_frame(&display_data) {
@@ -1213,7 +1231,7 @@ fn parse_to_hexview(input: &str, key: Option<&[u8; 16]>) -> String {
         }
     }
 
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     let _ = key;
 
     annotated_segments_to_json(&data)
@@ -1231,7 +1249,7 @@ pub(crate) fn render_annotated_bytes(
         }
     })?;
 
-    #[cfg(feature = "decryption")]
+    #[cfg(feature = "decryption-api")]
     if let Some(key_bytes) = key {
         if let Some(display_data) = decrypted_hexview_data(data, key_bytes) {
             let mut display_segments =
@@ -1259,7 +1277,7 @@ pub(crate) fn render_annotated_bytes(
         }
     }
 
-    #[cfg(not(feature = "decryption"))]
+    #[cfg(not(feature = "decryption-api"))]
     let _ = key;
 
     serde_json::to_string_pretty(&serde_json::json!({
@@ -1283,16 +1301,51 @@ fn annotated_segments_to_json(data: &[u8]) -> String {
     }
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypted_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
     decrypted_wired_hexview_data(data, key).or_else(|| decrypted_wireless_hexview_data(data, key))
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn replace_encrypted_payload_segments(
     segments: &mut Vec<crate::annotate::ByteSegment>,
     display_data: &[u8],
 ) {
+    let replace_message = |segments: &mut Vec<crate::annotate::ByteSegment>,
+                           block: Option<&user_data::UserDataBlock<'_>>| {
+        let Some(user_data::UserDataBlock::ApplicationMessage(message)) = block else {
+            return false;
+        };
+        let mut rewritten = Vec::with_capacity(segments.len());
+        for segment in segments.drain(..) {
+            if segment.kind == crate::annotate::SegmentKind::EncryptedPayload {
+                if let Some(payload) = display_data.get(segment.start..segment.end) {
+                    crate::annotate::annotate_message_payload(
+                        &mut rewritten,
+                        segment.start,
+                        message,
+                        payload,
+                        true,
+                    );
+                    continue;
+                }
+            }
+            rewritten.push(segment);
+        }
+        *segments = rewritten;
+        true
+    };
+    if let Ok(parsed) = MbusData::<frames::WiredFrame>::try_from(display_data) {
+        if replace_message(segments, parsed.user_data.as_ref()) {
+            return;
+        }
+    } else if let Ok(parsed) =
+        MbusData::<wireless_mbus_link_layer::WirelessFrame>::try_from(display_data)
+    {
+        if replace_message(segments, parsed.user_data.as_ref()) {
+            return;
+        }
+    }
     let mut rewritten = Vec::with_capacity(segments.len());
 
     for segment in segments.drain(..) {
@@ -1312,7 +1365,7 @@ fn replace_encrypted_payload_segments(
     *segments = rewritten;
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypted_wired_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
     let parsed_data = MbusData::<frames::WiredFrame>::try_from(data).ok()?;
     let user_data = parsed_data.user_data.as_ref()?;
@@ -1360,7 +1413,7 @@ fn decrypted_wired_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> 
     Some(display_data)
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypted_wireless_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8>> {
     let mut crc_buf = [0u8; 512];
     let wireless_data =
@@ -1401,60 +1454,17 @@ fn decrypted_wireless_hexview_data(data: &[u8], key: &[u8; 16]) -> Option<Vec<u8
     Some(display_data)
 }
 
-#[cfg(all(feature = "std", feature = "decryption"))]
+#[cfg(all(feature = "std", feature = "decryption-api"))]
 fn decrypt_variable_data_with_key(
     user_data: &user_data::UserDataBlock<'_>,
     wireless_manufacturer_id: Option<&wireless_mbus_link_layer::ManufacturerId>,
     key: &[u8; 16],
     output: &mut [u8],
 ) -> Option<usize> {
-    use user_data::UserDataBlock;
-
-    let mut provider = crate::decryption::StaticKeyProvider::<1>::new();
-    match user_data {
-        UserDataBlock::VariableDataStructureWithLongTplHeader {
-            long_tpl_header, ..
-        } => {
-            if !long_tpl_header.is_encrypted() {
-                return None;
-            }
-            let manufacturer = long_tpl_header.manufacturer.as_ref().ok()?;
-            provider
-                .add_key(
-                    manufacturer.to_id(),
-                    long_tpl_header.identification_number.number,
-                    *key,
-                )
-                .ok()?;
-            user_data.decrypt_variable_data(&provider, output).ok()
-        }
-        UserDataBlock::VariableDataStructureWithShortTplHeader {
-            short_tpl_header, ..
-        } => {
-            if !short_tpl_header.is_encrypted() {
-                return None;
-            }
-            let manufacturer_id = wireless_manufacturer_id?;
-            provider
-                .add_key(
-                    manufacturer_id.manufacturer_code.to_id(),
-                    manufacturer_id.identification_number.number,
-                    *key,
-                )
-                .ok()?;
-            user_data
-                .decrypt_variable_data_with_context(
-                    &provider,
-                    manufacturer_id.manufacturer_code,
-                    manufacturer_id.identification_number.number,
-                    manufacturer_id.version,
-                    manufacturer_id.device_type,
-                    output,
-                )
-                .ok()
-        }
-        _ => None,
+    if !user_data_is_encrypted(Some(user_data)) {
+        return None;
     }
+    crate::output::decrypt_user_data(user_data, wireless_manufacturer_id, key, output).ok()
 }
 
 #[cfg(feature = "std")]
@@ -1535,7 +1545,7 @@ mod tests {
         assert!(csv_output.contains("12345678"));
     }
 
-    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[cfg(all(feature = "std", feature = "decryption-mode-5"))]
     #[test]
     fn test_wireless_csv_with_key_contains_records() {
         let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";
@@ -1884,7 +1894,7 @@ mod tests {
         assert!(table_output.contains("(3383)[day]"));
     }
 
-    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[cfg(all(feature = "std", feature = "decryption-mode-5"))]
     #[test]
     fn decrypted_utf8_text_is_not_rendered_as_latin1() {
         let input = "2E44931578563412330333637A2A00202557FB8016CA78E1243700B52E981E1918233AFE5E826DD0D4AD7854C697E7C8EB";
@@ -1978,7 +1988,7 @@ mod tests {
         }));
     }
 
-    #[cfg(all(feature = "std", feature = "decryption"))]
+    #[cfg(all(feature = "std", feature = "decryption-mode-5"))]
     #[test]
     fn test_hexview_with_key_displays_decrypted_wireless_payload() {
         let input = "2E44931578563412330333637A2A0020255923C95AAA26D1B2E7493BC2AD013EC4A6F6D3529B520EDFF0EA6DEFC955B29D6D69EBF3EC8A";

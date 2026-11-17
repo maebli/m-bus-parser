@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -24,13 +24,13 @@ jobs:
       - name: Check Formatting
         run: cargo fmt -- --check
       - name: Security audit
-        run: | 
+        run: |
           cargo install cargo-audit
           cargo audit
       - name: Build Library
         run: cargo build --verbose
       - name: Run Library Tests
-        run: | 
+        run: |
           cargo test --verbose
           cargo test --verbose -F std
       - name: Run Library Tests with plaintext before with enabled
@@ -44,6 +44,14 @@ jobs:
           cargo test -p m-bus-manufacturer --all-targets
           rustup target add thumbv7em-none-eabi
           cargo build -p m-bus-manufacturer --target thumbv7em-none-eabi
+      - name: Test individual decryption modes
+        run: |
+          for mode in 5 7 10 13; do
+            cargo test -p m-bus-core --no-default-features --features "decryption-mode-$mode"
+            cargo test --no-default-features --features "std,decryption-mode-$mode"
+            cargo check --no-default-features --features "decryption-mode-$mode" --target thumbv7em-none-eabi
+            cargo check -p m-bus-parser-cli -p m-bus-parser-wasm-pack -p pymbusparser --no-default-features --features "decryption-mode-$mode"
+          done
       - name: Lint with Clippy
         run: |
           rustup component add clippy
@@ -54,7 +62,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     needs: build-library
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -82,7 +90,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     needs: build-library
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -101,10 +109,17 @@ jobs:
           cargo test --verbose
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Test mode 13 browser sessions
+        run: node --test wasm/tests/mode13.mjs
       - name: Run WASM browser tests
         run: |
           cd wasm
           wasm-pack test --headless --firefox
+      - name: Test Mode 7 WebAssembly bindings
+        run: wasm-pack test --node wasm --test mode7
       - name: Lint WASM with Clippy
         run: |
           rustup component add clippy
@@ -119,7 +134,7 @@ jobs:
       contents: read
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -185,7 +200,7 @@ jobs:
       contents: read
     if: startsWith(github.ref, 'refs/tags/cli-v')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -236,7 +251,7 @@ jobs:
       contents: read
     if: startsWith(github.ref, 'refs/tags/wasm-v')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -247,7 +262,7 @@ jobs:
         run: |
           cd wasm
           wasm-pack build --target bundler
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'

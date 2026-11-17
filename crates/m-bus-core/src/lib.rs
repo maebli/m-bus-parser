@@ -1,5 +1,6 @@
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
+pub mod authentication;
 pub mod decryption;
 
 #[cfg(feature = "std")]
@@ -97,6 +98,12 @@ pub enum ApplicationLayerError {
     InvalidManufacturerCode { code: u16 },
     InsufficientData,
     Unimplemented { feature: &'static str },
+    InvalidDataLength { expected: usize, actual: usize },
+    InvalidPayload { field: &'static str },
+    EncryptedPayload,
+    ChecksumMismatch { expected: u16, actual: u16 },
+    FormatSignatureMismatch,
+    OutputBufferTooSmall,
 }
 
 #[cfg(feature = "std")]
@@ -122,9 +129,27 @@ impl fmt::Display for ApplicationLayerError {
             ApplicationLayerError::InsufficientData => {
                 write!(f, "Insufficient data")
             }
+            ApplicationLayerError::InvalidDataLength { expected, actual } => {
+                write!(
+                    f,
+                    "Invalid data length: expected {expected} bytes, got {actual}"
+                )
+            }
             ApplicationLayerError::Unimplemented { feature } => {
                 write!(f, "Unimplemented feature: {}", feature)
             }
+            ApplicationLayerError::InvalidPayload { field } => write!(f, "Invalid {field}"),
+            ApplicationLayerError::EncryptedPayload => {
+                write!(f, "Decrypt the application payload before decoding it")
+            }
+            ApplicationLayerError::ChecksumMismatch { expected, actual } => write!(
+                f,
+                "Checksum mismatch: expected {expected:04X}, got {actual:04X}"
+            ),
+            ApplicationLayerError::FormatSignatureMismatch => {
+                write!(f, "Compact frame requires a matching format signature")
+            }
+            ApplicationLayerError::OutputBufferTooSmall => write!(f, "Output buffer is too small"),
         }
     }
 }
@@ -691,7 +716,7 @@ impl fmt::Display for SecurityMode {
             Self::AesCcm128 => write!(f, "AES-CCM-128"),
             Self::Reserved11 => write!(f, "Reserved for future use"),
             Self::Reserved12 => write!(f, "Reserved for future use"),
-            Self::SpecificUsage13 => write!(f, "Specific usage (Bibliographical Entry [8])"),
+            Self::SpecificUsage13 => write!(f, "TLS (mode 13)"),
             Self::Reserved14 => write!(f, "Reserved for future use"),
             Self::SpecificUsage15 => write!(f, "Specific usage (Bibliographical Entry [7])"),
             Self::ReservedHigher(mode) => write!(f, "Reserved for future use (mode {})", mode),

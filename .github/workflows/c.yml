@@ -1,0 +1,75 @@
+name: C bindings
+
+on:
+  push:
+    branches: [main]
+    tags: ['c-v*']
+    paths: ['c/**', 'src/**', 'crates/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/c.yml']
+  pull_request:
+    branches: [main]
+    paths: ['c/**', 'src/**', 'crates/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/c.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: macos-26
+            target: aarch64-apple-darwin
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: cargo fmt -p m-bus-parser-c -- --check
+      - run: cargo clippy -p m-bus-parser-c --no-deps -- -D warnings
+      - run: cargo build --locked -p m-bus-parser-c --release --target ${{ matrix.target }}
+      - name: Compile the C example and package libraries
+        run: python c/package.py --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: c-${{ matrix.target }}
+          path: target/c-dist/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/c-v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: c-*
+          merge-multiple: true
+          path: dist
+      - name: Publish native libraries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/*
+          else
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --title "C bindings $RELEASE_TAG" --notes "C shared and static libraries, public header, and runnable example. Each archive includes a SHA-256 checksum file."
+          fi
