@@ -239,8 +239,39 @@
             margin-top: 0;
         }
 
-        .input-heading { justify-content: space-between; margin-bottom: 4px; }
-        .input-heading label { margin: 0; font-size: 0.8rem; }
+        .input-heading { justify-content: space-between; gap: 8px 16px; margin: 2px 0 8px; }
+        .telegram-heading { display: grid; }
+        .telegram-heading label { margin: 0; }
+        .encoding-picker {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: #59636e;
+        }
+        .encoding-options {
+            display: inline-flex;
+            padding: 3px;
+            border: 1px solid #d1d9e0;
+            border-radius: 9px;
+            background: #f6f8fa;
+        }
+        .encoding-options label { position: relative; margin: 0; font: inherit; cursor: pointer; }
+        .encoding-options span {
+            display: block;
+            padding: 5px 12px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .encoding-options label:hover span { background: #eaeef2; }
+        .encoding-options input:checked + span { background: #fff; border-color: #8cadd5; color: #0550ae; box-shadow: 0 1px 2px #1f23281a; }
+        .encoding-options input:focus-visible + span { outline: 2px solid currentColor; outline-offset: 1px; }
+        body.dark-mode .encoding-picker { color: #b1bac4; }
+        body.dark-mode .encoding-options { background: #0d1117; border-color: #3d444d; }
+        body.dark-mode .encoding-options label:hover span { background: #212830; }
+        body.dark-mode .encoding-options input:checked + span { background: #132c49; border-color: #4493f8; color: #cae8ff; }
         #detected-meter { font-size: 0.75rem; color: #59636e; overflow-wrap: anywhere; }
         .decode-actions .key-help { margin: 0; }
 
@@ -1096,6 +1127,7 @@
         }
 
         @media (forced-colors: active) {
+            .encoding-options input:checked + span { border-color: Highlight; }
             .code-viewer,
             .code-scroll,
             .code-source,
@@ -1167,20 +1199,23 @@
     </div>
     <form id="parser-form" autocomplete="off" novalidate>
         <div class="input-heading">
-            <label for="inputstring">Telegram</label>
-            <span id="detected-meter" aria-live="polite">Meter and security mode are detected automatically</span>
+            <div class="telegram-heading">
+                <label for="inputstring">Telegram</label>
+                <span id="detected-meter" aria-live="polite">Meter and security mode are detected automatically</span>
+            </div>
+            <div class="encoding-picker" role="radiogroup" aria-labelledby="encoding-label">
+                <span id="encoding-label">Encoding</span>
+                <div class="encoding-options">
+                    <label title="Try Hex first, then Base64"><input class="visually-hidden" type="radio" name="encoding" value="auto" checked><span>Auto</span></label>
+                    <label><input class="visually-hidden" type="radio" name="encoding" value="hex"><span>Hex</span></label>
+                    <label><input class="visually-hidden" type="radio" name="encoding" value="base64"><span>Base64</span></label>
+                </div>
+            </div>
         </div>
         <textarea rows="2" cols="80"
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
         <div class="input-tools">
-            <label for="input-format">Input encoding
-                <select id="input-format">
-                    <option value="auto">Auto (hex first)</option>
-                    <option value="hex">Hex</option>
-                    <option value="base64">Base64</option>
-                </select>
-            </label>
             <div id="meter-key-fields">
                 <label for="aeskey" id="aeskey-label" class="visually-hidden">Meter key <span class="key-help">(optional)</span></label>
                 <div class="key-input-container">
@@ -1701,8 +1736,8 @@
             let renderGeneration = 0;
             let inspectionTimer;
             const telegramInput = document.getElementById('inputstring');
-            const inputFormat = document.getElementById('input-format');
-            inputFormat.addEventListener('change', () => {
+            const inputFormat = document.getElementById('parser-form').elements.namedItem('encoding');
+            document.querySelector('.encoding-picker').addEventListener('change', () => {
                 clearResult();
                 inspectCurrentTelegram();
             });
