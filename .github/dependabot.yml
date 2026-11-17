@@ -13,3 +13,6 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "bincode"
+        update-types: ["version-update:semver-major"]
