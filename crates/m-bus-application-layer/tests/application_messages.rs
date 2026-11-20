@@ -227,6 +227,46 @@ fn clock_commands_decode_time_and_validate_control_and_verification() {
 }
 
 #[test]
+fn variable_records_follow_the_transport_encryption_state() {
+    for (ci, header_size) in [(0x7A, 4), (0x72, 12)] {
+        for (security_mode, encrypted) in [(0, false), (5, true)] {
+            let mut bytes = telegram(ci, header_size, &[0x01, 0x13, 0x2A]);
+            bytes[header_size] = security_mode;
+            let block = parse_application_layer(&bytes).unwrap();
+            assert_eq!(block.is_encrypted(), Some(encrypted));
+            assert_eq!(block.data_records().is_none(), encrypted);
+        }
+    }
+}
+
+#[cfg(feature = "decryption-mode-13")]
+#[test]
+fn mode13_payload_is_selected_by_the_transport_security_mode() {
+    let handshake = [1, 22, 3, 3, 0, 4, 14, 0, 0, 0];
+    let mut bytes = telegram(0x7A, 4, &handshake);
+    let block = parse_application_layer(&bytes).unwrap();
+    assert!(block.mode13_payload().unwrap().is_none());
+
+    bytes[3..5].copy_from_slice(&[0xFF, 13]);
+    let block = parse_application_layer(&bytes).unwrap();
+    let payload = block.mode13_payload().unwrap().unwrap();
+    assert_eq!(payload.records().count(), 1);
+}
+
+#[cfg(feature = "decryption-mode-13")]
+#[test]
+fn mode13_channel_request_is_rejected_on_a_data_response() {
+    use m_bus_application_layer::decryption::mode13::Mode13Error;
+
+    let bytes = [0x7A, 0, 0, 0xFF, 13, 0, 0, 0, 0, 0, 0];
+    let block = parse_application_layer(&bytes).unwrap();
+    assert_eq!(
+        block.mode13_payload().unwrap_err(),
+        Mode13Error::InvalidConfiguration
+    );
+}
+
+#[test]
 fn encrypted_protocol_payload_is_not_interpreted_before_decryption() {
     let mut bytes = telegram(0x6D, 12, &[0; 16]);
     bytes[11] = 0x10;
