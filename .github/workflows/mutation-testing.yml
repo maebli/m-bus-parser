@@ -1,0 +1,47 @@
+name: Mutation testing
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.rs'
+      - '.github/workflows/mutation-testing.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-testing-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  mutants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Get changed Rust lines from the pull request
+        run: git diff HEAD^1 HEAD -- '*.rs' > "$RUNNER_TEMP/changes.diff"
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f
+        with:
+          tool: cargo-mutants@27.1.0
+
+      - name: Test mutations on changed lines
+        run: >-
+          cargo mutants --workspace --cargo-arg=--workspace --cargo-arg=--locked
+          --features m-bus-parser/std,m-bus-parser/decryption
+          --in-diff "$RUNNER_TEMP/changes.diff"
+
+      - name: Upload mutation results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-results
+          path: mutants.out/
+          if-no-files-found: ignore
