@@ -1893,6 +1893,41 @@ mod tests {
     }
 
     #[test]
+    fn primary_measurements_keep_their_units_across_decimal_scales() {
+        use super::*;
+
+        for (codes, first_scale, label, units) in [
+            (0x18..=0x1F, -3, ValueLabel::Mass, &[unit!(Kilogram)][..]),
+            (
+                0x30..=0x37,
+                0,
+                ValueLabel::Power,
+                &[unit!(Joul), unit!(Hour ^ -1)],
+            ),
+            (
+                0x48..=0x4F,
+                -9,
+                ValueLabel::VolumeFlow,
+                &[unit!(Meter ^ 3), unit!(Second ^ -1)],
+            ),
+            (
+                0x50..=0x57,
+                -3,
+                ValueLabel::MassFlow,
+                &[unit!(Kilogram), unit!(Hour ^ -1)],
+            ),
+            (0x68..=0x6B, -3, ValueLabel::Pressure, &[unit!(Bar)]),
+        ] {
+            for (code, scale) in codes.zip(first_scale..) {
+                let bytes = [code];
+                let block = ValueInformationBlock::try_from(bytes.as_slice()).unwrap();
+                let info = ValueInformation::try_from(&block).unwrap();
+                assert_information(info, 0, scale, &[label], units);
+            }
+        }
+    }
+
+    #[test]
     fn duration_vifs_include_their_time_unit() {
         use super::*;
         for (base, label) in [
