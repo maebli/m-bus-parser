@@ -2,6 +2,8 @@
 # will have compiled files and executables
 debug/
 target/
+/mutants.out/
+/mutants.out.old/
 __pycache__/
 
 # Keep the workspace and resource-benchmark dependency graphs reproducible in CI.
