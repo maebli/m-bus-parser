@@ -297,6 +297,11 @@ export function m_bus_parse_with_key(data, format, key_hex) {
     }
 }
 
+/**
+ * @param {string} data
+ * @param {string} session_json
+ * @returns {any}
+ */
 export function m_bus_decode_tls(data, session_json) {
     const ptr0 = passStringToWasm0(data, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
@@ -309,6 +314,14 @@ export function m_bus_decode_tls(data, session_json) {
     return takeFromExternrefTable0(ret[0]);
 }
 
+/**
+ * @param {string} data
+ * @param {string} format
+ * @param {string} session_json
+ * @param {number | null | undefined} width
+ * @param {boolean} application_only
+ * @returns {string}
+ */
 export function m_bus_render_tls(data, format, session_json, width, application_only) {
     let deferred5_0;
     let deferred5_1;

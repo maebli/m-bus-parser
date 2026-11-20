@@ -470,7 +470,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "m-bus-application-layer"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "bitflags",
  "m-bus-core",
@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "m-bus-core"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -492,7 +492,7 @@ dependencies = [
 
 [[package]]
 name = "m-bus-parser"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "bindgen",
  "bitflags",
@@ -858,7 +858,7 @@ dependencies = [
 
 [[package]]
 name = "wired-mbus-link-layer"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "m-bus-core",
  "serde",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "wireless-mbus-link-layer"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "crc16",
  "m-bus-core",
