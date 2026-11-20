@@ -147,6 +147,41 @@ mod tests {
 
     #[cfg(feature = "std")]
     #[test]
+    fn ell_ii_annotations_cover_the_header_and_record_at_frame_offsets() {
+        use m_bus_parser::annotate::{annotate_frame, Layer, SegmentKind};
+        use SegmentKind::{CiField, DataPayload, Dif, ExtendedLinkLayer, Unknown, Vif};
+
+        let annotations = |frame: &str| {
+            annotate_frame(&hex::decode(frame).unwrap())
+                .unwrap()
+                .into_iter()
+                .filter(|segment| segment.layer != Layer::Frame)
+                .map(|segment| (segment.kind, segment.start..segment.end))
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            annotations("1144AE0C7856341201078D20270102030434"),
+            [(Unknown, 10..18)]
+        );
+        assert_eq!(
+            annotations("1244AE0C7856341201078D2027010203043412"),
+            [(CiField, 10..11), (ExtendedLinkLayer, 11..19)]
+        );
+        assert_eq!(
+            annotations("1544AE0C7856341201078D202701020304341201132A"),
+            [
+                (CiField, 10..11),
+                (ExtendedLinkLayer, 11..19),
+                (Dif, 19..20),
+                (Vif, 20..21),
+                (DataPayload, 21..22),
+            ]
+        );
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
     fn test_ci_78_wireless_frame_with_trailing_crc_annotations() {
         use m_bus_parser::annotate::{annotate_frame, SegmentKind};
 
