@@ -129,7 +129,7 @@ impl<'a> TryFrom<&'a [u8]> for WiredFrame<'a> {
 
 fn validate_checksum(data: &[u8]) -> Result<(), FrameError> {
     // Assuming the checksum is the second to last byte in the data array.
-    let checksum_byte_index = data.len() - 2;
+    let checksum_byte_index = data.len().checked_sub(2).ok_or(FrameError::LengthShort)?;
     let checksum_byte = *data
         .get(checksum_byte_index)
         .ok_or(FrameError::LengthShort)?;
@@ -201,6 +201,21 @@ mod tests {
                     183, 9, 1, 114, 0, 114, 101, 0, 0, 178, 1, 101, 0, 0, 31
                 ]
             })
+        );
+    }
+
+    #[test]
+    fn test_long_frame_header_without_checksum_is_too_short() {
+        let header_only: &[u8] = &[0x68, 0x68, 0xCE, 0x68];
+        let header_and_one_byte: &[u8] = &[0x68, 0x68, 0xCE, 0x68, 0x00];
+
+        assert_eq!(
+            WiredFrame::try_from(header_only),
+            Err(FrameError::LengthShort)
+        );
+        assert_eq!(
+            WiredFrame::try_from(header_and_one_byte),
+            Err(FrameError::LengthShort)
         );
     }
 }
