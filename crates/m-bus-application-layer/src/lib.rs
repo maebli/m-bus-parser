@@ -483,8 +483,7 @@ impl fmt::Display for ApplicationResetSubcode {
 impl ApplicationResetSubcode {
     #[must_use]
     pub const fn from(value: u8) -> Self {
-        match value & 0b1111 {
-            // Extracting the lower 4 bits
+        match value >> 4 {
             0b0000 => Self::All(value),
             0b0001 => Self::UserData(value),
             0b0010 => Self::SimpleBilling(value),
@@ -1465,7 +1464,7 @@ mod tests {
         assert_eq!(
             result,
             Ok(UserDataBlock::ResetAtApplicationLevel {
-                subcode: ApplicationResetSubcode::All(0x10)
+                subcode: ApplicationResetSubcode::UserData(0x10)
             })
         );
     }
