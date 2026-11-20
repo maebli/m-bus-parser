@@ -1,0 +1,29 @@
+[package]
+name = "m-bus-parser-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+m-bus-application-layer = { path = "../crates/m-bus-application-layer" }
+wireless-mbus-link-layer = { path = "../crates/wireless-mbus-link-layer" }
+
+[[bin]]
+name = "records"
+path = "fuzz_targets/records.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wireless"
+path = "fuzz_targets/wireless.rs"
+test = false
+doc = false
+bench = false

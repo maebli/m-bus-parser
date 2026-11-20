@@ -638,6 +638,14 @@ fn bcd_to_value_floating(
 }
 
 fn integer_to_value_internal(data: &[u8], byte_size: usize) -> Data<'_> {
+    let is_empty_integer = byte_size == 0;
+    if is_empty_integer {
+        return Data {
+            value: Some(DataType::Number(0.0)),
+            size: 0,
+        };
+    }
+
     let mut data_value = 0i64;
     let mut shift = 0;
     for byte in data.iter().take(if byte_size > 8 { 8 } else { byte_size }) {
@@ -1537,6 +1545,19 @@ mod tests {
                 value: Some(DataType::Number(-1.0)),
                 size: 8
             }
+        );
+    }
+
+    #[test]
+    fn test_variable_length_zero_byte_integer_is_zero() {
+        let lvar_integer_with_zero_bytes = [0xE0];
+        let result = DataFieldCoding::VariableLength.parse(&lvar_integer_with_zero_bytes, None);
+        assert_eq!(
+            result,
+            Ok(Data {
+                value: Some(DataType::Number(0.0)),
+                size: 1
+            })
         );
     }
 }
