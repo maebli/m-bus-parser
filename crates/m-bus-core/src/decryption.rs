@@ -369,37 +369,35 @@ mod tests {
     }
 
     #[test]
-    fn test_key_provider_basic() {
-        let mut provider = StaticKeyProvider::<10>::new();
-
-        // Add a test key
-        let key = [
-            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
-            0x0F, 0x10,
+    fn key_lookup_requires_both_manufacturer_and_meter_number() {
+        let meters = [
+            (0x0421, 12345678, [1; 16]),
+            (0x1EE6, 12345678, [2; 16]),
+            (0x0421, 87654321, [3; 16]),
         ];
+        let mut provider = StaticKeyProvider::<3>::new();
+        for (manufacturer, number, key) in meters {
+            provider.add_key(manufacturer, number, key).unwrap();
+        }
 
-        // Manufacturer code "ABC" -> ID calculation
-        let manufacturer_code = ManufacturerCode::from_id(0x0421).unwrap(); // ABC
-        let identification_number = 12345678u32;
-
-        // Add the key
-        provider
-            .add_key(0x0421, identification_number, key)
-            .unwrap();
-
-        // Create context
-        let context = KeyContext {
-            manufacturer: manufacturer_code,
-            identification_number,
-            version: 0x01,
+        let context = |manufacturer, number| KeyContext {
+            manufacturer: ManufacturerCode::from_id(manufacturer).unwrap(),
+            identification_number: number,
+            version: 1,
             device_type: DeviceType::WaterMeter,
-            security_mode: crate::SecurityMode::AesCbc128IvZero,
-            access_number: 0x00,
+            security_mode: SecurityMode::AesCbc128IvZero,
+            access_number: 0,
         };
-
-        // Retrieve the key
-        let retrieved_key = provider.get_key(&context).unwrap();
-        assert_eq!(retrieved_key, &key);
+        for (manufacturer, number, key) in meters {
+            assert_eq!(
+                provider.get_key(&context(manufacturer, number)),
+                Ok(key.as_slice())
+            );
+        }
+        assert_eq!(
+            provider.get_key(&context(0x1EE6, 87654321)),
+            Err(DecryptionError::KeyNotFound)
+        );
     }
 
     #[cfg(feature = "decryption-mode-5")]
