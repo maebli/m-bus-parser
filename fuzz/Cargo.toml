@@ -1,0 +1,51 @@
+[package]
+name = "m-bus-parser-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+m-bus-application-layer = { path = "../crates/m-bus-application-layer" }
+wireless-mbus-link-layer = { path = "../crates/wireless-mbus-link-layer" }
+m-bus-parser = { path = "..", features = ["std", "decryption"] }
+
+[[bin]]
+name = "records"
+path = "fuzz_targets/records.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wireless"
+path = "fuzz_targets/wireless.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame_wired"
+path = "fuzz_targets/frame_wired.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "frame_wireless"
+path = "fuzz_targets/frame_wireless.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "render"
+path = "fuzz_targets/render.rs"
+test = false
+doc = false
+bench = false
