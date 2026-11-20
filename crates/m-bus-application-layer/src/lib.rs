@@ -713,6 +713,9 @@ impl<'a> UserDataBlock<'a> {
             Self::VariableDataStructureWithLongTplHeader {
                 long_tpl_header, ..
             } => Some(long_tpl_header.is_encrypted()),
+            Self::VariableDataStructureWithShortTplHeader {
+                short_tpl_header, ..
+            } => Some(short_tpl_header.is_encrypted()),
             Self::ApplicationMessage(message) => Some(message.transport_header.is_encrypted()),
             _ => None,
         }
