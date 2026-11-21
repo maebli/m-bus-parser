@@ -2410,96 +2410,10 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
             enrichment.manufacturer_description.clone(),
         ));
     }
-    output.push_str(&key_value_box(&summary, width));
+    output.push_str(&summary_fields(&summary, width));
 
     if !decoded.records.is_empty() {
-        if width >= 100 {
-            let content = width - 19;
-            let widths = vec![
-                3,
-                (content * 34 / 100).max(18),
-                12,
-                11,
-                13,
-                content.saturating_sub(3 + (content * 34 / 100).max(18) + 12 + 11 + 13),
-            ];
-            let rows = decoded
-                .records
-                .iter()
-                .map(|record| {
-                    vec![
-                        record.index.to_string(),
-                        reading(record),
-                        record.function.clone(),
-                        format!(
-                            "{}/{}/{}",
-                            record.storage_number, record.tariff, record.subunit
-                        ),
-                        record.data_coding.clone(),
-                        record_hex(record),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            output.push_str(&box_table(
-                &["#", "Reading", "Function", "S/T/U", "Coding", "Raw"],
-                &rows,
-                &widths,
-            ));
-        } else if width >= 72 {
-            let content = width - 13;
-            let reading_width = (content * 52 / 100).max(24);
-            let widths = vec![
-                3,
-                reading_width,
-                12,
-                content.saturating_sub(3 + reading_width + 12),
-            ];
-            let rows = decoded
-                .records
-                .iter()
-                .map(|record| {
-                    vec![
-                        record.index.to_string(),
-                        format!(
-                            "{}\n{} · raw {}",
-                            reading(record),
-                            record.data_coding,
-                            record_hex(record)
-                        ),
-                        record.function.clone(),
-                        format!(
-                            "{}/{}/{}",
-                            record.storage_number, record.tariff, record.subunit
-                        ),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            output.push_str(&box_table(
-                &["#", "Reading / detail", "Function", "S/T/U"],
-                &rows,
-                &widths,
-            ));
-        } else {
-            for record in &decoded.records {
-                output.push_str(&format!("Record {}\n", record.index));
-                output.push_str(&key_value_box(
-                    &[
-                        ("Reading".to_string(), reading(record)),
-                        ("Function".to_string(), record.function.clone()),
-                        (
-                            "Storage/Tariff/Subunit".to_string(),
-                            format!(
-                                "{}/{}/{}",
-                                record.storage_number, record.tariff, record.subunit
-                            ),
-                        ),
-                        ("Coding".to_string(), record.data_coding.clone()),
-                        ("Raw".to_string(), record_hex(record)),
-                    ],
-                    width,
-                ));
-            }
-        }
+        push_record_table(&mut output, &decoded.records, width);
     }
     if !decoded.diagnostics.is_empty() {
         output.push_str("Diagnostics\n");
@@ -2513,37 +2427,136 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
                 )
             })
             .collect::<Vec<_>>();
-        output.push_str(&key_value_box(&rows, width));
+        output.push_str(&summary_fields(&rows, width));
     }
     Ok(output)
 }
 
-fn reading(record: &RecordOutput) -> String {
-    let quantity = if record.quantities.is_empty() {
+fn push_record_table(output: &mut String, records: &[RecordOutput], width: usize) {
+    let headers = [
+        "#", "Quantity", "Value", "Function", "S/T/U", "Coding", "Raw",
+    ];
+    let mut widths = headers.map(UnicodeWidthStr::width);
+    let rows = records
+        .iter()
+        .map(|record| {
+            let (quantity, value) = if record.value.kind == "manufacturer_specific" {
+                (
+                    "Manufacturer data".to_string(),
+                    format!("{} bytes", record.data_hex.split_ascii_whitespace().count()),
+                )
+            } else {
+                (quantity_label(record), value_with_unit(record))
+            };
+            let row = [
+                record.index.to_string(),
+                quantity,
+                value,
+                record.function.clone(),
+                format!(
+                    "{}/{}/{}",
+                    record.storage_number, record.tariff, record.subunit
+                ),
+                record.data_coding.clone(),
+                record_hex(record),
+            ];
+            for (max_width, cell) in widths.iter_mut().zip(&row) {
+                for line in cell.lines() {
+                    *max_width = (*max_width).max(UnicodeWidthStr::width(line));
+                }
+            }
+            row
+        })
+        .collect::<Vec<_>>();
+    let border_and_padding = 1 + 3 * headers.len();
+    if widths.iter().sum::<usize>() + border_and_padding <= width {
+        output.push_str(&box_table(&headers, &rows, &widths));
+        return;
+    }
+
+    for [index, quantity, value, function, counters, coding, raw] in rows {
+        output.push('\n');
+        let label = format!("#{index}  {quantity}:");
+        let heading = format!("{label} {value}");
+        if UnicodeWidthStr::width(heading.as_str()) <= width {
+            push_text(output, "", &heading, width);
+        } else {
+            push_text(output, "", &label, width);
+            push_text(output, "  ", &value, width);
+        }
+        let mut metadata = function;
+        for field in [coding, format!("S/T/U {counters}")] {
+            if UnicodeWidthStr::width(metadata.as_str())
+                + 3
+                + UnicodeWidthStr::width(field.as_str())
+                > width - 2
+            {
+                push_text(output, "  ", &metadata, width);
+                metadata = field;
+            } else {
+                metadata.push_str(" · ");
+                metadata.push_str(&field);
+            }
+        }
+        push_text(output, "  ", &metadata, width);
+        push_text(output, "  ", &format!("Raw: {raw}"), width);
+    }
+}
+
+fn quantity_label(record: &RecordOutput) -> String {
+    if record.quantities.is_empty() {
         "Reading".to_string()
     } else {
         record.quantities.join(", ")
-    };
-    let unit = record
-        .unit
-        .as_ref()
-        .map(|value| format!(" {value}"))
-        .unwrap_or_default();
-    format!("{quantity}: {}{unit}", value_display(record))
+    }
 }
 
-fn key_value_box(rows: &[(String, String)], width: usize) -> String {
-    let content = width.saturating_sub(7);
-    let key_width = (content / 3).clamp(10, 24);
-    let value_width = content.saturating_sub(key_width).max(1);
-    let rows = rows
+fn value_with_unit(record: &RecordOutput) -> String {
+    let value = value_display(record);
+    match &record.unit {
+        Some(unit) => format!("{value} {unit}"),
+        None => value,
+    }
+}
+
+fn reading(record: &RecordOutput) -> String {
+    format!("{}: {}", quantity_label(record), value_with_unit(record))
+}
+
+fn push_text(output: &mut String, indent: &str, text: &str, width: usize) {
+    for line in wrap_display(text, width - indent.len()) {
+        output.push_str(indent);
+        output.push_str(&line);
+        output.push('\n');
+    }
+}
+
+fn summary_fields(rows: &[(String, String)], width: usize) -> String {
+    let mut output = String::new();
+    let label_width = rows
         .iter()
-        .map(|(key, value)| vec![key.clone(), value.clone()])
-        .collect::<Vec<_>>();
-    box_table(&["Field", "Value"], &rows, &[key_width, value_width])
+        .map(|(key, _)| UnicodeWidthStr::width(key.as_str()))
+        .max()
+        .unwrap_or(0);
+    for (key, value) in rows {
+        let key_width = UnicodeWidthStr::width(key.as_str());
+        let aligned = format!("{key}  {}{value}", " ".repeat(label_width - key_width));
+        if !value.contains('\n') && UnicodeWidthStr::width(aligned.as_str()) <= width {
+            output.push_str(&aligned);
+            output.push('\n');
+        } else {
+            push_text(&mut output, "", key, width);
+            push_text(&mut output, "  ", value, width);
+        }
+    }
+    output
 }
 
-fn box_table(headers: &[&str], rows: &[Vec<String>], widths: &[usize]) -> String {
+fn box_table<const N: usize>(
+    headers: &[&str; N],
+    rows: &[[String; N]],
+    widths: &[usize; N],
+) -> String {
     let mut output = String::new();
     push_border(&mut output, '┌', '┬', '┐', widths);
     push_row(
@@ -2614,15 +2627,31 @@ fn wrap_display(value: &str, width: usize) -> Vec<String> {
         }
         let mut line = String::new();
         let mut line_width = 0usize;
-        for character in source_line.chars() {
-            let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
-            if line_width != 0 && line_width + character_width > width {
-                lines.push(line);
-                line = String::new();
-                line_width = 0;
+        for (index, word) in source_line.split(' ').enumerate() {
+            let word_width = UnicodeWidthStr::width(word);
+            if index > 0 {
+                if line_width + 1 + word_width > width {
+                    lines.push(std::mem::take(&mut line));
+                    line_width = 0;
+                } else {
+                    line.push(' ');
+                    line_width += 1;
+                }
             }
-            line.push(character);
-            line_width += character_width;
+            if word_width <= width {
+                line.push_str(word);
+                line_width += word_width;
+                continue;
+            }
+            for character in word.chars() {
+                let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
+                if line_width + character_width > width {
+                    lines.push(std::mem::take(&mut line));
+                    line_width = 0;
+                }
+                line.push(character);
+                line_width += character_width;
+            }
         }
         lines.push(line);
     }
