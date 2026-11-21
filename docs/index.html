@@ -138,7 +138,7 @@
             font-size: 0.9rem;
         }
 
-        textarea {
+        form textarea {
             width: 100%;
             padding: 7px 9px;
             border: 1px solid #d1d9e0;
@@ -148,10 +148,12 @@
             box-sizing: border-box;
             margin-bottom: 0;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 14px;
+            font-size: 0.8125rem;
             line-height: 1.5;
+            field-sizing: content;
             resize: vertical;
-            min-height: 52px;
+            min-height: calc(1lh + 16px);
+            max-height: min(40vh, 16rem);
             display: block;
         }
 
@@ -201,7 +203,8 @@
         #meter-catalog > summary:hover { color: #0969da; }
         .meter-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0; }
         .meter-filter label { margin: 0; }
-        .meter-filter input { flex: 0 1 310px; min-width: 0; padding: 5px 8px; font: inherit; font-size: 0.84rem; color: inherit; background: transparent; border: 1px solid #d1d9e0; border-radius: 6px; }
+        .meter-filter input { flex: 0 1 310px; min-width: 0; }
+        .meter-filter input, .meter-filter select { padding: 5px 8px; font: inherit; font-size: 0.84rem; color: inherit; background: transparent; border: 1px solid #d1d9e0; border-radius: 6px; }
         .meter-filter span { font-size: 0.78rem; }
         .meter-samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 8px; margin-bottom: 4px; }
         .meter-sample { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid #d1d9e0; border-radius: 8px; text-decoration: none; color: inherit; }
@@ -223,7 +226,7 @@
         .sample-lock::after { width: 10px; height: 7px; margin-top: -1px; border-radius: 2px; }
         [data-encryption="cleartext"] .sample-lock::before { transform: translateX(4px); height: 6px; }
         .meter-sample:hover, .meter-sample:focus-visible { border-color: #0969da; }
-        body.dark-mode #meter-catalog, body.dark-mode .meter-sample, body.dark-mode .meter-filter input { border-color: #3d444d; }
+        body.dark-mode #meter-catalog, body.dark-mode .meter-sample, body.dark-mode .meter-filter input, body.dark-mode .meter-filter select { border-color: #3d444d; }
         body.dark-mode .meter-sample small { color: #b1bac4; }
         body.dark-mode .meter-sample strong, body.dark-mode #meter-catalog > summary:hover { color: #79b8ff; }
         body.dark-mode .meter-sample:hover, body.dark-mode .meter-sample:focus-visible { border-color: #4493f8; }
@@ -1395,7 +1398,16 @@
             <div class="meter-filter">
                 <label for="meter-search">Find an example</label>
                 <input type="search" id="meter-search" placeholder="Manufacturer, model, protocol or security mode" />
-                <span id="meter-count" role="status">49 examples</span>
+                <label for="catalog-security">Security</label>
+                <select id="catalog-security">
+                    <option value="">All modes</option>
+                    <option value="cleartext">Unencrypted</option>
+                    <option value="5">Mode 5 · AES-CBC</option>
+                    <option value="7">Mode 7 · AES-CBC</option>
+                    <option value="10">Mode 10 · AES-CCM</option>
+                    <option value="13">Mode 13 · TLS</option>
+                </select>
+                <span id="meter-count" role="status">48 examples</span>
             </div>
             <div class="meter-samples">
                 <a class="meter-sample" data-encryption="cleartext" href="?data=689898680801721234567842040202450000000E84000000000000008E1084000000000000008E2084000000000000008EB00084000000000000008E801084000000000000008E804084000000000000008E904084000000000000008EA04084000000000000008EB04084000000000000008E8050840000000000000001FF9300000CFF92000000000107FD9700000000000000000001FF9800001F7516&amp;format=table&amp;encoding=hex">
@@ -1422,6 +1434,38 @@
                     <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>Elster Falcon</strong><small>Water · Wired · 1,234.567&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
                 </a>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="5" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · Public key · No authentication</small><small class="sample-lock">Mode 5 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="5" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · Public key · No authentication</small><small class="sample-lock">Mode 5 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="7" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · OMS reference · Authenticated</small><small class="sample-lock">Mode 7 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="7" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · OMS reference · Authenticated</small><small class="sample-lock">Mode 7 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="10" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · Public key · Authenticated</small><small class="sample-lock">Mode 10 · AES-CCM</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="10" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · Public key · Authenticated</small><small class="sample-lock">Mode 10 · AES-CCM</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="13" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · Test session · Authenticated</small><small class="sample-lock">Mode 13 · TLS</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="13" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · Test session · Authenticated</small><small class="sample-lock">Mode 13 · TLS</small></span>
+                </button>
                 <a class="meter-sample" data-encryption="cleartext" href="?data=6821216808017202376200A8150002070000008C100409040000C4002A0000000001FD17008C16&amp;format=table&amp;encoding=hex">
                     <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>EMH DIZ</strong><small>Electricity · Wired · 4.09&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
@@ -1510,38 +1554,6 @@
                     <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>Minol Minocal WR3</strong><small>Heat · Wired · 0.01&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
                 </a>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="5" data-protocol="wired">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 5 · AES-CBC · Wired</strong><small>Public key · No authentication</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="5" data-protocol="wireless">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 5 · AES-CBC · Wireless</strong><small>Public key · No authentication</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="7" data-protocol="wired">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 7 · AES-CBC · Wired</strong><small>OMS reference · Authenticated</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="7" data-protocol="wireless">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 7 · AES-CBC · Wireless</strong><small>OMS reference · Authenticated</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="10" data-protocol="wired">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 10 · AES-CCM · Wired</strong><small>Public key · Authenticated</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="10" data-protocol="wireless">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 10 · AES-CCM · Wireless</strong><small>Public key · Authenticated</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="13" data-protocol="wired">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 13 · TLS · Wired</strong><small>Test session · Authenticated</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="13" data-protocol="wireless">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Mode 13 · TLS · Wireless</strong><small>Test session · Authenticated</small></span>
-                </button>
                 <a class="meter-sample" data-encryption="cleartext" href="?data=6832326808057208061030523B0102010000000403FA04000004837FFA04000002FD48440902FD5B0000022B00000C78080610300F0E7116&amp;format=table&amp;encoding=hex">
                     <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>NZR DHZ 5/63</strong><small>Electricity · Wired · 1.274&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
@@ -1586,10 +1598,6 @@
                     <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>SVM F22</strong><small>Heat · Wired · 28,014&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
                 </a>
-                <button type="button" class="meter-sample" data-encryption="cleartext" data-example="cleartext" data-protocol="wired">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Unencrypted · Wired</strong><small>No key needed</small></span>
-                </button>
                 <a class="meter-sample" data-encryption="cleartext" href="?data=2E44B05C82340100021B7A460000002F2F0A6601020AFB1A570602FD971D00002F2F2F2F2F2F2F2F2F2F2F2F2F2F2F&amp;format=table&amp;encoding=hex">
                     <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
                     <span><strong>WEP room sensor</strong><small>Room sensor · Wireless · 20.1&nbsp;°C</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
@@ -1640,11 +1648,6 @@
         const REPOSITORY = 'https://github.com/maebli/m-bus-parser';
 
         const telegramExamples = {
-            cleartext: {
-                telegrams: {
-                    wired: '683D3D6808017200512002824D0204008800000407000000000C15030000000B2E0000000B3B0000000A5A88120A5E16050B61237700026C8C110227370D0F60006716',
-                },
-            },
             5: {
                 telegrams: {
                     wired: '682F2F6808017278563412931533032A0020255923C95AAA26D1B2E7493B013EC4A6F6D3529B520EDFF0EA6DEFC99D6D69EBF32716',
@@ -1947,18 +1950,23 @@
             const meterCatalog = document.getElementById('meter-catalog');
             const meterSearch = document.getElementById('meter-search');
             const meterSamples = [...meterCatalog.querySelectorAll('.meter-sample')];
-            meterSearch.addEventListener('input', () => {
-                const words = meterSearch.value.trim().toLowerCase().split(/\s+/);
+            const catalogSecurity = document.getElementById('catalog-security');
+            function filterCatalog() {
+                const words = meterSearch.value.trim().toLowerCase().replace(/\bmode(?=\d)/g, 'mode ').split(/\s+/);
                 let visible = 0;
                 for (const sample of meterSamples) {
                     const label = sample.textContent.toLowerCase();
-                    sample.hidden = !words.every(word => word === 'encrypted'
+                    const mode = sample.dataset.example || sample.dataset.encryption;
+                    const matchesMode = !catalogSecurity.value || catalogSecurity.value === mode;
+                    sample.hidden = !matchesMode || !words.every(word => word === 'encrypted'
                         ? sample.dataset.encryption === 'encrypted' : label.includes(word));
                     if (!sample.hidden) visible++;
                 }
                 document.getElementById('meter-count').textContent = visible === 0
                     ? 'No matching examples' : visible === 1 ? '1 example' : visible + ' examples';
-            });
+            }
+            meterSearch.addEventListener('input', filterCatalog);
+            catalogSecurity.addEventListener('change', filterCatalog);
             meterSearch.addEventListener('keydown', event => {
                 if (event.key === 'Enter') event.preventDefault();
             });
