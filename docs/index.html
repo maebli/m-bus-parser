@@ -4,9 +4,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/png" href="./emeter.png">
+    <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="./manufacturer-icons.css">
     <style>
         /* UI palette: GitHub Primer light/dark neutrals and blue accents.
            https://primer.style/product/primitives/color/ */
@@ -107,7 +107,7 @@
         .header-meta { margin-top: 5px; }
         .header-meta .subtitle { margin-top: 0; }
         .project-links { gap: 4px; flex: 1 1 360px; }
-        .project-links a:not(#manufacturer-parser-request) {
+        .project-links > a:not(#manufacturer-parser-request) {
             padding: 1px 6px;
             border: 1px solid #d1d9e0;
             border-radius: 4px;
@@ -116,9 +116,16 @@
             line-height: 1.5;
             text-decoration: none;
         }
-        .project-links a:not(#manufacturer-parser-request):hover { color: #0969da; border-color: #0969da; }
-        body.dark-mode .project-links a:not(#manufacturer-parser-request) { color: #9198a1; border-color: #3d444d; }
-        body.dark-mode .project-links a:not(#manufacturer-parser-request):hover { color: #4493f8; border-color: #4493f8; }
+        .project-links > a:not(#manufacturer-parser-request):hover { color: #0969da; border-color: #0969da; }
+        body.dark-mode .project-links > a:not(#manufacturer-parser-request) { color: #9198a1; border-color: #3d444d; }
+        body.dark-mode .project-links > a:not(#manufacturer-parser-request):hover { color: #4493f8; border-color: #4493f8; }
+
+        .project-links .package-rust { background-color: #d463341f; }
+        .project-links .package-python { background-color: #388bfd1f; }
+        .project-links .package-javascript { background-color: #d7a90024; }
+        .project-links .package-java { background-color: #ce516e1f; }
+        .project-links .package-c { background-color: #9564dd1f; }
+        .project-links .package-cli { background-color: #26956a1f; }
 
         form {
             background: #fff;
@@ -138,7 +145,7 @@
             font-size: 0.9rem;
         }
 
-        textarea {
+        form textarea {
             width: 100%;
             padding: 7px 9px;
             border: 1px solid #d1d9e0;
@@ -148,10 +155,12 @@
             box-sizing: border-box;
             margin-bottom: 0;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 14px;
+            font-size: 0.8125rem;
             line-height: 1.5;
+            field-sizing: content;
             resize: vertical;
-            min-height: 52px;
+            min-height: calc(1lh + 16px);
+            max-height: min(40vh, 16rem);
             display: block;
         }
 
@@ -195,16 +204,46 @@
         .input-tools details[name="parser-disclosure"] > summary { cursor: pointer; width: fit-content; color: #59636e; font-size: 0.75rem; }
         .input-tools details[name="parser-disclosure"] > summary::marker { font-size: 0.65rem; }
         .input-tools details[name="parser-disclosure"] > summary:hover { color: #0969da; }
-        .example-options { display: grid; gap: 4px; }
-        .example-option { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 0; font-size: 0.8rem; }
-        .example-description { display: grid; flex: 1 1 240px; gap: 2px; }
-        .example-protocols { display: flex; gap: 4px; }
-        .example-options button { padding: 5px 8px; border: 1px solid #d1d9e0; border-radius: 4px; background: transparent; color: inherit; font: inherit; font-size: 0.75rem; cursor: pointer; }
-        .example-options button:hover { background: #eff2f5; }
-        .example-options span { color: #59636e; font-size: 0.75rem; }
-        body.dark-mode .example-options button { border-color: #3d444d; }
-        body.dark-mode .example-options button:hover { background: #212830; }
-        body.dark-mode .example-options span { color: #9198a1; }
+
+        #meter-catalog { margin-top: 8px; border-top: 1px solid #d1d9e0; padding-top: 6px; }
+        #meter-catalog > summary { width: fit-content; cursor: pointer; font-size: 0.84rem; font-weight: 600; }
+        #meter-catalog > summary:hover { color: #0969da; }
+        .meter-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0; }
+        .meter-filter label { margin: 0; }
+        .meter-filter input { flex: 0 1 310px; min-width: 0; }
+        .meter-filter input, .meter-filter select { padding: 5px 8px; font: inherit; font-size: 0.84rem; color: inherit; background: transparent; border: 1px solid #d1d9e0; border-radius: 6px; }
+        .meter-filter span { font-size: 0.78rem; }
+        .meter-samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 8px; margin-bottom: 4px; }
+        .meter-sample { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid #d1d9e0; border-radius: 8px; text-decoration: none; color: inherit; }
+        .meter-sample[hidden] { display: none; }
+        .meter-sample img { width: 3rem; height: 3rem; flex: none; object-fit: contain; }
+        .meter-sample strong, .meter-sample small { display: block; }
+        .meter-sample strong { font-size: 0.88rem; }
+        .meter-sample small { font-size: 0.78rem; color: #59636e; }
+        .meter-sample strong { color: #0969da; }
+        .sample-lock { position: relative; padding-inline-start: 16px; }
+        .sample-lock::before, .sample-lock::after {
+            content: ''; position: absolute; box-sizing: border-box; inset-inline-start: 1px;
+            top: 50%; border: 1.5px solid currentColor;
+        }
+        .sample-lock::before {
+            width: 8px; height: 7px; margin: -7px 0 0 1px;
+            border-bottom: 0; border-radius: 5px 5px 0 0;
+        }
+        .sample-lock::after { width: 10px; height: 7px; margin-top: -1px; border-radius: 2px; }
+        [data-encryption="cleartext"] .sample-lock::before { transform: translateX(4px); height: 6px; }
+        .meter-sample:hover, .meter-sample:focus-visible { border-color: #0969da; }
+        body.dark-mode #meter-catalog, body.dark-mode .meter-sample, body.dark-mode .meter-filter input, body.dark-mode .meter-filter select { border-color: #3d444d; }
+        body.dark-mode .meter-sample small { color: #b1bac4; }
+        body.dark-mode .meter-sample strong, body.dark-mode #meter-catalog > summary:hover { color: #79b8ff; }
+        body.dark-mode .meter-sample:hover, body.dark-mode .meter-sample:focus-visible { border-color: #4493f8; }
+
+        @media (max-width: 380px) {
+            .meter-sample { gap: 6px; padding: 6px; }
+            .meter-sample img { width: 2rem; height: 2rem; }
+        }
+
+        button.meter-sample { background: transparent; font: inherit; text-align: start; cursor: pointer; }
         .tls-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 12px; margin: 12px 0; }
         .tls-fields label { display: grid; min-width: 0; gap: 6px; font-size: 0.85rem; }
         .tls-fields .tls-key-field { grid-column: 1 / -1; }
@@ -318,9 +357,7 @@
         .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
         .result-views { min-width: 0; }
         .result-views .parse-actions { margin: 0; gap: 4px; }
-        .result-views input[type="button"] { background: transparent; border-color: transparent; color: #59636e; padding: 4px 10px; min-height: 28px; }
-        .result-views #parse_mermaid,
-        .result-views #parse_hexview { padding-inline: 10px; }
+        .result-views input[type="button"] { background: transparent; border-color: transparent; color: #59636e; box-sizing: border-box; width: 5rem; height: 2rem; min-height: 0; padding: 0 4px; }
         .result-views input[type="button"]:hover { background: #eff2f5; }
         .result-views input[type="button"][aria-pressed="true"] { background: #ddf4ff; border-color: #0969da; color: #0550ae; box-shadow: none; }
         .result-views input[type="button"]:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
@@ -388,15 +425,69 @@
             color: #fff;
         }
 
-        #parse_mermaid,
-        #parse_hexview { padding-inline: 24px; }
 
-        #mermaid_diagram {
-            padding: 28px 32px 32px;
-            overflow-x: auto;
+        .telegram-diagram {
+            --diagram-line: #b7c6d3;
+            --diagram-border: #d1d9e0;
+            --diagram-panel: #f6f8fa;
+            --diagram-accent: #0969da;
+            padding: 18px clamp(10px, 2vw, 24px) 24px;
+            border-top: 1px solid var(--diagram-border);
         }
-
-        #mermaid_diagram svg { display: block; margin: 0 auto; }
+        body.dark-mode .telegram-diagram {
+            --diagram-line: #506277;
+            --diagram-border: #3d444d;
+            --diagram-panel: #151b23;
+            --diagram-accent: #79c0ff;
+        }
+        .diagram-root { border-left: 4px solid var(--diagram-accent); padding: 8px 14px; background: var(--diagram-panel); }
+        .diagram-root h2 { font-size: 1.125rem; margin: 0; }
+        .diagram-root h2::first-letter { text-transform: uppercase; }
+        .diagram-branches { padding-left: 22px; }
+        .diagram-branch { position: relative; padding: 14px 0 0 18px; min-width: 0; }
+        .diagram-branch::before, .diagram-branch::after { position: absolute; content: ''; left: 0; }
+        .diagram-branch::before { top: 0; bottom: 0; border-left: 1px solid var(--diagram-line); }
+        .diagram-branch:last-child::before { bottom: auto; height: 26px; }
+        .diagram-branch::after { top: 26px; width: 12px; border-top: 1px solid var(--diagram-line); }
+        .diagram-branch h3 { margin: 0 0 4px; font-size: 1rem; }
+        .diagram-fields { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr); gap: 2px 14px; margin: 4px 0 0; font-size: .875rem; }
+        .diagram-fields dt, .diagram-fields dd { margin: 0; overflow-wrap: anywhere; }
+        .diagram-fields dt { font-weight: 600; }
+        .diagram-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 8px; align-items: start; }
+        .telegram-diagram [data-kind] { --ink: light-dark(#535e6a, #b9c5d2); }
+        .telegram-diagram [data-kind="electricity"] { --ink: light-dark(#865300, #ffd36d); }
+        .telegram-diagram [data-kind="water"] { --ink: light-dark(#006a96, #79d5ff); }
+        .telegram-diagram [data-kind="thermal"] { --ink: light-dark(#a13728, #ffab98); }
+        .telegram-diagram [data-kind="gas"] { --ink: light-dark(#08705f, #74dfc4); }
+        .telegram-diagram [data-kind="time"] { --ink: light-dark(#6643a5, #d2baff); }
+        .telegram-diagram { color-scheme: light; }
+        body.dark-mode .telegram-diagram { color-scheme: dark; }
+        .reading-icon {
+            width: 1.875rem; height: 1.875rem; box-sizing: border-box; padding: 6px;
+            fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round;
+            color: var(--ink); background: color-mix(in srgb, currentColor 12%, transparent); border-radius: 8px;
+        }
+        .diagram-branch h3:has(.reading-icon) { display: flex; align-items: center; gap: 6px; }
+        .diagram-branch h3 .reading-icon { width: 1.5rem; height: 1.5rem; padding: 4px; }
+        .diagram-record { border: 1px solid var(--diagram-border); border-radius: 8px; }
+        .diagram-record summary {
+            display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center;
+            box-sizing: border-box; min-height: 4.5rem; padding: 10px; font-size: .875rem; cursor: pointer;
+        }
+        .diagram-record summary::-webkit-details-marker { display: none; }
+        .diagram-record summary::after {
+            content: ''; width: 6px; height: 6px; border: solid currentColor; border-width: 0 1.5px 1.5px 0;
+            transform: rotate(45deg); margin: 0 3px;
+        }
+        .diagram-record[open] summary::after { transform: rotate(225deg); }
+        .diagram-record summary:hover { background: var(--diagram-panel); border-radius: inherit; }
+        .diagram-caption { min-width: 0; overflow-wrap: anywhere; }
+        .diagram-caption > span { display: block; }
+        .diagram-record:not([open]) .diagram-caption > * {
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .diagram-record strong { display: block; font: 600 1rem/1.5 ui-monospace, monospace; color: var(--ink); }
+        .diagram-record[open] .diagram-fields { border-top: 1px solid var(--diagram-border); padding: 8px 10px 10px; margin: 0; }
 
         :is(button, a, input):focus-visible {
             outline: 3px solid #0969da;
@@ -451,6 +542,13 @@
 
         #output > .key-help,
         #output > .parse-report-actions { margin: 12px 20px; }
+        .parser-request { text-decoration: underline dotted; text-underline-offset: 2px; }
+        .parser-request.show-action::after {
+            content: 'Request parser';
+            margin-inline-start: 0.5em;
+            font: 0.75rem system-ui, sans-serif;
+            white-space: nowrap;
+        }
 
         .output-placeholder {
             margin: 0;
@@ -485,6 +583,23 @@
             box-sizing: border-box;
             overflow: hidden;
         }
+
+        .text-table {
+            overflow-x: auto;
+            padding: 12px clamp(8px, 2vw, 20px);
+            border-top: 1px solid #d1d9e0;
+            font: 0.875rem/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .text-table .table-label { color: #065e78; }
+        .text-table .table-reading { color: #116329; }
+        .text-table .table-bytes { color: #6639a6; }
+        .manufacturer-link { color: #0969da; text-decoration: underline; }
+        body.dark-mode .text-table .table-label { color: #86d5ec; }
+        body.dark-mode .text-table .table-reading { color: #7ee787; }
+        body.dark-mode .text-table .table-bytes { color: #d2a8ff; }
+        body.dark-mode .manufacturer-link { color: #79c0ff; }
+        body.dark-mode .text-table { border-color: #3d444d; }
 
         .code-viewer {
             border-top: 1px solid #d0d7de;
@@ -603,8 +718,8 @@
             white-space: pre-wrap;
         }
 
-        .parse-report-actions a { color: #0969da; }
-        body.dark-mode .parse-report-actions a { color: #79c0ff; }
+        :is(.parse-report-actions a, .parser-request) { color: #0969da; }
+        body.dark-mode :is(.parse-report-actions a, .parser-request) { color: #79c0ff; }
 
         #copy_output,
         #download_output {
@@ -818,6 +933,7 @@
         }
 
         /* ── Interactive Hex Viewer ─────────────────────────── */
+        #output > .manufacturer-link { margin: 12px 24px 0; font-size: .875rem; line-height: 1.6; }
         .hex-view-title {
             margin: 20px 24px 8px;
             font-size: 14px;
@@ -1121,9 +1237,20 @@
             .header-text .subtitle { font-size: 0.75rem; overflow-wrap: anywhere; }
             form { padding: 8px 10px; }
             .parse-actions input { flex: 0 0 auto; }
+            #output > .manufacturer-link { margin-inline: 16px; }
             .hex-viewer { margin: 12px 16px 20px; }
             .hex-viewer-left, .hex-viewer-right { padding: 16px; }
-            #mermaid_diagram { padding: 20px; }
+            .diagram-branches { padding-left: 8px; }
+        }
+
+        @media (max-width: 380px) {
+            .diagram-fields dd:has(> .manufacturer-link) { grid-column: 1 / -1; }
+            .diagram-record summary { gap: 3px 6px; }
+            .diagram-record .reading-icon { width: 1.5rem; height: 1.5rem; padding: 4px; }
+            .diagram-caption { display: contents; }
+            .diagram-caption > span { grid-area: 1 / 2; }
+            .diagram-caption > strong { grid-column: 1 / -1; grid-row: 2; }
+            .diagram-record summary::after { grid-area: 1 / 3; }
         }
 
         @media (forced-colors: active) {
@@ -1160,10 +1287,15 @@
                 </div>
                 <nav class="project-links" aria-label="Project resources">
                     <a href="./dev/bench/">Benchmarks</a>
-                    <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Crate</a>
                     <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">Docs</a>
                     <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">Build</a>
                     <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>
+                    <a class="package-rust" href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Rust</a>
+                    <a class="package-python" href="https://pypi.org/project/pymbusparser/" target="_blank" rel="noopener noreferrer">Python</a>
+                    <a class="package-javascript" href="https://www.npmjs.com/package/m-bus-parser-wasm-pack" target="_blank" rel="noopener noreferrer">JavaScript (Wasm)</a>
+                    <a class="package-java" href="https://central.sonatype.com/artifact/io.github.maebli/m-bus-parser" target="_blank" rel="noopener noreferrer">Java</a>
+                    <a class="package-c" href="https://github.com/maebli/m-bus-parser/releases?q=%22C+bindings%22" target="_blank" rel="noopener noreferrer">C</a>
+                    <a class="package-cli" href="https://crates.io/crates/m-bus-parser-cli" target="_blank" rel="noopener noreferrer">CLI</a>
                     <a class="utility-control" id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
                         target="_blank" rel="noopener noreferrer">
                         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -1232,49 +1364,6 @@
             <div class="decode-actions">
                 <button type="submit" id="decode-button" disabled>Loading parser…</button>
             </div>
-            <details id="examples-panel" name="parser-disclosure">
-                <summary>Examples</summary>
-                <div class="disclosure-content">
-                    <p class="key-help">Choose Wired or Wireless to decode an example. Public test keys and TLS sessions are included when available.</p>
-                    <div class="example-options">
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 5 · AES-CBC</strong><span>Decrypted readings · no authentication</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="5" data-protocol="wired" aria-label="Load wired mode 5 example">Wired</button>
-                                <button type="button" data-example="5" data-protocol="wireless" aria-label="Load wireless mode 5 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 7 · AES-CBC</strong><span>Authenticated readings · OMS reference telegrams</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="7" data-protocol="wired" aria-label="Load wired mode 7 example">Wired</button>
-                                <button type="button" data-example="7" data-protocol="wireless" aria-label="Load wireless mode 7 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 10 · AES-CCM</strong><span>Authenticated readings</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="10" data-protocol="wired" aria-label="Load wired mode 10 example">Wired</button>
-                                <button type="button" data-example="10" data-protocol="wireless" aria-label="Load wireless mode 10 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 13 · TLS</strong><span>Authenticated readings · includes test session</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="13" data-protocol="wired" aria-label="Load wired mode 13 example">Wired</button>
-                                <button type="button" data-example="13" data-protocol="wireless" aria-label="Load wireless mode 13 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Unencrypted</strong><span>No key needed</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="cleartext" data-protocol="wired" aria-label="Load unencrypted wired example">Wired</button>
-                                <button type="button" data-example="cleartext" data-protocol="wireless" aria-label="Load unencrypted wireless example">Wireless</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </details>
             <details id="tls-panel" class="tls-panel" name="parser-disclosure">
                 <summary id="tls-summary">TLS session · mode 13</summary>
                 <div class="disclosure-content">
@@ -1323,18 +1412,229 @@
                 </details>
             </section>
         </div>
+        <details id="meter-catalog" name="parser-disclosure">
+            <summary id="examples-panel">Examples and meter catalog</summary>
+            <div class="meter-filter">
+                <label for="meter-search">Find an example</label>
+                <input type="search" id="meter-search" placeholder="Manufacturer, model, protocol or security mode" />
+                <label for="catalog-security">Security</label>
+                <select id="catalog-security">
+                    <option value="">All modes</option>
+                    <option value="cleartext">Unencrypted</option>
+                    <option value="5">Mode 5 · AES-CBC</option>
+                    <option value="7">Mode 7 · AES-CBC</option>
+                    <option value="10">Mode 10 · AES-CCM</option>
+                    <option value="13">Mode 13 · TLS</option>
+                </select>
+                <span id="meter-count" role="status">48 examples</span>
+            </div>
+            <div class="meter-samples">
+                <a class="meter-sample" data-encryption="cleartext" href="?data=689898680801721234567842040202450000000E84000000000000008E1084000000000000008E2084000000000000008EB00084000000000000008E801084000000000000008E804084000000000000008E904084000000000000008EA04084000000000000008EB04084000000000000008E8050840000000000000001FF9300000CFF92000000000107FD9700000000000000000001FF9800001F7516&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>ABB DELTA</strong><small>Electricity · Wired · 0&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=683D3D6808017200512002824D0204008800000407000000000C15030000000B2E0000000B3B0000000A5A88120A5E16050B61237700026C8C110227370D0F60006716&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Allmess CF50</strong><small>Heat · Wired · 0.3&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68A3A3680800720000000042040202000000000E040000000000008E10040000000000008E20040000000000008EB000040000000000008E8010040000000000008E8040040000000000008E9040040000000000008EA040040000000000008EB040040000000000008E80500400000000000001FF13000BFF120000000AFF6800000AFF69000007FD17000000000000000001FF18001F00000000000000000000000000000000FC16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Berg DZ+</strong><small>Electricity · Wired · 0&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68909068080A727865342124400102550000000BFD475634120BFD475634120BFD475634120BFD475634120BFD475634120BFD475634120BFD595634120BFD595634120BFD595634120BFD595634120B2A5634120B2A5634120B2A5634120B2A5634120BFD3A5634120BFD3A5634120BFD3A5634120BFD3A5634120AFD3A00050AFD3A05000AFD3A05000AFD3A05000AFD3A50004D16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Eastron SDM630</strong><small>Electricity · Wired · 1,234.56&nbsp;V</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6890906808017257268000CD4E08044600000004069814000004146BD6010084401479660100025B1C00025F2200026200000422B1A100000426B1A10000043B00000000042C00000000046D0C0CBD1684406E000000008480406E000000001FC409010112000101010757268000CD4E080407A3FF035726800004040D02FF0F053CFF62E762960A890A02001540170100006342DE16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster F2</strong><small>Heat · Wired · 5,272&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=684A4A680801724523117093150A07020000000C1367452301046D3A0DE602426CE1014C135169450042EC7E0111123B3917426C0111023BF9170F0E42200101010005085E01203D12083D120800C016&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster Falcon</strong><small>Water · Wired · 1,234.567&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="5" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · Public key · No authentication</small><small class="sample-lock">Mode 5 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="5" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · Public key · No authentication</small><small class="sample-lock">Mode 5 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="7" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · OMS reference · Authenticated</small><small class="sample-lock">Mode 7 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="7" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · OMS reference · Authenticated</small><small class="sample-lock">Mode 7 · AES-CBC</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="10" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · Public key · Authenticated</small><small class="sample-lock">Mode 10 · AES-CCM</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="10" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · Public key · Authenticated</small><small class="sample-lock">Mode 10 · AES-CCM</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="13" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wired · Test session · Authenticated</small><small class="sample-lock">Mode 13 · TLS</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-encryption="encrypted" data-example="13" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Elster gas meter</strong><small>Wireless · Test session · Authenticated</small><small class="sample-lock">Mode 13 · TLS</small></span>
+                </button>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6821216808017202376200A8150002070000008C100409040000C4002A0000000001FD17008C16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>EMH DIZ</strong><small>Electricity · Wired · 4.09&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68F4F46808007229260300B5151002020000000C7829260300841003540500008420030000000084904003AE1E000084A040030000000004ABFF01FEFFFFFF04ABFF020000000004ABFF0300000000042BFEFFFFFF848040ABFF010E000000848040ABFF0200000000848040ABFF03000000008480402B0E00000002FDC8FF01D10802FDC8FF02000002FDC8FF03000022FDC8FF01520722FDC8FF02000022FDC8FF03000012FDC8FF016A0912FDC8FF02000012FDC8FF03000003FDD9FF01BEFFFF03FDD9FF0200000003FDD9FF0300000003FD59BEFFFF01FFE1FF010D01FFE1FF020001FFE1FF030002FF52F40102FD60380001FD17007416&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>EMU Professional 375</strong><small>Electricity · Wired · 1.364&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68A1A16808007245330824C5140004662700000478917B6F01046D172ECC13041500000000441500000000840115000000000406000000004406000000008401060000000084100600000000C410060000000084110600000000426CBF1C026CDF1C8420060000000084300600000000043B00000000143B19000000042B00000000142B0B000000025B1600025F150004610900000002230C0201FD17000490280B000000EB16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Engelmann SensoStar 2</strong><small>Heat · Wired · 0&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68A6A66808037210003810C51401041E0000000478EA629E00046D3214861604158100000004FB00080000008420FB00000000008430FB0000000000043D00000000042D00000000025B5F00025F2B0004618A1400000227FA0101FD1700049028A0860100426C7F1C44158100000044FB0008000000C420FB0000000000C430FB000000000082016C5F1C840115540000008401FB00050000008421FB00000000008431FB0000000000B716&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Engelmann SensoStar 2C</strong><small>Heat · Wired · 800&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68515168080B7254029904C51400060C27000004782E254C00046D0A0CCD1304134C01000044134B0100008401134C010000426CBF1C026CDF1C043B00000000143B160800000223A70401FD1700049028080000003F16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Engelmann WaterStar</strong><small>Water · Wired · 0.332&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68383868081972076200232E192302920000008C1004682817008C11046828170002FDC9FF01E60002FDDBFF01060002ACFF0109008240ACFF01FDFF5B16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Finder 7E.23.8.230.0020</strong><small>Electricity · Wired · 1,728.68&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6891916808037278563412A31DE602020000008240FD486003828040FD48BF0382C040FD4820048240FD59BD03828040FD591F0482C040FD597E0482402BE00082402B36FF84100494280000842004983A0000845004BF4E0000846004A8610000849040048B75000084A04004B888000084D040042D9D000084E04004C8AF000082412BE00082422B000082432B000082442BCA004216&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>GMC EMMOD206</strong><small>Electricity · Wired · 103.88&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=681B1B6808017207201800E61E35074C0000000C78072018000C16690200009616&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>GWF MTKcoder</strong><small>Water · Wired · 269&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=683C3C680808727803491177040E160A0000000C7878034911041331D40000426C0000441300000000046D0B0BCD130227000009FD0E0209FD0F060F00017513D316&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Itron BM +m</strong><small>Water · Wired · 54.321&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=686464680806728551151177040A0D1B1000000C78855115110406000000000C14000000003B2D9999990B3B0000003A5A99993A5E99993B61999999046D180D98110227680009FD0E1109FD0F268CC00016210300008C8040142301000004863C000000000F03208516&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Itron CF 51</strong><small>Heat/cooling · Wired · 321&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=684D4D680807726776121177040B0C0B1000000C78677612110407000000000C16000000003B2D9999990B3B0000003A5A99993A5E99993B61999999046D2F0B98110227FC0009FD0E1009FD0F210F03205416&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Itron CF 55</strong><small>Heat · Wired · 0&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=684D4D680809729100101177040904511000000C78910010110406000000000C14000000003B2D9999993B3B9999990A5A05020A5E06020B61090000046D1D0D98110227810109FD0E1909FD0F450F2000E716&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Itron CF Echo II</strong><small>Heat · Wired · 0&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6856566808017271000012770414070A3000000C78710000120D7C084449202E747375630A454C4259432054534554046D2B0D9811027C09656D6974202E746162F21004143D30000004947F140000004414000000000F10011F2F16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Itron Cyble M-Bus v1.4</strong><small>Water · Wired · 123.49&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6856566808047287030210770414039A0000000C78870302100D7C084449202E747375630A20202020202020202020046D2B0F791A027C09656D6974202E746162D20F04141A00000004947F000000004414190000000F00021F9F16&amp;format=table&amp;encoding=hex">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Itron Cyble M-Bus v1.4</strong><small>Gas · Wired · 0.26&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=685C5C6808047214738111824D06045D0000000C78147381110C06000000000C14020000000A3B00000B5A1202000B5E1102000B610700003226000002278D01046D110E98118440147B000000848040144101000009FD0E0309FD0F180F0016E916&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Itron Integral MK MaXX</strong><small>Heat · Wired · 0.02&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68464668087872209183142D2C010204000000040600000000042209000000042B00000000142B0000000084500600000000846006000000000F000000000000000000000000000000102416&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Kamstrup 382-005</strong><small>Electricity · Wired · 0&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68F7F768081172175885062D2C0804040000000C78175885060406E791000004142CDB00000422D90300000459B9270000045D081200000461B1150000042D5B010000142DC0010000043B1F020000143B74020000841006000000008420060000000084401400000000848040140000000084C0400600000000046D1A2F65114406518200004414B2C30000542D26020000543B03040000C4100600000000C4200600000000C4401400000000C480401400000000C4C0400600000000426C5F1C0F00000000E7E40000636600000000000000000000000000005BC9A50234530000E0B20300899C680000000000010001070709010300000000009816&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Kamstrup MULTICAL 601</strong><small>Heat · Wired · 37,351&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6840406808017258200812E2304003400000002F2F4C1392408310466D0000081627000D781134313835303238303231393537313030478940FD1A0101FD170001FD670F3816&amp;format=table&amp;encoding=hex">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Landis+Gyr G350</strong><small>Gas · Wired · 10,834.092&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68E2E26808007205026666A7320704011000000974040970080C06000000000C14000000000B2D0000000B3B0000000B5A9501000B5E9701000B620200F00C7805026666891071073C22693700000C22693700000C26000000008C901006000000009B102D0000009B103B0000009B105A0703009B105E0705009410AD6F000000009410BB6F000000009410DA6F32147A189410DE6F2B0B69184C06000000004C14000000007C22693400004C2600000000CC90100600000000DB102D000000DB103B000000DB105A070300DB105E070500848F0F6D0000E1F1046D040C8D110F09070066017D16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Landis+Gyr ULTRAHEAT T230</strong><small>Heat · Wired · 4&nbsp;s</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68F8F86808647254008101A73202040F1000000974040970040C06699901000C14189264020B2E0000000B3B0000000A5B00000A5F00000A6200004C14189264024C06699901000C7854001165891071609B102D160300DB102D1603009B103B2088009A105B44009A105F40000C22670007003C22091605007C2217780400426C01018C2006000000008C3006000000008C80100600000000CC200600000000CC300600000000CC801006000000009A115B36009A115F40009B113B0000009B112D000000BC0122651405008C0106699901008C2106000000008C3106000000008C811006000000008C011418926402046D260087160F03020000234616&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Metrona ULTRAHEAT XS</strong><small>Heat · Wired · 19,969&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68EFEF68080272845042314D6A81042427000004060300000002FD17000084046D0000A1118404060300000084050600000000041349000000043B00000000543B2B000000546D1E086119042D0000000094012D1400000094016D1E0861190259D907025D8707046D350B8D118280016C81118480010603000000C280016C611CC4800106030000008281016C611B8481010603000000C281016C611AC4810106030000008282016C61198482010600000000C282016C6118C4820106000000008283016C61178483010600000000C283016C6116C4830106000000009280016C81119480013B010000009480012D000000008E16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Minol Minocal C2</strong><small>Heat · Wired · 3&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=68CDCD68080072592780314D6A82042B000000040600000000041401000000042D00000000043C0000000002590000025D000084040600000000C4046D0000811194012D0000000094016D1E0B8D11543C01000000546D1E0778138C4079000000008140FD090784401301000000C40413010000008C804079000000008480401301000000818040FD09078405130100000002FD170400046D010C8D118280016C8111848001060000000084C001130100000084804113010000009280016C81119480013C000000009480012D00000000AA16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Minol Minocal WR3</strong><small>Heat · Wired · 0.01&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6832326808057208061030523B0102010000000403FA04000004837FFA04000002FD48440902FD5B0000022B00000C78080610300F0E7116&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>NZR DHZ 5/63</strong><small>Electricity · Wired · 1.274&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=682F2F6808167201632111AC484103B10000000C1481608702046DA115E917426CDF1C4C148273590242EC7EFF1C0FC001010CBD16&amp;format=table&amp;encoding=hex">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Relay PadPuls 2</strong><small>Gas · Wired · 28,760.81&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6892926808287255000019434C1602BF0000008C1004930200008C1104930200008C2004060000008C21040600000002FDC9FF01DF0002FDDBFF01000002ACFF0100008240ACFF01000002FDC9FF02000002FDDBFF02000002ACFF0200008240ACFF02000002FDC9FF03000002FDDBFF03000002ACFF0300008240ACFF03000002FF68000002ACFF0000008240ACFF00000001FF14000A16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Saia-Burgess ALE3</strong><small>Electricity · Wired · 2.93&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6842426808007245009463AE4C0804F90000000C06199001000C13191162010C3B000000000C2B00000000025A6701025EE90003604631000C78450094630CFD10450094631FB616&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Sensus PolluCom E</strong><small>Heat · Wired · 19,019&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6871716808047288170100AE4C060D3E000000046D3B0EE714346D0000010134FD170000000404209222F1000424A41AE70004863B979B00000413BE095E00052EB1D12EBE053EF5B84E40055BB82DF941055F788BF941056300803BBD04BE5071BBB00004BE58F40200000C7888170100027F10B55D16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Sensus PolluStat</strong><small>Heat/cooling · Wired · 39,831&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6842426808007295502621AE4C0E04B51000000C06000000000C13000000000C3B000000000C2B00000000025AC900025ECA0003600000000C78955026210CFD10955026211FEC16&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Sensus PolluStat E</strong><small>Heat · Wired · 0&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6842426808087276000521184E3104510000000C07640800000C14929879000C7B020300000C2C585400000A5A55070A5E94050B607660010C78760005210CFD10760005211FB316&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Sensus PolluTherm</strong><small>Heat · Wired · 8,640&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=1844AE4C4455223368077A55000000041389E20100023B0000&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Sensus water meter</strong><small>Water · Wireless · 123.529&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=685E5E680805729164000865329906DA0000000C13000000000B22864004046D240A611C326C00000C789164000806FD0C0A000100FA010DFD0B05313248465701FD0E004C1300000000426C5F1C0F37FD170000000000000000027A2500027825008216&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Siemens WFH21</strong><small>Water · Wired · 0&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=6851516808017224064208EE4D0D042C300000040E00000000041400000000055B00000000055F00000000053E00000000052B00000000C4000E00000000C4001400000000C4401400000000C4804014000000001F7116&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Sontex Supercal 531</strong><small>Heat · Wired · 0&nbsp;J</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=685C5C6808017289600001CD4E090C9470000004066E6D0000041345C6090084401345C60900025BF300025FF300026200000422E21800000426DB180000043B00000000042C00000000046D0C15A82284406E000000008480406E000000001FA716&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>SVM F22</strong><small>Heat · Wired · 28,014&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=2E44B05C82340100021B7A460000002F2F0A6601020AFB1A570602FD971D00002F2F2F2F2F2F2F2F2F2F2F2F2F2F2F&amp;format=table&amp;encoding=hex">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>WEP room sensor</strong><small>Room sensor · Wireless · 20.1&nbsp;°C</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
+            </div>
+        </details>
     </form>
     <div id="output-container">
         <div class="output-toolbar">
             <div class="result-views">
                 <div class="parse-actions" role="group" aria-label="Output format">
-                    <input id="parse_json" type="button" value="JSON" aria-pressed="true" />
-                    <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
-                    <input id="parse_table" type="button" value="Table" aria-pressed="false" />
-                    <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
-                    <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
-                    <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
+                    <input id="parse_table" type="button" value="Table" aria-pressed="true" />
                     <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
+                    <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
+                    <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
+                    <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
+                    <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
+                    <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
             <div class="output-actions">
@@ -1359,6 +1659,7 @@
     <script type="module">
         import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.4";
 
+        import { renderDiagram } from "./diagram.js";
         import { normalizeInput } from "./input-format.js";
 
         import { createTlsSessionPanel } from "./tls-session.js";
@@ -1366,12 +1667,6 @@
         const REPOSITORY = 'https://github.com/maebli/m-bus-parser';
 
         const telegramExamples = {
-            cleartext: {
-                telegrams: {
-                    wired: '683D3D6808017200512002824D0204008800000407000000000C15030000000B2E0000000B3B0000000A5A88120A5E16050B61237700026C8C110227370D0F60006716',
-                    wireless: '1844AE4C4455223368077A55000000041389E20100023B0000',
-                },
-            },
             5: {
                 telegrams: {
                     wired: '682F2F6808017278563412931533032A0020255923C95AAA26D1B2E7493B013EC4A6F6D3529B520EDFF0EA6DEFC99D6D69EBF32716',
@@ -1625,11 +1920,9 @@
             container.append(actions, help);
         }
 
-        let currentFormat = "json";
+        let currentFormat = "table";
         let lastTableWidth = null;
         let tableResizeTimer = null;
-
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
 
         function createLineGutter(source) {
             const gutter = document.createElement('div');
@@ -1673,6 +1966,30 @@
         }
 
         async function setup() {
+            const meterCatalog = document.getElementById('meter-catalog');
+            const meterSearch = document.getElementById('meter-search');
+            const meterSamples = [...meterCatalog.querySelectorAll('.meter-sample')];
+            const catalogSecurity = document.getElementById('catalog-security');
+            function filterCatalog() {
+                const words = meterSearch.value.trim().toLowerCase().replace(/\bmode(?=\d)/g, 'mode ').split(/\s+/);
+                let visible = 0;
+                for (const sample of meterSamples) {
+                    const label = sample.textContent.toLowerCase();
+                    const mode = sample.dataset.example || sample.dataset.encryption;
+                    const matchesMode = !catalogSecurity.value || catalogSecurity.value === mode;
+                    sample.hidden = !matchesMode || !words.every(word => word === 'encrypted'
+                        ? sample.dataset.encryption === 'encrypted' : label.includes(word));
+                    if (!sample.hidden) visible++;
+                }
+                document.getElementById('meter-count').textContent = visible === 0
+                    ? 'No matching examples' : visible === 1 ? '1 example' : visible + ' examples';
+            }
+            meterSearch.addEventListener('input', filterCatalog);
+            catalogSecurity.addEventListener('change', filterCatalog);
+            meterSearch.addEventListener('keydown', event => {
+                if (event.key === 'Enter') event.preventDefault();
+            });
+
             const disclosureMenus = [...document.querySelectorAll('details[name="parser-disclosure"]')];
             document.addEventListener('keydown', event => {
                 if (event.key !== 'Escape') return;
@@ -1727,7 +2044,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.7.4", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=b4f4dd8b", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
@@ -1844,23 +2161,34 @@
                 updateDecodeButton();
             });
 
-            document.querySelectorAll('[data-example]').forEach(button => {
-                button.addEventListener('click', () => {
-                    const example = telegramExamples[button.dataset.example];
-                    inspectedTelegram = null;
-                    tlsPanel.clear();
-                    telegramInput.value = example.telegrams[button.dataset.protocol];
-                    inputFormat.value = 'auto';
-                    keyInput.value = example.key || '';
-                    keyInput.removeAttribute('aria-invalid');
-                    document.getElementById('aeskey-error').hidden = true;
-                    if (keyInput.type === 'text') keyToggle.click();
-                    if (example.session) tlsPanel.loadSession(example.session);
-                    for (const menu of disclosureMenus) menu.open = false;
-                    document.querySelector('#examples-panel > summary').focus();
-                    parseInput(currentFormat);
+            function loadSample(telegram, key, session, format) {
+                inspectedTelegram = null;
+                tlsPanel.clear();
+                telegramInput.value = telegram;
+                inputFormat.value = 'auto';
+                keyInput.value = key || '';
+                keyInput.removeAttribute('aria-invalid');
+                document.getElementById('aeskey-error').hidden = true;
+                if (keyInput.type === 'text') keyToggle.click();
+                if (session) tlsPanel.loadSession(session);
+                for (const menu of disclosureMenus) menu.open = false;
+                parseInput(format);
+            }
+
+            for (const sample of meterSamples) {
+                sample.addEventListener('click', event => {
+                    if (sample.dataset.example) {
+                        const example = telegramExamples[sample.dataset.example];
+                        loadSample(example.telegrams[sample.dataset.protocol], example.key, example.session, currentFormat);
+                    } else {
+                        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                        event.preventDefault();
+                        const params = new URL(sample.href).searchParams;
+                        loadSample(params.get('data'), '', null, params.get('format'));
+                    }
+                    meterCatalog.querySelector('summary').focus();
                 });
-            });
+            }
 
             // Load data and format from URL params and auto-parse if present
             const urlParams = new URLSearchParams(window.location.search);
@@ -1870,7 +2198,7 @@
             inputFormat.value = ['hex', 'base64'].includes(urlEncoding) ? urlEncoding : 'auto';
             if (urlData) {
                 document.getElementById('inputstring').value = urlData;
-                parseInput(urlFormat === 'table_format' ? 'table' : (urlFormat || 'mermaid'));
+                parseInput(urlFormat || currentFormat);
             } else {
                 inspectCurrentTelegram();
             }
@@ -1923,7 +2251,9 @@
 
             new ResizeObserver(() => {
                 if (currentFormat !== 'table' || !hasDecoded) return;
-                const width = measureTableWidth();
+                const table = document.querySelector('#output > .text-table');
+                if (!table) return;
+                const width = measureTableWidth(table);
                 if (width === lastTableWidth) return;
                 clearTimeout(tableResizeTimer);
                 tableResizeTimer = setTimeout(() => {
@@ -1937,7 +2267,7 @@
                 inspectCurrentTelegram();
                 const isTls = inspectedTelegram?.security?.mode_code === 13;
                 format = format === 'table_format' ? 'table' : format;
-                if (!['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview'].includes(format)) format = 'json';
+                if (!['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview'].includes(format)) format = 'table';
                 if (isTls && format === 'xml') format = 'json';
                 currentFormat = format;
                 document.querySelectorAll('.parse-actions input').forEach(button => {
@@ -2002,28 +2332,32 @@
 
                 try {
                     const normalizedInput = normalizeInput(inputString, inputFormat.value);
-                    const width = format === 'table' ? measureTableWidth() : undefined;
+                    const table = format === 'table' ? prepareTableView(outputContainer) : null;
+                    const width = table ? measureTableWidth(table) : undefined;
                     if (format === 'table') lastTableWidth = width;
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
+                    const renderFormat = table ? 'table-html' : format;
                     const result = sessionJson
-                        ? renderTlsPayload(normalizedInput, format, sessionJson, width, inspectedTelegram)
-                        : renderWithFallback(parserApi, normalizedInput, format, isTls ? undefined : aesKey || undefined, width);
+                        ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
+                        : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width);
                     attempt.mode = result.mode;
-                    const formattedResult = result.output;
+                    let formattedResult = result.output;
                     hasDecoded = true;
 
-                    if (format === 'hexview') {
+                    if (table) {
+                        table.innerHTML = formattedResult;
+                        formatManufacturerRow(table);
+                        formattedResult = table.textContent;
+                    } else if (format === 'hexview') {
                         outputContainer.replaceChildren();
+                        const manufacturerLink = manufacturerWebsite(result.decoded);
+                        if (manufacturerLink) outputContainer.append(manufacturerLink);
                         renderHexViewer(outputContainer, formattedResult, normalizedInput, result.decoded, isTls ? 'Captured TLS telegram' : '');
                         if (result.plaintext) {
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
                     } else if (format === 'mermaid') {
-                        const mermaidDiv = document.createElement('div');
-                        mermaidDiv.id = 'mermaid_diagram';
-                        mermaidDiv.textContent = formattedResult;
-                        outputContainer.replaceChildren(mermaidDiv);
-                        await mermaid.run({ nodes: [mermaidDiv] });
+                        renderDiagram(outputContainer, result.decoded, manufacturerWebsite(result.decoded));
                     } else {
                         await renderCodeViewer(
                             outputContainer,
@@ -2034,6 +2368,7 @@
                     }
 
                     if (generation !== renderGeneration) return;
+                    linkManufacturerFields(outputContainer);
                     showSecurity(result.decoded);
                     hasDecoded = true;
                     window._lastRawOutput = formattedResult;
@@ -2042,13 +2377,15 @@
                     } else if (result.mode === 'application') {
                         outputSummary.textContent = 'Parsed as application-layer data without a link-layer frame.';
                     } else {
-                        outputSummary.textContent = `${result.mode === 'wireless' ? 'Wireless' : 'Wired'} telegram · ${format === 'hexview' ? 'Hex View' : format.toUpperCase()}`;
+                        outputSummary.textContent = `${result.mode === 'wireless' ? 'Wireless' : 'Wired'} telegram · ${document.getElementById('parse_' + format).value}`;
                     }
                     if (result.diagnostics.length) {
-                        const warning = document.createElement('pre');
-                        warning.className = 'output-error';
-                        warning.textContent = result.diagnostics.map(item => `[${item.code}] ${item.message}`).join('\n');
-                        outputContainer.append(warning);
+                        if (format !== 'mermaid') {
+                            const warning = document.createElement('pre');
+                            warning.className = 'output-error';
+                            warning.textContent = result.diagnostics.map(item => `[${item.code}] ${item.message}`).join('\n');
+                            outputContainer.append(warning);
+                        }
                         lastFailure = { ...attempt, error: {
                             code: result.diagnostics[0].code,
                             attempts: result.diagnostics,
@@ -2065,14 +2402,78 @@
             }
         }
 
-        function measureTableWidth() {
-            const container = document.getElementById('output-container');
+        function manufacturerWebsite(decoded) {
+            const host = decoded.enrichment?.manufacturer_website;
+            if (!host || !/^[a-z0-9.-]+$/i.test(host)) return null;
+            const link = document.createElement('a');
+            link.className = 'manufacturer-link';
+            link.href = 'https://' + host;
+            link.textContent = host;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            return link;
+        }
+
+        function linkManufacturerFields(container) {
+            const fields = container.querySelectorAll('.text-table, .code-source code, .tree-detail, .diagram-record');
+            const request = document.getElementById('manufacturer-parser-request');
+            for (const field of fields) {
+                const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
+                const matches = [];
+                while (walker.nextNode()) {
+                    const text = walker.currentNode;
+                    if (text.parentElement.closest('a')) continue;
+                    const marker = /\bmanufacturer(?:[\s_-]+specific|\s+data)\b/i.exec(text.data);
+                    if (marker) matches.push({ text, marker });
+                }
+                for (const [index, { text, marker }] of matches.entries()) {
+                    const link = document.createElement('a');
+                    link.className = index === 0 ? 'parser-request show-action' : 'parser-request';
+                    link.href = request.href;
+                    link.target = request.target;
+                    link.rel = request.rel;
+                    link.title = 'Request a manufacturer-specific parser';
+                    link.setAttribute('aria-label', marker[0] + ' · ' + link.title);
+                    link.addEventListener('click', event => event.stopPropagation());
+                    const label = text.splitText(marker.index);
+                    label.splitText(marker[0].length);
+                    label.replaceWith(link);
+                    link.append(label);
+                }
+            }
+        }
+
+        function formatManufacturerRow(table) {
+            const link = table.querySelector('.table-link');
+            if (!link) return;
+            link.classList.add('manufacturer-link');
+            if (link.previousSibling.textContent.includes('\n')) return;
+            const row = document.createRange();
+            row.setStartBefore(link.previousElementSibling);
+            row.setEndAfter(link);
+            const wrapper = document.createElement('span');
+            wrapper.className = 'manufacturer-website-row';
+            row.surroundContents(wrapper);
+        }
+
+        function prepareTableView(container) {
+            const table = container.querySelector('.text-table') || document.createElement('pre');
+            table.className = 'text-table';
+            table.tabIndex = 0;
+            table.setAttribute('role', 'region');
+            table.setAttribute('aria-label', 'Table parser output');
+            container.replaceChildren(table);
+            return table;
+        }
+
+        function measureTableWidth(table) {
+            const style = getComputedStyle(table);
             const canvas = measureTableWidth.canvas ||= document.createElement('canvas');
             const context = canvas.getContext('2d');
-            context.font = '13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-            const characterWidth = context.measureText('0').width || 8;
-            const availableWidth = Math.max(0, container.clientWidth - 84);
-            return Math.max(32, Math.min(120, Math.floor(availableWidth / characterWidth)));
+            context.font = style.fontSize + ' ' + style.fontFamily;
+            const characterWidth = context.measureText('0').width;
+            const availableWidth = table.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+            return Math.max(32, Math.floor(availableWidth / characterWidth));
         }
 
         function updateDownload(content, extension, mimeType) {
