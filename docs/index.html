@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/png" href="./emeter.png">
+    <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
     <style>
@@ -1542,9 +1542,9 @@
         <div class="output-toolbar">
             <div class="result-views">
                 <div class="parse-actions" role="group" aria-label="Output format">
-                    <input id="parse_json" type="button" value="JSON" aria-pressed="true" />
+                    <input id="parse_table" type="button" value="Table" aria-pressed="true" />
+                    <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
                     <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
-                    <input id="parse_table" type="button" value="Table" aria-pressed="false" />
                     <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
                     <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
@@ -1839,7 +1839,7 @@
             container.append(actions, help);
         }
 
-        let currentFormat = "json";
+        let currentFormat = "table";
         let lastTableWidth = null;
         let tableResizeTimer = null;
 
@@ -1959,7 +1959,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=7fcbdcd8", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=b4f4dd8b", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
@@ -2117,7 +2117,7 @@
             inputFormat.value = ['hex', 'base64'].includes(urlEncoding) ? urlEncoding : 'auto';
             if (urlData) {
                 document.getElementById('inputstring').value = urlData;
-                parseInput(urlFormat === 'table_format' ? 'table' : (urlFormat || 'mermaid'));
+                parseInput(urlFormat || currentFormat);
             } else {
                 inspectCurrentTelegram();
             }
@@ -2186,7 +2186,7 @@
                 inspectCurrentTelegram();
                 const isTls = inspectedTelegram?.security?.mode_code === 13;
                 format = format === 'table_format' ? 'table' : format;
-                if (!['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview'].includes(format)) format = 'json';
+                if (!['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview'].includes(format)) format = 'table';
                 if (isTls && format === 'xml') format = 'json';
                 currentFormat = format;
                 document.querySelectorAll('.parse-actions input').forEach(button => {

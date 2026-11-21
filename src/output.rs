@@ -2432,8 +2432,8 @@ fn render_table(
     }
     output.push_str(&summary_fields(&summary, width, style));
 
-    if !decoded.records.is_empty() {
-        push_record_table(&mut output, &decoded.records, width, style);
+    for record in &decoded.records {
+        push_record_reading(&mut output, record, width, style);
     }
     if !decoded.diagnostics.is_empty() {
         output.push_str("Diagnostics\n");
@@ -2452,104 +2452,59 @@ fn render_table(
     Ok(output)
 }
 
-fn push_record_table(
+fn push_record_reading(
     output: &mut String,
-    records: &[RecordOutput],
+    record: &RecordOutput,
     width: usize,
     style: TableStyle,
 ) {
-    let headers = [
-        "#", "Quantity", "Value", "Function", "S/T/U", "Coding", "Raw",
-    ];
-    let mut widths = headers.map(UnicodeWidthStr::width);
-    let rows = records
-        .iter()
-        .map(|record| {
-            let (quantity, value) = if record.value.kind == "manufacturer_specific" {
-                (
-                    "Manufacturer data".to_string(),
-                    format!("{} bytes", record.data_hex.split_ascii_whitespace().count()),
-                )
-            } else {
-                (quantity_label(record), value_with_unit(record))
-            };
-            let row = [
-                record.index.to_string(),
-                quantity,
-                value,
-                record.function.clone(),
-                format!(
-                    "{}/{}/{}",
-                    record.storage_number, record.tariff, record.subunit
-                ),
-                record.data_coding.clone(),
-                record_hex(record),
-            ];
-            for (max_width, cell) in widths.iter_mut().zip(&row) {
-                for line in cell.lines() {
-                    *max_width = (*max_width).max(UnicodeWidthStr::width(line));
-                }
-            }
-            row
-        })
-        .collect::<Vec<_>>();
-    let border_and_padding = 1 + 3 * headers.len();
-    if widths.iter().sum::<usize>() + border_and_padding <= width {
-        output.push_str(&box_table(
-            &headers,
-            &rows,
-            &widths,
-            style,
-            &[
-                Cell::Text,
-                Cell::Label,
-                Cell::Reading,
-                Cell::Text,
-                Cell::Text,
-                Cell::Text,
-                Cell::Bytes,
-            ],
-        ));
-        return;
-    }
-
-    for [index, quantity, value, function, counters, coding, raw] in rows {
+    let (quantity, value) = if record.value.kind == "manufacturer_specific" {
+        (
+            "Manufacturer data".to_string(),
+            format!("{} bytes", record.data_hex.split_ascii_whitespace().count()),
+        )
+    } else {
+        (quantity_label(record), value_with_unit(record))
+    };
+    output.push('\n');
+    let label = format!("#{}  {quantity}:", record.index);
+    let heading = format!("{label} {value}");
+    if !heading.contains('\n') && UnicodeWidthStr::width(heading.as_str()) <= width {
+        style.write(output, Cell::Label, &label);
+        output.push(' ');
+        style.write(output, Cell::Reading, &value);
         output.push('\n');
-        let label = format!("#{index}  {quantity}:");
-        let heading = format!("{label} {value}");
-        if !heading.contains('\n') && UnicodeWidthStr::width(heading.as_str()) <= width {
-            style.write(output, Cell::Label, &label);
-            output.push(' ');
-            style.write(output, Cell::Reading, &value);
-            output.push('\n');
-        } else {
-            push_text(output, "", &label, width, style, Cell::Label);
-            push_text(output, "  ", &value, width, style, Cell::Reading);
-        }
-        let mut metadata = function;
-        for field in [coding, format!("S/T/U {counters}")] {
-            if UnicodeWidthStr::width(metadata.as_str())
-                + 3
-                + UnicodeWidthStr::width(field.as_str())
-                > width - 2
-            {
-                push_text(output, "  ", &metadata, width, style, Cell::Text);
-                metadata = field;
-            } else {
-                metadata.push_str(" · ");
-                metadata.push_str(&field);
-            }
-        }
-        push_text(output, "  ", &metadata, width, style, Cell::Text);
-        push_text(
-            output,
-            "  ",
-            &format!("Raw: {raw}"),
-            width,
-            style,
-            Cell::Bytes,
-        );
+    } else {
+        push_text(output, "", &label, width, style, Cell::Label);
+        push_text(output, "  ", &value, width, style, Cell::Reading);
     }
+    let mut metadata = record.function.clone();
+    for field in [
+        record.data_coding.clone(),
+        format!(
+            "S/T/U {}/{}/{}",
+            record.storage_number, record.tariff, record.subunit
+        ),
+    ] {
+        if UnicodeWidthStr::width(metadata.as_str()) + 3 + UnicodeWidthStr::width(field.as_str())
+            > width - 2
+        {
+            push_text(output, "  ", &metadata, width, style, Cell::Text);
+            metadata = field;
+        } else {
+            metadata.push_str(" · ");
+            metadata.push_str(&field);
+        }
+    }
+    push_text(output, "  ", &metadata, width, style, Cell::Text);
+    push_text(
+        output,
+        "  ",
+        &format!("Raw: {}", record_hex(record)),
+        width,
+        style,
+        Cell::Bytes,
+    );
 }
 
 fn quantity_label(record: &RecordOutput) -> String {
@@ -2614,79 +2569,6 @@ fn summary_fields(rows: &[(String, String)], width: usize, style: TableStyle) ->
         }
     }
     output
-}
-
-fn box_table<const N: usize>(
-    headers: &[&str; N],
-    rows: &[[String; N]],
-    widths: &[usize; N],
-    style: TableStyle,
-    cells: &[Cell; N],
-) -> String {
-    let mut output = String::new();
-    push_border(&mut output, '┌', '┬', '┐', widths);
-    push_row(
-        &mut output,
-        &headers
-            .iter()
-            .map(|value| value.to_string())
-            .collect::<Vec<_>>(),
-        widths,
-        style,
-        &[Cell::Label; N],
-    );
-    push_border(&mut output, '├', '┼', '┤', widths);
-    for (index, row) in rows.iter().enumerate() {
-        push_row(&mut output, row, widths, style, cells);
-        if index + 1 != rows.len() {
-            push_border(&mut output, '├', '┼', '┤', widths);
-        }
-    }
-    push_border(&mut output, '└', '┴', '┘', widths);
-    output
-}
-
-fn push_border(output: &mut String, left: char, middle: char, right: char, widths: &[usize]) {
-    output.push(left);
-    for (index, width) in widths.iter().enumerate() {
-        output.push_str(&"─".repeat(width + 2));
-        output.push(if index + 1 == widths.len() {
-            right
-        } else {
-            middle
-        });
-    }
-    output.push('\n');
-}
-
-fn push_row(
-    output: &mut String,
-    cells: &[String],
-    widths: &[usize],
-    style: TableStyle,
-    roles: &[Cell],
-) {
-    let wrapped = widths
-        .iter()
-        .enumerate()
-        .map(|(index, width)| wrap_display(cells.get(index).map_or("", String::as_str), *width))
-        .collect::<Vec<_>>();
-    let height = wrapped.iter().map(Vec::len).max().unwrap_or(1);
-    for line in 0..height {
-        output.push('│');
-        for (index, (width, role)) in widths.iter().zip(roles).enumerate() {
-            let value = wrapped
-                .get(index)
-                .and_then(|lines| lines.get(line))
-                .map_or("", String::as_str);
-            output.push(' ');
-            style.write(output, *role, value);
-            output.push_str(&" ".repeat(width.saturating_sub(UnicodeWidthStr::width(value))));
-            output.push(' ');
-            output.push('│');
-        }
-        output.push('\n');
-    }
 }
 
 fn wrap_display(value: &str, width: usize) -> Vec<String> {
