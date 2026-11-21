@@ -107,7 +107,7 @@
         .header-meta { margin-top: 5px; }
         .header-meta .subtitle { margin-top: 0; }
         .project-links { gap: 4px; flex: 1 1 360px; }
-        .project-links a:not(#manufacturer-parser-request) {
+        .project-links > a:not(#manufacturer-parser-request) {
             padding: 1px 6px;
             border: 1px solid #d1d9e0;
             border-radius: 4px;
@@ -116,9 +116,21 @@
             line-height: 1.5;
             text-decoration: none;
         }
-        .project-links a:not(#manufacturer-parser-request):hover { color: #0969da; border-color: #0969da; }
-        body.dark-mode .project-links a:not(#manufacturer-parser-request) { color: #9198a1; border-color: #3d444d; }
-        body.dark-mode .project-links a:not(#manufacturer-parser-request):hover { color: #4493f8; border-color: #4493f8; }
+        .project-links > a:not(#manufacturer-parser-request):hover { color: #0969da; border-color: #0969da; }
+        body.dark-mode .project-links > a:not(#manufacturer-parser-request) { color: #9198a1; border-color: #3d444d; }
+        body.dark-mode .project-links > a:not(#manufacturer-parser-request):hover { color: #4493f8; border-color: #4493f8; }
+
+        .package-links {
+            display: flex;
+            flex: 1 0 100%;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0 10px;
+            font-size: .6875rem;
+            color: #59636e;
+        }
+        .package-links a { padding-block: 2px; color: inherit; text-underline-offset: 2px; white-space: nowrap; }
+        body.dark-mode .package-links { color: #b1bac4; }
 
         form {
             background: #fff;
@@ -1274,7 +1286,6 @@
                 </div>
                 <nav class="project-links" aria-label="Project resources">
                     <a href="./dev/bench/">Benchmarks</a>
-                    <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Crate</a>
                     <a href="https://docs.rs/m-bus-parser" target="_blank" rel="noopener noreferrer">Docs</a>
                     <a href="https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml" target="_blank" rel="noopener noreferrer">Build</a>
                     <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>
@@ -1283,6 +1294,15 @@
                         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
                         <span>Add manufacturer-specific parser</span>
                     </a>
+                    <span class="package-links" role="group" aria-label="Parser packages">
+                        <span>Packages</span>
+                        <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Rust</a>
+                        <a href="https://pypi.org/project/pymbusparser/" target="_blank" rel="noopener noreferrer">Python</a>
+                        <a href="https://www.npmjs.com/package/m-bus-parser-wasm-pack" target="_blank" rel="noopener noreferrer">JavaScript (Wasm)</a>
+                        <a href="https://central.sonatype.com/artifact/io.github.maebli/m-bus-parser" target="_blank" rel="noopener noreferrer">Java</a>
+                        <a href="https://github.com/maebli/m-bus-parser/releases?q=%22C+bindings%22" target="_blank" rel="noopener noreferrer">C</a>
+                        <a href="https://crates.io/crates/m-bus-parser-cli" target="_blank" rel="noopener noreferrer">CLI</a>
+                    </span>
                 </nav>
             </div>
         </div>
