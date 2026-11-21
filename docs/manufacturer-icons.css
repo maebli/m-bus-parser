@@ -6,14 +6,21 @@
 .text-table .table-link::before {
     content: "";
     position: absolute;
-    right: calc(100% + 2px);
+    right: calc(100% + 4px);
     top: 50%;
     transform: translateY(-50%);
     width: 14px;
     height: 14px;
-    border-radius: 3px;
-    background: var(--manufacturer-icon, none);
-    background-size: 112px auto;
+    box-sizing: content-box;
+    padding: 2px;
+    border: 1px solid #b8c3ce;
+    border-radius: 5px;
+    background: var(--manufacturer-icon, none),
+        linear-gradient(to bottom, #fff 55%, #e9eef3) #fff;
+    background-size: 112px auto, 100% 100%;
+    background-origin: content-box, border-box;
+    background-clip: content-box, border-box;
+    box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgb(20 35 50 / 18%);
     pointer-events: none;
 }
 
