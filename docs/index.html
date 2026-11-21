@@ -1395,7 +1395,7 @@
             <div class="meter-filter">
                 <label for="meter-search">Find an example</label>
                 <input type="search" id="meter-search" placeholder="Manufacturer, model, protocol or security mode" />
-                <span id="meter-count" role="status">50 examples</span>
+                <span id="meter-count" role="status">49 examples</span>
             </div>
             <div class="meter-samples">
                 <a class="meter-sample" data-encryption="cleartext" href="?data=689898680801721234567842040202450000000E84000000000000008E1084000000000000008E2084000000000000008EB00084000000000000008E801084000000000000008E804084000000000000008E904084000000000000008EA04084000000000000008EB04084000000000000008E8050840000000000000001FF9300000CFF92000000000107FD9700000000000000000001FF9800001F7516&amp;format=table&amp;encoding=hex">
@@ -1554,10 +1554,6 @@
                     <img src="./meter-catalog/electricity.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>Saia-Burgess ALE3</strong><small>Electricity · Wired · 2.93&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
                 </a>
-                <a class="meter-sample" data-encryption="cleartext" href="?data=1844AE4C4455223368077A55000000041389E20100023B0000&amp;format=table&amp;encoding=hex">
-                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
-                    <span><strong>SEN water meter</strong><small>Water · Wireless · 123.529&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
-                </a>
                 <a class="meter-sample" data-encryption="cleartext" href="?data=6842426808007245009463AE4C0804F90000000C06199001000C13191162010C3B000000000C2B00000000025A6701025EE90003604631000C78450094630CFD10450094631FB616&amp;format=table&amp;encoding=hex">
                     <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>Sensus PolluCom E</strong><small>Heat · Wired · 19,019&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
@@ -1574,6 +1570,10 @@
                     <img src="./meter-catalog/heat.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>Sensus PolluTherm</strong><small>Heat · Wired · 8,640&nbsp;kWh</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
                 </a>
+                <a class="meter-sample" data-encryption="cleartext" href="?data=1844AE4C4455223368077A55000000041389E20100023B0000&amp;format=table&amp;encoding=hex">
+                    <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Sensus water meter</strong><small>Water · Wireless · 123.529&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
+                </a>
                 <a class="meter-sample" data-encryption="cleartext" href="?data=685E5E680805729164000865329906DA0000000C13000000000B22864004046D240A611C326C00000C789164000806FD0C0A000100FA010DFD0B05313248465701FD0E004C1300000000426C5F1C0F37FD170000000000000000027A2500027825008216&amp;format=table&amp;encoding=hex">
                     <img src="./meter-catalog/water.webp" alt="" width="60" height="60" loading="lazy">
                     <span><strong>Siemens WFH21</strong><small>Water · Wired · 0&nbsp;m³</small><small class="sample-lock">Unencrypted</small><span class="visually-hidden"> · Decode sample</span></span>
@@ -1589,10 +1589,6 @@
                 <button type="button" class="meter-sample" data-encryption="cleartext" data-example="cleartext" data-protocol="wired">
                     <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
                     <span><strong class="sample-lock">Unencrypted · Wired</strong><small>No key needed</small></span>
-                </button>
-                <button type="button" class="meter-sample" data-encryption="cleartext" data-example="cleartext" data-protocol="wireless">
-                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
-                    <span><strong class="sample-lock">Unencrypted · Wireless</strong><small>No key needed</small></span>
                 </button>
                 <a class="meter-sample" data-encryption="cleartext" href="?data=2E44B05C82340100021B7A460000002F2F0A6601020AFB1A570602FD971D00002F2F2F2F2F2F2F2F2F2F2F2F2F2F2F&amp;format=table&amp;encoding=hex">
                     <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
@@ -1647,7 +1643,6 @@
             cleartext: {
                 telegrams: {
                     wired: '683D3D6808017200512002824D0204008800000407000000000C15030000000B2E0000000B3B0000000A5A88120A5E16050B61237700026C8C110227370D0F60006716',
-                    wireless: '1844AE4C4455223368077A55000000041389E20100023B0000',
                 },
             },
             5: {
