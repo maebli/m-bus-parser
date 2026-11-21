@@ -88,7 +88,7 @@ function recordNode(record, medium) {
     return node;
 }
 
-export function renderDiagram(container, decoded) {
+export function renderDiagram(container, decoded, manufacturerLink) {
     const diagram = element('section', undefined, 'telegram-diagram');
     diagram.setAttribute('aria-label', 'Telegram diagram');
     const root = element('div', undefined, 'diagram-root');
@@ -102,8 +102,14 @@ export function renderDiagram(container, decoded) {
     const meter = decoded.meter?.identity;
     const medium = meterKind(meter?.device_type);
     if (meter) {
-        const meterBranch = branch('Meter', fields([['ID', meter.id], ['Manufacturer', meter.manufacturer_code],
-            ['Type', meter.device_type], ['Version', meter.version]]));
+        const meterFields = fields([['ID', meter.id], ['Manufacturer', meter.manufacturer_code],
+            ['Type', meter.device_type], ['Version', meter.version]]);
+        if (manufacturerLink) {
+            const website = element('dd');
+            website.append(manufacturerLink);
+            meterFields.append(element('dt', 'Website'), website);
+        }
+        const meterBranch = branch('Meter', meterFields);
         meterBranch.dataset.kind = medium;
         meterBranch.querySelector('h3').prepend(readingIcon(medium));
         branches.append(meterBranch);

@@ -574,11 +574,11 @@
         .text-table .table-label { color: #065e78; }
         .text-table .table-reading { color: #116329; }
         .text-table .table-bytes { color: #6639a6; }
-        .text-table .table-link { color: #0969da; text-decoration: underline; }
+        .manufacturer-link { color: #0969da; text-decoration: underline; }
         body.dark-mode .text-table .table-label { color: #86d5ec; }
         body.dark-mode .text-table .table-reading { color: #7ee787; }
         body.dark-mode .text-table .table-bytes { color: #d2a8ff; }
-        body.dark-mode .text-table .table-link { color: #79c0ff; }
+        body.dark-mode .manufacturer-link { color: #79c0ff; }
         body.dark-mode .text-table { border-color: #3d444d; }
 
         .code-viewer {
@@ -913,6 +913,7 @@
         }
 
         /* ── Interactive Hex Viewer ─────────────────────────── */
+        #output > .manufacturer-link { margin: 12px 24px 0; font-size: .875rem; line-height: 1.6; }
         .hex-view-title {
             margin: 20px 24px 8px;
             font-size: 14px;
@@ -1216,6 +1217,7 @@
             .header-text .subtitle { font-size: 0.75rem; overflow-wrap: anywhere; }
             form { padding: 8px 10px; }
             .parse-actions input { flex: 0 0 auto; }
+            #output > .manufacturer-link { margin-inline: 16px; }
             .hex-viewer { margin: 12px 16px 20px; }
             .hex-viewer-left, .hex-viewer-right { padding: 16px; }
             .diagram-branches { padding-left: 8px; }
@@ -2315,15 +2317,18 @@
 
                     if (table) {
                         table.innerHTML = formattedResult;
+                        formatManufacturerRow(table);
                         formattedResult = table.textContent;
                     } else if (format === 'hexview') {
                         outputContainer.replaceChildren();
+                        const manufacturerLink = manufacturerWebsite(result.decoded);
+                        if (manufacturerLink) outputContainer.append(manufacturerLink);
                         renderHexViewer(outputContainer, formattedResult, normalizedInput, result.decoded, isTls ? 'Captured TLS telegram' : '');
                         if (result.plaintext) {
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
                     } else if (format === 'mermaid') {
-                        renderDiagram(outputContainer, result.decoded);
+                        renderDiagram(outputContainer, result.decoded, manufacturerWebsite(result.decoded));
                     } else {
                         await renderCodeViewer(
                             outputContainer,
@@ -2365,6 +2370,31 @@
                     updateDownload('', extension, mimeType);
                 }
             }
+        }
+
+        function manufacturerWebsite(decoded) {
+            const host = decoded.enrichment?.manufacturer_website;
+            if (!host || !/^[a-z0-9.-]+$/i.test(host)) return null;
+            const link = document.createElement('a');
+            link.className = 'manufacturer-link';
+            link.href = 'https://' + host;
+            link.textContent = host;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            return link;
+        }
+
+        function formatManufacturerRow(table) {
+            const link = table.querySelector('.table-link');
+            if (!link) return;
+            link.classList.add('manufacturer-link');
+            if (link.previousSibling.textContent.includes('\n')) return;
+            const row = document.createRange();
+            row.setStartBefore(link.previousElementSibling);
+            row.setEndAfter(link);
+            const wrapper = document.createElement('span');
+            wrapper.className = 'manufacturer-website-row';
+            row.surroundContents(wrapper);
         }
 
         function prepareTableView(container) {
