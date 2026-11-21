@@ -513,6 +513,15 @@
             overflow: hidden;
         }
 
+        .text-table {
+            overflow-x: auto;
+            padding: 12px clamp(8px, 2vw, 20px);
+            border-top: 1px solid #d1d9e0;
+            font: 0.875rem/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        body.dark-mode .text-table { border-color: #3d444d; }
+
         .code-viewer {
             border-top: 1px solid #d0d7de;
             background: #fff;
@@ -1942,7 +1951,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=0.7.4", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=1e76e0b7", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
@@ -2153,7 +2162,9 @@
 
             new ResizeObserver(() => {
                 if (currentFormat !== 'table' || !hasDecoded) return;
-                const width = measureTableWidth();
+                const table = document.querySelector('#output > .text-table');
+                if (!table) return;
+                const width = measureTableWidth(table);
                 if (width === lastTableWidth) return;
                 clearTimeout(tableResizeTimer);
                 tableResizeTimer = setTimeout(() => {
@@ -2232,7 +2243,8 @@
 
                 try {
                     const normalizedInput = normalizeInput(inputString, inputFormat.value);
-                    const width = format === 'table' ? measureTableWidth() : undefined;
+                    const table = format === 'table' ? prepareTableView(outputContainer) : null;
+                    const width = table ? measureTableWidth(table) : undefined;
                     if (format === 'table') lastTableWidth = width;
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
                     const result = sessionJson
@@ -2242,7 +2254,9 @@
                     const formattedResult = result.output;
                     hasDecoded = true;
 
-                    if (format === 'hexview') {
+                    if (table) {
+                        table.textContent = formattedResult;
+                    } else if (format === 'hexview') {
                         outputContainer.replaceChildren();
                         renderHexViewer(outputContainer, formattedResult, normalizedInput, result.decoded, isTls ? 'Captured TLS telegram' : '');
                         if (result.plaintext) {
@@ -2295,14 +2309,24 @@
             }
         }
 
-        function measureTableWidth() {
-            const container = document.getElementById('output-container');
+        function prepareTableView(container) {
+            const table = container.querySelector('.text-table') || document.createElement('pre');
+            table.className = 'text-table';
+            table.tabIndex = 0;
+            table.setAttribute('role', 'region');
+            table.setAttribute('aria-label', 'Table parser output');
+            container.replaceChildren(table);
+            return table;
+        }
+
+        function measureTableWidth(table) {
+            const style = getComputedStyle(table);
             const canvas = measureTableWidth.canvas ||= document.createElement('canvas');
             const context = canvas.getContext('2d');
-            context.font = '13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-            const characterWidth = context.measureText('0').width || 8;
-            const availableWidth = Math.max(0, container.clientWidth - 84);
-            return Math.max(32, Math.min(120, Math.floor(availableWidth / characterWidth)));
+            context.font = style.fontSize + ' ' + style.fontFamily;
+            const characterWidth = context.measureText('0').width;
+            const availableWidth = table.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+            return Math.max(32, Math.floor(availableWidth / characterWidth));
         }
 
         function updateDownload(content, extension, mimeType) {
