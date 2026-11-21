@@ -535,6 +535,7 @@
 
         #output > .key-help,
         #output > .parse-report-actions { margin: 12px 20px; }
+        .parser-hint { margin: 0 16px 8px; }
 
         .output-placeholder {
             margin: 0;
@@ -704,8 +705,8 @@
             white-space: pre-wrap;
         }
 
-        .parse-report-actions a { color: #0969da; }
-        body.dark-mode .parse-report-actions a { color: #79c0ff; }
+        :is(.parse-report-actions, .parser-hint) a { color: #0969da; }
+        body.dark-mode :is(.parse-report-actions, .parser-hint) a { color: #79c0ff; }
 
         #copy_output,
         #download_output {
@@ -1634,6 +1635,9 @@
                 </a>
             </div>
         </div>
+        <p class="key-help parser-hint">Missing a meter reading?
+            <a href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml" target="_blank" rel="noopener noreferrer">Request a manufacturer-specific parser</a>.
+        </p>
         <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
     </div>
