@@ -345,9 +345,7 @@
         .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
         .result-views { min-width: 0; }
         .result-views .parse-actions { margin: 0; gap: 4px; }
-        .result-views input[type="button"] { background: transparent; border-color: transparent; color: #59636e; padding: 4px 10px; min-height: 28px; }
-        .result-views #parse_mermaid,
-        .result-views #parse_hexview { padding-inline: 10px; }
+        .result-views input[type="button"] { background: transparent; border-color: transparent; color: #59636e; box-sizing: border-box; width: 5rem; height: 2rem; min-height: 0; padding: 0 4px; }
         .result-views input[type="button"]:hover { background: #eff2f5; }
         .result-views input[type="button"][aria-pressed="true"] { background: #ddf4ff; border-color: #0969da; color: #0550ae; box-shadow: none; }
         .result-views input[type="button"]:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
@@ -415,8 +413,6 @@
             color: #fff;
         }
 
-        #parse_mermaid,
-        #parse_hexview { padding-inline: 24px; }
 
         .telegram-diagram {
             --diagram-line: #b7c6d3;
@@ -445,11 +441,40 @@
         .diagram-fields { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr); gap: 2px 14px; margin: 4px 0 0; font-size: .875rem; }
         .diagram-fields dt, .diagram-fields dd { margin: 0; overflow-wrap: anywhere; }
         .diagram-fields dt { font-weight: 600; }
-        .diagram-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 228px), 1fr)); gap: 8px; align-items: start; }
-        .diagram-record { padding: 10px 12px; border: 1px solid var(--diagram-border); border-radius: 8px; }
-        .diagram-record summary { font-size: .875rem; cursor: pointer; overflow-wrap: anywhere; }
-        .diagram-record strong { display: block; font: 600 1rem/1.5 ui-monospace, monospace; color: var(--diagram-accent); margin-top: 2px; }
-        .diagram-record[open] .diagram-fields { border-top: 1px solid var(--diagram-border); padding-top: 8px; margin-top: 8px; }
+        .diagram-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 228px), 1fr)); gap: 8px; }
+        .diagram-records:not(:has(details[open])) { grid-auto-rows: 1fr; }
+        .diagram-records:has(details[open]) { align-items: start; }
+        .telegram-diagram [data-kind] { --ink: light-dark(#535e6a, #b9c5d2); }
+        .telegram-diagram [data-kind="electricity"] { --ink: light-dark(#865300, #ffd36d); }
+        .telegram-diagram [data-kind="water"] { --ink: light-dark(#006a96, #79d5ff); }
+        .telegram-diagram [data-kind="thermal"] { --ink: light-dark(#a13728, #ffab98); }
+        .telegram-diagram [data-kind="gas"] { --ink: light-dark(#08705f, #74dfc4); }
+        .telegram-diagram [data-kind="time"] { --ink: light-dark(#6643a5, #d2baff); }
+        .telegram-diagram { color-scheme: light; }
+        body.dark-mode .telegram-diagram { color-scheme: dark; }
+        .reading-icon {
+            width: 1.875rem; height: 1.875rem; box-sizing: border-box; padding: 6px;
+            fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round;
+            color: var(--ink); background: color-mix(in srgb, currentColor 12%, transparent); border-radius: 8px;
+        }
+        .diagram-branch h3:has(.reading-icon) { display: flex; align-items: center; gap: 6px; }
+        .diagram-branch h3 .reading-icon { width: 1.5rem; height: 1.5rem; padding: 4px; }
+        .diagram-record { border: 1px solid var(--diagram-border); border-radius: 8px; }
+        .diagram-record summary {
+            display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center;
+            box-sizing: border-box; min-height: 4.5rem; padding: 10px; font-size: .875rem; cursor: pointer;
+        }
+        .diagram-record:not([open]) summary { height: 100%; }
+        .diagram-record summary::-webkit-details-marker { display: none; }
+        .diagram-record summary::after {
+            content: ''; width: 6px; height: 6px; border: solid currentColor; border-width: 0 1.5px 1.5px 0;
+            transform: rotate(45deg); margin: 0 3px;
+        }
+        .diagram-record[open] summary::after { transform: rotate(225deg); }
+        .diagram-record summary:hover { background: var(--diagram-panel); border-radius: inherit; }
+        .diagram-caption { overflow-wrap: anywhere; }
+        .diagram-record strong { display: block; font: 600 1rem/1.5 ui-monospace, monospace; color: var(--ink); }
+        .diagram-record[open] .diagram-fields { border-top: 1px solid var(--diagram-border); padding: 8px 10px 10px; margin: 0; }
 
         :is(button, a, input):focus-visible {
             outline: 3px solid #0969da;
