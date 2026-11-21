@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="./manufacturer-icons.css">
     <style>
         /* UI palette: GitHub Primer light/dark neutrals and blue accents.
            https://primer.style/product/primitives/color/ */
@@ -418,12 +418,38 @@
         #parse_mermaid,
         #parse_hexview { padding-inline: 24px; }
 
-        #mermaid_diagram {
-            padding: 28px 32px 32px;
-            overflow-x: auto;
+        .telegram-diagram {
+            --diagram-line: #b7c6d3;
+            --diagram-border: #d1d9e0;
+            --diagram-panel: #f6f8fa;
+            --diagram-accent: #0969da;
+            padding: 18px clamp(10px, 2vw, 24px) 24px;
+            border-top: 1px solid var(--diagram-border);
         }
-
-        #mermaid_diagram svg { display: block; margin: 0 auto; }
+        body.dark-mode .telegram-diagram {
+            --diagram-line: #506277;
+            --diagram-border: #3d444d;
+            --diagram-panel: #151b23;
+            --diagram-accent: #79c0ff;
+        }
+        .diagram-root { border-left: 4px solid var(--diagram-accent); padding: 8px 14px; background: var(--diagram-panel); }
+        .diagram-root h2 { font-size: 1.125rem; margin: 0; }
+        .diagram-root h2::first-letter { text-transform: uppercase; }
+        .diagram-branches { padding-left: 22px; }
+        .diagram-branch { position: relative; padding: 14px 0 0 18px; min-width: 0; }
+        .diagram-branch::before, .diagram-branch::after { position: absolute; content: ''; left: 0; }
+        .diagram-branch::before { top: 0; bottom: 0; border-left: 1px solid var(--diagram-line); }
+        .diagram-branch:last-child::before { bottom: auto; height: 26px; }
+        .diagram-branch::after { top: 26px; width: 12px; border-top: 1px solid var(--diagram-line); }
+        .diagram-branch h3 { margin: 0 0 4px; font-size: 1rem; }
+        .diagram-fields { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr); gap: 2px 14px; margin: 4px 0 0; font-size: .875rem; }
+        .diagram-fields dt, .diagram-fields dd { margin: 0; overflow-wrap: anywhere; }
+        .diagram-fields dt { font-weight: 600; }
+        .diagram-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 228px), 1fr)); gap: 8px; align-items: start; }
+        .diagram-record { padding: 10px 12px; border: 1px solid var(--diagram-border); border-radius: 8px; }
+        .diagram-record summary { font-size: .875rem; cursor: pointer; overflow-wrap: anywhere; }
+        .diagram-record strong { display: block; font: 600 1rem/1.5 ui-monospace, monospace; color: var(--diagram-accent); margin-top: 2px; }
+        .diagram-record[open] .diagram-fields { border-top: 1px solid var(--diagram-border); padding-top: 8px; margin-top: 8px; }
 
         :is(button, a, input):focus-visible {
             outline: 3px solid #0969da;
@@ -1167,7 +1193,7 @@
             .parse-actions input { flex: 0 0 auto; }
             .hex-viewer { margin: 12px 16px 20px; }
             .hex-viewer-left, .hex-viewer-right { padding: 16px; }
-            #mermaid_diagram { padding: 20px; }
+            .diagram-branches { padding-left: 8px; }
         }
 
         @media (forced-colors: active) {
@@ -1543,12 +1569,12 @@
             <div class="result-views">
                 <div class="parse-actions" role="group" aria-label="Output format">
                     <input id="parse_table" type="button" value="Table" aria-pressed="true" />
+                    <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
+                    <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
                     <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
                     <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
                     <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
-                    <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
-                    <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
                 </div>
             </div>
             <div class="output-actions">
@@ -1573,6 +1599,7 @@
     <script type="module">
         import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.4";
 
+        import { renderDiagram } from "./diagram.js";
         import { normalizeInput } from "./input-format.js";
 
         import { createTlsSessionPanel } from "./tls-session.js";
@@ -1842,8 +1869,6 @@
         let currentFormat = "table";
         let lastTableWidth = null;
         let tableResizeTimer = null;
-
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
 
         function createLineGutter(source) {
             const gutter = document.createElement('div');
@@ -2273,11 +2298,7 @@
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
                     } else if (format === 'mermaid') {
-                        const mermaidDiv = document.createElement('div');
-                        mermaidDiv.id = 'mermaid_diagram';
-                        mermaidDiv.textContent = formattedResult;
-                        outputContainer.replaceChildren(mermaidDiv);
-                        await mermaid.run({ nodes: [mermaidDiv] });
+                        renderDiagram(outputContainer, result.decoded);
                     } else {
                         await renderCodeViewer(
                             outputContainer,
@@ -2296,13 +2317,15 @@
                     } else if (result.mode === 'application') {
                         outputSummary.textContent = 'Parsed as application-layer data without a link-layer frame.';
                     } else {
-                        outputSummary.textContent = `${result.mode === 'wireless' ? 'Wireless' : 'Wired'} telegram · ${format === 'hexview' ? 'Hex View' : format.toUpperCase()}`;
+                        outputSummary.textContent = `${result.mode === 'wireless' ? 'Wireless' : 'Wired'} telegram · ${document.getElementById('parse_' + format).value}`;
                     }
                     if (result.diagnostics.length) {
-                        const warning = document.createElement('pre');
-                        warning.className = 'output-error';
-                        warning.textContent = result.diagnostics.map(item => `[${item.code}] ${item.message}`).join('\n');
-                        outputContainer.append(warning);
+                        if (format !== 'mermaid') {
+                            const warning = document.createElement('pre');
+                            warning.className = 'output-error';
+                            warning.textContent = result.diagnostics.map(item => `[${item.code}] ${item.message}`).join('\n');
+                            outputContainer.append(warning);
+                        }
                         lastFailure = { ...attempt, error: {
                             code: result.diagnostics[0].code,
                             attempts: result.diagnostics,

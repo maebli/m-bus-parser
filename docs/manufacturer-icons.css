@@ -1,0 +1,60 @@
+.text-table .table-link {
+    position: relative;
+    --icon-sheet: url("./manufacturer-icons.webp");
+}
+
+.text-table .table-link::before {
+    content: "";
+    position: absolute;
+    right: calc(100% + 2px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: var(--manufacturer-icon, none);
+    background-size: 112px auto;
+    pointer-events: none;
+}
+
+.table-link[href="https://aquametro.com"] { --manufacturer-icon: var(--icon-sheet) 0px 0px no-repeat; }
+.table-link[href="https://basari.com.tr"] { --manufacturer-icon: var(--icon-sheet) -14px 0px no-repeat; }
+.table-link[href="https://berg-energie.de"] { --manufacturer-icon: var(--icon-sheet) -28px 0px no-repeat; }
+.table-link[href="https://bestas.com.tr"] { --manufacturer-icon: var(--icon-sheet) -42px 0px no-repeat; }
+.table-link[href="https://edmi-meters.com"] { --manufacturer-icon: var(--icon-sheet) -56px 0px no-repeat; }
+.table-link[href="https://elektromed.com.tr"] { --manufacturer-icon: var(--icon-sheet) -70px 0px no-repeat; }
+.table-link[href="https://elvaco.com"] { --manufacturer-icon: var(--icon-sheet) -84px 0px no-repeat; }
+.table-link[href="https://emh-metering.com"] { --manufacturer-icon: var(--icon-sheet) -98px 0px no-repeat; }
+.table-link[href="https://emuag.ch"] { --manufacturer-icon: var(--icon-sheet) 0px -14px no-repeat; }
+.table-link[href="https://engelmann.de"] { --manufacturer-icon: var(--icon-sheet) -14px -14px no-repeat; }
+.table-link[href="https://entes.com.tr"] { --manufacturer-icon: var(--icon-sheet) -28px -14px no-repeat; }
+.table-link[href="https://federal.com.tr"] { --manufacturer-icon: var(--icon-sheet) -42px -14px no-repeat; }
+.table-link[href="https://gossenmetrawatt.com"] { --manufacturer-icon: var(--icon-sheet) -56px -14px no-repeat; }
+.table-link[href="https://gwf.ch"] { --manufacturer-icon: var(--icon-sheet) -70px -14px no-repeat; }
+.table-link[href="https://herz-messtechnik.de"] { --manufacturer-icon: var(--icon-sheet) -84px -14px no-repeat; }
+.table-link[href="https://imit.it"] { --manufacturer-icon: var(--icon-sheet) -98px -14px no-repeat; }
+.table-link[href="https://intracom.gr"] { --manufacturer-icon: var(--icon-sheet) 0px -28px no-repeat; }
+.table-link[href="https://iskraemeco.com"] { --manufacturer-icon: var(--icon-sheet) -14px -28px no-repeat; }
+.table-link[href="https://ista.com"] { --manufacturer-icon: var(--icon-sheet) -28px -28px no-repeat; }
+.table-link[href="https://janitza.de"] { --manufacturer-icon: var(--icon-sheet) -42px -28px no-repeat; }
+.table-link[href="https://kamstrup.com"] { --manufacturer-icon: var(--icon-sheet) -56px -28px no-repeat; }
+.table-link[href="https://knx.org"] { --manufacturer-icon: var(--icon-sheet) -70px -28px no-repeat; }
+.table-link[href="https://kundo.de"] { --manufacturer-icon: var(--icon-sheet) -84px -28px no-repeat; }
+.table-link[href="https://landisgyr.com"] { --manufacturer-icon: var(--icon-sheet) -98px -28px no-repeat; }
+.table-link[href="https://lem.com"] { --manufacturer-icon: var(--icon-sheet) 0px -42px no-repeat; }
+.table-link[href="https://lorenz-meters.de"] { --manufacturer-icon: var(--icon-sheet) -14px -42px no-repeat; }
+.table-link[href="https://lumel.com.pl"] { --manufacturer-icon: var(--icon-sheet) -28px -42px no-repeat; }
+.table-link[href="https://m-bus.de"] { --manufacturer-icon: var(--icon-sheet) -42px -42px no-repeat; }
+.table-link[href="https://maddalena.it"] { --manufacturer-icon: var(--icon-sheet) -56px -42px no-repeat; }
+.table-link[href="https://manas.com.tr"] { --manufacturer-icon: var(--icon-sheet) -70px -42px no-repeat; }
+.table-link[href="https://minol.de"] { --manufacturer-icon: var(--icon-sheet) -84px -42px no-repeat; }
+.table-link[href="https://nzr.de"] { --manufacturer-icon: var(--icon-sheet) -98px -42px no-repeat; }
+.table-link[href="https://padmess.de"] { --manufacturer-icon: var(--icon-sheet) 0px -56px no-repeat; }
+.table-link[href="https://saia-pcd.com"] { --manufacturer-icon: var(--icon-sheet) -14px -56px no-repeat; }
+.table-link[href="https://siemens.com"] { --manufacturer-icon: var(--icon-sheet) -28px -56px no-repeat; }
+.table-link[href="https://slb.com"] { --manufacturer-icon: var(--icon-sheet) -42px -56px no-repeat; }
+.table-link[href="https://sontex.ch"] { --manufacturer-icon: var(--icon-sheet) -56px -56px no-repeat; }
+.table-link[href="https://techem.com"] { --manufacturer-icon: var(--icon-sheet) -70px -56px no-repeat; }
+.table-link[href="https://westermo.se"] { --manufacturer-icon: var(--icon-sheet) -84px -56px no-repeat; }
+.table-link[href="https://zenner.com"] { --manufacturer-icon: var(--icon-sheet) -98px -56px no-repeat; }
+.table-link[href="https://ziv.es"] { --manufacturer-icon: var(--icon-sheet) 0px -70px no-repeat; }
