@@ -547,7 +547,13 @@
 
         #output > .key-help,
         #output > .parse-report-actions { margin: 12px 20px; }
-        .parser-hint { margin: 0 16px 8px; }
+        .parser-request { text-decoration: underline dotted; text-underline-offset: 2px; }
+        .parser-request.show-action::after {
+            content: 'Request parser';
+            margin-inline-start: 0.5em;
+            font: 0.75rem system-ui, sans-serif;
+            white-space: nowrap;
+        }
 
         .output-placeholder {
             margin: 0;
@@ -717,8 +723,8 @@
             white-space: pre-wrap;
         }
 
-        :is(.parse-report-actions, .parser-hint) a { color: #0969da; }
-        body.dark-mode :is(.parse-report-actions, .parser-hint) a { color: #79c0ff; }
+        :is(.parse-report-actions a, .parser-request) { color: #0969da; }
+        body.dark-mode :is(.parse-report-actions a, .parser-request) { color: #79c0ff; }
 
         #copy_output,
         #download_output {
@@ -1291,12 +1297,12 @@
                     <a href="https://github.com/maebli/m-bus-parser/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>
                     <span class="package-links" role="group" aria-label="Parser packages">
                         <span>Packages</span>
-                        <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🦀</span> Rust</a>
-                        <a href="https://pypi.org/project/pymbusparser/" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🐍</span> Python</a>
-                        <a href="https://www.npmjs.com/package/m-bus-parser-wasm-pack" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">🟨</span> JavaScript (Wasm)</a>
-                        <a href="https://central.sonatype.com/artifact/io.github.maebli/m-bus-parser" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">☕</span> Java</a>
-                        <a href="https://github.com/maebli/m-bus-parser/releases?q=%22C+bindings%22" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">⚙️</span> C</a>
-                        <a href="https://crates.io/crates/m-bus-parser-cli" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">⌨️</span> CLI</a>
+                        <a href="https://crates.io/crates/m-bus-parser" target="_blank" rel="noopener noreferrer">Rust</a>
+                        <a href="https://pypi.org/project/pymbusparser/" target="_blank" rel="noopener noreferrer">Python</a>
+                        <a href="https://www.npmjs.com/package/m-bus-parser-wasm-pack" target="_blank" rel="noopener noreferrer">JavaScript (Wasm)</a>
+                        <a href="https://central.sonatype.com/artifact/io.github.maebli/m-bus-parser" target="_blank" rel="noopener noreferrer">Java</a>
+                        <a href="https://github.com/maebli/m-bus-parser/releases?q=%22C+bindings%22" target="_blank" rel="noopener noreferrer">C</a>
+                        <a href="https://crates.io/crates/m-bus-parser-cli" target="_blank" rel="noopener noreferrer">CLI</a>
                     </span>
                     <a class="utility-control" id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
                         target="_blank" rel="noopener noreferrer">
@@ -1655,9 +1661,6 @@
                 </a>
             </div>
         </div>
-        <p class="key-help parser-hint">Missing a meter reading?
-            <a href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml" target="_blank" rel="noopener noreferrer">Request a manufacturer-specific parser</a>.
-        </p>
         <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
     </div>
@@ -2373,6 +2376,7 @@
                     }
 
                     if (generation !== renderGeneration) return;
+                    linkManufacturerFields(outputContainer);
                     showSecurity(result.decoded);
                     hasDecoded = true;
                     window._lastRawOutput = formattedResult;
@@ -2416,6 +2420,35 @@
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             return link;
+        }
+
+        function linkManufacturerFields(container) {
+            const fields = container.querySelectorAll('.text-table, .code-source code, .tree-detail, .diagram-record');
+            const request = document.getElementById('manufacturer-parser-request');
+            for (const field of fields) {
+                const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
+                const matches = [];
+                while (walker.nextNode()) {
+                    const text = walker.currentNode;
+                    if (text.parentElement.closest('a')) continue;
+                    const marker = /\bmanufacturer(?:[\s_-]+specific|\s+data)\b/i.exec(text.data);
+                    if (marker) matches.push({ text, marker });
+                }
+                for (const [index, { text, marker }] of matches.entries()) {
+                    const link = document.createElement('a');
+                    link.className = index === 0 ? 'parser-request show-action' : 'parser-request';
+                    link.href = request.href;
+                    link.target = request.target;
+                    link.rel = request.rel;
+                    link.title = 'Request a manufacturer-specific parser';
+                    link.setAttribute('aria-label', marker[0] + ' · ' + link.title);
+                    link.addEventListener('click', event => event.stopPropagation());
+                    const label = text.splitText(marker.index);
+                    label.splitText(marker[0].length);
+                    label.replaceWith(link);
+                    link.append(label);
+                }
+            }
         }
 
         function formatManufacturerRow(table) {
