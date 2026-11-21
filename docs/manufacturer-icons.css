@@ -18,24 +18,21 @@
 }
 
 .manufacturer-link::before {
+    --zoom: 1.2;
     content: "";
     position: absolute;
     inset-inline-start: 0;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%) scale(var(--zoom));
     width: 14px;
     height: 14px;
     box-sizing: content-box;
-    padding: 2px;
-    border: 1px solid #b8c3ce;
-    border-radius: 5px;
-    background: radial-gradient(ellipse at center, transparent 45%, rgb(38 57 74 / 14%) 100%),
-        var(--manufacturer-icon, none),
-        linear-gradient(to bottom, #fff 55%, #e9eef3) #fff;
-    background-size: 100% 100%, 112px auto, 100% 100%;
-    background-origin: border-box, content-box, border-box;
-    background-clip: border-box, content-box, border-box;
-    box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgb(20 35 50 / 18%);
+    padding: 3px;
+    background: var(--manufacturer-icon, none), linear-gradient(#fff 55%, #e3e9ef);
+    background-size: 112px auto, 100% 100%;
+    background-origin: content-box, border-box;
+    background-clip: content-box, border-box;
+    mask-image: radial-gradient(circle closest-side, #000 50%, transparent calc(100% / var(--zoom)));
     pointer-events: none;
 }
 

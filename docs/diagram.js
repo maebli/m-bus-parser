@@ -74,13 +74,14 @@ function recordValue(record) {
 function recordNode(record, medium) {
     const node = element('details', undefined, 'diagram-record');
     const summary = element('summary');
-    const quantity = record.quantities?.join(', ') || record.data_coding || 'Reading';
+    const quantity = record.quantities?.[0] || record.data_coding || 'Reading';
     const kind = readingKind(quantity, medium);
     node.dataset.kind = kind;
     const caption = element('span', undefined, 'diagram-caption');
     caption.append(element('span', '#' + record.index + ' · ' + quantity), element('strong', recordValue(record)));
     summary.append(readingIcon(kind), caption);
     node.append(summary, fields([
+        ['Qualifiers', record.quantities?.slice(1).join(', ')],
         ['Function', record.function], ['Storage', record.storage_number],
         ['Tariff', record.tariff], ['Subunit', record.subunit], ['Coding', record.data_coding],
         ['Raw bytes', [record.header_hex, record.data_hex].filter(Boolean).join(' ')],

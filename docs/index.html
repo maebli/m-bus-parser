@@ -222,16 +222,7 @@
             .meter-sample img { width: 2rem; height: 2rem; }
         }
 
-        .example-options { display: grid; gap: 4px; }
-        .example-option { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 6px 0; font-size: 0.8rem; }
-        .example-description { display: grid; flex: 1 1 240px; gap: 2px; }
-        .example-protocols { display: flex; gap: 4px; }
-        .example-options button { padding: 5px 8px; border: 1px solid #d1d9e0; border-radius: 4px; background: transparent; color: inherit; font: inherit; font-size: 0.75rem; cursor: pointer; }
-        .example-options button:hover { background: #eff2f5; }
-        .example-options span { color: #59636e; font-size: 0.75rem; }
-        body.dark-mode .example-options button { border-color: #3d444d; }
-        body.dark-mode .example-options button:hover { background: #212830; }
-        body.dark-mode .example-options span { color: #9198a1; }
+        button.meter-sample { background: transparent; font: inherit; text-align: start; cursor: pointer; }
         .tls-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 12px; margin: 12px 0; }
         .tls-fields label { display: grid; min-width: 0; gap: 6px; font-size: 0.85rem; }
         .tls-fields .tls-key-field { grid-column: 1 / -1; }
@@ -441,7 +432,7 @@
         .diagram-fields { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr); gap: 2px 14px; margin: 4px 0 0; font-size: .875rem; }
         .diagram-fields dt, .diagram-fields dd { margin: 0; overflow-wrap: anywhere; }
         .diagram-fields dt { font-weight: 600; }
-        .diagram-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 228px), 1fr)); gap: 8px; }
+        .diagram-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 8px; }
         .diagram-records:not(:has(details[open])) { grid-auto-rows: 1fr; }
         .diagram-records:has(details[open]) { align-items: start; }
         .telegram-diagram [data-kind] { --ink: light-dark(#535e6a, #b9c5d2); }
@@ -472,7 +463,12 @@
         }
         .diagram-record[open] summary::after { transform: rotate(225deg); }
         .diagram-record summary:hover { background: var(--diagram-panel); border-radius: inherit; }
-        .diagram-caption { overflow-wrap: anywhere; }
+        .diagram-caption { min-width: 0; overflow-wrap: anywhere; }
+        .diagram-caption > span { display: block; }
+        .diagram-record:not([open]) .diagram-caption > * {
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .diagram-record[open] { grid-column: 1 / -1; }
         .diagram-record strong { display: block; font: 600 1rem/1.5 ui-monospace, monospace; color: var(--ink); }
         .diagram-record[open] .diagram-fields { border-top: 1px solid var(--diagram-border); padding: 8px 10px 10px; margin: 0; }
 
@@ -1223,6 +1219,16 @@
             .diagram-branches { padding-left: 8px; }
         }
 
+        @media (max-width: 380px) {
+            .diagram-fields dd:has(> .manufacturer-link) { grid-column: 1 / -1; }
+            .diagram-record summary { gap: 3px 6px; }
+            .diagram-record .reading-icon { width: 1.5rem; height: 1.5rem; padding: 4px; }
+            .diagram-caption { display: contents; }
+            .diagram-caption > span { grid-area: 1 / 2; }
+            .diagram-caption > strong { grid-column: 1 / -1; grid-row: 2; }
+            .diagram-record summary::after { grid-area: 1 / 3; }
+        }
+
         @media (forced-colors: active) {
             .encoding-options input:checked + span { border-color: Highlight; }
             .code-viewer,
@@ -1329,49 +1335,6 @@
             <div class="decode-actions">
                 <button type="submit" id="decode-button" disabled>Loading parser…</button>
             </div>
-            <details id="examples-panel" name="parser-disclosure">
-                <summary>Examples</summary>
-                <div class="disclosure-content">
-                    <p class="key-help">Choose Wired or Wireless to decode an example. Public test keys and TLS sessions are included when available.</p>
-                    <div class="example-options">
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 5 · AES-CBC</strong><span>Decrypted readings · no authentication</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="5" data-protocol="wired" aria-label="Load wired mode 5 example">Wired</button>
-                                <button type="button" data-example="5" data-protocol="wireless" aria-label="Load wireless mode 5 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 7 · AES-CBC</strong><span>Authenticated readings · OMS reference telegrams</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="7" data-protocol="wired" aria-label="Load wired mode 7 example">Wired</button>
-                                <button type="button" data-example="7" data-protocol="wireless" aria-label="Load wireless mode 7 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 10 · AES-CCM</strong><span>Authenticated readings</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="10" data-protocol="wired" aria-label="Load wired mode 10 example">Wired</button>
-                                <button type="button" data-example="10" data-protocol="wireless" aria-label="Load wireless mode 10 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Mode 13 · TLS</strong><span>Authenticated readings · includes test session</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="13" data-protocol="wired" aria-label="Load wired mode 13 example">Wired</button>
-                                <button type="button" data-example="13" data-protocol="wireless" aria-label="Load wireless mode 13 example">Wireless</button>
-                            </div>
-                        </div>
-                        <div class="example-option">
-                            <div class="example-description"><strong>Unencrypted</strong><span>No key needed</span></div>
-                            <div class="example-protocols">
-                                <button type="button" data-example="cleartext" data-protocol="wired" aria-label="Load unencrypted wired example">Wired</button>
-                                <button type="button" data-example="cleartext" data-protocol="wireless" aria-label="Load unencrypted wireless example">Wireless</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </details>
             <details id="tls-panel" class="tls-panel" name="parser-disclosure">
                 <summary id="tls-summary">TLS session · mode 13</summary>
                 <div class="disclosure-content">
@@ -1420,12 +1383,12 @@
                 </details>
             </section>
         </div>
-        <details id="meter-catalog">
-            <summary>Meter catalog</summary>
+        <details id="meter-catalog" name="parser-disclosure">
+            <summary id="examples-panel">Examples and meter catalog</summary>
             <div class="meter-filter">
-                <label for="meter-search">Find a meter</label>
-                <input type="search" id="meter-search" placeholder="Manufacturer, model or meter type" />
-                <span id="meter-count" role="status">40 examples</span>
+                <label for="meter-search">Find an example</label>
+                <input type="search" id="meter-search" placeholder="Manufacturer, model, protocol or security mode" />
+                <span id="meter-count" role="status">50 examples</span>
             </div>
             <div class="meter-samples">
                 <a class="meter-sample" href="?data=689898680801721234567842040202450000000E84000000000000008E1084000000000000008E2084000000000000008EB00084000000000000008E801084000000000000008E804084000000000000008E904084000000000000008EA04084000000000000008EB04084000000000000008E8050840000000000000001FF9300000CFF92000000000107FD9700000000000000000001FF9800001F7516&amp;format=table&amp;encoding=hex">
@@ -1588,6 +1551,46 @@
                     <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
                     <span><strong>WEP room sensor</strong><small>Room sensor · Wireless · 20.1&nbsp;°C</small><span class="visually-hidden"> · Decode sample</span></span>
                 </a>
+                <button type="button" class="meter-sample" data-example="cleartext" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Unencrypted · Wired</strong><small>No key needed</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="cleartext" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Unencrypted · Wireless</strong><small>No key needed</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="5" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 5 · AES-CBC · Wired</strong><small>Public key · No authentication</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="5" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 5 · AES-CBC · Wireless</strong><small>Public key · No authentication</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="7" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 7 · AES-CBC · Wired</strong><small>OMS reference · Authenticated</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="7" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 7 · AES-CBC · Wireless</strong><small>OMS reference · Authenticated</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="10" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 10 · AES-CCM · Wired</strong><small>Public key · Authenticated</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="10" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 10 · AES-CCM · Wireless</strong><small>Public key · Authenticated</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="13" data-protocol="wired">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 13 · TLS · Wired</strong><small>Test session · Authenticated</small></span>
+                </button>
+                <button type="button" class="meter-sample" data-example="13" data-protocol="wireless">
+                    <img src="./emeter.png" alt="" width="60" height="60" loading="lazy">
+                    <span><strong>Mode 13 · TLS · Wireless</strong><small>Test session · Authenticated</small></span>
+                </button>
             </div>
         </details>
     </form>
@@ -1951,7 +1954,7 @@
                     if (!sample.hidden) visible++;
                 }
                 document.getElementById('meter-count').textContent = visible === 0
-                    ? 'No matching meters' : visible === 1 ? '1 example' : visible + ' examples';
+                    ? 'No matching examples' : visible === 1 ? '1 example' : visible + ' examples';
             });
             meterSearch.addEventListener('keydown', event => {
                 if (event.key === 'Enter') event.preventDefault();
@@ -2142,21 +2145,17 @@
                 parseInput(format);
             }
 
-            document.querySelectorAll('[data-example]').forEach(button => {
-                button.addEventListener('click', () => {
-                    const example = telegramExamples[button.dataset.example];
-                    loadSample(example.telegrams[button.dataset.protocol], example.key, example.session, currentFormat);
-                    document.querySelector('#examples-panel > summary').focus();
-                });
-            });
-
             for (const sample of meterSamples) {
                 sample.addEventListener('click', event => {
-                    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                    event.preventDefault();
-                    const params = new URL(sample.href).searchParams;
-                    meterCatalog.open = false;
-                    loadSample(params.get('data'), '', null, params.get('format'));
+                    if (sample.dataset.example) {
+                        const example = telegramExamples[sample.dataset.example];
+                        loadSample(example.telegrams[sample.dataset.protocol], example.key, example.session, currentFormat);
+                    } else {
+                        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                        event.preventDefault();
+                        const params = new URL(sample.href).searchParams;
+                        loadSample(params.get('data'), '', null, params.get('format'));
+                    }
                     meterCatalog.querySelector('summary').focus();
                 });
             }
