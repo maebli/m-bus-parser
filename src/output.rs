@@ -22,6 +22,8 @@ use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
 mod messages;
+mod table_style;
+use table_style::{Cell, TableStyle};
 #[cfg(feature = "decryption-mode-13")]
 mod tls;
 #[cfg(feature = "decryption-mode-13")]
@@ -48,6 +50,8 @@ const MINIMUM_TABLE_WIDTH: usize = 32;
 #[non_exhaustive]
 pub enum OutputFormat {
     Table,
+    TableAnsi,
+    TableHtml,
     Json,
     Yaml,
     Csv,
@@ -62,6 +66,8 @@ impl OutputFormat {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Table => "table",
+            Self::TableAnsi => "table-ansi",
+            Self::TableHtml => "table-html",
             Self::Json => "json",
             Self::Yaml => "yaml",
             Self::Csv => "csv",
@@ -85,6 +91,8 @@ impl FromStr for OutputFormat {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "table" | "table_format" => Ok(Self::Table),
+            "table-ansi" => Ok(Self::TableAnsi),
+            "table-html" => Ok(Self::TableHtml),
             "json" => Ok(Self::Json),
             "yaml" | "yml" => Ok(Self::Yaml),
             "csv" => Ok(Self::Csv),
@@ -621,8 +629,17 @@ fn render_decoded(
             })
         }
         OutputFormat::Csv => render_csv(decoded),
-        OutputFormat::Table => {
-            render_table(decoded, options.table_width.unwrap_or(DEFAULT_TABLE_WIDTH))
+        OutputFormat::Table | OutputFormat::TableAnsi | OutputFormat::TableHtml => {
+            let style = match format {
+                OutputFormat::TableAnsi => TableStyle::Terminal,
+                OutputFormat::TableHtml => TableStyle::Html,
+                _ => TableStyle::Plain,
+            };
+            render_table(
+                decoded,
+                options.table_width.unwrap_or(DEFAULT_TABLE_WIDTH),
+                style,
+            )
         }
         OutputFormat::Mermaid => Ok(render_mermaid(decoded)),
         _ => unreachable!("specialized formats handled by caller"),
@@ -2330,7 +2347,11 @@ fn record_hex(record: &RecordOutput) -> String {
     }
 }
 
-fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputError> {
+fn render_table(
+    decoded: &DecodedOutput,
+    width: usize,
+    style: TableStyle,
+) -> Result<String, OutputError> {
     if width < MINIMUM_TABLE_WIDTH {
         return Err(OutputError::InvalidOption {
             option: "table_width",
@@ -2342,8 +2363,7 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
         "{} {} frame · {} decode",
         decoded.protocol, decoded.frame.kind, decoded.decode_state
     );
-    output.push_str(&wrap_display(&title, width).join("\n"));
-    output.push('\n');
+    push_text(&mut output, "", &title, width, style, Cell::Label);
 
     let identity = decoded.meter.identity.as_ref();
     let mut summary = vec![
@@ -2410,10 +2430,10 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
             enrichment.manufacturer_description.clone(),
         ));
     }
-    output.push_str(&summary_fields(&summary, width));
+    output.push_str(&summary_fields(&summary, width, style));
 
     if !decoded.records.is_empty() {
-        push_record_table(&mut output, &decoded.records, width);
+        push_record_table(&mut output, &decoded.records, width, style);
     }
     if !decoded.diagnostics.is_empty() {
         output.push_str("Diagnostics\n");
@@ -2427,12 +2447,17 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
                 )
             })
             .collect::<Vec<_>>();
-        output.push_str(&summary_fields(&rows, width));
+        output.push_str(&summary_fields(&rows, width, style));
     }
     Ok(output)
 }
 
-fn push_record_table(output: &mut String, records: &[RecordOutput], width: usize) {
+fn push_record_table(
+    output: &mut String,
+    records: &[RecordOutput],
+    width: usize,
+    style: TableStyle,
+) {
     let headers = [
         "#", "Quantity", "Value", "Function", "S/T/U", "Coding", "Raw",
     ];
@@ -2470,7 +2495,21 @@ fn push_record_table(output: &mut String, records: &[RecordOutput], width: usize
         .collect::<Vec<_>>();
     let border_and_padding = 1 + 3 * headers.len();
     if widths.iter().sum::<usize>() + border_and_padding <= width {
-        output.push_str(&box_table(&headers, &rows, &widths));
+        output.push_str(&box_table(
+            &headers,
+            &rows,
+            &widths,
+            style,
+            &[
+                Cell::Text,
+                Cell::Label,
+                Cell::Reading,
+                Cell::Text,
+                Cell::Text,
+                Cell::Text,
+                Cell::Bytes,
+            ],
+        ));
         return;
     }
 
@@ -2478,11 +2517,14 @@ fn push_record_table(output: &mut String, records: &[RecordOutput], width: usize
         output.push('\n');
         let label = format!("#{index}  {quantity}:");
         let heading = format!("{label} {value}");
-        if UnicodeWidthStr::width(heading.as_str()) <= width {
-            push_text(output, "", &heading, width);
+        if !heading.contains('\n') && UnicodeWidthStr::width(heading.as_str()) <= width {
+            style.write(output, Cell::Label, &label);
+            output.push(' ');
+            style.write(output, Cell::Reading, &value);
+            output.push('\n');
         } else {
-            push_text(output, "", &label, width);
-            push_text(output, "  ", &value, width);
+            push_text(output, "", &label, width, style, Cell::Label);
+            push_text(output, "  ", &value, width, style, Cell::Reading);
         }
         let mut metadata = function;
         for field in [coding, format!("S/T/U {counters}")] {
@@ -2491,15 +2533,22 @@ fn push_record_table(output: &mut String, records: &[RecordOutput], width: usize
                 + UnicodeWidthStr::width(field.as_str())
                 > width - 2
             {
-                push_text(output, "  ", &metadata, width);
+                push_text(output, "  ", &metadata, width, style, Cell::Text);
                 metadata = field;
             } else {
                 metadata.push_str(" · ");
                 metadata.push_str(&field);
             }
         }
-        push_text(output, "  ", &metadata, width);
-        push_text(output, "  ", &format!("Raw: {raw}"), width);
+        push_text(output, "  ", &metadata, width, style, Cell::Text);
+        push_text(
+            output,
+            "  ",
+            &format!("Raw: {raw}"),
+            width,
+            style,
+            Cell::Bytes,
+        );
     }
 }
 
@@ -2523,15 +2572,22 @@ fn reading(record: &RecordOutput) -> String {
     format!("{}: {}", quantity_label(record), value_with_unit(record))
 }
 
-fn push_text(output: &mut String, indent: &str, text: &str, width: usize) {
+fn push_text(
+    output: &mut String,
+    indent: &str,
+    text: &str,
+    width: usize,
+    style: TableStyle,
+    cell: Cell,
+) {
     for line in wrap_display(text, width - indent.len()) {
         output.push_str(indent);
-        output.push_str(&line);
+        style.write(output, cell, &line);
         output.push('\n');
     }
 }
 
-fn summary_fields(rows: &[(String, String)], width: usize) -> String {
+fn summary_fields(rows: &[(String, String)], width: usize, style: TableStyle) -> String {
     let mut output = String::new();
     let label_width = rows
         .iter()
@@ -2540,13 +2596,21 @@ fn summary_fields(rows: &[(String, String)], width: usize) -> String {
         .unwrap_or(0);
     for (key, value) in rows {
         let key_width = UnicodeWidthStr::width(key.as_str());
-        let aligned = format!("{key}  {}{value}", " ".repeat(label_width - key_width));
-        if !value.contains('\n') && UnicodeWidthStr::width(aligned.as_str()) <= width {
-            output.push_str(&aligned);
+        let cell = if key == "Website" {
+            Cell::Website(value)
+        } else {
+            Cell::Text
+        };
+        if !value.contains('\n')
+            && label_width + 2 + UnicodeWidthStr::width(value.as_str()) <= width
+        {
+            style.write(&mut output, Cell::Label, key);
+            output.push_str(&" ".repeat(label_width + 2 - key_width));
+            style.write(&mut output, cell, value);
             output.push('\n');
         } else {
-            push_text(&mut output, "", key, width);
-            push_text(&mut output, "  ", value, width);
+            push_text(&mut output, "", key, width, style, Cell::Label);
+            push_text(&mut output, "  ", value, width, style, cell);
         }
     }
     output
@@ -2556,6 +2620,8 @@ fn box_table<const N: usize>(
     headers: &[&str; N],
     rows: &[[String; N]],
     widths: &[usize; N],
+    style: TableStyle,
+    cells: &[Cell; N],
 ) -> String {
     let mut output = String::new();
     push_border(&mut output, '┌', '┬', '┐', widths);
@@ -2566,10 +2632,12 @@ fn box_table<const N: usize>(
             .map(|value| value.to_string())
             .collect::<Vec<_>>(),
         widths,
+        style,
+        &[Cell::Label; N],
     );
     push_border(&mut output, '├', '┼', '┤', widths);
     for (index, row) in rows.iter().enumerate() {
-        push_row(&mut output, row, widths);
+        push_row(&mut output, row, widths, style, cells);
         if index + 1 != rows.len() {
             push_border(&mut output, '├', '┼', '┤', widths);
         }
@@ -2591,7 +2659,13 @@ fn push_border(output: &mut String, left: char, middle: char, right: char, width
     output.push('\n');
 }
 
-fn push_row(output: &mut String, cells: &[String], widths: &[usize]) {
+fn push_row(
+    output: &mut String,
+    cells: &[String],
+    widths: &[usize],
+    style: TableStyle,
+    roles: &[Cell],
+) {
     let wrapped = widths
         .iter()
         .enumerate()
@@ -2600,13 +2674,13 @@ fn push_row(output: &mut String, cells: &[String], widths: &[usize]) {
     let height = wrapped.iter().map(Vec::len).max().unwrap_or(1);
     for line in 0..height {
         output.push('│');
-        for (index, width) in widths.iter().enumerate() {
+        for (index, (width, role)) in widths.iter().zip(roles).enumerate() {
             let value = wrapped
                 .get(index)
                 .and_then(|lines| lines.get(line))
                 .map_or("", String::as_str);
             output.push(' ');
-            output.push_str(value);
+            style.write(output, *role, value);
             output.push_str(&" ".repeat(width.saturating_sub(UnicodeWidthStr::width(value))));
             output.push(' ');
             output.push('│');

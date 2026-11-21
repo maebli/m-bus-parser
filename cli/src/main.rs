@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::str::FromStr;
 
-use clap::{Parser, Subcommand};
+use clap::{ColorChoice, Parser, Subcommand};
 use m_bus_parser::{
     decode_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
     OutputFormat, RenderOptions,
@@ -17,6 +17,15 @@ use input::{normalize_input, InputFormat};
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        default_value = "auto",
+        help = "Color and hyperlink table output (auto uses an interactive terminal)"
+    )]
+    color: ColorChoice,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -114,6 +123,20 @@ fn run() -> Result<(), String> {
             let input = normalize_input(&input, input_format)?;
             let output_format = OutputFormat::from_str(&format)
                 .map_err(|error| format!("[{}] {error}", error.code()))?;
+            let use_color = match cli.color {
+                ColorChoice::Always => true,
+                ColorChoice::Never => false,
+                ColorChoice::Auto => {
+                    io::stdout().is_terminal()
+                        && std::env::var_os("NO_COLOR").unwrap_or_default().is_empty()
+                        && std::env::var_os("TERM").as_deref() != Some(std::ffi::OsStr::new("dumb"))
+                }
+            };
+            let output_format = if output_format == OutputFormat::Table && use_color {
+                OutputFormat::TableAnsi
+            } else {
+                output_format
+            };
             let key = key
                 .as_deref()
                 .map(parse_key)

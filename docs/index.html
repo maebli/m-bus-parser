@@ -520,6 +520,14 @@
             font: 0.875rem/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
+        .text-table .table-label { color: #065e78; }
+        .text-table .table-reading { color: #116329; }
+        .text-table .table-bytes { color: #6639a6; }
+        .text-table .table-link { color: #0969da; text-decoration: underline; }
+        body.dark-mode .text-table .table-label { color: #86d5ec; }
+        body.dark-mode .text-table .table-reading { color: #7ee787; }
+        body.dark-mode .text-table .table-bytes { color: #d2a8ff; }
+        body.dark-mode .text-table .table-link { color: #79c0ff; }
         body.dark-mode .text-table { border-color: #3d444d; }
 
         .code-viewer {
@@ -1951,7 +1959,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=1e76e0b7", import.meta.url));
+            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=7fcbdcd8", import.meta.url));
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastFailure = null;
@@ -2247,15 +2255,17 @@
                     const width = table ? measureTableWidth(table) : undefined;
                     if (format === 'table') lastTableWidth = width;
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
+                    const renderFormat = table ? 'table-html' : format;
                     const result = sessionJson
-                        ? renderTlsPayload(normalizedInput, format, sessionJson, width, inspectedTelegram)
-                        : renderWithFallback(parserApi, normalizedInput, format, isTls ? undefined : aesKey || undefined, width);
+                        ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
+                        : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width);
                     attempt.mode = result.mode;
-                    const formattedResult = result.output;
+                    let formattedResult = result.output;
                     hasDecoded = true;
 
                     if (table) {
-                        table.textContent = formattedResult;
+                        table.innerHTML = formattedResult;
+                        formattedResult = table.textContent;
                     } else if (format === 'hexview') {
                         outputContainer.replaceChildren();
                         renderHexViewer(outputContainer, formattedResult, normalizedInput, result.decoded, isTls ? 'Captured TLS telegram' : '');
