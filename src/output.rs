@@ -2347,121 +2347,160 @@ fn render_table(decoded: &DecodedOutput, width: usize) -> Result<String, OutputE
 
     let identity = decoded.meter.identity.as_ref();
     let mut summary = vec![
-        [
+        (
             "Function".to_string(),
             decoded
                 .frame
                 .function
                 .clone()
                 .unwrap_or_else(|| "—".to_string()),
-        ],
-        [
+        ),
+        (
             "Meter".to_string(),
             identity
                 .and_then(|value| value.id.clone())
                 .unwrap_or_else(|| "—".to_string()),
-        ],
-        [
+        ),
+        (
             "Manufacturer".to_string(),
             identity
                 .and_then(|value| value.manufacturer_code.clone())
                 .unwrap_or_else(|| "—".to_string()),
-        ],
-        [
+        ),
+        (
             "Device".to_string(),
             identity
                 .and_then(|value| value.device_type.clone())
                 .unwrap_or_else(|| "—".to_string()),
-        ],
-        [
+        ),
+        (
             "Security".to_string(),
             format!(
                 "{} · {}",
                 decoded.security.payload_protection, decoded.security.decryption_state
             ),
-        ],
+        ),
     ];
     if let Some(mask) = &decoded.transport.secondary_address_mask {
-        summary.push(["Secondary address mask".to_string(), mask.clone()]);
+        summary.push(("Secondary address mask".to_string(), mask.clone()));
     }
     if let Some(application) = &decoded.application {
-        summary.push(["Application".to_string(), application.protocol.clone()]);
+        summary.push(("Application".to_string(), application.protocol.clone()));
         if let Some(decoded) = &application.decoded {
-            summary.push(["Application data".to_string(), decoded.to_string()]);
+            summary.push(("Application data".to_string(), decoded.to_string()));
         }
         if !application.payload_hex.is_empty() {
-            summary.push([
+            summary.push((
                 "Application bytes".to_string(),
                 application.payload_hex.clone(),
-            ]);
+            ));
         }
     }
     if let Some(enrichment) = &decoded.enrichment {
-        summary.push([
+        summary.push((
             "Manufacturer name".to_string(),
             enrichment.manufacturer_name.clone(),
-        ]);
-        summary.push([
+        ));
+        summary.push((
             "Website".to_string(),
             enrichment.manufacturer_website.clone(),
-        ]);
-        summary.push([
+        ));
+        summary.push((
             "Description".to_string(),
             enrichment.manufacturer_description.clone(),
-        ]);
+        ));
     }
-    output.push_str(&box_table(&["Field", "Value"], &summary, width));
+    output.push_str(&summary_fields(&summary, width));
 
     if !decoded.records.is_empty() {
         push_record_table(&mut output, &decoded.records, width);
     }
     if !decoded.diagnostics.is_empty() {
+        output.push_str("Diagnostics\n");
         let rows = decoded
             .diagnostics
             .iter()
             .map(|diagnostic| {
-                [
+                (
                     diagnostic.code.clone(),
                     format!("{}: {}", diagnostic.severity, diagnostic.message),
-                ]
+                )
             })
             .collect::<Vec<_>>();
-        output.push_str(&box_table(&["Diagnostic", "Message"], &rows, width));
+        output.push_str(&summary_fields(&rows, width));
     }
     Ok(output)
 }
 
 fn push_record_table(output: &mut String, records: &[RecordOutput], width: usize) {
-    let mut readings = Vec::with_capacity(records.len());
-    let mut details = Vec::with_capacity(records.len());
-    for record in records {
-        let (quantity, value) = if record.value.kind == "manufacturer_specific" {
-            (
-                "Manufacturer data".to_string(),
-                format!("{} bytes", record.data_hex.split_ascii_whitespace().count()),
-            )
-        } else {
-            (quantity_label(record), value_with_unit(record))
-        };
-        let index = record.index.to_string();
-        readings.push([index.clone(), quantity, value]);
-        details.push([
-            index,
-            format!(
-                "{} · {}\nStorage/tariff/subunit: {}/{}/{}\nRaw: {}",
-                record.function,
-                record.data_coding,
-                record.storage_number,
-                record.tariff,
-                record.subunit,
+    let headers = [
+        "#", "Quantity", "Value", "Function", "S/T/U", "Coding", "Raw",
+    ];
+    let mut widths = headers.map(UnicodeWidthStr::width);
+    let rows = records
+        .iter()
+        .map(|record| {
+            let (quantity, value) = if record.value.kind == "manufacturer_specific" {
+                (
+                    "Manufacturer data".to_string(),
+                    format!("{} bytes", record.data_hex.split_ascii_whitespace().count()),
+                )
+            } else {
+                (quantity_label(record), value_with_unit(record))
+            };
+            let row = [
+                record.index.to_string(),
+                quantity,
+                value,
+                record.function.clone(),
+                format!(
+                    "{}/{}/{}",
+                    record.storage_number, record.tariff, record.subunit
+                ),
+                record.data_coding.clone(),
                 record_hex(record),
-            ),
-        ]);
+            ];
+            for (max_width, cell) in widths.iter_mut().zip(&row) {
+                for line in cell.lines() {
+                    *max_width = (*max_width).max(UnicodeWidthStr::width(line));
+                }
+            }
+            row
+        })
+        .collect::<Vec<_>>();
+    let border_and_padding = 1 + 3 * headers.len();
+    if widths.iter().sum::<usize>() + border_and_padding <= width {
+        output.push_str(&box_table(&headers, &rows, &widths));
+        return;
     }
-    output.push('\n');
-    output.push_str(&box_table(&["#", "Quantity", "Value"], &readings, width));
-    output.push('\n');
-    output.push_str(&box_table(&["#", "Record details"], &details, width));
+
+    for [index, quantity, value, function, counters, coding, raw] in rows {
+        output.push('\n');
+        let label = format!("#{index}  {quantity}:");
+        let heading = format!("{label} {value}");
+        if UnicodeWidthStr::width(heading.as_str()) <= width {
+            push_text(output, "", &heading, width);
+        } else {
+            push_text(output, "", &label, width);
+            push_text(output, "  ", &value, width);
+        }
+        let mut metadata = function;
+        for field in [coding, format!("S/T/U {counters}")] {
+            if UnicodeWidthStr::width(metadata.as_str())
+                + 3
+                + UnicodeWidthStr::width(field.as_str())
+                > width - 2
+            {
+                push_text(output, "  ", &metadata, width);
+                metadata = field;
+            } else {
+                metadata.push_str(" · ");
+                metadata.push_str(&field);
+            }
+        }
+        push_text(output, "  ", &metadata, width);
+        push_text(output, "  ", &format!("Raw: {raw}"), width);
+    }
 }
 
 fn quantity_label(record: &RecordOutput) -> String {
@@ -2484,37 +2523,58 @@ fn reading(record: &RecordOutput) -> String {
     format!("{}: {}", quantity_label(record), value_with_unit(record))
 }
 
-fn box_table<const N: usize>(headers: &[&str; N], rows: &[[String; N]], width: usize) -> String {
-    let mut widths = headers.map(UnicodeWidthStr::width);
-    for row in rows {
-        for (natural_width, cell) in widths.iter_mut().zip(row) {
-            for line in cell.split('\n') {
-                *natural_width = (*natural_width).max(UnicodeWidthStr::width(line));
-            }
+fn push_text(output: &mut String, indent: &str, text: &str, width: usize) {
+    for line in wrap_display(text, width - indent.len()) {
+        output.push_str(indent);
+        output.push_str(&line);
+        output.push('\n');
+    }
+}
+
+fn summary_fields(rows: &[(String, String)], width: usize) -> String {
+    let mut output = String::new();
+    let label_width = rows
+        .iter()
+        .map(|(key, _)| UnicodeWidthStr::width(key.as_str()))
+        .max()
+        .unwrap_or(0);
+    for (key, value) in rows {
+        let key_width = UnicodeWidthStr::width(key.as_str());
+        let aligned = format!("{key}  {}{value}", " ".repeat(label_width - key_width));
+        if !value.contains('\n') && UnicodeWidthStr::width(aligned.as_str()) <= width {
+            output.push_str(&aligned);
+            output.push('\n');
+        } else {
+            push_text(&mut output, "", key, width);
+            push_text(&mut output, "  ", value, width);
         }
     }
-    let mut remaining = width - (3 * N + 1);
-    let mut narrowest_first = widths.each_mut();
-    narrowest_first.sort_by_key(|column| **column);
-    for (index, column) in narrowest_first.into_iter().enumerate() {
-        *column = (*column).min(remaining / (N - index));
-        remaining -= *column;
-    }
+    output
+}
+
+fn box_table<const N: usize>(
+    headers: &[&str; N],
+    rows: &[[String; N]],
+    widths: &[usize; N],
+) -> String {
     let mut output = String::new();
-    push_border(&mut output, '┌', '┬', '┐', &widths);
+    push_border(&mut output, '┌', '┬', '┐', widths);
     push_row(
         &mut output,
         &headers
             .iter()
             .map(|value| value.to_string())
             .collect::<Vec<_>>(),
-        &widths,
+        widths,
     );
-    push_border(&mut output, '├', '┼', '┤', &widths);
-    for row in rows {
-        push_row(&mut output, row, &widths);
+    push_border(&mut output, '├', '┼', '┤', widths);
+    for (index, row) in rows.iter().enumerate() {
+        push_row(&mut output, row, widths);
+        if index + 1 != rows.len() {
+            push_border(&mut output, '├', '┼', '┤', widths);
+        }
     }
-    push_border(&mut output, '└', '┴', '┘', &widths);
+    push_border(&mut output, '└', '┴', '┘', widths);
     output
 }
 
