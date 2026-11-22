@@ -531,6 +531,12 @@ fn decode_bytes_with_session(
     let stripped = normalized.len() != data.len();
     match MbusData::<wireless::WirelessFrame>::try_from(normalized) {
         Ok(mut parsed) => {
+            let radio4 = radio4_application(&parsed.frame, normalized.get(9).copied())?;
+            if radio4.is_some() {
+                parsed.user_data = None;
+                parsed.data_records = None;
+                parsed.application_error = None;
+            }
             let mut decrypted_buffer = [0u8; 512];
             let security = prepare_security(
                 parsed.user_data.as_ref(),
@@ -544,14 +550,18 @@ fn decode_bytes_with_session(
             } else if security.encrypted {
                 parsed.data_records = None;
             }
-            Ok(build_wireless_output(
+            let mut result = build_wireless_output(
                 data,
                 normalized,
                 stripped,
                 &parsed,
                 security.clone(),
                 options.include_enrichment,
-            ))
+            );
+            if let Some(application) = radio4 {
+                result.application = Some(application);
+            }
+            Ok(result)
         }
         Err(error) => Err(OutputError::InvalidFrame {
             wired: wired_error,
@@ -1031,6 +1041,42 @@ fn build_wired_output(
         security_context,
         include_enrichment,
     )
+}
+
+fn radio4_application(
+    frame: &wireless::WirelessFrame<'_>,
+    raw_medium: Option<u8>,
+) -> Result<Option<ApplicationOutput>, OutputError> {
+    let Some((&0xa2, payload)) = frame.data.split_first() else {
+        return Ok(None);
+    };
+    let id = &frame.manufacturer_id;
+    if id.manufacturer_code.code != ['T', 'C', 'H']
+        || !matches!(id.version, 0x70 | 0x95)
+        || !matches!(raw_medium, Some(0x62 | 0x72))
+    {
+        return Ok(None);
+    }
+    let [_, _, _, previous_low, previous_high, _, _, current_low, current_high, ..] = payload
+    else {
+        return Err(OutputError::Rendering {
+            code: "application.radio4_truncated",
+            message: "Techem radio 4 payload is missing its volume counters".into(),
+        });
+    };
+    let previous = u32::from(u16::from_le_bytes([*previous_low, *previous_high]));
+    let current = u32::from(u16::from_le_bytes([*current_low, *current_high]));
+    let cubic_metres = |tenths: u32| scaled_decimal(&tenths.to_string(), -1, None);
+    Ok(Some(ApplicationOutput {
+        control_information: "A2".into(),
+        protocol: "Techem radio 4".into(),
+        payload_hex: hex_string(payload),
+        decoded: Some(serde_json::json!({
+            "month_start_volume_m3": cubic_metres(previous),
+            "volume_since_month_start_m3": cubic_metres(current),
+            "total_volume_m3": cubic_metres(previous + current),
+        })),
+    }))
 }
 
 fn build_wireless_output(
