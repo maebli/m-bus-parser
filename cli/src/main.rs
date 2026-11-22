@@ -12,6 +12,7 @@ use m_bus_parser::{
 use terminal_size::{terminal_size, Width};
 
 mod input;
+mod vendor;
 use input::{normalize_input, InputFormat};
 
 #[derive(Parser)]
@@ -32,6 +33,29 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(about = "List drivers provided by the installed wmbusmeters executable")]
+    Drivers,
+    #[command(about = "Decode one frame as JSON using a local wmbusmeters driver")]
+    Vendor {
+        #[arg(
+            short = 'd',
+            long,
+            conflicts_with = "file",
+            required_unless_present = "file"
+        )]
+        data: Option<String>,
+        #[arg(short, long, conflicts_with = "data")]
+        file: Option<PathBuf>,
+        #[arg(long, value_enum, default_value = "auto")]
+        input_format: InputFormat,
+        #[arg(
+            long,
+            help = "Driver name from the drivers command (default: auto-detect)"
+        )]
+        driver: Option<String>,
+        #[arg(short, long, help = "Hexadecimal meter key for this telegram")]
+        key: Option<String>,
+    },
     /// Parse an M-Bus data file
     Parse {
         #[arg(
@@ -97,6 +121,17 @@ fn main() -> ExitCode {
 fn run() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Drivers => vendor::list(),
+        Command::Vendor {
+            data,
+            file,
+            input_format,
+            driver,
+            key,
+        } => {
+            let input = read_input(file, data, input_format)?;
+            vendor::decode(&input, driver.as_deref(), key.as_deref())
+        }
         Command::Parse {
             file,
             data,
@@ -108,19 +143,7 @@ fn run() -> Result<(), String> {
             width,
             no_enrichment,
         } => {
-            let input = match (file, data) {
-                (Some(path), None) => fs::read_to_string(&path).map_err(|error| {
-                    format!("[input.file] failed to read {}: {error}", path.display())
-                })?,
-                (None, Some(data)) => data,
-                (None, None) => {
-                    return Err(
-                        "[option.invalid] either --file or --data must be provided".to_string()
-                    );
-                }
-                (Some(_), Some(_)) => unreachable!("clap enforces conflicts"),
-            };
-            let input = normalize_input(&input, input_format)?;
+            let input = read_input(file, data, input_format)?;
             let output_format = OutputFormat::from_str(&format)
                 .map_err(|error| format!("[{}] {error}", error.code()))?;
             let use_color = match cli.color {
@@ -194,6 +217,23 @@ fn run() -> Result<(), String> {
             Ok(())
         }
     }
+}
+
+fn read_input(
+    file: Option<PathBuf>,
+    data: Option<String>,
+    input_format: InputFormat,
+) -> Result<String, String> {
+    let input = match (file, data) {
+        (Some(path), None) => fs::read_to_string(&path)
+            .map_err(|error| format!("[input.file] failed to read {}: {error}", path.display()))?,
+        (None, Some(data)) => data,
+        (None, None) => {
+            return Err("[option.invalid] either --file or --data must be provided".to_string());
+        }
+        (Some(_), Some(_)) => unreachable!("clap enforces conflicts"),
+    };
+    normalize_input(&input, input_format)
 }
 
 fn render_auto_detected(
