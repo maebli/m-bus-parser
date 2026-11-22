@@ -411,6 +411,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "m-bus-manufacturer"
+version = "0.7.4"
+dependencies = [
+ "m-bus-application-layer",
+ "m-bus-core",
+]
+
+[[package]]
 name = "m-bus-parser"
 version = "0.7.4"
 dependencies = [
@@ -418,6 +426,7 @@ dependencies = [
  "bitflags",
  "m-bus-application-layer",
  "m-bus-core",
+ "m-bus-manufacturer",
  "prettytable-rs",
  "serde",
  "serde_json",
