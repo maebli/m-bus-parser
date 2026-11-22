@@ -906,6 +906,7 @@ dependencies = [
  "clap",
  "hex",
  "m-bus-parser",
+ "serde_json",
  "terminal_size",
 ]
 
