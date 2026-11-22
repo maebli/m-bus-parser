@@ -173,6 +173,9 @@ fn gwf_water_tail_uses_the_inner_meter_identity() {
     let frame = "2044E61E46441510020E7278563412E61E3C07010000000413DC690D000F0120E3";
     let output = decode_hex(frame, &DecodeOptions::default()).unwrap();
     let record = output.records.last().unwrap();
+    let table = render_hex(frame, OutputFormat::Table, &RenderOptions::default()).unwrap();
+    assert!(table.contains("power mode: 1 · Saving"));
+    assert!(table.contains("battery life: 14 a"));
     assert_eq!(record.data_hex, "01 20 E3");
     let fields = &record.manufacturer_fields;
     assert_eq!(fields[0].labels, ["Low battery"]);
