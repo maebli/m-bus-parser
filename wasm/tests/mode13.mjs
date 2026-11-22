@@ -140,8 +140,8 @@ test('clearing a session cancels an unfinished file import', async () => {
 
 test('page ignores a stale static key for detected TLS telegrams', async () => {
     const html = await readFile(new URL('../../docs/index.html', import.meta.url), 'utf8');
-    const fallback = html.slice(html.indexOf('        function inspectTelegram('), html.indexOf('        function failureReport('));
-    const handler = html.slice(html.indexOf('            async function parseInput('), html.indexOf('        }\n\n        function measureTableWidth('));
+    const fallback = html.slice(html.indexOf('        function inspectTelegram('), html.indexOf('        let currentFormat'));
+    const handler = html.slice(html.indexOf('            async function parseInput('), html.indexOf('\n        }', html.indexOf('            async function parseInput(')));
     for (const tlsActive of [true, false]) {
         const doc = document();
         doc.querySelectorAll = () => [];
@@ -156,7 +156,9 @@ test('page ignores a stale static key for detected TLS telegrams', async () => {
             location: { origin: 'http://localhost', pathname: '/' },
             navigator: { userAgent: 'test' },
             currentFormat: 'json',
-            lastFailure: null,
+            lastAttempt: null,
+            captureAttempt: () => ({ payload: frame, format: 'json' }),
+            linkManufacturerFields() {},
             lastTableWidth: null,
             renderGeneration: 0,
             hasDecoded: false,
@@ -172,7 +174,6 @@ test('page ignores a stale static key for detected TLS telegrams', async () => {
             m_bus_render_tls,
             updateDownload() {},
             renderOutputError(element, error) { failure = error; },
-            appendReportActions() {},
             async renderCodeViewer(element, source) { rendered = source; },
         });
         assert.equal(failure, undefined);
