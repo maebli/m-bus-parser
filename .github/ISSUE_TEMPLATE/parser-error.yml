@@ -1,0 +1,38 @@
+name: Parser error
+description: Report an incorrect reading, display problem, or failed decode.
+title: "[Parser error] "
+labels: ["bug"]
+type: Bug
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: What went wrong?
+      description: Describe what you expected. Review the telegram and readings before posting them publicly.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Parser and meter details
+      render: text
+  - type: textarea
+    id: telegram
+    attributes:
+      label: Telegram as entered
+      render: text
+  - type: input
+    id: replay
+    attributes:
+      label: Reproduction link
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      render: text
+  - type: textarea
+    id: output
+    attributes:
+      label: Observed output
+      description: If the parser downloaded a full report, drop the text file in the first field above.
+      render: text
