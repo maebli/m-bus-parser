@@ -167,3 +167,30 @@ fn typed_errors_have_stable_codes_and_offsets() {
     assert!(matches!(invalid_frame, OutputError::InvalidFrame { .. }));
     assert_eq!(invalid_frame.code(), "frame.invalid");
 }
+
+#[test]
+fn gwf_water_tail_uses_the_inner_meter_identity() {
+    let frame = "2044E61E46441510020E7278563412E61E3C07010000000413DC690D000F0120E3";
+    let output = decode_hex(frame, &DecodeOptions::default()).unwrap();
+    let record = output.records.last().unwrap();
+    assert_eq!(record.data_hex, "01 20 E3");
+    let fields = &record.manufacturer_fields;
+    assert_eq!(fields[0].labels, ["Low battery"]);
+    assert_eq!(fields[1].labels, ["Saving"]);
+    assert_eq!(
+        (fields[2].value.as_str(), fields[2].unit.as_str()),
+        ("14", "a")
+    );
+}
+
+#[test]
+fn unrecognized_gwf_payloads_keep_the_raw_tail() {
+    for (version, tail) in [("21", "0120E3"), ("3C", "0220E3"), ("3C", "0120")] {
+        let body = format!("44E61E78563412{version}077A010000000F{tail}");
+        let frame = format!("{:02X}{body}", body.len() / 2);
+        let parsed = decode_hex(&frame, &DecodeOptions::default()).unwrap();
+        let record = parsed.records.last().unwrap();
+        assert!(record.manufacturer_fields.is_empty());
+        assert_eq!(record.data_hex.replace(' ', ""), tail);
+    }
+}
