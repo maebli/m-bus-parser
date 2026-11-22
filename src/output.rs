@@ -1492,6 +1492,16 @@ fn collect_records(
                 if let (Some(identity), [0x0f, tail @ ..]) = (identity, record.raw_bytes()) {
                     parsed.manufacturer_fields = manufacturer_fields(identity, tail);
                 }
+                if let Some((name, value)) =
+                    identity.and_then(|id| multical_energy_register(id, record.raw_bytes()))
+                {
+                    parsed.quantities = vec![name.into()];
+                    parsed.unit = None;
+                    parsed.value = ValueOutput {
+                        kind: "decimal".into(),
+                        value: Some(value.to_string().into()),
+                    };
+                }
                 output.push(parsed);
                 offset += size;
             }
@@ -1499,6 +1509,25 @@ fn collect_records(
         }
     }
     (output, None)
+}
+
+fn multical_energy_register(identity: &MeterIdentity, raw: &[u8]) -> Option<(&'static str, u32)> {
+    if identity.manufacturer_code.as_deref() != Some("KAM") {
+        return None;
+    }
+    match (identity.version?, identity.device_type_code?) {
+        (0x34, 0x04 | 0x0a..=0x0d) | (0x35 | 0x40, 0x04 | 0x0c | 0x0d) | (0x19 | 0x39, 0x04) => (),
+        _ => return None,
+    }
+    let [0x04 | 0x44, 0xff, register, bytes @ ..] = raw else {
+        return None;
+    };
+    let name = match register {
+        7 => "Flow temperature integral (E8 register count)",
+        8 => "Return temperature integral (E9 register count)",
+        _ => return None,
+    };
+    Some((name, u32::from_le_bytes(bytes.try_into().ok()?)))
 }
 
 fn manufacturer_fields(identity: &MeterIdentity, tail: &[u8]) -> Vec<ManufacturerField> {
