@@ -14,10 +14,13 @@ pub use m_bus_core::DeviceType;
 mod cursor;
 mod dispatch;
 mod gwf;
+mod ultraheat;
 
 pub const BUILTIN: &[Decoder] = &[
     gwf::water(0x01, DeviceType::BusSystemComponent),
     gwf::water(0x3c, DeviceType::WaterMeter),
+    ultraheat::status(0x07),
+    ultraheat::status(0x0a),
 ];
 pub use cursor::{Cursor, Reading};
 pub use dispatch::{decode, DecodeSummary};
