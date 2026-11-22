@@ -12,9 +12,11 @@ fn legacy_radio4_has_two_volume_counters_and_no_short_tpl_header() {
     assert_eq!(values["month_start_volume_m3"], "0.1");
     assert_eq!(values["volume_since_month_start_m3"], "0.3");
     assert_eq!(values["total_volume_m3"], "0.4");
-    let near_match = frame.replacen("9562", "9563", 1);
-    let other = decode_hex(&near_match, &DecodeOptions::default()).unwrap();
-    assert!(other.application.is_none());
+    for (original, replacement) in [("6850", "2D2C"), ("9562", "9662"), ("9562", "9563")] {
+        let near_match = frame.replacen(original, replacement, 1);
+        let other = decode_hex(&near_match, &DecodeOptions::default()).unwrap();
+        assert!(other.application.is_none());
+    }
 }
 
 #[test]
