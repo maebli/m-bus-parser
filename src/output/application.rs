@@ -68,7 +68,8 @@ fn render_application_with_session(
     } else {
         Some(user_data::parse_data_records(&data))
     };
-    let (parsed_records, error) = collect_records(records.as_ref());
+    let (meter, _) = meter_and_transport(block.as_ref(), None);
+    let (parsed_records, error) = collect_records(records.as_ref(), meter.identity.as_ref());
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",

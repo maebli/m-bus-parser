@@ -394,6 +394,19 @@ pub struct RecordOutput {
     pub data_coding: String,
     pub header_hex: String,
     pub data_hex: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub manufacturer_fields: Vec<ManufacturerField>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ManufacturerField {
+    pub name: String,
+    pub value: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub unit: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<String>,
+    pub range: core::ops::Range<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -553,7 +566,7 @@ pub fn decode_data_records(data: &[u8]) -> Result<Vec<RecordOutput>, OutputError
         return Err(OutputError::EmptyInput);
     }
     let records = user_data::DataRecords::from(data);
-    let (output, error) = collect_records(Some(&records));
+    let (output, error) = collect_records(Some(&records), None);
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",
@@ -1129,7 +1142,8 @@ fn build_output(
         });
     }
 
-    let (record_outputs, record_error) = collect_records(records);
+    let (meter, transport) = meter_and_transport(user_data, wireless_id);
+    let (record_outputs, record_error) = collect_records(records, meter.identity.as_ref());
     if let Some((offset, message)) = record_error.as_ref() {
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
@@ -1141,7 +1155,6 @@ fn build_output(
         });
     }
 
-    let (meter, transport) = meter_and_transport(user_data, wireless_id);
     let (application, application_diagnostic) = application_output(user_data, &security_context);
     let application_partial = application_diagnostic.is_some();
     if let Some(diagnostic) = application_diagnostic {
@@ -1464,6 +1477,7 @@ fn enrichment_for(code: &str) -> Option<EnrichmentOutput> {
 
 fn collect_records(
     records: Option<&user_data::DataRecords<'_>>,
+    identity: Option<&MeterIdentity>,
 ) -> (Vec<RecordOutput>, Option<(usize, String)>) {
     let Some(records) = records else {
         return (Vec::new(), None);
@@ -1474,13 +1488,72 @@ fn collect_records(
         match item {
             Ok(record) => {
                 let size = record.raw_bytes().len();
-                output.push(record_output(output.len(), &record));
+                let mut parsed = record_output(output.len(), &record);
+                if let (Some(identity), [0x0f, tail @ ..]) = (identity, record.raw_bytes()) {
+                    parsed.manufacturer_fields = manufacturer_fields(identity, tail);
+                }
+                output.push(parsed);
                 offset += size;
             }
             Err(error) => return (output, Some((offset, error.to_string()))),
         }
     }
     (output, None)
+}
+
+fn manufacturer_fields(identity: &MeterIdentity, tail: &[u8]) -> Vec<ManufacturerField> {
+    use m_bus_manufacturer::{decode, Integer, MeterInfo, Value, BUILTIN};
+    let meter = MeterInfo {
+        manufacturer: identity
+            .manufacturer_code
+            .as_deref()
+            .and_then(|code| code.as_bytes().try_into().ok()),
+        version: identity.version,
+        device: identity.device_type_code.map(Into::into),
+    };
+    let mut fields = Vec::new();
+    let result = decode(BUILTIN, &meter, tail, &mut |field| {
+        let value = match &field.value {
+            Value::Integer(value) => {
+                let digits = match value {
+                    Integer::Unsigned(n) => n.to_string(),
+                    Integer::Signed(n) => n.to_string(),
+                };
+                scaled_decimal(&digits, field.exponent.into(), None)
+            }
+            Value::Bytes(bytes) => hex_string(bytes),
+            Value::Date(date) => match date {
+                m_bus_manufacturer::DateValue::Date { day, month, year } => {
+                    temporal_value("date", day, month, year, None, None, None)
+                }
+                m_bus_manufacturer::DateValue::DateTime {
+                    day,
+                    month,
+                    year,
+                    hour,
+                    minute,
+                } => temporal_value("datetime", day, month, year, Some(hour), Some(minute), None),
+            }
+            .value
+            .map(|v| {
+                v.as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| v.to_string())
+            })
+            .unwrap_or_default(),
+        };
+        fields.push(ManufacturerField {
+            name: field.name.to_owned(),
+            value,
+            unit: unit_output(field.units.iter().copied()),
+            labels: field.active_labels().map(str::to_owned).collect(),
+            range: field.range,
+        });
+    });
+    if !matches!(result, Some(Ok(summary)) if summary.consumed > 0) {
+        fields.clear();
+    }
+    fields
 }
 
 fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutput {
@@ -1517,6 +1590,7 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
         data_coding,
         header_hex: record.data_record_header_hex(),
         data_hex: record.data_hex(),
+        manufacturer_fields: Vec::new(),
     }
 }
 
@@ -2477,6 +2551,18 @@ fn push_record_reading(
     } else {
         push_text(output, "", &label, width, style, Cell::Label);
         push_text(output, "  ", &value, width, style, Cell::Reading);
+    }
+    for field in &record.manufacturer_fields {
+        let mut line = format!("{}: {}", field.name, field.value);
+        if !field.unit.is_empty() {
+            line.push(' ');
+            line.push_str(&field.unit);
+        }
+        if !field.labels.is_empty() {
+            line.push_str(" · ");
+            line.push_str(&field.labels.join(", "));
+        }
+        push_text(output, "  ", &line, width, style, Cell::Reading);
     }
     let mut metadata = record.function.clone();
     for field in [
