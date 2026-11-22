@@ -14,10 +14,12 @@ pub use m_bus_core::DeviceType;
 mod cursor;
 mod dispatch;
 mod gwf;
+mod zenner;
 
 pub const BUILTIN: &[Decoder] = &[
     gwf::water(0x01, DeviceType::BusSystemComponent),
     gwf::water(0x3c, DeviceType::WaterMeter),
+    zenner::WATER,
 ];
 pub use cursor::{Cursor, Reading};
 pub use dispatch::{decode, DecodeSummary};
