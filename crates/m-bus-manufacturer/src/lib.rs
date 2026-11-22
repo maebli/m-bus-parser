@@ -16,6 +16,7 @@ mod dispatch;
 mod gwf;
 mod hydroclima;
 mod hydrodigit;
+mod ultraheat;
 
 pub const BUILTIN: &[Decoder] = &[
     hydrodigit::water(0x13, DeviceType::WaterMeter),
@@ -24,6 +25,8 @@ pub const BUILTIN: &[Decoder] = &[
     hydroclima::allocator(0x85),
     gwf::water(0x01, DeviceType::BusSystemComponent),
     gwf::water(0x3c, DeviceType::WaterMeter),
+    ultraheat::status(0x07),
+    ultraheat::status(0x0a),
 ];
 pub use cursor::{Cursor, Reading};
 pub use dispatch::{decode, DecodeSummary};
