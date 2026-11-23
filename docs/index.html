@@ -539,11 +539,33 @@
         }
 
         #result-report { margin: 8px 20px 12px; }
-        .parser-request {
-            display: inline-block;
-            margin: 0 20px 8px;
+        .parser-note {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            width: fit-content;
+            margin: 0 clamp(8px, 2vw, 20px) 12px;
+            padding: 8px 12px;
+            border: 1px solid #b6d7f2;
+            border-radius: 6px;
+            background: #f1f8ff;
+            color: #253c50;
             font-size: 0.875rem;
+            line-height: 1.5;
         }
+        .parser-note p { margin: 0; }
+        .parser-note-icon {
+            flex: none;
+            width: 1em;
+            border: 1px solid currentColor;
+            border-radius: 50%;
+            color: #0969da;
+            font: bold 0.8rem/1 Georgia, serif;
+            text-align: center;
+        }
+        .parser-note a { color: #0550ae; text-underline-offset: 2px; }
+        body.dark-mode .parser-note { background: #132535; border-color: #354f65; color: #d1deeb; }
+        body.dark-mode .parser-note-icon, body.dark-mode .parser-note a { color: #79c0ff; }
 
         .output-placeholder {
             margin: 0;
@@ -712,9 +734,6 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             white-space: pre-wrap;
         }
-
-        .parser-request { color: #0969da; }
-        body.dark-mode .parser-request { color: #79c0ff; }
 
         #copy_output,
         #download_output {
@@ -1662,6 +1681,13 @@
         </div>
         <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
+        <template id="parser-note-template">
+            <aside class="parser-note" role="note">
+                <span class="parser-note-icon" aria-hidden="true">i</span>
+                <p>The parser couldn’t decode the manufacturer data in record <span class="parser-note-record"></span>.
+                    <a href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml" target="_blank" rel="noopener noreferrer">Request a parser</a></p>
+            </aside>
+        </template>
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
@@ -2364,16 +2390,13 @@
                     }
 
                     if (generation !== renderGeneration) return;
-                    if (result.decoded.records.some(record =>
+                    const unparsedRecord = result.decoded.records.find(record =>
                         record.value.kind === 'manufacturer_specific' && record.data_hex && !record.manufacturer_fields?.length
-                    )) {
-                        const link = document.createElement('a');
-                        link.className = 'parser-request';
-                        link.href = 'https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml';
-                        link.textContent = 'Request parser';
-                        link.target = '_blank';
-                        link.rel = 'noopener noreferrer';
-                        outputContainer.append(link);
+                    );
+                    if (unparsedRecord) {
+                        const note = document.getElementById('parser-note-template').content.cloneNode(true);
+                        note.querySelector('.parser-note-record').textContent = '#' + unparsedRecord.index;
+                        outputContainer.append(note);
                     }
                     showSecurity(result.decoded);
                     hasDecoded = true;
