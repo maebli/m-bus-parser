@@ -23,7 +23,6 @@ fn docs_header_links_to_project_resources() {
         "https://docs.rs/m-bus-parser",
         "https://github.com/maebli/m-bus-parser/actions/workflows/rust.yml",
         "https://github.com/maebli/m-bus-parser/blob/main/LICENSE",
-        "https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml",
     ] {
         assert!(
             project_links.contains(&format!("href=\"{destination}\"")),

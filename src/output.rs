@@ -2640,21 +2640,21 @@ fn push_record_reading(
         push_text(output, "  ", &line, width, style, Cell::Reading);
     }
     let mut metadata = record.function.clone();
-    for field in [
-        record.data_coding.clone(),
-        format!(
-            "S/T/U {}/{}/{}",
-            record.storage_number, record.tariff, record.subunit
-        ),
-    ] {
-        if UnicodeWidthStr::width(metadata.as_str()) + 3 + UnicodeWidthStr::width(field.as_str())
-            > width - 2
+    let selectors = format!(
+        "S/T/U {}/{}/{}",
+        record.storage_number, record.tariff, record.subunit
+    );
+    for field in [record.data_coding.as_str(), &selectors] {
+        if field == record.function {
+            continue;
+        }
+        if UnicodeWidthStr::width(metadata.as_str()) + 3 + UnicodeWidthStr::width(field) > width - 2
         {
             push_text(output, "  ", &metadata, width, style, Cell::Text);
-            metadata = field;
+            metadata = field.to_owned();
         } else {
             metadata.push_str(" · ");
-            metadata.push_str(&field);
+            metadata.push_str(field);
         }
     }
     push_text(output, "  ", &metadata, width, style, Cell::Text);
