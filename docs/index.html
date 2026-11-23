@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="stylesheet" href="./manufacturer-icons.css">
-    <link rel="stylesheet" href="./products/view.css">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="low" href="./m_bus_parser_wasm_pack_bg.wasm?v=b4f4dd8b">
+    <link rel="modulepreload" href="./m_bus_parser_wasm_pack.js?v=0.7.4">
     <style>
         /* UI palette: GitHub Primer light/dark neutrals and blue accents.
            https://primer.style/product/primitives/color/ */
@@ -540,32 +540,58 @@
 
         #result-report { margin: 8px 20px 12px; }
         .parser-note {
-            display: flex;
-            align-items: baseline;
-            gap: 8px;
+            --note-accent: #145c91;
+            --note-border: #c6dcea;
+            --note-icon: #ddecf7;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 6px 12px;
             width: fit-content;
             margin: 0 clamp(8px, 2vw, 20px) 12px;
-            padding: 8px 12px;
-            border: 1px solid #b6d7f2;
-            border-radius: 6px;
-            background: #f1f8ff;
-            color: #253c50;
-            font-size: 0.875rem;
-            line-height: 1.5;
+            padding: 10px 14px;
+            border: 1px solid var(--note-border);
+            border-radius: 10px;
+            background: #f4f9fc;
+            color: #425769;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+        .parser-note-icon {
+            padding: 7px;
+            border-radius: 50%;
+            background: var(--note-icon);
+            color: var(--note-accent);
         }
         .parser-note p { margin: 0; }
-        .parser-note-icon {
-            flex: none;
-            width: 1em;
-            border: 1px solid currentColor;
-            border-radius: 50%;
-            color: #0969da;
-            font: bold 0.8rem/1 Georgia, serif;
-            text-align: center;
+        .parser-note strong { display: block; color: #243d50; font-size: 0.875rem; }
+        .parser-note-record { font-family: ui-monospace, monospace; }
+        .parser-note a {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            justify-self: start;
+            padding: 5px 9px;
+            border: 1px solid var(--note-border);
+            border-radius: 6px;
+            color: var(--note-accent);
+            font-weight: 600;
+            text-decoration: none;
+            white-space: nowrap;
         }
-        .parser-note a { color: #0550ae; text-underline-offset: 2px; }
-        body.dark-mode .parser-note { background: #132535; border-color: #354f65; color: #d1deeb; }
-        body.dark-mode .parser-note-icon, body.dark-mode .parser-note a { color: #79c0ff; }
+        .parser-note a:hover, .parser-note a:focus-visible { background: var(--note-icon); border-color: currentColor; }
+        body.dark-mode .parser-note {
+            --note-accent: #a3d6ff;
+            --note-border: #365369;
+            --note-icon: #203d53;
+            background: #142633;
+            color: #b7c9d6;
+        }
+        body.dark-mode .parser-note strong { color: #e1edf5; }
+        @media (max-width: 540px) {
+            .parser-note { grid-template-columns: auto 1fr; }
+            .parser-note a { grid-column: 2; }
+        }
 
         .output-placeholder {
             margin: 0;
@@ -1292,7 +1318,7 @@
 
 <body>
     <div class="header">
-        <img id="banner" src="./emeter.png" alt="Electric meter" width="64" height="64">
+        <img id="banner" src="./emeter-192.webp" alt="Electric meter" width="64" height="64">
         <div class="header-text">
             <h1>Online M-Bus Parser <span class="parser-version" id="parser-version"></span></h1>
             <div class="header-meta">
@@ -1649,6 +1675,8 @@
             </div>
         </details>
     </form>
+    <link rel="stylesheet" href="./manufacturer-icons.css">
+    <link rel="stylesheet" href="./products/view.css">
     <div id="output-container">
         <div class="output-toolbar">
             <div class="result-views">
@@ -1683,9 +1711,14 @@
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
         <template id="parser-note-template">
             <aside class="parser-note" role="note">
-                <span class="parser-note-icon" aria-hidden="true">i</span>
-                <p>The parser couldn’t decode the manufacturer data in record <span class="parser-note-record"></span>.
-                    <a href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml" target="_blank" rel="noopener noreferrer">Request a parser</a></p>
+                <svg class="parser-note-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <circle cx="8" cy="8" r="6.25"/><path d="M8 7.5v3.25m0-5.5v.1"/>
+                </svg>
+                <p><strong>Unparsed manufacturer data</strong>Record <span class="parser-note-record"></span> is shown as raw bytes.</p>
+                <a href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml" target="_blank" rel="noopener noreferrer">
+                    Request a parser
+                    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l6-6M4 3h5v5"/></svg>
+                </a>
             </aside>
         </template>
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
@@ -1693,8 +1726,6 @@
     <script type="module">
         import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.4";
 
-        import { renderProduct } from "./products/view.js";
-        import { renderDiagram } from "./diagram.js";
         import { normalizeInput } from "./input-format.js";
 
         import { createTlsSessionPanel } from "./tls-session.js";
@@ -2377,8 +2408,12 @@
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
                     } else if (format === 'product') {
+                        const { renderProduct } = await import("./products/view.js");
+                        if (generation !== renderGeneration) return;
                         renderProduct(outputContainer, result.decoded, reportCurrentError);
                     } else if (format === 'mermaid') {
+                        const { renderDiagram } = await import("./diagram.js");
+                        if (generation !== renderGeneration) return;
                         renderDiagram(outputContainer, result.decoded, manufacturerWebsite(result.decoded));
                     } else {
                         await renderCodeViewer(
