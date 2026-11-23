@@ -81,7 +81,7 @@ export function openWaterRegister(face, solid, circle) {
     );
 }
 
-export function waterDial(ctx, wheels, id, volume) {
+export function waterDial(ctx, wheels, id, volume, { encoder, fabricationNumber }) {
     ctx.fillStyle = '#dddcd1';
     ctx.fillRect(0, 0, 512, 512);
     const circle = (x, y, r, color) => {
@@ -96,7 +96,14 @@ export function waterDial(ctx, wheels, id, volume) {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#253943';
     ctx.font = 'bold 31px sans-serif';
-    ctx.fillText('m³', 258, 110);
+    if (encoder) {
+        ctx.fillText('m³', 256, 154);
+        ctx.save();
+        ctx.translate(71, 72);
+        ctx.scale(0.72, 0.82);
+    } else {
+        ctx.fillText('m³', 258, 110);
+    }
     ctx.fillStyle = '#55564d';
     ctx.fillRect(33, 158, 446, 80);
     for (let i = 0; i < wheels.length; i++) {
@@ -109,6 +116,29 @@ export function waterDial(ctx, wheels, id, volume) {
         ctx.fillStyle = '#fffdf3';
         ctx.font = 'bold 53px monospace';
         ctx.fillText(wheels[i], x + 25, 201);
+    }
+    if (encoder) {
+        ctx.restore();
+        ctx.save();
+        ctx.translate(256, 354);
+        ctx.rotate(Number.isFinite(volume) ? (volume * 1000 % 1) * 2 * Math.PI : 0);
+        for (let blade = 0; blade < 6; blade++) {
+            ctx.rotate(Math.PI / 3);
+            ctx.fillStyle = '#3a4141';
+            ctx.beginPath();
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(-12, -39);
+            ctx.lineTo(11, -47);
+            ctx.lineTo(6, 0);
+            ctx.fill();
+        }
+        ctx.restore();
+        circle(256, 354, 10, '#69716d');
+        ctx.fillStyle = '#374344';
+        ctx.font = '24px monospace';
+        ctx.fillText(fabricationNumber || id || '', 256, 94, 190);
+        if (fabricationNumber) ctx.fillRect(161, 111, 190, 4);
+        return;
     }
     circle(190, 326, 63, '#b3afa0');
     circle(190, 326, 57, '#f7f5e8');
@@ -140,5 +170,6 @@ export function waterDial(ctx, wheels, id, volume) {
     ctx.font = '19px sans-serif';
     ctx.fillText('× 0.1 L', 189, 407);
     ctx.font = '20px monospace';
-    ctx.fillText(id || '', 331, 345, 135);
+    ctx.fillText(fabricationNumber || id || '', 331, 345, 135);
+    if (fabricationNumber) ctx.fillRect(263, 363, 136, 4);
 }

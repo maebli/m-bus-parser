@@ -138,11 +138,6 @@ export function g350Index(ctx, reading, id) {
     ctx.strokeRect(156, 253, 335, 54);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#585f59';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('G350', 148, 30);
-    ctx.font = '15px sans-serif';
-    ctx.fillText('Landis+Gyr', 315, 32);
     ctx.fillStyle = '#93988c';
     ctx.fillRect(181, 68, 259, 84);
     const glass = ctx.createLinearGradient(0, 70, 0, 150);
@@ -161,8 +156,6 @@ export function g350Index(ctx, reading, id) {
     ctx.fillStyle = '#dedfd8';
     ctx.fillRect(0, 360, 640, 120);
     ctx.fillStyle = '#555d57';
-    ctx.font = '24px sans-serif';
-    ctx.fillText('Landis+Gyr', 36, 388);
     ctx.font = '20px monospace';
     ctx.fillText(id || '', 36, 424, 330);
     ctx.font = '17px sans-serif';

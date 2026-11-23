@@ -153,15 +153,6 @@ export function a230Display(ctx, reading) {
     ctx.fillStyle = '#792b24';
     ctx.font = 'bold 18px sans-serif';
     ctx.fillText('L1  L2  L3', 438, 406);
-    ctx.fillStyle = '#c3cece';
-    ctx.fillRect(25, 505, 550, 2);
-    ctx.textAlign = 'left';
-    ctx.font = '20px sans-serif';
-    ctx.fillText('CAMILLE BAUER', 28, 551);
-    ctx.textAlign = 'right';
-    ctx.font = '30px sans-serif';
-    ctx.fillText('A230', 572, 551);
-
     ctx.fillStyle = '#dadbd2';
     ctx.fillRect(0, 600, 600, 150);
     ctx.textAlign = 'left';
@@ -170,7 +161,4 @@ export function a230Display(ctx, reading) {
     ctx.fillText('EMMOD 206', 23, 643);
     ctx.font = '24px sans-serif';
     ctx.fillText('M-Bus', 24, 703);
-    ctx.textAlign = 'right';
-    ctx.font = '22px sans-serif';
-    ctx.fillText('CAMILLE BAUER', 576, 648);
 }

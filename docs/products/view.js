@@ -86,6 +86,9 @@ export function renderProduct(container, decoded, reportError) {
     stage.configure(asset, name, meter, decoded.records);
     const preview = element('div', 'product-preview');
     const hint = element('div', 'product-preview-footer', 'Drag or use arrow keys to rotate');
+    if (fixture?.asset && asset !== 'wep-room-sensor') {
+        hint.append(element('small', 'product-art-note', 'Unofficial illustration'));
+    }
     const report = element('button', 'product-report', 'Report an error');
     report.type = 'button';
     report.addEventListener('click', reportError);
@@ -106,6 +109,7 @@ export function renderProduct(container, decoded, reportError) {
                 && r.unit === record.unit && r.storage_number === record.storage_number
                 && r.tariff === record.tariff && r.function === record.function)?.value.value);
         }
+        if (record?.quantities.includes('Fabrication number')) reading.fabricationNumber = reading.value;
         stage.updateReading(reading);
         label.textContent = record ? readingLabel(record) : 'Reading';
         value.textContent = record ? [reading.value, reading.unit].filter(Boolean).join(' ') : 'No decoded measurement';
