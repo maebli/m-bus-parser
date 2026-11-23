@@ -264,6 +264,7 @@ jobs:
       - name: Build wasm for the site
         if: ${{ !cancelled() }}
         run: |
+          tools/build-site-wasm.sh
           cd wasm
           wasm-pack build --target web --out-dir pkg-web
       - name: Stage wasm artifacts
@@ -276,9 +277,6 @@ jobs:
           if [ -f wasm/pkg-web/m_bus_parser_wasm_pack_bg.js ]; then
             cp wasm/pkg-web/m_bus_parser_wasm_pack_bg.js docs/
           fi
-          # The site cache-busts wasm by query string; pin it to this commit so
-          # browsers pick up each rebuild.
-          sed -i "s/?v=[0-9A-Za-z._-]*\"/?v=${GITHUB_SHA:0:7}\"/g" docs/index.html
       - name: Upload site artifact
         if: ${{ !cancelled() }}
         uses: actions/upload-pages-artifact@v5

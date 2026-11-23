@@ -1,4 +1,6 @@
+use js_sys::Error as JsError;
 use std::sync::OnceLock;
+use wasm_bindgen::prelude::*;
 
 use syntect::html::{ClassStyle, ClassedHTMLGenerator};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
@@ -22,7 +24,14 @@ fn syntax_for<'a>(syntax_set: &'a SyntaxSet, language: &str) -> &'a SyntaxRefere
         .unwrap_or_else(|| syntax_set.find_syntax_plain_text())
 }
 
-pub(crate) fn highlight_source(source: &str, language: &str) -> Result<String, String> {
+/// Highlight JSON, YAML, CSV, XML, or plaintext with the bundled Rust grammar set.
+#[wasm_bindgen]
+pub fn m_bus_highlight(source: &str, language: &str) -> Result<String, JsValue> {
+    highlight_source(source, language)
+        .map_err(|error| JsError::new(&format!("syntax highlighting failed: {error}")).into())
+}
+
+fn highlight_source(source: &str, language: &str) -> Result<String, String> {
     if language.trim().eq_ignore_ascii_case("csv") {
         return Ok(highlight_csv(source));
     }

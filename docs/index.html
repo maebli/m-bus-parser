@@ -6,8 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="stylesheet" href="./manufacturer-icons.css">
-    <link rel="stylesheet" href="./products/view.css">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=fc7f6f523fd94baa">
+    <link rel="modulepreload" href="./parser.js?v=8d2bb41cb43d20b7">
+    <link rel="modulepreload" href="./input-format.js">
+    <link rel="modulepreload" href="./tls-session.js">
+    <link rel="modulepreload" href="./error-report.js">
+    <script>
+        async function loadProductView() {
+            const [viewer] = await Promise.all([
+                import('./products/view.js'),
+                import('./products/turntable.js'),
+                import('./products/geometry.js'),
+                import('./products/faces.js'),
+            ]);
+            return viewer;
+        }
+
+        if (new URLSearchParams(location.search).get('format') === 'product') {
+            loadProductView().catch(error => console.debug('3D viewer preload failed.', error));
+        }
+    </script>
     <style>
         /* UI palette: GitHub Primer light/dark neutrals and blue accents.
            https://primer.style/product/primitives/color/ */
@@ -94,9 +112,6 @@
             text-decoration: underline;
         }
 
-        #manufacturer-parser-request { margin-left: auto; color: #0969da; }
-        body.dark-mode #manufacturer-parser-request { color: #4493f8; }
-
         .header-meta,
         .project-links {
             display: flex;
@@ -108,7 +123,7 @@
         .header-meta { margin-top: 5px; }
         .header-meta .subtitle { margin-top: 0; }
         .project-links { gap: 4px; flex: 1 1 360px; }
-        .project-links > a:not(#manufacturer-parser-request) {
+        .project-links > a {
             padding: 1px 6px;
             border: 1px solid #d1d9e0;
             border-radius: 4px;
@@ -117,9 +132,9 @@
             line-height: 1.5;
             text-decoration: none;
         }
-        .project-links > a:not(#manufacturer-parser-request):hover { color: #0969da; border-color: #0969da; }
-        body.dark-mode .project-links > a:not(#manufacturer-parser-request) { color: #9198a1; border-color: #3d444d; }
-        body.dark-mode .project-links > a:not(#manufacturer-parser-request):hover { color: #4493f8; border-color: #4493f8; }
+        .project-links > a:hover { color: #0969da; border-color: #0969da; }
+        body.dark-mode .project-links > a { color: #9198a1; border-color: #3d444d; }
+        body.dark-mode .project-links > a:hover { color: #4493f8; border-color: #4493f8; }
 
         .project-links .package-rust { background-color: #d463341f; }
         .project-links .package-python { background-color: #388bfd1f; }
@@ -542,12 +557,58 @@
         }
 
         #result-report { margin: 8px 20px 12px; }
-        .parser-request { text-decoration: underline dotted; text-underline-offset: 2px; }
-        .parser-request.show-action::after {
-            content: 'Request parser';
-            margin-inline-start: 0.5em;
-            font: 0.75rem system-ui, sans-serif;
+        .parser-note {
+            --note-accent: #145c91;
+            --note-border: #c6dcea;
+            --note-icon: #ddecf7;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 6px 12px;
+            width: fit-content;
+            margin: 0 clamp(8px, 2vw, 20px) 12px;
+            padding: 10px 14px;
+            border: 1px solid var(--note-border);
+            border-radius: 10px;
+            background: #f4f9fc;
+            color: #425769;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+        .parser-note-icon {
+            padding: 7px;
+            border-radius: 50%;
+            background: var(--note-icon);
+            color: var(--note-accent);
+        }
+        .parser-note p { margin: 0; }
+        .parser-note strong { display: block; color: #243d50; font-size: 0.875rem; }
+        .parser-note-record { font-family: ui-monospace, monospace; }
+        .parser-note a {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            justify-self: start;
+            padding: 5px 9px;
+            border: 1px solid var(--note-border);
+            border-radius: 6px;
+            color: var(--note-accent);
+            font-weight: 600;
+            text-decoration: none;
             white-space: nowrap;
+        }
+        .parser-note a:hover, .parser-note a:focus-visible { background: var(--note-icon); border-color: currentColor; }
+        body.dark-mode .parser-note {
+            --note-accent: #a3d6ff;
+            --note-border: #365369;
+            --note-icon: #203d53;
+            background: #142633;
+            color: #b7c9d6;
+        }
+        body.dark-mode .parser-note strong { color: #e1edf5; }
+        @media (max-width: 540px) {
+            .parser-note { grid-template-columns: auto 1fr; }
+            .parser-note a { grid-column: 2; }
         }
 
         .output-placeholder {
@@ -717,9 +778,6 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             white-space: pre-wrap;
         }
-
-        .parser-request { color: #0969da; }
-        body.dark-mode .parser-request { color: #79c0ff; }
 
         #copy_output,
         #download_output {
@@ -1278,7 +1336,7 @@
 
 <body>
     <div class="header">
-        <img id="banner" src="./emeter.png" alt="Electric meter" width="64" height="64">
+        <img id="banner" src="./emeter-192.webp" alt="Electric meter" width="64" height="64">
         <div class="header-text">
             <h1>Online M-Bus Parser <span class="parser-version" id="parser-version"></span></h1>
             <div class="header-meta">
@@ -1296,11 +1354,6 @@
                     <a class="package-java" href="https://central.sonatype.com/artifact/io.github.maebli/m-bus-parser" target="_blank" rel="noopener noreferrer">Java</a>
                     <a class="package-c" href="https://github.com/maebli/m-bus-parser/releases?q=%22C+bindings%22" target="_blank" rel="noopener noreferrer">C</a>
                     <a class="package-cli" href="https://crates.io/crates/m-bus-parser-cli" target="_blank" rel="noopener noreferrer">CLI</a>
-                    <a class="utility-control" id="manufacturer-parser-request" href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml"
-                        target="_blank" rel="noopener noreferrer">
-                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                        <span>Add manufacturer-specific parser</span>
-                    </a>
                 </nav>
             </div>
         </div>
@@ -1640,6 +1693,8 @@
             </div>
         </details>
     </form>
+    <link rel="stylesheet" href="./manufacturer-icons.css">
+    <link rel="stylesheet" href="./products/view.css">
     <div id="output-container">
         <div class="output-toolbar">
             <div class="result-views">
@@ -1672,13 +1727,23 @@
         </div>
         <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
+        <template id="parser-note-template">
+            <aside class="parser-note" role="note">
+                <svg class="parser-note-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <circle cx="8" cy="8" r="6.25"/><path d="M8 7.5v3.25m0-5.5v.1"/>
+                </svg>
+                <p><strong>Unparsed manufacturer data</strong>Record <span class="parser-note-record"></span> is shown as raw bytes.</p>
+                <a href="https://github.com/maebli/m-bus-parser/issues/new?template=manufacturer-parser.yml" target="_blank" rel="noopener noreferrer">
+                    Request a parser
+                    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l6-6M4 3h5v5"/></svg>
+                </a>
+            </aside>
+        </template>
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.4";
+        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./parser.js?v=8d2bb41cb43d20b7";
 
-        import { renderProduct } from "./products/view.js";
-        import { renderDiagram } from "./diagram.js";
         import { normalizeInput } from "./input-format.js";
 
         import { createTlsSessionPanel } from "./tls-session.js";
@@ -1758,8 +1823,8 @@
             }
         }
 
-        function renderWithFallback(api, input, format, key, width) {
-            const inspected = inspectTelegram(api, input, width);
+        function renderWithFallback(api, input, format, key, width, inspected) {
+            inspected ??= inspectTelegram(api, input, width);
             const isApplication = inspected.protocol === 'application';
             const usableKey = isApplication ? undefined : key;
             const decoded = usableKey ? api.decode(input, usableKey, true) : inspected;
@@ -1909,6 +1974,16 @@
             return gutter;
         }
 
+        let syntaxModule;
+        async function loadSyntax() {
+            const [module, wasm] = await Promise.all([
+                import("./syntax.js?v=428d019268ec04a2"),
+                fetch(new URL("./syntax_bg.wasm?v=31aa000a35391209", import.meta.url)),
+            ]);
+            await module.default({ module_or_path: wasm });
+            return module;
+        }
+
         function renderCodeViewer(container, source, language, label) {
             source = String(source ?? '');
             const viewer = document.createElement('div');
@@ -1923,13 +1998,14 @@
             const pre = document.createElement('pre');
             pre.className = 'code-source';
             const code = document.createElement('code');
-            try {
-                // syntect escapes source text before emitting this restricted span-only markup.
-                code.innerHTML = m_bus_highlight(source, language);
-            } catch (error) {
-                console.warn('Syntax highlighting unavailable; using plaintext output.', error);
-                code.textContent = source;
-            }
+            code.textContent = source;
+            syntaxModule ??= loadSyntax().catch(error => {
+                syntaxModule = undefined;
+                throw error;
+            });
+            syntaxModule.then(({ m_bus_highlight }) => {
+                if (code.isConnected) code.innerHTML = m_bus_highlight(source, language);
+            }).catch(error => console.warn('Syntax highlighting unavailable.', error));
             pre.appendChild(code);
             scroll.append(createLineGutter(source), pre);
             viewer.appendChild(scroll);
@@ -2016,7 +2092,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=b4f4dd8b", import.meta.url));
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=fc7f6f523fd94baa", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
@@ -2343,7 +2419,7 @@
                     const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : format;
                     const result = sessionJson
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
-                        : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width);
+                        : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
                     attempt.decoded = result.decoded;
                     let formattedResult = result.output;
                     hasDecoded = true;
@@ -2361,11 +2437,15 @@
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
                     } else if (format === 'product') {
+                        const { renderProduct } = await loadProductView();
+                        if (generation !== renderGeneration) return;
                         renderProduct(outputContainer, result.decoded, reportCurrentError);
                     } else if (format === 'mermaid') {
+                        const { renderDiagram } = await import("./diagram.js");
+                        if (generation !== renderGeneration) return;
                         renderDiagram(outputContainer, result.decoded, manufacturerWebsite(result.decoded));
                     } else {
-                        await renderCodeViewer(
+                        renderCodeViewer(
                             outputContainer,
                             formattedResult,
                             language,
@@ -2374,7 +2454,14 @@
                     }
 
                     if (generation !== renderGeneration) return;
-                    linkManufacturerFields(outputContainer);
+                    const unparsedRecord = result.decoded.records.find(record =>
+                        record.value.kind === 'manufacturer_specific' && record.data_hex && !record.manufacturer_fields?.length
+                    );
+                    if (unparsedRecord) {
+                        const note = document.getElementById('parser-note-template').content.cloneNode(true);
+                        note.querySelector('.parser-note-record').textContent = '#' + unparsedRecord.index;
+                        outputContainer.append(note);
+                    }
                     showSecurity(result.decoded);
                     hasDecoded = true;
                     window._lastRawOutput = formattedResult;
@@ -2415,35 +2502,6 @@
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             return link;
-        }
-
-        function linkManufacturerFields(container) {
-            const fields = container.querySelectorAll('.text-table, .code-source code, .tree-detail, .diagram-record');
-            const request = document.getElementById('manufacturer-parser-request');
-            for (const field of fields) {
-                const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
-                const matches = [];
-                while (walker.nextNode()) {
-                    const text = walker.currentNode;
-                    if (text.parentElement.closest('a')) continue;
-                    const marker = /\bmanufacturer(?:[\s_-]+specific|\s+data)\b/i.exec(text.data);
-                    if (marker) matches.push({ text, marker });
-                }
-                for (const [index, { text, marker }] of matches.entries()) {
-                    const link = document.createElement('a');
-                    link.className = index === 0 ? 'parser-request show-action' : 'parser-request';
-                    link.href = request.href;
-                    link.target = request.target;
-                    link.rel = request.rel;
-                    link.title = 'Request a manufacturer-specific parser';
-                    link.setAttribute('aria-label', marker[0] + ' · ' + link.title);
-                    link.addEventListener('click', event => event.stopPropagation());
-                    const label = text.splitText(marker.index);
-                    label.splitText(marker[0].length);
-                    label.replaceWith(link);
-                    link.append(label);
-                }
-            }
         }
 
         function formatManufacturerRow(table) {

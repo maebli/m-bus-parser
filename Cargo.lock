@@ -927,6 +927,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "m-bus-website-wasm"
+version = "0.0.0"
+dependencies = [
+ "js-sys",
+ "m-bus-parser",
+ "serde-wasm-bindgen",
+ "syntect",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

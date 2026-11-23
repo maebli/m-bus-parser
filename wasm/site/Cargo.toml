@@ -1,0 +1,20 @@
+[package]
+name = "m-bus-website-wasm"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+parser = ["dep:m-bus-parser", "dep:serde-wasm-bindgen", "decryption-mode-13"]
+decryption-mode-13 = ["m-bus-parser/decryption-mode-13"]
+syntax = ["dep:syntect"]
+
+[dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2.84"
+serde-wasm-bindgen = { version = "0.6", optional = true }
+m-bus-parser = { path = "../..", features = ["std", "serde", "decryption"], optional = true }
+syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "html", "regex-fancy"], optional = true }
