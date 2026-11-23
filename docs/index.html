@@ -6,8 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="low" href="./parser_bg.wasm?v=1">
-    <link rel="modulepreload" href="./parser.js?v=1">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=fc7f6f523fd94baa">
+    <link rel="modulepreload" href="./parser.js?v=8d2bb41cb43d20b7">
+    <link rel="modulepreload" href="./input-format.js">
+    <link rel="modulepreload" href="./tls-session.js">
+    <link rel="modulepreload" href="./error-report.js">
+    <script>
+        async function loadProductView() {
+            const [viewer] = await Promise.all([
+                import('./products/view.js'),
+                import('./products/turntable.js'),
+                import('./products/geometry.js'),
+                import('./products/faces.js'),
+            ]);
+            return viewer;
+        }
+
+        if (new URLSearchParams(location.search).get('format') === 'product') {
+            loadProductView().catch(error => console.debug('3D viewer preload failed.', error));
+        }
+    </script>
     <style>
         /* UI palette: GitHub Primer light/dark neutrals and blue accents.
            https://primer.style/product/primitives/color/ */
@@ -1724,7 +1742,7 @@
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./parser.js?v=1";
+        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./parser.js?v=8d2bb41cb43d20b7";
 
         import { normalizeInput } from "./input-format.js";
 
@@ -1805,8 +1823,8 @@
             }
         }
 
-        function renderWithFallback(api, input, format, key, width) {
-            const inspected = inspectTelegram(api, input, width);
+        function renderWithFallback(api, input, format, key, width, inspected) {
+            inspected ??= inspectTelegram(api, input, width);
             const isApplication = inspected.protocol === 'application';
             const usableKey = isApplication ? undefined : key;
             const decoded = usableKey ? api.decode(input, usableKey, true) : inspected;
@@ -1958,8 +1976,11 @@
 
         let syntaxModule;
         async function loadSyntax() {
-            const module = await import("./syntax.js?v=1");
-            await module.default({ module_or_path: new URL("./syntax_bg.wasm?v=1", import.meta.url) });
+            const [module, wasm] = await Promise.all([
+                import("./syntax.js?v=428d019268ec04a2"),
+                fetch(new URL("./syntax_bg.wasm?v=31aa000a35391209", import.meta.url)),
+            ]);
+            await module.default({ module_or_path: wasm });
             return module;
         }
 
@@ -2071,7 +2092,7 @@
                 }
             });
 
-            await init({ module_or_path: new URL("./parser_bg.wasm?v=1", import.meta.url) });
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=fc7f6f523fd94baa", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
@@ -2398,7 +2419,7 @@
                     const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : format;
                     const result = sessionJson
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
-                        : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width);
+                        : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
                     attempt.decoded = result.decoded;
                     let formattedResult = result.output;
                     hasDecoded = true;
@@ -2416,7 +2437,7 @@
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
                     } else if (format === 'product') {
-                        const { renderProduct } = await import("./products/view.js");
+                        const { renderProduct } = await loadProductView();
                         if (generation !== renderGeneration) return;
                         renderProduct(outputContainer, result.decoded, reportCurrentError);
                     } else if (format === 'mermaid') {
