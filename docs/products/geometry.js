@@ -134,7 +134,7 @@ export function meterGeometry(asset) {
         iperlHousing(face, solid, outline, circle);
     } else if (asset === 'gwf-mtkcoder' || asset === 'generic-water') {
         const gwf = asset === 'gwf-mtkcoder';
-        const pipeEnd = gwf ? 1.1 : 0.96;
+        const pipeEnd = gwf ? 1.13 : 0.96;
         flowBody(face, -pipeEnd, pipeEnd, -0.29, 0.183, brass, false, gwf ? 2.1 : 1.18);
         solid(
             circle,
@@ -298,12 +298,12 @@ export function meterGeometry(asset) {
             );
         }
     } else {
-        buildHousing(profiles[asset], { face, solid, box, outline, circle, lead });
+        buildHousing(profiles[asset], { face, solid, box, outline, circle, cable, lead });
     }
     const points = faces.flatMap((f) => f.points);
     const low = [0, 1, 2].map((i) => Math.min(...points.map((p) => p[i])));
     const high = [0, 1, 2].map((i) => Math.max(...points.map((p) => p[i])));
     const center = low.map((v, i) => (v + high[i]) / 2);
-    const radius = Math.max(...points.map((p) => Math.hypot(...p.map((v, i) => v - center[i]))));
+    const radius = profiles[asset]?.cameraRadius ?? Math.max(...points.map((p) => Math.hypot(...p.map((v, i) => v - center[i]))));
     return { faces, center, radius };
 }

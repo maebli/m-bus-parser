@@ -97,10 +97,10 @@ export function waterDial(ctx, wheels, id, volume, { encoder, fabricationNumber 
     ctx.fillStyle = '#253943';
     ctx.font = 'bold 31px sans-serif';
     if (encoder) {
-        ctx.fillStyle = '#263e64';
-        ctx.fillRect(99, 104, 314, 26);
-        ctx.fillStyle = '#253943';
-        ctx.fillText('m³', 256, 76);
+        ctx.fillText('m³', 256, 154);
+        ctx.save();
+        ctx.translate(71, 72);
+        ctx.scale(0.72, 0.82);
     } else {
         ctx.fillText('m³', 258, 110);
     }
@@ -116,6 +116,29 @@ export function waterDial(ctx, wheels, id, volume, { encoder, fabricationNumber 
         ctx.fillStyle = '#fffdf3';
         ctx.font = 'bold 53px monospace';
         ctx.fillText(wheels[i], x + 25, 201);
+    }
+    if (encoder) {
+        ctx.restore();
+        ctx.save();
+        ctx.translate(256, 354);
+        ctx.rotate(Number.isFinite(volume) ? (volume * 1000 % 1) * 2 * Math.PI : 0);
+        for (let blade = 0; blade < 6; blade++) {
+            ctx.rotate(Math.PI / 3);
+            ctx.fillStyle = '#3a4141';
+            ctx.beginPath();
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(-12, -39);
+            ctx.lineTo(11, -47);
+            ctx.lineTo(6, 0);
+            ctx.fill();
+        }
+        ctx.restore();
+        circle(256, 354, 10, '#69716d');
+        ctx.fillStyle = '#374344';
+        ctx.font = '24px monospace';
+        ctx.fillText(fabricationNumber || id || '', 256, 94, 190);
+        if (fabricationNumber) ctx.fillRect(161, 111, 190, 4);
+        return;
     }
     circle(190, 326, 63, '#b3afa0');
     circle(190, 326, 57, '#f7f5e8');

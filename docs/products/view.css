@@ -21,10 +21,15 @@
     background: var(--surface);
 }
 .product-preview-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
     padding: 3px 10px 6px;
     color: var(--muted);
     font-size: .76rem;
 }
+.product-art-note { margin-left: auto; text-align: right; font-size: .7rem; }
 .product-report {
     position: absolute;
     top: 8px;

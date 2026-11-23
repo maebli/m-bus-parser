@@ -18,7 +18,7 @@ export function faceSize(asset) {
     const profile = profiles[asset];
     if (!profile) return sizes[asset] || [512, 512];
     const [w, h] = profile.size;
-    const faceHeight = profile.mount === 'rail' ? h / 2 : h;
+    const faceHeight = h * (profile.fascia || 1);
     const scale = 640 / Math.max(w, faceHeight);
     return [Math.round(w * scale), Math.round(faceHeight * scale)];
 }
@@ -70,6 +70,26 @@ function panel(ctx, profile, reading, id) {
     ctx.fillStyle = profile.face || caseWhite;
     ctx.fillRect(0, 0, width, height);
     ctx.textBaseline = 'middle';
+    if (profile.screen && !profile.round) {
+        const inset = Math.min(width, height) * 0.025;
+        ctx.strokeStyle = '#a8aea6';
+        ctx.lineWidth = inset * 0.24;
+        ctx.beginPath();
+        ctx.roundRect(inset, inset, width - inset * 2, height - inset * 2, inset * 1.7);
+        ctx.stroke();
+    }
+    if (profile.sideGrips) {
+        ctx.fillStyle = '#79818a';
+        for (const x of [0.04, 0.89]) {
+            ctx.beginPath();
+            ctx.roundRect(width * x, height * 0.18, width * 0.07, height * 0.62, width * 0.025);
+            ctx.fill();
+        }
+    }
+    if (profile.strip) {
+        ctx.fillStyle = profile.strip;
+        ctx.fillRect(0, height * 0.14, width, height * 0.045);
+    }
     if (profile.panel) {
         const [x, y, w, h, color] = profile.panel;
         ctx.fillStyle = color;
@@ -80,10 +100,21 @@ function panel(ctx, profile, reading, id) {
     if (profile.ribbedRight) {
         ctx.fillStyle = '#b8b9b2';
         for (let y = height * 0.03; y < height; y += height * 0.043) {
-            ctx.fillRect(width * 0.64, y, width * 0.36, height * 0.009);
+            ctx.fillRect(width * 0.6, y, width * 0.38, height * 0.009);
         }
         ctx.fillStyle = '#d6d7cc';
-        ctx.fillRect(width * 0.69, height * 0.18, width * 0.27, height * 0.6);
+        ctx.fillRect(width * 0.65, height * 0.16, width * 0.31, height * 0.65);
+        ctx.strokeStyle = '#989d94';
+        ctx.lineWidth = width * 0.003;
+        ctx.strokeRect(width * 0.65, height * 0.16, width * 0.31, height * 0.65);
+        ctx.fillStyle = '#a4aaa5';
+        ctx.fillRect(width * 0.15, height * 0.847, width * 0.088, height * 0.055);
+        ctx.fillStyle = '#50595a';
+        for (const x of [0.172, 0.211]) {
+            ctx.beginPath();
+            ctx.arc(width * x, height * 0.874, height * 0.011, 0, 2 * Math.PI);
+            ctx.fill();
+        }
     }
     if (profile.terminalCover) {
         ctx.fillStyle = '#bec3bc';
@@ -121,8 +152,20 @@ function panel(ctx, profile, reading, id) {
     }
     if (profile.mount === 'sensor') {
         ctx.fillStyle = '#858c8b';
-        for (let i = 0; i < 7; i++) {
-            ctx.fillRect(width * 0.16, height * (0.19 + i * 0.069), width * 0.68, height * 0.021);
+        for (const top of [0.13, 0.66]) {
+            for (let row = 0; row < 5; row++) {
+                for (let column = 0; column < 16; column++) {
+                    ctx.beginPath();
+                    ctx.arc(
+                        width * (0.16 + column * 0.045),
+                        height * (top + row * 0.045),
+                        width * 0.011,
+                        0,
+                        2 * Math.PI
+                    );
+                    ctx.fill();
+                }
+            }
         }
     }
     if (id && profile.screen && profile.mount !== 'rail') {
