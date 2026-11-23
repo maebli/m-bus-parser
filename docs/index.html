@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="low" href="./m_bus_parser_wasm_pack_bg.wasm?v=b4f4dd8b">
-    <link rel="modulepreload" href="./m_bus_parser_wasm_pack.js?v=0.7.4">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="low" href="./parser_bg.wasm?v=1">
+    <link rel="modulepreload" href="./parser.js?v=1">
     <style>
         /* UI palette: GitHub Primer light/dark neutrals and blue accents.
            https://primer.style/product/primitives/color/ */
@@ -1724,7 +1724,7 @@
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_highlight, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./m_bus_parser_wasm_pack.js?v=0.7.4";
+        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./parser.js?v=1";
 
         import { normalizeInput } from "./input-format.js";
 
@@ -1956,6 +1956,13 @@
             return gutter;
         }
 
+        let syntaxModule;
+        async function loadSyntax() {
+            const module = await import("./syntax.js?v=1");
+            await module.default({ module_or_path: new URL("./syntax_bg.wasm?v=1", import.meta.url) });
+            return module;
+        }
+
         function renderCodeViewer(container, source, language, label) {
             source = String(source ?? '');
             const viewer = document.createElement('div');
@@ -1970,13 +1977,14 @@
             const pre = document.createElement('pre');
             pre.className = 'code-source';
             const code = document.createElement('code');
-            try {
-                // syntect escapes source text before emitting this restricted span-only markup.
-                code.innerHTML = m_bus_highlight(source, language);
-            } catch (error) {
-                console.warn('Syntax highlighting unavailable; using plaintext output.', error);
-                code.textContent = source;
-            }
+            code.textContent = source;
+            syntaxModule ??= loadSyntax().catch(error => {
+                syntaxModule = undefined;
+                throw error;
+            });
+            syntaxModule.then(({ m_bus_highlight }) => {
+                if (code.isConnected) code.innerHTML = m_bus_highlight(source, language);
+            }).catch(error => console.warn('Syntax highlighting unavailable.', error));
             pre.appendChild(code);
             scroll.append(createLineGutter(source), pre);
             viewer.appendChild(scroll);
@@ -2063,7 +2071,7 @@
                 }
             });
 
-            await init(new URL("./m_bus_parser_wasm_pack_bg.wasm?v=b4f4dd8b", import.meta.url));
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=1", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
@@ -2416,7 +2424,7 @@
                         if (generation !== renderGeneration) return;
                         renderDiagram(outputContainer, result.decoded, manufacturerWebsite(result.decoded));
                     } else {
-                        await renderCodeViewer(
+                        renderCodeViewer(
                             outputContainer,
                             formattedResult,
                             language,

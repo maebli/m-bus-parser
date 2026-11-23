@@ -264,6 +264,7 @@ jobs:
       - name: Build wasm for the site
         if: ${{ !cancelled() }}
         run: |
+          tools/build-site-wasm.sh
           cd wasm
           wasm-pack build --target web --out-dir pkg-web
       - name: Stage wasm artifacts

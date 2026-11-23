@@ -58,6 +58,8 @@ pub mod output;
 mod rscada_xml;
 pub use m_bus_application_layer as user_data;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub use m_bus_core::decryption;
 use m_bus_core::ApplicationLayerError;
 // Re-export link layer types for convenience

@@ -9,11 +9,11 @@ import {
     m_bus_render_application,
     m_bus_decode_tls,
     m_bus_render_tls,
-} from '../../docs/m_bus_parser_wasm_pack.js';
+} from '../../docs/parser.js';
 import { createTlsSessionPanel, parseSessionImport } from '../../docs/tls-session.js';
 import { normalizeInput } from '../../docs/input-format.js';
 
-initSync({ module: await readFile(new URL('../../docs/m_bus_parser_wasm_pack_bg.wasm', import.meta.url)) });
+initSync({ module: await readFile(new URL('../../docs/parser_bg.wasm', import.meta.url)) });
 const vectors = await readFile(new URL('../../crates/m-bus-core/tests/fixtures/mode13.rs', import.meta.url), 'utf8');
 const record = vectors.match(/OPENSSL_AES128_RECORD: &str =\s*"([a-f0-9]+)"/)[1];
 const frame = `2f4493157856341233037a0100ff0d01${record}`;

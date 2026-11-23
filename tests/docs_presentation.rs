@@ -107,8 +107,11 @@ fn docs_hex_view_uses_serialized_annotation_names() {
 
 #[test]
 fn checked_in_wasm_stays_within_the_docs_budget() {
-    let wasm = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/m_bus_parser_wasm_pack_bg.wasm");
-    let bytes = fs::metadata(wasm).unwrap().len();
+    let docs = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs");
+    let bytes = ["parser_bg.wasm", "syntax_bg.wasm"]
+        .iter()
+        .map(|file| fs::metadata(docs.join(file)).unwrap().len())
+        .sum::<u64>();
     assert!(
         bytes <= 2 * 1024 * 1024,
         "docs WASM is {bytes} bytes; budget is 2 MiB"
