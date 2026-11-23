@@ -187,9 +187,7 @@ export function iperlDisplay(ctx, reading, id) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#464d4c';
     ctx.font = '18px sans-serif';
-    ctx.fillText('SENSUS  ' + (id || ''), 26, 26);
-    ctx.font = 'bold 22px sans-serif';
-    ctx.fillText('iPERL', 26, 447);
+    ctx.fillText(id || '', 26, 26);
     ctx.beginPath();
     ctx.moveTo(512, 49);
     ctx.bezierCurveTo(255, 51, 57, 135, 49, 241);
@@ -223,13 +221,4 @@ export function iperlDisplay(ctx, reading, id) {
     ctx.fill();
     ctx.fillStyle = '#34393c';
     ctx.fillRect(0, 480, 600, 320);
-    ctx.beginPath();
-    ctx.moveTo(595, 526);
-    ctx.bezierCurveTo(181, 610, 74, 664, 228, 764);
-    ctx.strokeStyle = '#449acb';
-    ctx.lineWidth = 28;
-    ctx.stroke();
-    ctx.fillStyle = '#67afcf';
-    ctx.font = 'bold 27px sans-serif';
-    ctx.fillText('sensus', 458, 704);
 }

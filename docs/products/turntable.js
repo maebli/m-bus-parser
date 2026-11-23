@@ -1,114 +1,6 @@
-import { a230Display } from './a230.js';
-import { iperlDisplay } from './iperl.js';
-import { waterDial } from './water.js';
-import { g350Index } from './g350.js';
-import { elsterIndex } from './elster.js';
+import { faceSize, paintFace } from './faces.js';
 import { meterGeometry } from './geometry.js';
 import { MeterRasterizer, textureLevels } from './rasterizer.js';
-import { screens } from './screens.js';
-
-const dialSizes = {
-    'gmc-emmod206': [600, 750],
-    'sensus-iperl': [600, 800],
-    'elster-gas': [640, 360],
-    'landisplusgyr-g350': [640, 480],
-    'generic-water': [512, 512]
-};
-
-function volumeWheels(volume) {
-    const match = /^(\d{1,5})(?:\.(\d+))?$/.exec(String(volume));
-    return match ? match[1].padStart(5, '0') + (match[2] || '').padEnd(3, '0').slice(0, 3) : '————————';
-}
-
-function paintRegister(ctx, image, asset, reading, volume, id) {
-    if (asset === 'gmc-emmod206') {
-        a230Display(ctx, reading);
-        return;
-    }
-    if (asset === 'sensus-iperl') {
-        iperlDisplay(ctx, reading, id);
-        return;
-    }
-    if (asset === 'generic-water') {
-        waterDial(ctx, volumeWheels(volume), id, volume);
-        return;
-    }
-    if (asset === 'landisplusgyr-g350') {
-        g350Index(ctx, reading, id);
-        return;
-    }
-    if (asset === 'elster-gas') {
-        elsterIndex(ctx, volumeWheels(volume), id);
-        return;
-    }
-    const w = image.naturalWidth,
-        h = image.naturalHeight;
-    ctx.drawImage(image, 0, 0);
-    if (asset === 'gwf-mtkcoder') {
-        const wheels = volumeWheels(volume);
-        const x = w * 0.415,
-            y = h * 0.52,
-            dw = (w * 0.148) / 8,
-            dh = h * 0.054;
-        ctx.font = 'bold ' + dh * 0.86 + 'px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        for (let i = 0; i < 8; i++) {
-            ctx.fillStyle = i < 5 ? '#242524' : '#92292a';
-            ctx.fillRect(x + i * dw, y, dw + 0.2, dh);
-            ctx.fillStyle = '#0d0e0c';
-            ctx.fillRect(x + i * dw, y, 1, dh);
-            ctx.fillStyle = '#fff';
-            ctx.fillText(wheels[i], x + (i + 0.5) * dw, y + 0.52 * dh, dw * 0.95);
-        }
-    }
-    if (asset === 'multical-601' && id !== '06855817') {
-        ctx.fillStyle = '#e7e5dc';
-        ctx.fillRect(w * 0.72, h * 0.18, w * 0.223, h * 0.072);
-        ctx.fillRect(w * 0.77, h * 0.299, w * 0.18, h * 0.045);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#282824';
-        ctx.font = 'bold ' + w * 0.038 + 'px monospace';
-        ctx.fillText(id || '—', w * 0.738, h * 0.217, w * 0.19);
-        ctx.font = w * 0.017 + 'px monospace';
-        ctx.fillText(id || '—', w * 0.776, h * 0.323, w * 0.17);
-    }
-    if (!screens[asset]) return;
-    const [x, y, sw, sh] = screens[asset].map((n, i) => (n * (i % 2 ? h : w)) / 100);
-    const dateTime = /^(\d{4}-\d{2}-\d{2})T(.+)$/.exec(reading.value);
-    const main = dateTime ? dateTime[1] : reading.value;
-    const secondary = dateTime ? dateTime[2] : reading.unit;
-    ctx.fillStyle = '#a9b29a';
-    ctx.fillRect(x, y, sw, sh);
-    ctx.fillStyle = '#263225';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '500 ' + sh * 0.56 + 'px monospace';
-    ctx.fillText(main, x + sw / 2, y + sh * (secondary ? 0.37 : 0.5), sw * 0.93);
-    ctx.font = sh * 0.26 + 'px monospace';
-    ctx.fillText(secondary, x + sw / 2, y + sh * 0.8, sw * 0.9);
-}
-
-function imageBounds({ data, width, height }) {
-    let left = width,
-        right = 0,
-        top = height,
-        bottom = 0;
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (data[(y * width + x) * 4 + 3] < 150) continue;
-            left = Math.min(left, x);
-            right = Math.max(right, x);
-            top = Math.min(top, y);
-            bottom = Math.max(bottom, y);
-        }
-    }
-    return right > left && bottom > top
-        ? [left / width, top / height, (right - left + 1) / width, (bottom - top + 1) / height]
-        : [0, 0, 1, 1];
-}
-
 class MeterTurntable extends HTMLElement {
     constructor() {
         super();
@@ -158,7 +50,7 @@ class MeterTurntable extends HTMLElement {
 
     connectedCallback() {
         this.resize.observe(this);
-        if (this.image.complete && this.image.naturalWidth) this.loadGeometry();
+        this.loadGeometry();
     }
     disconnectedCallback() {
         this.resize.disconnect();
@@ -219,21 +111,17 @@ class MeterTurntable extends HTMLElement {
         );
         this.canvas.setAttribute('aria-hidden', 'true');
         this.append(this.image, this.canvas);
-        this.image.onload = () => this.loadGeometry();
-        this.image.src = new URL('./' + asset + '.webp', import.meta.url).href;
+        this.loadGeometry();
     }
 
     loadGeometry() {
-        if (!this.isConnected || this.geometry) return;
-        [this.surface.width, this.surface.height] = dialSizes[this.asset] || [
-            this.image.naturalWidth,
-            this.image.naturalHeight
-        ];
-        const ctx = this.surface.getContext('2d', { willReadFrequently: true });
-        if (!ctx || !this.canvas.getContext('2d')) return;
-        ctx.drawImage(this.image, 0, 0);
-        const image = ctx.getImageData(0, 0, this.surface.width, this.surface.height);
-        this.geometry = meterGeometry(this.asset, image, imageBounds(image));
+        if (!this.isConnected || !this.asset || this.geometry) return;
+        if (!this.surface.getContext('2d', { willReadFrequently: true }) || !this.canvas.getContext('2d')) {
+            this.image.src = new URL('./' + this.asset + '.webp', import.meta.url).href;
+            return;
+        }
+        [this.surface.width, this.surface.height] = faceSize(this.asset);
+        this.geometry = meterGeometry(this.asset);
         this.image.hidden = true;
         this.controls.hidden = false;
         this.updateReading(this.reading);
@@ -242,14 +130,7 @@ class MeterTurntable extends HTMLElement {
     updateReading(reading = { value: '—', unit: '' }) {
         this.reading = reading;
         if (!this.geometry) return;
-        paintRegister(
-            this.surface.getContext('2d'),
-            this.image,
-            this.asset,
-            reading,
-            this.volume,
-            this.meterId
-        );
+        paintFace(this.surface.getContext('2d'), this.asset, reading, this.volume, this.meterId);
         this.texture = textureLevels(this.surface);
         this.redraw();
     }

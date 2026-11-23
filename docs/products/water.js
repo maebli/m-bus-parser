@@ -81,7 +81,7 @@ export function openWaterRegister(face, solid, circle) {
     );
 }
 
-export function waterDial(ctx, wheels, id, volume) {
+export function waterDial(ctx, wheels, id, volume, { encoder, fabricationNumber }) {
     ctx.fillStyle = '#dddcd1';
     ctx.fillRect(0, 0, 512, 512);
     const circle = (x, y, r, color) => {
@@ -96,7 +96,14 @@ export function waterDial(ctx, wheels, id, volume) {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#253943';
     ctx.font = 'bold 31px sans-serif';
-    ctx.fillText('m³', 258, 110);
+    if (encoder) {
+        ctx.fillStyle = '#263e64';
+        ctx.fillRect(99, 104, 314, 26);
+        ctx.fillStyle = '#253943';
+        ctx.fillText('m³', 256, 76);
+    } else {
+        ctx.fillText('m³', 258, 110);
+    }
     ctx.fillStyle = '#55564d';
     ctx.fillRect(33, 158, 446, 80);
     for (let i = 0; i < wheels.length; i++) {
@@ -140,5 +147,6 @@ export function waterDial(ctx, wheels, id, volume) {
     ctx.font = '19px sans-serif';
     ctx.fillText('× 0.1 L', 189, 407);
     ctx.font = '20px monospace';
-    ctx.fillText(id || '', 331, 345, 135);
+    ctx.fillText(fabricationNumber || id || '', 331, 345, 135);
+    if (fabricationNumber) ctx.fillRect(263, 363, 136, 4);
 }
