@@ -209,7 +209,13 @@ fn application_only_rendering_supports_the_website_formats() {
                 Some(false),
             )
             .expect("application-only input");
-            assert!(!output.is_empty());
+            if format == "json" {
+                let decoded: serde_json::Value = serde_json::from_str(&output).unwrap();
+                assert_eq!(decoded["protocol"], "application");
+                assert_eq!(decoded["records"][0]["data_hex"], "15 31 00");
+            } else {
+                assert!(!output.is_empty());
+            }
         }
         assert!(m_bus_parser_wasm_pack::m_bus_render(input, "json", None, None, None).is_err());
     }

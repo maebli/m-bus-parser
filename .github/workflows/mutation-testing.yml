@@ -25,23 +25,48 @@ jobs:
           persist-credentials: false
 
       - name: Get changed Rust lines from the pull request
-        run: git diff HEAD^1 HEAD -- '*.rs' > "$RUNNER_TEMP/changes.diff"
+        id: changes
+        run: |
+          git diff HEAD^1 HEAD -- '*.rs' > "$RUNNER_TEMP/changes.diff"
+          if ! git diff --quiet HEAD^1 HEAD -- 'wasm/*.rs'; then
+            package_id=$(cargo pkgid --locked wasm-bindgen)
+            echo "bindgen=${package_id##*@}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install cargo-mutants
         uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f
         with:
           tool: cargo-mutants@27.1.0
 
-      - name: Test mutations on changed lines
+      - name: Test native mutations on changed lines
         run: >-
-          cargo mutants --workspace --cargo-arg=--workspace --cargo-arg=--locked
+          cargo mutants --workspace --exclude 'wasm/**' --cargo-arg=--workspace --cargo-arg=--locked
           --features m-bus-parser/std,m-bus-parser/decryption
-          --in-diff "$RUNNER_TEMP/changes.diff"
+          --in-diff "$RUNNER_TEMP/changes.diff" --output "$RUNNER_TEMP/mutation-results/native"
+
+      - name: Install WebAssembly test runner
+        if: steps.changes.outputs.bindgen != ''
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f
+        with:
+          tool: wasm-bindgen@${{ steps.changes.outputs.bindgen }}
+
+      - name: Test WebAssembly mutations on changed lines
+        if: steps.changes.outputs.bindgen != ''
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+        run: |
+          rustup target add wasm32-unknown-unknown
+          export GECKODRIVER=geckodriver
+          cargo mutants --workspace --file 'wasm/**' \
+            --test-package m-bus-parser-wasm-pack --test-package m-bus-website-wasm \
+            --features m-bus-website-wasm/parser,m-bus-website-wasm/syntax \
+            --cargo-arg=--target=wasm32-unknown-unknown --cargo-arg=--locked \
+            --in-diff "$RUNNER_TEMP/changes.diff" --output "$RUNNER_TEMP/mutation-results/wasm"
 
       - name: Upload mutation results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: mutation-results
-          path: mutants.out/
+          path: ${{ runner.temp }}/mutation-results/
           if-no-files-found: ignore

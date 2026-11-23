@@ -84,6 +84,27 @@ fn canonical_json_has_a_versioned_stable_root() {
 }
 
 #[test]
+fn manufacturer_metadata_wraps_only_when_it_exceeds_the_table_width() {
+    let metadata = "  Manufacturer specific · S/T/U 0/0/0";
+    let exact_width = metadata.chars().count();
+    for (width, expected) in [
+        (exact_width, metadata),
+        (exact_width - 1, "  Manufacturer specific\n  S/T/U 0/0/0"),
+    ] {
+        let options = RenderOptions {
+            table_width: Some(width),
+            ..RenderOptions::default()
+        };
+        let table = render_hex(WIRED_FRAME, OutputFormat::Table, &options).unwrap();
+        let (_, tail) = table
+            .split_once("#9  Manufacturer data: 2 bytes\n")
+            .unwrap();
+        let (actual, _) = tail.split_once("\n  Raw: 0F 60 00").unwrap();
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
 fn enrichment_is_optional_without_changing_the_schema() {
     let decoded = decode_hex(
         WIRED_FRAME,
