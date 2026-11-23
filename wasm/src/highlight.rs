@@ -140,7 +140,7 @@ fn push_escaped_html(html: &mut String, source: &str) {
 mod tests {
     use super::*;
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test(unsupported = test)]
     fn supported_formats_preserve_every_source_line() {
         for (language, source) in [
             ("json", "{\n  \"meter\": \"02205100\"\n}"),
@@ -166,7 +166,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test(unsupported = test)]
     fn highlighted_html_escapes_untrusted_source() {
         let html = highlight_source("\"</script><img src=x>\"", "json").unwrap();
         assert!(!html.contains("<script"));
@@ -174,7 +174,7 @@ mod tests {
         assert!(html.contains("&lt;"));
     }
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test(unsupported = test)]
     fn csv_highlighting_respects_quotes_and_embedded_newlines() {
         let source = "a,b\n\"one,two\",\"<tag>\"\n\"line\nbreak\",x";
         let html = highlight_source(source, "csv").unwrap();
@@ -186,7 +186,7 @@ mod tests {
         assert!(!html.contains("<tag>"));
     }
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test(unsupported = test)]
     fn syntax_palette_meets_wcag_aa_in_both_themes() {
         const REQUIRED_RATIO: f64 = 4.5;
         const LIGHT_BACKGROUND: &str = "#ffffff";

@@ -142,7 +142,7 @@ pub fn m_bus_parse_with_key(data: &str, format: &str, key_hex: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test(unsupported = test)]
     fn strict_key_validation_does_not_panic_on_odd_input() {
         assert!(parse_key(Some("123")).is_err());
         assert!(parse_key(Some("00")).is_err());
