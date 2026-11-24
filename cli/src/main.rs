@@ -35,9 +35,11 @@ struct Cli {
 enum Command {
     #[command(about = "List drivers provided by the installed wmbusmeters executable")]
     Drivers,
-    #[command(about = "Decode an ordered sequence of AFL fragments as JSON")]
+    #[command(
+        about = "Decode OMS AFL fragments, ACRIOS packets, or a joined wired stream as JSON"
+    )]
     ParseFragments {
-        #[arg(required = true, num_args = 2..)]
+        #[arg(required = true, num_args = 1..)]
         frames: Vec<String>,
         #[arg(short, long)]
         key: Option<String>,
@@ -140,7 +142,7 @@ fn run() -> Result<(), String> {
                 key: key.as_deref().map(parse_key).transpose()?,
                 ..DecodeOptions::default()
             };
-            let result = m_bus_parser::output::decode_fragments(&frames, &options)
+            let result = m_bus_parser::output::decode_fragment_frames(&frames, &options)
                 .map_err(|e| e.to_string())?;
             println!(
                 "{}",

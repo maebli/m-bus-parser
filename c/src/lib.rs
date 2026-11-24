@@ -144,10 +144,10 @@ pub unsafe extern "C" fn mbus_parse_fragments(
     key_length: usize,
 ) -> *mut MbusResult {
     result_pointer(|| {
-        if frames.is_null() || !(2..=255).contains(&count) {
+        if frames.is_null() || !(1..=255).contains(&count) {
             return Err(OutputError::Rendering {
                 code: "fragment.invalid",
-                message: "expected 2 to 255 ordered fragments".into(),
+                message: "expected 1 to 255 ordered packets".into(),
             });
         }
         let frames = unsafe { slice::from_raw_parts(frames, count) };
@@ -159,7 +159,7 @@ pub unsafe extern "C" fn mbus_parse_fragments(
             key: unsafe { parse_key(key, key_length)? },
             ..DecodeOptions::default()
         };
-        let decoded = m_bus_parser::decode_fragments(&inputs, &options)?;
+        let decoded = m_bus_parser::decode_fragment_frames(&inputs, &options)?;
         serde_json::to_string(&decoded).map_err(|e| OutputError::Serialization {
             format: "json",
             message: e.to_string(),

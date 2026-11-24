@@ -176,7 +176,7 @@ fn mermaid_restores_semantic_color_and_grouping() {
 
 #[test]
 fn typed_errors_have_stable_codes_and_offsets() {
-    let error = decode_hex("68,3D", &DecodeOptions::default()).unwrap_err();
+    let error = decode_hex("68,3Z", &DecodeOptions::default()).unwrap_err();
     assert_eq!(error.code(), "input.invalid_hex");
     assert_eq!(error.layer(), "input");
     assert!(error.byte_offset().is_some());

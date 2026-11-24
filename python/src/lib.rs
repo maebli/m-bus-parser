@@ -106,17 +106,17 @@ fn parse_fragments(
     include_enrichment: bool,
 ) -> PyResult<Py<PyAny>> {
     let count = frames.len()?;
-    if !(2..=255).contains(&count) {
+    if !(1..=255).contains(&count) {
         return Err(binding_error(
             "fragment.invalid",
-            "expected 2 to 255 ordered fragments",
+            "expected 1 to 255 ordered packets",
         ));
     }
     let data = (0..count)
         .map(|index| extract_bytes(&frames.get_item(index)?, "frame"))
         .collect::<PyResult<Vec<_>>>()?;
     let slices = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
-    let decoded = m_bus_parser::decode_fragments(
+    let decoded = m_bus_parser::decode_fragment_frames(
         &slices,
         &DecodeOptions {
             key: extract_key(key)?,
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn rejects_ambiguous_hex() {
-        assert!(decode_hex_bytes("68,3D").is_err());
+        assert!(decode_hex_bytes("68,3Z").is_err());
         assert!(decode_hex_bytes("123").is_err());
     }
 

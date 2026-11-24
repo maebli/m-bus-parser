@@ -205,7 +205,123 @@ impl Fields {
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum FragmentOutput {
+    Single(Box<DecodedOutput>),
+    Multiple(Vec<DecodedOutput>),
+}
+
+pub fn decode_fragment_frames(
+    packets: &[&[u8]],
+    options: &DecodeOptions,
+) -> Result<FragmentOutput, OutputError> {
+    if let [stream @ [0x68, length, repeat, 0x68, ..]] = packets {
+        if length == repeat && stream.len() > usize::from(*length) + 6 {
+            return decode_wired_stream(stream, options);
+        }
+    }
+    if !matches!(packets.first(), Some([1, ..])) {
+        return decode_afl_fragments(packets, options)
+            .map(|frame| FragmentOutput::Single(Box::new(frame)));
+    }
+    let total = u8::try_from(packets.len()).map_err(|_| invalid("too many ACRIOS packets"))?;
+    let mut joined = Vec::new();
+    for (index, packet) in packets.iter().enumerate() {
+        let [sequence, count, bytes @ ..] = packet else {
+            return Err(invalid("missing ACRIOS packet header"));
+        };
+        if usize::from(*sequence) != index + 1 || *count != total || bytes.is_empty() {
+            return Err(invalid("inconsistent ACRIOS packet order, count or length"));
+        }
+        joined.extend_from_slice(bytes);
+    }
+    let mut result = decode_wired_stream(acrios_meter_data(&joined), options)?;
+    if let FragmentOutput::Single(frame) = &mut result {
+        frame.raw.fragment_frames_hex = packets.iter().map(|packet| hex_string(packet)).collect();
+    }
+    Ok(result)
+}
+
+fn decode_wired_stream(
+    mut payload: &[u8],
+    options: &DecodeOptions,
+) -> Result<FragmentOutput, OutputError> {
+    let mut decoded = Vec::new();
+    while !payload.is_empty() {
+        let size = match payload {
+            [0x68, length, repeat, 0x68, ..] if length == repeat => usize::from(*length) + 6,
+            [0x10, ..] => 5,
+            [0xe5, ..] => 1,
+            _ => return Err(invalid("invalid wired frame header in ACRIOS data")),
+        };
+        let (frame, rest) = payload
+            .split_at_checked(size)
+            .ok_or_else(|| invalid("truncated wired frame in ACRIOS data"))?;
+        wired::WiredFrame::try_from(frame)
+            .map_err(|_| invalid("invalid wired frame in ACRIOS data"))?;
+        decoded.push(decode_bytes(frame, options)?);
+        payload = rest;
+    }
+    if decoded.len() == 1 {
+        let frame = decoded
+            .pop()
+            .ok_or_else(|| invalid("missing wired frame"))?;
+        Ok(FragmentOutput::Single(Box::new(frame)))
+    } else {
+        Ok(FragmentOutput::Multiple(decoded))
+    }
+}
+
+fn acrios_meter_data(bytes: &[u8]) -> &[u8] {
+    match bytes {
+        [0x68, length, repeat, 0x68, ..] if length == repeat => bytes,
+        [_, inner @ ..] if matches!(inner, [0x68, length, repeat, 0x68, ..] if length == repeat) => {
+            inner
+        }
+        _ => bytes,
+    }
+}
+
+pub(super) fn singleton_payload(packet: &[u8]) -> Result<Option<&[u8]>, OutputError> {
+    let [1, count, bytes @ ..] = packet else {
+        return Ok(None);
+    };
+    let payload = acrios_meter_data(bytes);
+    let [0x68, length, repeat, 0x68, ..] = payload else {
+        return Ok(None);
+    };
+    if *count > 1 && length == repeat {
+        return Err(invalid(
+            "supply all numbered ACRIOS packets to the fragment decoder",
+        ));
+    }
+    if *count != 1 || length != repeat {
+        return Err(invalid("invalid ACRIOS packet count or frame length"));
+    }
+    if payload.len() > usize::from(*length) + 6 {
+        return Err(invalid(
+            "use the fragment decoder for an ACRIOS packet containing multiple frames",
+        ));
+    }
+    wired::WiredFrame::try_from(payload)
+        .map_err(|_| invalid("invalid wired frame in ACRIOS data"))?;
+    Ok(Some(payload))
+}
+
 pub fn decode_fragments(
+    frames: &[&[u8]],
+    options: &DecodeOptions,
+) -> Result<DecodedOutput, OutputError> {
+    match decode_fragment_frames(frames, options)? {
+        FragmentOutput::Single(frame) => Ok(*frame),
+        FragmentOutput::Multiple(_) => Err(invalid(
+            "use decode_fragment_frames for multiple meter frames",
+        )),
+    }
+}
+
+fn decode_afl_fragments(
     frames: &[&[u8]],
     options: &DecodeOptions,
 ) -> Result<DecodedOutput, OutputError> {

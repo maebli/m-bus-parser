@@ -930,7 +930,7 @@ impl DataFieldCoding {
                 let day = parse_single_or_every!(
                     input.get(2).ok_or(DataRecordError::InsufficientData)?,
                     0x1F,
-                    0x1F,
+                    0,
                     0
                 );
                 let month = parse_month!(input.get(3).ok_or(DataRecordError::InsufficientData)?);

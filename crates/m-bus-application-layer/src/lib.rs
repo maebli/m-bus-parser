@@ -516,7 +516,7 @@ impl ApplicationResetSubcode {
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Counter {
-    count: u32,
+    count: i32,
 }
 
 #[cfg(feature = "std")]
@@ -527,9 +527,15 @@ impl fmt::Display for Counter {
 }
 
 impl Counter {
+    pub const fn value(&self) -> i32 {
+        self.count
+    }
+
     pub fn from_bcd_hex_digits(digits: [u8; 4]) -> Result<Self, ApplicationLayerError> {
         let count = bcd_hex_digits_to_u32(digits)?;
-        Ok(Self { count })
+        Ok(Self {
+            count: count as i32,
+        })
     }
 }
 
@@ -1145,35 +1151,42 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
-                let mut iter = data.iter().skip(1);
-                let identification_number = IdentificationNumber::from_bcd_hex_digits([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ])?;
-
-                let access_number = *iter.next().ok_or(ApplicationLayerError::InsufficientData)?;
-
-                let status = StatusField::from_bits_truncate(
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                );
-                let device_type_and_unit = u16::from_be_bytes([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ]);
-                let counter1 = Counter::from_bcd_hex_digits([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ])?;
-                let counter2 = Counter::from_bcd_hex_digits([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ])?;
+                let body = data
+                    .get(1..17)
+                    .ok_or(ApplicationLayerError::InsufficientData)?;
+                if data.len() != 17 {
+                    return Err(ApplicationLayerError::InvalidDataLength {
+                        expected: 17,
+                        actual: data.len(),
+                    });
+                }
+                let ([id, [access_number, status, unit1, unit2], first, second], _) =
+                    body.as_chunks::<4>()
+                else {
+                    return Err(ApplicationLayerError::InsufficientData);
+                };
+                let order = |mut bytes: [u8; 4]| {
+                    if control_information_byte == 0x77 {
+                        bytes.reverse();
+                    }
+                    bytes
+                };
+                let identification_number = IdentificationNumber::from_bcd_hex_digits(order(*id))?;
+                let access_number = *access_number;
+                let status = StatusField::from_bits_truncate(*status);
+                let device_type_and_unit = u16::from_be_bytes([*unit1, *unit2]);
+                let counter = |bytes| {
+                    let digits = order(bytes);
+                    if status.contains(StatusField::COUNTER_BINARY_SIGNED) {
+                        Ok(Counter {
+                            count: i32::from_le_bytes(digits),
+                        })
+                    } else {
+                        Counter::from_bcd_hex_digits(digits)
+                    }
+                };
+                let counter1 = counter(*first)?;
+                let counter2 = counter(*second)?;
                 Ok(UserDataBlock::FixedDataStructure {
                     identification_number,
                     access_number,

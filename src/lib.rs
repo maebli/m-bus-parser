@@ -50,6 +50,8 @@
 #[allow(clippy::indexing_slicing)]
 pub mod annotate;
 #[cfg(feature = "std")]
+mod fixed;
+#[cfg(feature = "std")]
 pub mod manufacturers;
 pub mod mbus_data;
 #[cfg(feature = "std")]
@@ -71,9 +73,9 @@ pub use wireless_mbus_link_layer::{FormatABytes, FormatAFrame, ManufacturerId, W
 pub use mbus_data::serialize_mbus_data;
 #[cfg(feature = "std")]
 pub use output::{
-    decode_bytes, decode_data_records, decode_data_records_hex, decode_fragments, decode_hex,
-    decode_hex_bytes, render_bytes, render_hex, DecodeOptions, DecodedOutput, OutputError,
-    OutputFormat, RenderOptions,
+    decode_bytes, decode_data_records, decode_data_records_hex, decode_fragment_frames,
+    decode_fragments, decode_hex, decode_hex_bytes, render_bytes, render_hex, DecodeOptions,
+    DecodedOutput, OutputError, OutputFormat, RenderOptions,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]

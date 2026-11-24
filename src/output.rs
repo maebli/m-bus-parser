@@ -26,7 +26,7 @@ mod messages;
 mod profile;
 #[cfg(feature = "oms-gen3")]
 mod sml;
-pub use fragments::decode_fragments;
+pub use fragments::{decode_fragment_frames, decode_fragments, FragmentOutput};
 mod table_style;
 use table_style::{Cell, TableStyle};
 #[cfg(feature = "decryption-mode-13")]
@@ -530,6 +530,12 @@ fn decode_bytes_with_keys(
         return Err(OutputError::EmptyInput);
     }
 
+    if let Some(frame) = fragments::singleton_payload(data)? {
+        let mut decoded = decode_bytes_with_keys(frame, options, session, application_key)?;
+        decoded.raw.fragment_frames_hex.push(hex_string(data));
+        return Ok(decoded);
+    }
+
     let wired_error = match MbusData::<wired::WiredFrame>::try_from(data) {
         Ok(mut parsed) => {
             let mut decrypted_buffer = [0u8; 512];
@@ -639,9 +645,10 @@ pub fn render_bytes(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
+    let frame = fragments::singleton_payload(data)?.unwrap_or(data);
     match format {
         OutputFormat::Xml => {
-            crate::rscada_xml::render_from_bytes(data, options.decode.key.as_ref()).map_err(
+            crate::rscada_xml::render_from_bytes(frame, options.decode.key.as_ref()).map_err(
                 |message| OutputError::Rendering {
                     code: "xml.unsupported",
                     message,
@@ -649,10 +656,10 @@ pub fn render_bytes(
             )
         }
         OutputFormat::Annotated => {
-            crate::mbus_data::render_annotated_bytes(data, options.decode.key.as_ref())
+            crate::mbus_data::render_annotated_bytes(frame, options.decode.key.as_ref())
         }
         OutputFormat::AnnotatedText => {
-            crate::annotate::annotate_and_render(data).map_err(|error| OutputError::Rendering {
+            crate::annotate::annotate_and_render(frame).map_err(|error| OutputError::Rendering {
                 code: "annotation.failed",
                 message: error.to_string(),
             })
@@ -736,7 +743,7 @@ pub fn decode_hex_bytes(input: &str) -> Result<Vec<u8>, OutputError> {
     let mut token_start = 0usize;
     let mut saw_separator = true;
     for (index, character) in trimmed.char_indices() {
-        if character.is_ascii_whitespace() || matches!(character, ':' | '-') {
+        if character.is_ascii_whitespace() || matches!(character, ':' | '-' | ',') {
             if !token.is_empty() {
                 push_hex_token(&mut bytes, &token, token_start)?;
                 token.clear();
@@ -1235,7 +1242,19 @@ fn build_output(
     }
 
     let (meter, transport) = meter_and_transport(user_data, wireless_id);
-    let (record_outputs, record_error) = collect_records(records, meter.identity.as_ref());
+    let (record_outputs, record_error) = match user_data {
+        Some(user_data::UserDataBlock::FixedDataStructure {
+            device_type_and_unit,
+            status,
+            counter1,
+            counter2,
+            ..
+        }) => (
+            fixed_record_outputs(*device_type_and_unit, *status, counter1, counter2, payload),
+            None,
+        ),
+        _ => collect_records(records, meter.identity.as_ref()),
+    };
     if let Some((offset, message)) = record_error.as_ref() {
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
@@ -1435,12 +1454,13 @@ fn meter_and_transport(
             device_type_and_unit,
             ..
         }) => {
+            let [a, b] = device_type_and_unit.to_be_bytes();
             primary = Some(MeterIdentity {
                 source: "application.fixed".to_string(),
                 id: Some(identification_number.to_string()),
                 manufacturer_code: None,
                 version: None,
-                device_type: Some(format!("fixed type/unit 0x{device_type_and_unit:04X}")),
+                device_type: Some(crate::fixed::medium(a, b).into()),
                 device_type_code: None,
             });
             transport.header_kind = Some("fixed".to_string());
@@ -1576,6 +1596,52 @@ fn enrichment_for(code: &str) -> Option<EnrichmentOutput> {
         manufacturer_website: info.website.to_string(),
         manufacturer_description: info.description.to_string(),
     })
+}
+
+fn fixed_record_outputs(
+    types: u16,
+    status: user_data::StatusField,
+    counter1: &user_data::Counter,
+    counter2: &user_data::Counter,
+    payload: Option<&[u8]>,
+) -> Vec<RecordOutput> {
+    let readings = crate::fixed::readings(types, status.bits(), counter1, counter2);
+    let raw = payload.and_then(|bytes| bytes.last_chunk::<8>());
+    let binary = status.contains(user_data::StatusField::COUNTER_BINARY_SIGNED);
+    readings
+        .into_iter()
+        .enumerate()
+        .map(|(index, reading)| RecordOutput {
+            index,
+            function: if reading.stored {
+                "Stored value"
+            } else {
+                "Actual value"
+            }
+            .into(),
+            storage_number: u64::from(reading.stored),
+            tariff: 0,
+            subunit: 0,
+            quantities: vec![format!("Counter {}", index + 1)],
+            value: ValueOutput {
+                kind: "decimal".into(),
+                value: Some(reading.value.to_string().into()),
+            },
+            unit: Some(reading.unit.into()),
+            data_coding: if binary {
+                "32-bit integer"
+            } else {
+                "8-digit BCD"
+            }
+            .into(),
+            header_hex: format!("{:02X}", reading.unit_byte),
+            data_hex: raw
+                .and_then(|bytes| bytes.get(index * 4..index * 4 + 4))
+                .map(hex_string)
+                .unwrap_or_default(),
+            manufacturer_fields: Vec::new(),
+        })
+        .collect()
 }
 
 fn collect_records(
@@ -1901,6 +1967,9 @@ fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
     let scale = value_information.map(|value| value.decimal_scale_exponent);
     let offset = record_offset_power10(record);
 
+    let raw_value = record
+        .raw_bytes()
+        .get(record.data_record_header.get_size()..);
     match record.value() {
         Some(DataType::Number(number)) | Some(DataType::LossyNumber(number)) => {
             if information
@@ -1929,6 +1998,18 @@ fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
             kind: "text".to_string(),
             value: Some(serde_json::Value::String(text.to_string())),
         },
+        Some(DataType::Date(..)) if raw_value == Some(&[0, 0]) => ValueOutput {
+            kind: "date".into(),
+            value: Some(serde_json::Value::Null),
+        },
+        Some(DataType::DateTime(..))
+            if matches!(raw_value, Some([0, 0, 0, 0]) | Some([0x80..=0xff, _, _, _])) =>
+        {
+            ValueOutput {
+                kind: "datetime".into(),
+                value: Some(serde_json::Value::Null),
+            }
+        }
         Some(DataType::Date(day, month, year)) => {
             temporal_value("date", day, month, year, None, None, None)
         }
@@ -3081,7 +3162,7 @@ mod tests {
     #[test]
     fn strict_hex_rejects_odd_and_invalid_input() {
         assert!(decode_hex_bytes("123").is_err());
-        assert!(decode_hex_bytes("68,3D").is_err());
+        assert_eq!(decode_hex_bytes("68,3D").unwrap(), [0x68, 0x3d]);
         assert!(decode_hex_bytes("0x6").is_err());
     }
 
