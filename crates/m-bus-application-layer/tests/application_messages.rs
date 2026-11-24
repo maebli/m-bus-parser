@@ -229,9 +229,13 @@ fn clock_commands_decode_time_and_validate_control_and_verification() {
 #[test]
 fn variable_records_follow_the_transport_encryption_state() {
     for (ci, header_size) in [(0x7A, 4), (0x72, 12)] {
-        for (security_mode, encrypted) in [(0, false), (5, true)] {
+        // Configuration field LSB and MSB. Mode 5 with N = 0 sends no
+        // encrypted block.
+        for (configuration, encrypted) in
+            [([0x00, 0], false), ([0x10, 5], true), ([0x00, 5], false)]
+        {
             let mut bytes = telegram(ci, header_size, &[0x01, 0x13, 0x2A]);
-            bytes[header_size] = security_mode;
+            bytes[header_size - 1..=header_size].copy_from_slice(&configuration);
             let block = parse_application_layer(&bytes).unwrap();
             assert_eq!(block.is_encrypted(), Some(encrypted));
             assert_eq!(block.data_records().is_none(), encrypted);
