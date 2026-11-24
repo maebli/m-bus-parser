@@ -82,6 +82,34 @@ pub fn m_bus_decode(
     })
 }
 
+#[wasm_bindgen]
+pub fn m_bus_decode_fragments(
+    frames: Vec<String>,
+    key_hex: Option<String>,
+    include_enrichment: Option<bool>,
+) -> Result<JsValue, JsValue> {
+    let options = decode_options(key_hex.as_deref(), include_enrichment).map_err(error_to_js)?;
+    if !(2..=255).contains(&frames.len()) {
+        return Err(error_to_js(OutputError::Rendering {
+            code: "fragment.invalid",
+            message: "expected 2 to 255 ordered fragments".into(),
+        }));
+    }
+    let bytes = frames
+        .iter()
+        .map(|frame| decode_hex_bytes(frame))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(error_to_js)?;
+    let slices = bytes.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let decoded = m_bus_parser::decode_fragments(&slices, &options).map_err(error_to_js)?;
+    serde_wasm_bindgen::to_value(&decoded).map_err(|error| {
+        error_to_js(OutputError::Serialization {
+            format: "javascript",
+            message: error.to_string(),
+        })
+    })
+}
+
 /// Render with the shared Rust/Python/CLI output contract.
 #[wasm_bindgen]
 pub fn m_bus_render(

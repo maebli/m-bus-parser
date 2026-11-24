@@ -97,6 +97,38 @@ fn parse(
     json_to_python(py, &json)
 }
 
+#[pyfunction]
+#[pyo3(signature = (frames, *, key=None, include_enrichment=true))]
+fn parse_fragments(
+    py: Python<'_>,
+    frames: &Bound<'_, pyo3::types::PySequence>,
+    key: Option<&Bound<'_, PyAny>>,
+    include_enrichment: bool,
+) -> PyResult<Py<PyAny>> {
+    let count = frames.len()?;
+    if !(2..=255).contains(&count) {
+        return Err(binding_error(
+            "fragment.invalid",
+            "expected 2 to 255 ordered fragments",
+        ));
+    }
+    let data = (0..count)
+        .map(|index| extract_bytes(&frames.get_item(index)?, "frame"))
+        .collect::<PyResult<Vec<_>>>()?;
+    let slices = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let decoded = m_bus_parser::decode_fragments(
+        &slices,
+        &DecodeOptions {
+            key: extract_key(key)?,
+            include_enrichment,
+        },
+    )
+    .map_err(parser_error)?;
+    let json = serde_json::to_string(&decoded)
+        .map_err(|error| binding_error("render.serialization", error))?;
+    json_to_python(py, &json)
+}
+
 /// Parse application-layer data records into a native Python list.
 #[pyfunction]
 fn parse_records(py: Python<'_>, data: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
@@ -176,6 +208,7 @@ fn pymbusparser(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("MbusParserError", m.py().get_type::<MbusParserError>())?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_fragments, m)?)?;
     m.add_function(wrap_pyfunction!(parse_records, m)?)?;
     m.add_function(wrap_pyfunction!(render, m)?)?;
     m.add_function(wrap_pyfunction!(parse_application_layer, m)?)?;
@@ -185,6 +218,7 @@ fn pymbusparser(m: &Bound<'_, PyModule>) -> PyResult<()> {
         vec![
             "MbusParserError",
             "parse",
+            "parse_fragments",
             "parse_records",
             "render",
             "parse_application_layer",

@@ -52,6 +52,22 @@ unsafe fn input_bytes<'a>(
     Ok(unsafe { slice::from_raw_parts(data, length) })
 }
 
+unsafe fn parse_key(key: *const u8, length: usize) -> Result<Option<[u8; 16]>, OutputError> {
+    match length {
+        0 => Ok(None),
+        16 => {
+            let bytes = unsafe { input_bytes(key, length, "key")? };
+            let mut key = [0; 16];
+            key.copy_from_slice(bytes);
+            Ok(Some(key))
+        }
+        _ => Err(OutputError::InvalidOption {
+            option: "key",
+            message: "the key must contain exactly 16 bytes, or be omitted with length zero".into(),
+        }),
+    }
+}
+
 fn output_format(format: i32) -> Result<OutputFormat, OutputError> {
     match format {
         0 => Ok(OutputFormat::Json),
@@ -98,22 +114,8 @@ pub unsafe extern "C" fn mbus_render(
 ) -> *mut MbusResult {
     result_pointer(|| {
         let format = output_format(format)?;
-        if key_length != 0 && key_length != 16 {
-            return Err(OutputError::InvalidOption {
-                option: "key",
-                message: "the key must contain exactly 16 bytes, or be omitted with length zero"
-                    .to_owned(),
-            });
-        }
         let data = unsafe { input_bytes(data, data_length, "data")? };
-        let key_bytes = unsafe { input_bytes(key, key_length, "key")? };
-        let key = if key_bytes.is_empty() {
-            None
-        } else {
-            let mut key = [0; 16];
-            key.copy_from_slice(key_bytes);
-            Some(key)
-        };
+        let key = unsafe { parse_key(key, key_length)? };
         render_bytes(
             data,
             format,
@@ -125,6 +127,43 @@ pub unsafe extern "C" fn mbus_render(
                 ..RenderOptions::default()
             },
         )
+    })
+}
+
+#[repr(C)]
+pub struct MbusFrame {
+    pub data: *const u8,
+    pub length: usize,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn mbus_parse_fragments(
+    frames: *const MbusFrame,
+    count: usize,
+    key: *const u8,
+    key_length: usize,
+) -> *mut MbusResult {
+    result_pointer(|| {
+        if frames.is_null() || !(2..=255).contains(&count) {
+            return Err(OutputError::Rendering {
+                code: "fragment.invalid",
+                message: "expected 2 to 255 ordered fragments".into(),
+            });
+        }
+        let frames = unsafe { slice::from_raw_parts(frames, count) };
+        let inputs = frames
+            .iter()
+            .map(|f| unsafe { input_bytes(f.data, f.length, "frame") })
+            .collect::<Result<Vec<_>, _>>()?;
+        let options = DecodeOptions {
+            key: unsafe { parse_key(key, key_length)? },
+            ..DecodeOptions::default()
+        };
+        let decoded = m_bus_parser::decode_fragments(&inputs, &options)?;
+        serde_json::to_string(&decoded).map_err(|e| OutputError::Serialization {
+            format: "json",
+            message: e.to_string(),
+        })
     })
 }
 

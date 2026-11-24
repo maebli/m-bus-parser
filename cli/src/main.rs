@@ -35,6 +35,13 @@ struct Cli {
 enum Command {
     #[command(about = "List drivers provided by the installed wmbusmeters executable")]
     Drivers,
+    #[command(about = "Decode an ordered sequence of AFL fragments as JSON")]
+    ParseFragments {
+        #[arg(required = true, num_args = 2..)]
+        frames: Vec<String>,
+        #[arg(short, long)]
+        key: Option<String>,
+    },
     #[command(about = "Decode one frame as JSON using a local wmbusmeters driver")]
     Vendor {
         #[arg(
@@ -122,6 +129,25 @@ fn run() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
         Command::Drivers => vendor::list(),
+        Command::ParseFragments { frames, key } => {
+            let data = frames
+                .iter()
+                .map(|frame| m_bus_parser::decode_hex_bytes(frame))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            let frames = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+            let options = DecodeOptions {
+                key: key.as_deref().map(parse_key).transpose()?,
+                ..DecodeOptions::default()
+            };
+            let result = m_bus_parser::output::decode_fragments(&frames, &options)
+                .map_err(|e| e.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).map_err(|e| e.to_string())?
+            );
+            Ok(())
+        }
         Command::Vendor {
             data,
             file,
