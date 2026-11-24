@@ -276,6 +276,7 @@ fn date_time_coding(vif: u8, coding: DataFieldCoding) -> DataFieldCoding {
     match vif & 0x7F {
         0x6C => DataFieldCoding::DateTypeG,
         // VIF 6Dh with six data bytes is type I; four bytes is type F.
+        0x6D if coding == DataFieldCoding::VariableLength => coding,
         0x6D if coding == DataFieldCoding::Integer48Bit => DataFieldCoding::DateTimeTypeI,
         0x6D => DataFieldCoding::DateTimeTypeF,
         _ => coding,

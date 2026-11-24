@@ -231,6 +231,7 @@ fn variable_records_follow_the_transport_encryption_state() {
     for (ci, header_size) in [(0x7A, 4), (0x72, 12)] {
         for (security_mode, encrypted) in [(0, false), (5, true)] {
             let mut bytes = telegram(ci, header_size, &[0x01, 0x13, 0x2A]);
+            bytes[header_size - 1] = 0x10;
             bytes[header_size] = security_mode;
             let block = parse_application_layer(&bytes).unwrap();
             assert_eq!(block.is_encrypted(), Some(encrypted));

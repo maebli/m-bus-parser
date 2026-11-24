@@ -772,6 +772,14 @@ impl ConfigurationField {
         SecurityMode::from_bits(mode_bits)
     }
 
+    pub const fn is_encrypted(&self) -> bool {
+        match self.security_mode() {
+            SecurityMode::NoEncryption => false,
+            SecurityMode::AesCbc128IvNonZero => self.mode_specific_lower() >> 4 != 0,
+            _ => true,
+        }
+    }
+
     /// Get the lower mode-specific byte (bits 7-0)
     ///
     /// The meaning of these bits depends on the selected Security mode.

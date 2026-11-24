@@ -21,7 +21,12 @@ use crate::user_data::data_information::{
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
+mod fragments;
 mod messages;
+mod profile;
+#[cfg(feature = "oms-gen3")]
+mod sml;
+pub use fragments::decode_fragments;
 mod table_style;
 use table_style::{Cell, TableStyle};
 #[cfg(feature = "decryption-mode-13")]
@@ -423,6 +428,8 @@ pub struct ValueOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RawOutput {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub fragment_frames_hex: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input: Option<String>,
     pub original_frame_hex: String,
@@ -463,9 +470,21 @@ struct SecurityContext {
     key_supplied: bool,
     decrypted_payload: Option<Vec<u8>>,
     tls: Option<TlsOutput>,
+    application_mac_verified: bool,
 }
 
 impl SecurityContext {
+    fn verify_application(
+        mut self,
+        block: Option<&user_data::UserDataBlock<'_>>,
+        key: Option<&[u8; 16]>,
+    ) -> Result<Self, OutputError> {
+        if let Some(key) = key {
+            self.application_mac_verified = messages::verify_application(block, &self, key)?;
+        }
+        Ok(self)
+    }
+
     fn authenticated(&self) -> bool {
         self.decrypted
             && matches!(
@@ -489,13 +508,23 @@ pub fn decode_hex(input: &str, options: &DecodeOptions) -> Result<DecodedOutput,
 
 /// Decode an already materialized frame.
 pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
-    decode_bytes_with_session(data, options, None)
+    decode_bytes_with_keys(data, options, None, None)
 }
 
-fn decode_bytes_with_session(
+#[cfg(feature = "decryption-mode-7")]
+pub fn decode_bytes_with_application_key(
+    data: &[u8],
+    options: &DecodeOptions,
+    application_key: &[u8; 16],
+) -> Result<DecodedOutput, OutputError> {
+    decode_bytes_with_keys(data, options, None, Some(application_key))
+}
+
+fn decode_bytes_with_keys(
     data: &[u8],
     options: &DecodeOptions,
     session: Option<&TlsSession<'_>>,
+    application_key: Option<&[u8; 16]>,
 ) -> Result<DecodedOutput, OutputError> {
     if data.is_empty() {
         return Err(OutputError::EmptyInput);
@@ -510,7 +539,8 @@ fn decode_bytes_with_session(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?;
+            )?
+            .verify_application(parsed.user_data.as_ref(), application_key)?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -544,7 +574,8 @@ fn decode_bytes_with_session(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?;
+            )?
+            .verify_application(parsed.user_data.as_ref(), application_key)?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -781,6 +812,7 @@ fn prepare_security(
             key_supplied: key.is_some(),
             decrypted_payload: None,
             tls: None,
+            application_mac_verified: false,
         });
     }
     let Some(key) = key else {
@@ -792,6 +824,7 @@ fn prepare_security(
             key_supplied: false,
             decrypted_payload: None,
             tls: None,
+            application_mac_verified: false,
         });
     };
     if ell_encrypted && mode.is_none() {
@@ -834,6 +867,15 @@ fn prepare_security(
                 message: "decryption returned an invalid payload length".to_string(),
             })?
             .to_vec();
+        if cfg!(feature = "oms-gen2")
+            && mode == Some(SecurityMode::AesCbc128IvNonZero)
+            && !decrypted.starts_with(&[0x2f, 0x2f])
+        {
+            return Err(OutputError::Decryption {
+                code: "security.decryption_failed",
+                message: "Mode 5 decryption verification bytes do not match".into(),
+            });
+        }
         Ok(SecurityContext {
             encrypted,
             mode,
@@ -842,6 +884,7 @@ fn prepare_security(
             key_supplied: true,
             decrypted_payload: Some(decrypted),
             tls: None,
+            application_mac_verified: false,
         })
     }
 
@@ -874,11 +917,7 @@ fn security_fields(
                 .short_tpl_header
                 .configuration_field
                 .security_mode();
-            (
-                !matches!(mode, SecurityMode::NoEncryption),
-                Some(mode),
-                false,
-            )
+            (long_tpl_header.is_encrypted(), Some(mode), false)
         }
         Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
             extended_link_layer,
@@ -889,14 +928,10 @@ fn security_fields(
                 .as_ref()
                 .is_some_and(|ell| ell.encryption.is_some());
             let mode = short_tpl_header.configuration_field.security_mode();
-            if ell_encrypted && matches!(mode, SecurityMode::NoEncryption) {
+            if ell_encrypted && !short_tpl_header.is_encrypted() {
                 (true, None, true)
             } else {
-                (
-                    !matches!(mode, SecurityMode::NoEncryption),
-                    Some(mode),
-                    ell_encrypted,
-                )
+                (short_tpl_header.is_encrypted(), Some(mode), ell_encrypted)
             }
         }
         _ => (false, None, false),
@@ -1126,13 +1161,22 @@ fn build_output(
     security_context: SecurityContext,
     include_enrichment: bool,
 ) -> DecodedOutput {
+    let fragment = application_error.is_some() && payload.is_some_and(fragments::is_fragment);
     let mut diagnostics = Vec::new();
     if let Some(error) = application_error {
+        let (code, message) = if fragment {
+            (
+                "fragment.incomplete",
+                "Supply all fragments in order to decode this message".to_owned(),
+            )
+        } else {
+            ("application.partial", error.to_string())
+        };
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
-            code: "application.partial".to_string(),
+            code: code.into(),
             layer: "application".to_string(),
-            message: error.to_string(),
+            message,
             offset_start: None,
             offset_end: None,
         });
@@ -1161,6 +1205,8 @@ fn build_output(
             layer: "security".to_string(),
             message: if security_context.tls.is_some() {
                 "TLS payload was decrypted and its authentication tags were verified"
+            } else if security_context.mode == Some(SecurityMode::AesCbc128IvZero) {
+                "AES-CBC payload was decrypted and its AES-CMAC was verified"
             } else {
                 "AES-CCM payload was decrypted and its authentication tag was verified"
             }
@@ -1177,7 +1223,7 @@ fn build_output(
             offset_start: None,
             offset_end: None,
         });
-    } else if security_context.key_supplied {
+    } else if security_context.key_supplied && !fragment {
         diagnostics.push(Diagnostic {
             severity: "info".to_string(),
             code: "security.key_unused".to_string(),
@@ -1224,7 +1270,9 @@ fn build_output(
         .decrypted_payload
         .as_deref()
         .map(hex_string);
-    let decryption_state = if !security_context.encrypted {
+    let decryption_state = if fragment {
+        "awaiting_fragments"
+    } else if !security_context.encrypted {
         "not_applicable"
     } else if security_context.authenticated() {
         "decrypted_authenticated"
@@ -1237,7 +1285,7 @@ fn build_output(
     };
     let payload_protection = if security_context.encrypted {
         "encrypted"
-    } else if security_context.ell_encrypted {
+    } else if security_context.ell_encrypted || fragment {
         "unknown"
     } else {
         "cleartext"
@@ -1276,6 +1324,7 @@ fn build_output(
         },
         records: record_outputs,
         raw: RawOutput {
+            fragment_frames_hex: Vec::new(),
             input: None,
             original_frame_hex: hex_string(original),
             normalized_frame_hex: hex_string(normalized),
@@ -1370,6 +1419,14 @@ fn meter_and_transport(
                 });
                 transport.ell = Some(ell_output(ell));
             }
+        }
+        Some(UserDataBlock::ExtendedLinkLayerOnly(ell)) => {
+            transport.header_kind = Some("ell".to_string());
+            transport.access_numbers.push(SourcedU8 {
+                source: "ell".to_string(),
+                value: ell.access_number,
+            });
+            transport.ell = Some(ell_output(ell));
         }
         Some(UserDataBlock::FixedDataStructure {
             identification_number,
@@ -1530,6 +1587,8 @@ fn collect_records(
     };
     let mut output = Vec::new();
     let mut offset = 0usize;
+    let mut bases = Vec::new();
+    let mut first_error = None;
     for item in records.clone() {
         match item {
             Ok(record) => {
@@ -1548,13 +1607,33 @@ fn collect_records(
                         value: Some(value.to_string().into()),
                     };
                 }
+                match profile::decode(&record, &bases) {
+                    Ok(Some(value)) => parsed.value = value,
+                    Err(message) => {
+                        first_error.get_or_insert_with(|| (offset, message.into()));
+                        parsed.value = ValueOutput {
+                            kind: "compact_profile".into(),
+                            value: None,
+                        };
+                    }
+                    Ok(None) => {}
+                }
+                if matches!(
+                    record.value(),
+                    Some(DataType::Number(_) | DataType::LossyNumber(_))
+                ) {
+                    bases.push(record.raw_bytes);
+                }
                 output.push(parsed);
                 offset += size;
             }
-            Err(error) => return (output, Some((offset, error.to_string()))),
+            Err(error) => {
+                first_error.get_or_insert_with(|| (offset, error.to_string()));
+                break;
+            }
         }
     }
-    (output, None)
+    (output, first_error)
 }
 
 fn multical_energy_register(identity: &MeterIdentity, raw: &[u8]) -> Option<(&'static str, u32)> {
@@ -1814,6 +1893,9 @@ fn standardized_word(word: &str, first: bool) -> String {
 }
 
 fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
+    if let Some(time) = profile::time_point(record) {
+        return time;
+    }
     let information = record.data_information();
     let value_information = record.value_information();
     let scale = value_information.map(|value| value.decimal_scale_exponent);

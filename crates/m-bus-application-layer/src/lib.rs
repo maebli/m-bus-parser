@@ -263,7 +263,9 @@ impl From<ControlInformation> for Direction {
             ControlInformation::ApplicationLayerFormatFrameShortTransport => Self::MasterToSlave,
             ControlInformation::ApplicationLayerFormatFrameLongTransport => Self::MasterToSlave,
             ControlInformation::ClockSyncAbsolute => Self::MasterToSlave,
-            ControlInformation::ClockSyncRelative => Self::MasterToSlave,
+            ControlInformation::ClockSyncRelative
+            | ControlInformation::SecurityTransferCommandLong => Self::MasterToSlave,
+            ControlInformation::SecurityTransferResponseShort => Self::SlaveToMaster,
             ControlInformation::ApplicationErrorShortTransport => Self::SlaveToMaster,
             ControlInformation::ApplicationErrorLongTransport => Self::SlaveToMaster,
             ControlInformation::AlarmShortTransport => Self::SlaveToMaster,
@@ -355,6 +357,8 @@ pub enum ControlInformation {
     ExtendedLinkLayerII,
     ExtendedLinkLayerIII,
     RequestSelectedApplication,
+    SecurityTransferCommandLong,
+    SecurityTransferResponseShort,
 }
 
 impl ControlInformation {
@@ -376,6 +380,8 @@ impl ControlInformation {
             0x6B => Ok(Self::ApplicationLayerFormatFrameLongTransport),
             0x6C => Ok(Self::ClockSyncAbsolute),
             0x6D => Ok(Self::ClockSyncRelative),
+            0xC3 => Ok(Self::SecurityTransferCommandLong),
+            0xC4 => Ok(Self::SecurityTransferResponseShort),
             0x6E => Ok(Self::ApplicationErrorShortTransport),
             0x6F => Ok(Self::ApplicationErrorLongTransport),
             0x70 => Ok(Self::SendErrorStatus),
@@ -453,12 +459,14 @@ pub enum ApplicationResetSubcode {
     Development(u8),
     Selftest(u8),
     Reserved2(u8),
+    Unspecified,
 }
 
 #[cfg(feature = "std")]
 impl fmt::Display for ApplicationResetSubcode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let subcode = match self {
+            Self::Unspecified => "Unspecified",
             Self::All(_) => "All",
             Self::UserData(_) => "User data",
             Self::SimpleBilling(_) => "Simple billing",
@@ -591,6 +599,7 @@ pub enum UserDataBlock<'a> {
         secondary_address: SecondaryAddressMask,
     },
     ApplicationMessage(ApplicationMessage<'a>),
+    ExtendedLinkLayerOnly(ExtendedLinkLayer),
 }
 
 impl<'a> UserDataBlock<'a> {
@@ -905,11 +914,7 @@ pub struct ShortTplHeader {
 impl LongTplHeader {
     #[must_use]
     pub fn is_encrypted(&self) -> bool {
-        use m_bus_core::SecurityMode;
-        !matches!(
-            self.short_tpl_header.configuration_field.security_mode(),
-            SecurityMode::NoEncryption
-        )
+        self.short_tpl_header.is_encrypted()
     }
 }
 
@@ -965,11 +970,7 @@ impl ShortTplHeader {
 
     #[must_use]
     pub fn is_encrypted(&self) -> bool {
-        use m_bus_core::SecurityMode;
-        !matches!(
-            self.configuration_field.security_mode(),
-            SecurityMode::NoEncryption
-        )
+        self.configuration_field.is_encrypted()
     }
 
     #[cfg(feature = "decryption-api")]
@@ -1020,6 +1021,27 @@ impl ShortTplHeader {
             }
             .decrypt_into(provider, output);
         }
+        #[cfg(feature = "decryption-mode-5")]
+        if context.security_mode == m_bus_core::SecurityMode::AesCbc128IvNonZero {
+            use crate::decryption::DecryptionError::InvalidDataLength;
+            let blocks = self.configuration_field.mode_specific_lower() >> 4;
+            let encrypted_len = if blocks == 15 {
+                data.len()
+            } else {
+                usize::from(blocks) * 16
+            };
+            if encrypted_len % 16 != 0 {
+                return Err(InvalidDataLength);
+            }
+            let (ciphertext, plaintext) = data
+                .split_at_checked(encrypted_len)
+                .ok_or(InvalidDataLength)?;
+            let target = output.get_mut(..data.len()).ok_or(InvalidDataLength)?;
+            let (encrypted_target, plaintext_target) = target.split_at_mut(encrypted_len);
+            EncryptedPayload::new(ciphertext, context).decrypt_into(provider, encrypted_target)?;
+            plaintext_target.copy_from_slice(plaintext);
+            return Ok(data.len());
+        }
         EncryptedPayload::new(data, context).decrypt_into(provider, output)
     }
 }
@@ -1041,9 +1063,11 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
-                let subcode = ApplicationResetSubcode::from(
-                    *data.get(1).ok_or(ApplicationLayerError::InsufficientData)?,
-                );
+                let subcode = match data.get(1) {
+                    Some(&value) => ApplicationResetSubcode::from(value),
+                    None if cfg!(feature = "oms-gen2") => ApplicationResetSubcode::Unspecified,
+                    None => return Err(ApplicationLayerError::InsufficientData),
+                };
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
             ControlInformation::SelectSlave => {
@@ -1226,6 +1250,8 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             | ControlInformation::ApplicationLayerFormatFrameNoTransport
             | ControlInformation::ApplicationLayerFormatFrameShortTransport
             | ControlInformation::ApplicationLayerFormatFrameLongTransport
+            | ControlInformation::SecurityTransferCommandLong
+            | ControlInformation::SecurityTransferResponseShort
             | ControlInformation::ClockSyncAbsolute
             | ControlInformation::ClockSyncRelative
             | ControlInformation::ApplicationErrorShortTransport
