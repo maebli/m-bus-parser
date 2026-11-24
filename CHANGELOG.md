@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Monthly inverse compact profiles with signed BCD differences now show the
+  historical readings when the telegram includes the matching base reading.
+  The ZENNER water-meter example contains 14 monthly readings.
+
 ## [0.5.2] - 2026-09-23
 
 ### Changed
