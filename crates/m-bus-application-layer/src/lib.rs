@@ -1020,6 +1020,30 @@ impl ShortTplHeader {
             }
             .decrypt_into(provider, output);
         }
+
+        #[cfg(feature = "decryption-mode-5")]
+        if context.security_mode == m_bus_core::SecurityMode::AesCbc128IvNonZero {
+            use crate::decryption::DecryptionError;
+
+            // Bits 7-4 of the configuration field give the number of encrypted
+            // 16-byte blocks. Anything after them is sent in plaintext.
+            let blocks = usize::from(self.configuration_field.mode_specific_lower() >> 4);
+            let (encrypted, plaintext) = data
+                .split_at_checked(blocks * 16)
+                .ok_or(DecryptionError::InvalidDataLength)?;
+            let decrypted_len = if encrypted.is_empty() {
+                0
+            } else {
+                EncryptedPayload::new(encrypted, context).decrypt_into(provider, output)?
+            };
+            let len = decrypted_len + plaintext.len();
+            output
+                .get_mut(decrypted_len..len)
+                .ok_or(DecryptionError::InvalidDataLength)?
+                .copy_from_slice(plaintext);
+            return Ok(len);
+        }
+
         EncryptedPayload::new(data, context).decrypt_into(provider, output)
     }
 }

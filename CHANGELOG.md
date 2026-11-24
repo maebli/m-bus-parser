@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Mode 5 payloads now decrypt only the number of 16-byte blocks given in bits
+  4 to 7 of the configuration field. The rest of the payload is plaintext and
+  is passed through unchanged. Before, every full block was decrypted, so a
+  plaintext tail of 16 bytes or more came out as garbage (OMS Vol. 2 Annex N,
+  N.6.3 shows such a partially encrypted frame). A block count larger than the
+  payload is now rejected.
+
 ## [0.5.2] - 2026-09-23
 
 ### Changed
