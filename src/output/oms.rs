@@ -1,7 +1,18 @@
 use super::{ConfigurationField, DecodedOutput, Link, OmsReport, OutputError};
 use crate::rscada_xml::xml_encode;
-use m_bus_oms_rules::sequence::{AccessObservation, ExchangeFrame};
+use m_bus_oms_rules::sequence::{AccessObservation, ExchangeFrame, KeyInformationHistory};
 use std::fmt::Write;
+
+pub use m_bus_oms_rules::layers::OmsRadioMode;
+pub use m_bus_oms_rules::readings::Taf7Parameters;
+
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct OmsCaptureOptions {
+    pub consecutive: bool,
+    pub radio_mode: Option<OmsRadioMode>,
+    pub taf7: Option<Taf7Parameters>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OmsFormat {
@@ -26,7 +37,8 @@ pub(super) fn encrypted_record_prefix(
     security: &super::SecurityContext,
 ) -> Option<usize> {
     if !security.encrypted {
-        return (frame.kind == "wireless" && !security.ell_encrypted).then_some(0);
+        return (matches!(frame.kind.as_str(), "wireless" | "lpwan") && !security.ell_encrypted)
+            .then_some(0);
     }
     let plain_len = security.decrypted_payload.as_ref()?.len();
     let (header, data) = block?.transport_payload()?;
@@ -55,6 +67,15 @@ pub(super) fn access_observation(
 ) -> Option<AccessObservation> {
     if !matches!(link, Link::Wireless(0x44 | 0x46..=0x48)) {
         return None;
+    }
+    if let Some(mac) = &frame.lpwan {
+        let llc = mac.llc.as_ref()?;
+        return Some(AccessObservation {
+            sender: llc.sender?,
+            synchronous: Some(llc.flags & 0x40 != 0),
+            repeated: false,
+            number: llc.access_number,
+        });
     }
     let address = frame.raw.normalized_frame_hex.get(4..20)?;
     let sender = super::decode_hex_bytes(address).ok()?.try_into().ok()?;
@@ -134,6 +155,33 @@ fn exchange_frame(frame: &DecodedOutput) -> Option<ExchangeFrame> {
             .iter()
             .find(|field| matches!(field.source.as_str(), "tpl" | "tpl.short" | "tpl.long"))
             .and_then(|s| u8::from_str_radix(&s.raw, 16).ok()),
+        security_mode: frame.security.mode_code,
+        key_information_present: if frame.security.mode_code == Some(10) {
+            frame
+                .transport
+                .configuration_extension
+                .map(|ext| ext & 0x40 != 0)
+        } else {
+            frame
+                .transport
+                .header_kind
+                .as_ref()
+                .map(|_| frame.transport.afl_key_information.is_some())
+        },
+        key_id: frame.security.key_id,
+        key_version: frame.security.key_version,
+        security_counter: frame.security.message_counter,
+        verified_encryption: frame.security.decryption_state == "decrypted_authenticated"
+            && frame
+                .transport
+                .configuration
+                .as_ref()
+                .and_then(|c| u16::from_str_radix(&c.raw, 16).ok())
+                .is_some_and(|cf| match frame.security.mode_code {
+                    Some(7) => cf & 0xf0 != 0,
+                    Some(10) => cf & 0xff != 0,
+                    _ => false,
+                }),
         fragmented: matches!(
             frame.record_availability,
             super::RecordAvailability::Fragmented
@@ -154,6 +202,24 @@ pub fn render_oms_capture(
     selected: Option<usize>,
     consecutive: bool,
 ) -> Result<String, OutputError> {
+    render_oms_capture_with_options(
+        frames,
+        format,
+        selected,
+        OmsCaptureOptions {
+            consecutive,
+            ..Default::default()
+        },
+    )
+}
+
+pub fn render_oms_capture_with_options(
+    frames: &[DecodedOutput],
+    format: OmsFormat,
+    selected: Option<usize>,
+    options: OmsCaptureOptions,
+) -> Result<String, OutputError> {
+    let consecutive = options.consecutive;
     if selected.is_some_and(|index| index >= frames.len()) {
         return Err(OutputError::InvalidOption {
             option: "telegram",
@@ -163,11 +229,22 @@ pub fn render_oms_capture(
     let mut history = Default::default();
     let mut reports = Vec::new();
     let mut previous: Option<ExchangeFrame> = None;
+    let mut lpwan = m_bus_oms_rules::lpwan::LpwanHistory::default();
+    let mut key_information = KeyInformationHistory::default();
     for (index, frame) in frames.iter().enumerate() {
-        let mut report = frame.assess_oms_with_history(&mut history, consecutive);
+        let mut report = frame.assess_oms_with_history(&mut history, options);
+        if let Some(mac) = &frame.lpwan {
+            lpwan.observe(mac, consecutive, &mut report);
+        }
         let current = exchange_frame(frame);
         if let (Some(request), Some(reply)) = (previous, current) {
             request.check_reply(reply, consecutive, &mut report);
+        }
+        if let Some(frame) = current {
+            if options.radio_mode.is_some_and(OmsRadioMode::is_c) {
+                key_information.check_mode_c_ell(frame, &mut report);
+            }
+            key_information.observe(frame, consecutive, &mut report);
         }
         previous = current;
         if selected.is_none_or(|selected| selected == index) {

@@ -84,15 +84,149 @@ pub struct ExchangeFrame {
     pub transport_access: Option<u8>,
     pub transport_status: Option<u8>,
     pub fragmented: bool,
+    pub security_mode: Option<u8>,
+    pub key_information_present: Option<bool>,
+    pub security_counter: Option<u32>,
+    pub key_id: Option<u8>,
+    pub key_version: Option<u8>,
+    pub verified_encryption: bool,
+}
+
+#[derive(Default)]
+pub struct KeyInformationHistory {
+    requests: BTreeMap<[u8; 8], bool>,
+    first_ell: BTreeMap<[u8; 8], bool>,
+}
+
+impl KeyInformationHistory {
+    pub fn check_mode_c_ell(
+        &mut self,
+        current: ExchangeFrame,
+        report: &mut crate::telegram::TelegramReport,
+    ) {
+        if !matches!(current.function, 0x44 | 0x46 | 0x47) {
+            return;
+        }
+        let present = current.link_access.is_some();
+        if let Some(first) = self.first_ell.get(&current.sender) {
+            report.push(RuleFinding {
+                rule: "Consistent Mode C ELL usage",
+                reference: "§5.2.2.2.4",
+                source_url: primary!(51, 549),
+                status: if *first == present { RuleStatus::Passed } else { RuleStatus::Failed },
+                detail: "An end device must use the ELL consistently across its SND-NR, SND-IR and ACC-NR transmissions.",
+                record_number: None,
+            });
+        } else {
+            self.first_ell.insert(current.sender, present);
+        }
+    }
+
+    pub fn observe(
+        &mut self,
+        current: ExchangeFrame,
+        consecutive: bool,
+        report: &mut crate::telegram::TelegramReport,
+    ) {
+        if matches!(current.function, 0x43 | 0x53 | 0x73) {
+            if current.fragmented {
+                self.requests.clear();
+            } else if let Some(address) = current.receiver {
+                if let Some(present) = current.key_information_present {
+                    self.requests.insert(address, present);
+                } else {
+                    self.requests.remove(&address);
+                }
+            } else {
+                self.requests.clear();
+            }
+            return;
+        }
+        if !matches!(current.function, 0x08 | 0x18 | 0x28 | 0x38) || current.fragmented {
+            return;
+        }
+        let requested = self.requests.get(&current.sender).copied();
+        let mode_d = current.security_mode == Some(10);
+        if !mode_d && requested != Some(true) {
+            return;
+        }
+        let consistent = requested
+            .zip(current.key_information_present)
+            .map(|(a, b)| a == b);
+        report.push(RuleFinding {
+            rule: "Response key information flag",
+            reference: "§6.2.2, §7.2.4.5",
+            source_url: if mode_d { primary!(65, 471) } else { primary!(56, 477) },
+            status: match consistent {
+                Some(true) if consecutive => RuleStatus::Passed,
+                Some(false) if consecutive => RuleStatus::Failed,
+                _ => RuleStatus::CouldNotCheck,
+            },
+            detail: "The last addressed SND-UD or SND-UD2 sets the response key-information flag. Mode 10 uses the transport key-version flag.",
+            record_number: None,
+        });
+    }
 }
 
 impl ExchangeFrame {
+    fn check_security_counter(
+        self,
+        next: Self,
+        consecutive: bool,
+        report: &mut crate::telegram::TelegramReport,
+    ) {
+        if self.sender != next.sender
+            || self.key_id != Some(0)
+            || next.key_id != self.key_id
+            || self.key_version != next.key_version
+            || !self.verified_encryption
+            || !next.verified_encryption
+            || self
+                .transport_access
+                .zip(next.transport_access)
+                .is_none_or(|(a, b)| a == b)
+            || self.fragmented
+            || next.fragmented
+        {
+            return;
+        }
+        let meter = matches!(self.function, 0x44 | 0x46) && matches!(next.function, 0x44 | 0x46);
+        let gateway = matches!(self.function, 0x43 | 0x53 | 0x73)
+            && matches!(next.function, 0x43 | 0x53 | 0x73)
+            && self.receiver.is_some()
+            && self.receiver == next.receiver;
+        if !meter && !gateway {
+            return;
+        }
+        let Some((prior, current)) = self.security_counter.zip(next.security_counter) else {
+            return;
+        };
+        let delta = current.checked_sub(prior);
+        let valid = if meter {
+            delta == Some(1)
+        } else {
+            delta.is_some_and(|d| (1..=100).contains(&d))
+        };
+        report.push(RuleFinding {
+            rule: "Authenticated message counter progression",
+            reference: if meter { "§9.3.2.2" } else { "§9.3.2.4" },
+            source_url: if meter { primary!(89, 690) } else { primary!(91, 314) },
+            status: if !consecutive || (!valid && self.key_version.is_none() && current <= prior) {
+                RuleStatus::CouldNotCheck
+            } else if valid { RuleStatus::Passed } else { RuleStatus::Failed },
+            detail: if meter { "Consecutive authenticated and encrypted end-device transmissions increment the counter by one." }
+                else { "Consecutive authenticated and encrypted commands for the same end device increment the gateway counter by one to 100." },
+            record_number: None,
+        });
+    }
+
     pub fn check_reply(
         self,
         reply: Self,
         consecutive: bool,
         report: &mut crate::telegram::TelegramReport,
     ) {
+        self.check_security_counter(reply, consecutive, report);
         let ack = matches!(reply.function, 0x00 | 0x10 | 0x20 | 0x30);
         let nack = matches!(reply.function, 0x01 | 0x11 | 0x21 | 0x31);
         let response = matches!(reply.function, 0x08 | 0x18 | 0x28 | 0x38);
@@ -159,6 +293,15 @@ impl ExchangeFrame {
         }
         if self.fragmented || reply.fragmented {
             return;
+        }
+        if matches!(self.function, 0x53 | 0x73) && ack {
+            check(
+                "Acknowledgement transport header",
+                "§7.3, Table 28",
+                primary!(68, 111),
+                Some(reply.transport_access.is_some()),
+                "The ACK to an unfragmented wireless SND-UD requires a transport header.",
+            );
         }
         if matches!(self.function, 0x5b | 0x7b) && response
             || matches!(self.function, 0x53 | 0x73) && ack

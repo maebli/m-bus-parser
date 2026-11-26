@@ -1,4 +1,6 @@
+mod capture;
 use super::*;
+pub use capture::render_capture_hex_with_tls_session;
 use m_bus_core::decryption::mode13::{Mode13Error, TlsContentType, TlsDirection};
 
 pub fn decode_hex_with_tls_session(
@@ -70,6 +72,10 @@ pub(super) fn prepare_mode13(
         records: payload
             .records()
             .map(|record| TlsRecordOutput {
+                client_hello: record.content_type == TlsContentType::Handshake
+                    && matches!(record.payload, [1, high, mid, low, 3, 3, ..] if
+                        record.payload.len() >= 45 && (u32::from_be_bytes([0, *high, *mid, *low]) as usize + 4) <= record.payload.len()
+                        && u32::from_be_bytes([0, *high, *mid, *low]) >= 41),
                 content_type: match record.content_type {
                     TlsContentType::ChannelRequest => "channel_request",
                     TlsContentType::ChangeCipherSpec => "change_cipher_spec",

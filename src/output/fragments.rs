@@ -4,6 +4,7 @@ use super::*;
 enum Link {
     Wired(wired::Address),
     Wireless(wireless::ManufacturerId, Option<[u8; 8]>),
+    Lpwan(wireless::ManufacturerId, Option<[u8; 8]>),
 }
 
 fn invalid(message: &str) -> OutputError {
@@ -51,6 +52,25 @@ fn link_payload<'a>(
     }) = wired::WiredFrame::try_from(frame)
     {
         (Link::Wired(address), Some(function), data)
+    } else if m_bus_oms_rules::lpwan::has_mac_crc(frame) {
+        let (header, data) = m_bus_oms_rules::lpwan::LpwanHeader::parse(frame).map_err(invalid)?;
+        let down = header.downlink();
+        let llc = header
+            .llc
+            .ok_or_else(|| invalid("missing LPWAN fragment LLC"))?;
+        let (meter, peer) = if down {
+            (llc.receiver, llc.sender)
+        } else {
+            (llc.sender, llc.receiver)
+        };
+        let meter = meter
+            .and_then(super::lpwan::manufacturer_id)
+            .ok_or_else(|| invalid("missing LPWAN fragment origin"))?;
+        (
+            Link::Lpwan(meter, peer),
+            llc.control.and_then(|c| Function::try_from(c).ok()),
+            data,
+        )
     } else {
         let bytes = wireless::strip_format_a_crcs(frame, scratch).unwrap_or(frame);
         let frame = wireless::WirelessFrame::try_from(bytes)
@@ -230,7 +250,7 @@ fn afl_frame(frame: &[u8]) -> bool {
 fn complete_wireless_frame(packet: &[u8]) -> bool {
     let mut scratch = [0; 290];
     let frame = wireless::strip_format_a_crcs(packet, &mut scratch).unwrap_or(packet);
-    wireless::WirelessFrame::try_from(frame).is_ok()
+    wireless::WirelessFrame::try_from(frame).is_ok() || m_bus_oms_rules::lpwan::has_mac_crc(packet)
 }
 
 pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputError> {
@@ -300,6 +320,9 @@ pub(super) fn detect_bytes(
     data: &[u8],
     options: &DecodeOptions,
 ) -> Result<Option<FragmentOutput>, OutputError> {
+    if m_bus_oms_rules::lpwan::has_mac_crc(data) {
+        return Ok(None);
+    }
     if let [1, 1, payload @ ..] = data {
         let payload = acrios_meter_data(payload);
         if wired_frame_size(payload).is_some() {
@@ -528,6 +551,7 @@ fn decode_afl_fragments(
     }
     let (protocol, wireless_id, address) = match origin {
         Some((Link::Wireless(ref id, _), _)) => ("wireless", Some(id), None),
+        Some((Link::Lpwan(ref id, _), _)) => ("oms_lpwan", Some(id), None),
         Some((Link::Wired(ref address), _)) => ("wired", None, Some(address.to_string())),
         None => return Err(invalid("missing fragment origin")),
     };

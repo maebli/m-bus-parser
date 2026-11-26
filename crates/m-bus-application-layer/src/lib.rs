@@ -272,6 +272,7 @@ impl From<ControlInformation> for Direction {
             ControlInformation::SecurityTransferResponseShort => Self::SlaveToMaster,
             ControlInformation::ApplicationErrorShortTransport => Self::SlaveToMaster,
             ControlInformation::ApplicationErrorLongTransport => Self::SlaveToMaster,
+            ControlInformation::OmsApplication { direction, .. } => direction,
             ControlInformation::AlarmShortTransport => Self::SlaveToMaster,
             ControlInformation::AlarmLongTransport => Self::SlaveToMaster,
             ControlInformation::ApplicationLayerNoTransport => Self::SlaveToMaster,
@@ -322,7 +323,9 @@ pub enum ControlInformation {
     HashProcedure(u8),
     SendErrorStatus,
     SendAlarmStatus,
-    ResponseWithVariableDataStructure { lsb_order: bool },
+    ResponseWithVariableDataStructure {
+        lsb_order: bool,
+    },
     ResponseWithFixedDataStructure,
     // Wireless M-Bus CI values
     DataSentWithShortTransportLayer,
@@ -363,11 +366,46 @@ pub enum ControlInformation {
     RequestSelectedApplication,
     SecurityTransferCommandLong,
     SecurityTransferResponseShort,
+    OmsApplication {
+        protocol: ApplicationProtocol,
+        direction: Direction,
+        header_size: u8,
+    },
 }
 
 impl ControlInformation {
-    const fn from(byte: u8) -> Result<Self, ApplicationLayerError> {
+    fn from(byte: u8) -> Result<Self, ApplicationLayerError> {
+        use ApplicationProtocol as P;
+        use Direction::{MasterToSlave, SlaveToMaster};
+        let oms = |protocol, direction, header_size| {
+            Ok(Self::OmsApplication {
+                protocol,
+                direction,
+                header_size,
+            })
+        };
         match byte {
+            0x53 => oms(P::ApplicationResetOrSelect, MasterToSlave, 12),
+            0x55 => oms(P::RequestSelectedApplication, MasterToSlave, 12),
+            0x56 => oms(P::RequestSelectedApplication, MasterToSlave, 4),
+            0x57 => oms(P::ApplicationResetOrSelect, MasterToSlave, 4),
+            0x5F => oms(P::TlsHandshake, MasterToSlave, 12),
+            0x62 => oms(P::ClockSet, MasterToSlave, 4),
+            0x66 => oms(P::SelectedApplication, SlaveToMaster, 0),
+            0x67 => oms(P::SelectedApplication, SlaveToMaster, 4),
+            0x68 => oms(P::SelectedApplication, SlaveToMaster, 12),
+            0x87 => oms(P::NetworkManagement, SlaveToMaster, 12),
+            0x88 => oms(P::NetworkManagement, SlaveToMaster, 4),
+            0x92 if cfg!(feature = "oms-gen5") => oms(P::NetworkManagement, MasterToSlave, 4),
+            0x93 if cfg!(feature = "oms-gen5") => oms(P::TransportOnly, MasterToSlave, 4),
+            0x9E => oms(P::TlsHandshake, SlaveToMaster, 4),
+            0x9F => oms(P::TlsHandshake, SlaveToMaster, 12),
+            0xC0 => oms(P::ImageTransfer, MasterToSlave, 12),
+            0xC1 => oms(P::ImageTransfer, SlaveToMaster, 4),
+            0xC2 => oms(P::ImageTransfer, SlaveToMaster, 12),
+            0xC5 => oms(P::SecurityTransfer, SlaveToMaster, 12),
+            0xC6 => oms(P::SecurityTransfer, MasterToSlave, 4),
+            0xC7 => oms(P::ImageTransfer, MasterToSlave, 4),
             0x50 => Ok(Self::ResetAtApplicationLevel),
             0x51 => Ok(Self::SendData),
             0x52 => Ok(Self::SelectSlave),
@@ -641,7 +679,7 @@ impl<'a> UserDataBlock<'a> {
             _ => {
                 return Err(ApplicationLayerError::InvalidPayload {
                     field: "authenticated transport",
-                })
+                });
             }
         }
         Ok(block)
@@ -1069,7 +1107,12 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
         let control_information_byte = *data
             .first()
             .ok_or(ApplicationLayerError::InsufficientData)?;
-        let control_information = ControlInformation::from(control_information_byte)?;
+        let control_information =
+            if matches!(control_information_byte, 0x92 | 0x93) && data.len() < 5 {
+                ControlInformation::HashProcedure(control_information_byte - 0x90)
+            } else {
+                ControlInformation::from(control_information_byte)?
+            };
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
@@ -1273,6 +1316,7 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             | ControlInformation::ClockSyncRelative
             | ControlInformation::ApplicationErrorShortTransport
             | ControlInformation::ApplicationErrorLongTransport
+            | ControlInformation::OmsApplication { .. }
             | ControlInformation::AlarmShortTransport
             | ControlInformation::AlarmLongTransport
             | ControlInformation::ApplicationLayerCompactFrameNoTransport

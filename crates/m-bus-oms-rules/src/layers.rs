@@ -1,7 +1,29 @@
+#[path = "layer_security.rs"]
+mod security;
+
 use alloc::vec::Vec;
 use m_bus_core::{ConfigurationField, Function};
 
 use crate::telegram::{Link, RuleFinding, RuleStatus};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize),
+    serde(rename_all = "lowercase")
+)]
+pub enum OmsRadioMode {
+    C,
+    C1,
+    C2,
+    Other,
+}
+
+impl OmsRadioMode {
+    pub fn is_c(self) -> bool {
+        matches!(self, Self::C | Self::C1 | Self::C2)
+    }
+}
 
 #[derive(Clone, Copy, Default)]
 pub struct LayerFields {
@@ -21,6 +43,22 @@ pub struct LayerFields {
     pub authentication_type: Option<u8>,
     pub message_length: Option<u16>,
     pub reassembled: bool,
+    pub lpwan_sync: Option<bool>,
+    pub radio_mode: Option<OmsRadioMode>,
+    pub ell_encryption_mode: Option<u8>,
+    pub security_counter: Option<u32>,
+    pub transport_body_length: Option<usize>,
+    pub tls: Option<TlsFields>,
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct TlsFields {
+    pub channel_request: bool,
+    pub handshake_or_alert: bool,
+    pub application: bool,
+    pub alert: bool,
+    pub clear_alert: bool,
+    pub client_hello: bool,
 }
 
 fn finding(
@@ -77,7 +115,7 @@ impl LayerFields {
         self.application_ci.or(self.outer_ci).and_then(uplink_ci) != Some(false)
     }
 
-    fn content_index(self, cf: ConfigurationField) -> Option<u8> {
+    pub(super) fn content_index(self, cf: ConfigurationField) -> Option<u8> {
         match cf.security_mode().to_bits() {
             7 => Some(cf.mode_specific_lower() & 7),
             10 => self
@@ -94,8 +132,8 @@ impl LayerFields {
         let cf = cf?;
         let mode = cf.security_mode().to_bits();
         let synchronous = self
-            .communication_control
-            .map(|cc| cc & 0x20 != 0)
+            .lpwan_sync
+            .or_else(|| self.communication_control.map(|cc| cc & 0x20 != 0))
             .or_else(|| (mode == 5).then_some(cf.raw() & 0x2000 != 0));
         match mode {
             5 if cf.mode_specific_lower() & 12 == 0 => synchronous,
@@ -108,6 +146,58 @@ impl LayerFields {
         }
     }
 
+    fn check_radio(
+        self,
+        link: Link,
+        configuration: Option<ConfigurationField>,
+        results: &mut Vec<RuleFinding>,
+    ) {
+        if let Some(mode) = self.ell_encryption_mode {
+            results.push(finding(
+                "Wireless link-layer encryption",
+                ("§5.2.1", primary!(49, 296)),
+                Some(mode == 0),
+                "OMS wireless M-Bus prohibits ELL encryption.",
+            ));
+        }
+        if let Some(cc) = self.communication_control {
+            results.push(finding("Original ELL transmission flags", ("§5.2.2.2.3", primary!(51, 455)),
+                (cc & 0x10 == 0 && (!matches!(link, Link::Wireless(0x44 | 0x46..=0x48 | 8 | 0x18 | 0x28 | 0x38)) || cc & 2 == 0)).then_some(true),
+                "An original transmission clears the hop bit and an originating end device clears the repeated-access bit. A marked capture may come from a repeater."));
+        }
+        if !self.radio_mode.is_some_and(OmsRadioMode::is_c) {
+            return;
+        }
+        let ell = self.communication_control.is_some();
+        let legacy = matches!(link, Link::Wireless(0x44 | 0x46 | 0x47))
+            && configuration.is_some_and(|cf| matches!(cf.security_mode().to_bits(), 0 | 5));
+        let permitted = match (ell, legacy, self.radio_mode) {
+            (true, _, _) | (false, true, Some(OmsRadioMode::C1)) => Some(true),
+            (false, true, Some(OmsRadioMode::C)) => None,
+            _ => Some(false),
+        };
+        results.push(finding("Mode C extended link layer", ("§5.2.2.2.4", primary!(51, 549)), permitted,
+            "Mode C requires an ELL. A unidirectional device using only modes 0 and 5 may omit it for SND-NR, SND-IR and ACC-NR."));
+        if self.radio_mode == Some(OmsRadioMode::C1)
+            && matches!(link, Link::Wireless(0x44 | 0x46 | 0x47))
+        {
+            let flags = self
+                .communication_control
+                .map(|cc| cc & 0x84 != 0)
+                .or_else(|| {
+                    configuration
+                        .filter(|cf| matches!(cf.security_mode().to_bits(), 0 | 5))
+                        .map(|cf| cf.raw() & 0xc000 != 0)
+                });
+            results.push(finding(
+                "Mode C1 accessibility",
+                ("§4.3.3.1, Table 10", primary!(45, 114)),
+                flags.map(|available| !available),
+                "A unidirectional device must advertise no access windows.",
+            ));
+        }
+    }
+
     pub(super) fn check(
         self,
         link: Link,
@@ -115,6 +205,9 @@ impl LayerFields {
         results: &mut Vec<RuleFinding>,
     ) {
         let function = link.function();
+        if self.lpwan_sync.is_none() && matches!(link, Link::Wireless(_)) {
+            self.check_radio(link, configuration, results);
+        }
         let direction = match function {
             Some(
                 Function::SndUd { .. }
@@ -135,8 +228,8 @@ impl LayerFields {
             _ => None,
         };
         let synchronous = self
-            .communication_control
-            .map(|cc| cc & 0x20 != 0)
+            .lpwan_sync
+            .or_else(|| self.communication_control.map(|cc| cc & 0x20 != 0))
             .or_else(|| {
                 configuration
                     .filter(|cf| matches!(cf.security_mode().to_bits(), 0 | 5))
@@ -224,7 +317,9 @@ impl LayerFields {
                     | Function::ReqUd1 { .. },
                 ),
             ) => Some(true),
-            (Link::Wireless(_), Some(Function::AccNr)) if self.communication_control.is_none() => {
+            (Link::Wireless(_), Some(Function::AccNr))
+                if self.communication_control.is_none() && self.lpwan_sync.is_none() =>
+            {
                 Some(true)
             }
             (_, Some(Function::RspUd { .. }))
@@ -312,9 +407,15 @@ impl LayerFields {
                 ));
             }
             if matches!(link, Link::Wireless(_))
+                && self.lpwan_sync.is_none()
                 && matches!(ci, 0x50..=0x52 | 0x54 | 0x56..=0x57 | 0x5a | 0x61..=0x62 | 0x65..=0x66 | 0x70..=0x71 | 0x92..=0x93 | 0xb8 | 0xbb | 0xbd..=0xbf | 0xc6..=0xc7 | 0xcf)
             {
-                results.push(finding("Radio mode restriction", ("§2.2, Table 1 note d", primary!(25, 107)), None, "This CI is prohibited in mode C. The capture does not identify the radio mode."));
+                results.push(finding(
+                    "Radio mode restriction",
+                    ("§2.2, Table 1 note d", primary!(25, 107)),
+                    self.radio_mode.map(|mode| !mode.is_c()),
+                    "This CI is prohibited in radio mode C.",
+                ));
             }
         }
         if let Some(cc) = self.communication_control {
@@ -385,7 +486,9 @@ impl LayerFields {
                 "The message length may be at most 16 KiB.",
             ));
         }
+        self.check_application_security(link, configuration, has_afl, results);
         let Some(cf) = configuration else { return };
+        self.check_security_fields(cf, results);
         let mode = cf.security_mode().to_bits();
         if direction == Some(true) && matches!(mode, 7 | 10) && cf.raw() >> 14 <= 1 {
             results.push(finding(
@@ -490,7 +593,7 @@ impl LayerFields {
                 "Mode 0 and profile A specify no MAC.",
             ));
         }
-        if mode == 13 && matches!(link, Link::Wireless(_)) {
+        if mode == 13 && matches!(link, Link::Wireless(_)) && self.lpwan_sync.is_none() {
             results.push(finding(
                 "Wireless TLS link layer",
                 ("§7.2.4.6", primary!(66, 86)),

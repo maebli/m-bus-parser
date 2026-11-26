@@ -28,9 +28,13 @@ use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
 mod fragments;
+mod lpwan;
 mod messages;
 mod oms;
-pub use oms::{render_oms_capture, render_oms_reports, OmsFormat};
+pub use oms::{
+    render_oms_capture, render_oms_capture_with_options, render_oms_reports, OmsCaptureOptions,
+    OmsFormat, OmsRadioMode, Taf7Parameters,
+};
 mod profile;
 #[cfg(feature = "oms-gen3")]
 mod sml;
@@ -45,14 +49,18 @@ mod tls_session;
 #[cfg(feature = "decryption-mode-13")]
 use m_bus_core::decryption::mode13::TlsSession;
 #[cfg(feature = "decryption-mode-13")]
-pub use tls::{decode_hex_with_tls_session, render_hex_with_tls_session};
+pub use tls::{
+    decode_hex_with_tls_session, render_capture_hex_with_tls_session, render_hex_with_tls_session,
+};
 #[cfg(feature = "decryption-mode-13")]
 pub use tls_session::ImportedTlsSession;
 #[cfg(not(feature = "decryption-mode-13"))]
 struct TlsSession<'a>(core::marker::PhantomData<&'a ()>);
-pub use application::render_application_hex;
+pub use application::{render_application_hex, render_application_oms};
 #[cfg(feature = "decryption-mode-13")]
-pub use application::render_application_hex_with_tls_session;
+pub use application::{
+    render_application_hex_with_tls_session, render_application_oms_with_tls_session,
+};
 use messages::application_output;
 
 const SCHEMA_VERSION: u8 = 3;
@@ -261,6 +269,8 @@ pub struct DecodedOutput {
     pub decode_state: String,
     pub protocol: String,
     pub frame: FrameOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lpwan: Option<m_bus_oms_rules::lpwan::LpwanHeader>,
     pub meter: MeterOutput,
     pub transport: TransportOutput,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -276,13 +286,17 @@ pub struct DecodedOutput {
 
 impl DecodedOutput {
     pub fn assess_oms_5_0_1(&self) -> OmsReport {
-        self.assess_oms_with_history(&mut Default::default(), false)
+        self.assess_oms_with_options(OmsCaptureOptions::default())
+    }
+
+    pub fn assess_oms_with_options(&self, options: OmsCaptureOptions) -> OmsReport {
+        self.assess_oms_with_history(&mut Default::default(), options)
     }
 
     fn assess_oms_with_history(
         &self,
         history: &mut m_bus_oms_rules::sequence::AccessHistory,
-        consecutive: bool,
+        options: OmsCaptureOptions,
     ) -> OmsReport {
         let frame = &self.frame;
         let transport = &self.transport;
@@ -291,7 +305,7 @@ impl DecodedOutput {
             .as_deref()
             .and_then(|raw| u8::from_str_radix(raw, 16).ok());
         let link = match (frame.kind.as_str(), control) {
-            ("wireless", Some(control)) => Link::Wireless(control),
+            ("wireless" | "lpwan", Some(control)) => Link::Wireless(control),
             ("short" | "control" | "long", Some(control)) => {
                 Function::try_from(control).map_or(Link::Unavailable, Link::Wired)
             }
@@ -337,7 +351,11 @@ impl DecodedOutput {
             mac_verified: self.security.decryption_state == "decrypted_authenticated",
             verification_prefix: self.security.decrypted_payload_hex.as_deref().map(|plain| {
                 match self.security.mode_code {
-                    Some(7) => self.security.decryption_state == "decrypted_authenticated",
+                    Some(7)
+                        if configuration.is_some_and(|cf| cf.mode_specific_lower() >> 4 != 0) =>
+                    {
+                        self.security.decryption_state == "decrypted_authenticated"
+                    }
                     _ => plain.starts_with("2F2F"),
                 }
             }),
@@ -355,6 +373,36 @@ impl DecodedOutput {
                 .ell
                 .as_ref()
                 .and_then(|ell| u8::from_str_radix(&ell.communication_control, 16).ok()),
+            radio_mode: options.radio_mode,
+            ell_encryption_mode: transport
+                .ell
+                .as_ref()
+                .and_then(|ell| ell.session_number.as_ref()?.get(6..8))
+                .and_then(|byte| u8::from_str_radix(byte, 16).ok())
+                .map(|byte| byte >> 5),
+            security_counter: self.security.message_counter,
+            lpwan_sync: self.lpwan.as_ref().and_then(|mac| {
+                mac.llc
+                    .as_ref()
+                    .map(|llc| !mac.downlink() && llc.flags & 0x40 != 0)
+            }),
+            transport_body_length: transport.body_length,
+            tls: self.security.tls.as_ref().map(|tls| {
+                let has = |name| tls.records.iter().any(|r| r.content_type == name);
+                m_bus_oms_rules::layers::TlsFields {
+                    channel_request: tls.protocol == "channel_request",
+                    handshake_or_alert: has("handshake")
+                        || has("change_cipher_spec")
+                        || has("alert"),
+                    application: has("application_data"),
+                    alert: has("alert"),
+                    clear_alert: tls
+                        .records
+                        .iter()
+                        .any(|r| r.content_type == "alert" && r.length == 2),
+                    client_hello: tls.records.iter().any(|r| r.client_hello),
+                }
+            }),
             authentication_type: transport.authentication_type,
             message_length: transport.afl_message_length,
             layers_decoded: transport.header_kind.is_some() || frame.kind == "short",
@@ -376,15 +424,24 @@ impl DecodedOutput {
                 subunit: record.subunit,
             })
         });
-        let mut report = telegram::assess_telegram(
+        let mut report = telegram::assess_telegram_with_taf7(
             link,
             configuration,
             fields,
             self.record_availability,
             readings,
+            options.taf7,
         );
+        if let Some(mac) = &self.lpwan {
+            mac.check(
+                mac.upper_layer_octets != 0,
+                transport.header_kind.as_deref() == Some("short_tpl"),
+                transport.header_kind.as_deref() == Some("long_tpl"),
+                &mut report,
+            );
+        }
         if let Some(access) = oms::access_observation(self, link, configuration) {
-            if let Some(finding) = history.observe(access, consecutive) {
+            if let Some(finding) = history.observe(access, options.consecutive) {
                 report.push(finding);
             }
         }
@@ -468,6 +525,10 @@ pub struct TransportOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configuration_extension: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_length: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub afl_key_information: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub authentication_type: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub afl_message_length: Option<u16>,
@@ -496,6 +557,8 @@ pub struct ApplicationOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TlsRecordOutput {
+    #[serde(skip)]
+    pub client_hello: bool,
     pub content_type: String,
     pub length: usize,
 }
@@ -517,6 +580,8 @@ pub struct SecurityOutput {
     pub key_supplied: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_id: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_version: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message_counter: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -698,6 +763,9 @@ fn decode_bytes_with_keys(
         return Err(OutputError::EmptyInput);
     }
 
+    if m_bus_oms_rules::lpwan::has_mac_crc(data) {
+        return lpwan::decode(data, options, session, application_key);
+    }
     if let Some(frame) = fragments::singleton_payload(data)? {
         let mut decoded = decode_bytes_with_keys(frame, options, session, application_key)?;
         decoded.raw.fragment_frames_hex.push(hex_string(data));
@@ -1597,6 +1665,36 @@ fn build_output(
         "cleartext"
     };
     let mode = security_context.mode;
+    let authentication = user_data.and_then(user_data::UserDataBlock::authentication);
+    let (key_id, key_version, message_counter) = match mode.map(|m| m.to_bits()) {
+        Some(10) => {
+            let body = user_data
+                .and_then(user_data::UserDataBlock::transport_payload)
+                .map(|(_, body)| body);
+            let extension = transport.configuration_extension;
+            let version_present = extension.is_some_and(|value| value & 0x40 != 0);
+            let offset = 2 + usize::from(version_present);
+            let counter = body
+                .and_then(|bytes| bytes.get(offset..)?.first_chunk::<4>())
+                .copied()
+                .map(u32::from_le_bytes);
+            (
+                extension.map(|v| (v & 15) as u8),
+                body.filter(|_| version_present)
+                    .and_then(|v| v.get(2))
+                    .copied(),
+                counter,
+            )
+        }
+        _ => (
+            transport
+                .configuration_extension
+                .filter(|_| mode.is_some_and(|m| m.to_bits() == 7))
+                .map(|v| (v & 15) as u8),
+            transport.afl_key_information.map(|v| (v >> 8) as u8),
+            authentication.map(|a| a.message_counter),
+        ),
+    };
     let partial = application_error.is_some()
         || application_partial
         || record_error.is_some()
@@ -1614,6 +1712,7 @@ fn build_output(
         RecordAvailability::Complete
     };
     DecodedOutput {
+        lpwan: None,
         record_availability,
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
@@ -1628,14 +1727,9 @@ fn build_output(
             mode_code: mode.map(|value| value.to_bits()),
             decryption_state: decryption_state.to_string(),
             key_supplied: security_context.key_supplied,
-            key_id: user_data
-                .filter(|block| block.authentication().is_some())
-                .and_then(|block| block.transport_payload())
-                .and_then(|(_, data)| data.first())
-                .map(|extension| extension & 0x0f),
-            message_counter: user_data
-                .and_then(|block| block.authentication())
-                .map(|header| header.message_counter),
+            key_id,
+            key_version,
+            message_counter,
             tls: security_context.tls,
             encrypted_payload_hex,
             decrypted_payload_hex,
@@ -1668,6 +1762,8 @@ fn meter_and_transport(
         outer_ci: None,
         application_ci: None,
         configuration_extension: None,
+        body_length: None,
+        afl_key_information: authentication.and_then(|a| a.key_information),
         authentication_type: authentication.map(|a| a.message_control & 15),
         afl_message_length: authentication.and_then(|a| a.message_length),
         header_kind: None,
@@ -1824,6 +1920,7 @@ fn meter_and_transport(
         .filter(|_| transport.configuration.is_some())
     {
         transport.application_ci = Some(header.control_information);
+        transport.body_length = Some(body.len());
         transport.configuration_extension =
             match header.configuration_field.security_mode().to_bits() {
                 7 | 13 => body.first().copied().map(u16::from),

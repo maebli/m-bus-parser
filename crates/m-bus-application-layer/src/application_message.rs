@@ -70,6 +70,10 @@ pub enum ApplicationProtocol {
     RequestFormatFrame,
     NetworkLayer,
     NetworkManagement,
+    ApplicationResetOrSelect,
+    SelectedApplication,
+    ImageTransfer,
+    TlsHandshake,
 }
 
 impl ApplicationProtocol {
@@ -93,6 +97,10 @@ impl ApplicationProtocol {
             Self::Compact => "compact",
             Self::DlmsCosem => "dlms_cosem",
             Self::Sml => "sml",
+            Self::ApplicationResetOrSelect => "application_reset_or_select",
+            Self::SelectedApplication => "selected_application",
+            Self::ImageTransfer => "image_transfer",
+            Self::TlsHandshake => "tls_handshake",
             Self::TransportOnly => "transport_only",
             Self::RequestCompactFrame => "request_compact_frame",
             Self::RequestFormatFrame => "request_format_frame",
@@ -201,6 +209,11 @@ impl<'a> ApplicationMessage<'a> {
             C::ApplicationErrorShortTransport => (P::ApplicationError, 4),
             C::ApplicationErrorLongTransport => (P::ApplicationError, 12),
             C::SendAlarmStatus => (P::Alarm, 0),
+            C::OmsApplication {
+                protocol,
+                header_size,
+                ..
+            } => (protocol, usize::from(header_size)),
             C::AlarmShortTransport => (P::Alarm, 4),
             C::AlarmLongTransport => (P::Alarm, 12),
             C::SecurityTransferCommandLong => (P::SecurityTransfer, 12),
@@ -236,7 +249,7 @@ impl<'a> ApplicationMessage<'a> {
             _ => {
                 return Err(ApplicationLayerError::InvalidControlInformation {
                     byte: data.first().copied().unwrap_or(0),
-                })
+                });
             }
         };
         let header_bytes = data
@@ -391,7 +404,7 @@ fn parse_clock(
         _ => {
             return Err(ApplicationLayerError::InvalidPayload {
                 field: "clock control",
-            })
+            });
         }
     };
     let value_size = if operation == ClockOperation::Set {

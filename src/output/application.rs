@@ -11,7 +11,7 @@ pub fn render_application_hex(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
-    render_application_with_session(input, format, options, None)
+    render_application_with_session(input, format, options, None, Default::default())
 }
 
 #[cfg(feature = "decryption-mode-13")]
@@ -22,7 +22,33 @@ pub fn render_application_hex_with_tls_session(
     session: &TlsSession<'_>,
 ) -> Result<String, OutputError> {
     tls::require_tls_output_format(format)?;
-    render_application_with_session(input, format, options, Some(session))
+    render_application_with_session(input, format, options, Some(session), Default::default())
+}
+
+pub fn render_application_oms(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+) -> Result<String, OutputError> {
+    render_application_with_session(input, OutputFormat::Oms(format), options, None, capture)
+}
+
+#[cfg(feature = "decryption-mode-13")]
+pub fn render_application_oms_with_tls_session(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    session: &TlsSession<'_>,
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        Some(session),
+        capture,
+    )
 }
 
 fn render_application_with_session(
@@ -30,6 +56,7 @@ fn render_application_with_session(
     format: OutputFormat,
     options: &RenderOptions,
     session: Option<&TlsSession<'_>>,
+    capture: OmsCaptureOptions,
 ) -> Result<String, OutputError> {
     let data = decode_hex_bytes(input)?;
     let block = match user_data::parse_application_layer(&data) {
@@ -172,5 +199,8 @@ fn render_application_with_session(
         security.clone(),
         options.decode.include_enrichment,
     );
+    if let OutputFormat::Oms(format) = format {
+        return render_oms_capture_with_options(&[decoded], format, None, capture);
+    }
     render_decoded(&decoded, format, options)
 }
