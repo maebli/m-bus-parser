@@ -1,8 +1,5 @@
-use super::{DecryptionError, KeyContext, KeyProvider, decimal_to_bcd, decrypt_aes_cbc_into};
+use super::{DecryptionError, KeyContext, KeyProvider, decrypt_aes_cbc_into};
 use crate::{ConfigurationField, SecurityMode, authentication::AuthenticationHeader};
-use aes::Aes128;
-use cipher::KeyInit;
-use cmac::{Cmac, Mac};
 
 pub struct Mode7Payload<'a> {
     pub data: &'a [u8],
@@ -74,26 +71,14 @@ impl Mode7Payload<'_> {
             .get_mut(..data.len())
             .ok_or(DecryptionError::InvalidDataLength)?;
         let key = provider.get_key(&self.context)?;
-        let counter = self.authentication.message_counter.to_le_bytes();
-        let mut derivation = [7; 16];
-        derivation[0] = if self.from_meter { 0x01 } else { 0x11 };
-        derivation[1..5].copy_from_slice(&counter);
-        derivation[5..9].copy_from_slice(&decimal_to_bcd(self.context.identification_number));
-        let mut kdf =
-            Cmac::<Aes128>::new_from_slice(key).map_err(|_| DecryptionError::InvalidKeyLength)?;
-        kdf.update(&derivation);
-        let authentication_key = kdf.finalize().into_bytes();
-        let mut mac = Cmac::<Aes128>::new_from_slice(&authentication_key)
-            .map_err(|_| DecryptionError::InvalidKeyLength)?;
-        mac.update(&[self.authentication.message_control]);
-        mac.update(&counter);
-        if let Some(length) = self.authentication.message_length {
-            mac.update(&length.to_le_bytes());
-        }
-        mac.update(self.authentication.transport);
-        if mac.verify_truncated_left(self.authentication.mac).is_err() {
+        if let Err(error) = super::verify_afl_cmac(
+            self.authentication,
+            key,
+            self.context.identification_number,
+            self.from_meter,
+        ) {
             target.fill(0);
-            return Err(DecryptionError::AuthenticationFailed);
+            return Err(error);
         }
         if encrypted_length == 0 {
             if self.configuration.raw() & 0x08 != 0 {
@@ -102,11 +87,12 @@ impl Mode7Payload<'_> {
             target.copy_from_slice(data);
             return Ok(data.len());
         }
-        derivation[0] = if self.from_meter { 0x00 } else { 0x10 };
-        let mut kdf =
-            Cmac::<Aes128>::new_from_slice(key).map_err(|_| DecryptionError::InvalidKeyLength)?;
-        kdf.update(&derivation);
-        let encryption_key = kdf.finalize().into_bytes();
+        let encryption_key = super::afl::ephemeral_key(
+            key,
+            if self.from_meter { 0 } else { 0x10 },
+            self.authentication.message_counter,
+            self.context.identification_number,
+        )?;
         target.copy_from_slice(data);
         decrypt_aes_cbc_into(
             &data[..encrypted_length],

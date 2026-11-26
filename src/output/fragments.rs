@@ -23,6 +23,12 @@ pub(super) fn is_fragment(mut data: &[u8]) -> bool {
     let [0x90, size, id, flags, rest @ ..] = data else {
         return false;
     };
+    if *id == 1
+        && flags & 0x40 == 0
+        && m_bus_core::authentication::AuthenticationHeader::parse(data).is_ok()
+    {
+        return false;
+    }
     let Some(header_len) = size.checked_sub(2).map(usize::from) else {
         return false;
     };

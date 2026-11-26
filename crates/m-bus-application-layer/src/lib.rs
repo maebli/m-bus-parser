@@ -657,7 +657,7 @@ impl<'a> UserDataBlock<'a> {
         let authentication = AuthenticationHeader::parse(data)?;
         let mut block = Self::try_from(authentication.transport)?;
         if !block.transport_payload().is_some_and(|(header, _)| {
-            header.configuration_field.security_mode() == m_bus_core::SecurityMode::AesCbc128IvZero
+            matches!(header.configuration_field.security_mode().to_bits(), 7 | 10 | 13)
         }) {
             return Err(ApplicationLayerError::InvalidPayload {
                 field: "authenticated security mode",

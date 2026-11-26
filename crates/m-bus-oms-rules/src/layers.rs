@@ -64,6 +64,7 @@ pub struct ClockFields {
 
 #[derive(Clone, Copy, Default)]
 pub struct TlsFields {
+    pub cmac_verified: bool,
     pub channel_request: bool,
     pub handshake_or_alert: bool,
     pub application: bool,

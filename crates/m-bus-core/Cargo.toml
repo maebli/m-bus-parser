@@ -16,7 +16,7 @@ decryption-api = []
 decryption-mode-5 = ["decryption-api", "dep:aes", "dep:cbc", "dep:cipher"]
 decryption-mode-7 = ["decryption-api", "dep:aes", "dep:cbc", "dep:cipher", "dep:cmac"]
 decryption-mode-10 = ["decryption-api", "dep:aes", "dep:ccm", "dep:cmac"]
-decryption-mode-13 = ["decryption-api", "dep:aes-gcm"]
+decryption-mode-13 = ["decryption-api", "dep:aes-gcm", "dep:aes", "dep:cmac"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"], optional = true }

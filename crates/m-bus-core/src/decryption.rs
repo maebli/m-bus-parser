@@ -1,3 +1,8 @@
+#[cfg(any(feature = "decryption-mode-7", feature = "decryption-mode-13"))]
+mod afl;
+#[cfg(any(feature = "decryption-mode-7", feature = "decryption-mode-13"))]
+pub use afl::verify_afl_cmac;
+
 #[cfg(feature = "decryption-mode-13")]
 pub mod mode13;
 
@@ -177,7 +182,8 @@ impl<'a> EncryptedPayload<'a> {
 #[cfg(any(
     feature = "decryption-mode-5",
     feature = "decryption-mode-7",
-    feature = "decryption-mode-10"
+    feature = "decryption-mode-10",
+    feature = "decryption-mode-13"
 ))]
 fn decimal_to_bcd(mut value: u32) -> [u8; 4] {
     let mut bcd = [0u8; 4];

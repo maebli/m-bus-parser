@@ -395,6 +395,7 @@ impl DecodedOutput {
                 let has = |name| tls.records.iter().any(|r| r.content_type == name);
                 m_bus_oms_rules::layers::TlsFields {
                     channel_request: tls.protocol == "channel_request",
+                    cmac_verified: tls.cmac_verified,
                     handshake_or_alert: has("handshake")
                         || has("change_cipher_spec")
                         || has("alert"),
@@ -607,6 +608,7 @@ pub struct SecurityOutput {
     pub key_supplied: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_id: Option<u8>,
+    pub cmac_verified: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_version: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1155,7 +1157,7 @@ fn prepare_security(
     let _ = session;
     #[cfg(feature = "decryption-mode-13")]
     if mode == Some(SecurityMode::SpecificUsage13) {
-        return tls::prepare_mode13(user_data, session);
+        return tls::prepare_mode13(user_data, wireless_id, key, session);
     }
     #[cfg(feature = "decryption-mode-13")]
     if session.is_some() {

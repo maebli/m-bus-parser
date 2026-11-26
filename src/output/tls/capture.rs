@@ -38,7 +38,7 @@ fn apply(
         let application = decode_hex_bytes(&frame.raw.original_frame_hex)?;
         let block = user_data::parse_application_layer(&application)
             .map_err(|_| tls_error(Mode13Error::InvalidConfiguration))?;
-        let context = prepare_mode13(Some(&block), Some(session))?;
+        let context = prepare_mode13(Some(&block), None, options.key.as_ref(), Some(session))?;
         let records = context
             .decrypted_payload
             .as_deref()

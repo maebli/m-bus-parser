@@ -347,3 +347,32 @@ fn security_transfer_validates_every_block_and_matches_the_response() {
         Some("failed")
     );
 }
+
+#[test]
+fn profile_c_channel_request_cmac_uses_the_gateway_direction_and_meter_identity() {
+    let tls = "5F78563412931533030100FF0D000000000000";
+    let body = format!("53{GATEWAY}8C8001900F012C25B30A0000F58EBD7D2A32963D{tls}");
+    let packet = format!("{:02X}{body}", body.len() / 2);
+    let parse = |key| {
+        decode_hex(
+            &packet,
+            &DecodeOptions {
+                key,
+                ..Default::default()
+            },
+        )
+    };
+    let rule = "TLS AFL authentication tag";
+    assert_eq!(
+        status(&report(&parse(None).unwrap()), rule),
+        Some("could_not_check")
+    );
+    assert_eq!(
+        status(
+            &report(&parse(Some(core::array::from_fn(|i| i as u8))).unwrap()),
+            rule
+        ),
+        Some("passed")
+    );
+    assert!(parse(Some([3; 16])).is_err());
+}

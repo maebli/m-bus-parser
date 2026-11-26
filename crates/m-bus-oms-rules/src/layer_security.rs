@@ -139,6 +139,14 @@ impl LayerFields {
                 "A channel request or ClientHello requires an eight-byte AFL CMAC.",
             ));
         }
+        if self.authentication_type.is_some() {
+            findings.push(finding(
+                "TLS AFL authentication tag",
+                ("Annex F.3.5.1, §9.3.3.1", annex_f!(19, 120)),
+                tls.cmac_verified.then_some(true),
+                "The communication key must verify the AFL CMAC over the TLS transport message.",
+            ));
+        }
         if let Some(hello) = tls.hello {
             let reference = ("Annex F.3.1", annex_f!(12, 110));
             findings.push(finding(
