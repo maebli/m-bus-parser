@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use std::str::FromStr;
 
 use clap::{ColorChoice, Parser, Subcommand};
+use m_bus_parser::output::{FragmentOutput, OmsCaptureOptions, OmsRadioMode, Taf7Parameters};
 use m_bus_parser::{
     decode_capture_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
     OutputFormat, RenderOptions,
@@ -67,11 +68,8 @@ enum Command {
     },
     #[command(about = "Check a telegram against the supported OMS 5.0.1 rules")]
     CheckOms {
-        #[arg(
-            long,
-            help = "Confirm the capture is in order and includes every transmission, without a device restart"
-        )]
-        consecutive: bool,
+        #[command(flatten)]
+        validation: ValidationArgs,
         #[command(flatten)]
         input: TelegramInput,
         #[arg(short = 't', long, default_value = "json", value_parser = ["json", "xml", "csv"])]
@@ -133,6 +131,57 @@ struct TelegramInput {
     tls_session: Option<PathBuf>,
 }
 
+#[derive(clap::Args, Default)]
+struct ValidationArgs {
+    #[arg(
+        long,
+        help = "Confirm that all transmissions are present in order without a device restart"
+    )]
+    consecutive: bool,
+    #[arg(long, value_name = "MODE", value_parser = parse_radio_mode, help = "Declared wireless mode: c, c1, c2 or other")]
+    radio_mode: Option<OmsRadioMode>,
+    #[arg(long, help = "Check the declared TAF7 use case")]
+    taf7: bool,
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared TAF7 measuring period in milliseconds")]
+    taf7_measuring_period_ms: Option<u64>,
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared TAF7 registration period in milliseconds")]
+    taf7_registration_period_ms: Option<u64>,
+    #[arg(
+        long,
+        value_name = "MS",
+        help = "Declared TAF7 acceptance window in milliseconds"
+    )]
+    taf7_acceptance_window_ms: Option<u64>,
+}
+
+fn parse_radio_mode(value: &str) -> Result<OmsRadioMode, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "c" => Ok(OmsRadioMode::C),
+        "c1" => Ok(OmsRadioMode::C1),
+        "c2" => Ok(OmsRadioMode::C2),
+        "other" => Ok(OmsRadioMode::Other),
+        _ => Err("expected c, c1, c2 or other".into()),
+    }
+}
+
+impl From<ValidationArgs> for OmsCaptureOptions {
+    fn from(args: ValidationArgs) -> Self {
+        let has_taf7 = args.taf7
+            || args.taf7_measuring_period_ms.is_some()
+            || args.taf7_registration_period_ms.is_some()
+            || args.taf7_acceptance_window_ms.is_some();
+        Self {
+            consecutive: args.consecutive,
+            radio_mode: args.radio_mode,
+            taf7: has_taf7.then_some(Taf7Parameters {
+                measuring_period_ms: args.taf7_measuring_period_ms,
+                registration_period_ms: args.taf7_registration_period_ms,
+                acceptance_window_ms: args.taf7_acceptance_window_ms,
+            }),
+        }
+    }
+}
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -179,21 +228,28 @@ fn run() -> Result<(), String> {
         Command::CheckOms {
             input,
             format,
-            consecutive,
+            validation,
         } => render_input(
             input,
             &format!("oms-{format}"),
             None,
             true,
             cli.color,
-            consecutive,
+            validation.into(),
         ),
         Command::Parse {
             input,
             format,
             width,
             no_enrichment,
-        } => render_input(input, &format, width, no_enrichment, cli.color, false),
+        } => render_input(
+            input,
+            &format,
+            width,
+            no_enrichment,
+            cli.color,
+            Default::default(),
+        ),
     }
 }
 
@@ -203,7 +259,7 @@ fn render_input(
     width: Option<usize>,
     no_enrichment: bool,
     color: ColorChoice,
-    consecutive: bool,
+    capture: OmsCaptureOptions,
 ) -> Result<(), String> {
     let TelegramInput {
         file,
@@ -261,27 +317,33 @@ fn render_input(
             let imported = m_bus_parser::output::ImportedTlsSession::from_json(&json)
                 .map_err(|error| format!("[{}] {error}", error.code()))?;
             let session = imported.session();
-            match m_bus_parser::output::render_hex_with_tls_session(
+            match m_bus_parser::output::render_capture_hex_with_tls_session(
                 &input,
                 output_format,
                 &options,
+                capture,
                 &session,
             ) {
-                Err(OutputError::InvalidFrame { .. }) => {
-                    m_bus_parser::output::render_application_hex_with_tls_session(
+                Err(OutputError::InvalidFrame { .. }) => match output_format {
+                    OutputFormat::Oms(format) => {
+                        m_bus_parser::output::render_application_oms_with_tls_session(
+                            &input, format, &options, capture, &session,
+                        )
+                    }
+                    _ => m_bus_parser::output::render_application_hex_with_tls_session(
                         &input,
                         output_format,
                         &options,
                         &session,
-                    )
-                }
+                    ),
+                },
                 result => result,
             }
         }
-        None => render_auto_detected(&input, output_format, &options, consecutive),
+        None => render_auto_detected(&input, output_format, &options, capture),
     };
     #[cfg(not(feature = "decryption-mode-13"))]
-    let rendered = render_auto_detected(&input, output_format, &options, consecutive);
+    let rendered = render_auto_detected(&input, output_format, &options, capture);
     let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
     print!("{rendered}");
     Ok(())
@@ -308,16 +370,32 @@ fn render_auto_detected(
     input: &str,
     format: OutputFormat,
     options: &RenderOptions,
-    consecutive: bool,
+    capture: OmsCaptureOptions,
 ) -> Result<String, OutputError> {
-    match (format, decode_capture_hex(input, &options.decode)) {
-        (OutputFormat::Oms(format), Ok(m_bus_parser::output::FragmentOutput::Multiple(frames))) => {
-            m_bus_parser::output::render_oms_capture(&frames, format, None, consecutive)
-        }
-        (_, Err(OutputError::InvalidFrame { .. })) => {
-            render_application_hex(input, format, options)
-        }
-        _ => render_hex(input, format, options),
+    if let OutputFormat::Oms(format) = format {
+        return match decode_capture_hex(input, &options.decode) {
+            Ok(FragmentOutput::Single(frame)) => {
+                m_bus_parser::output::render_oms_capture_with_options(
+                    std::slice::from_ref(frame.as_ref()),
+                    format,
+                    None,
+                    capture,
+                )
+            }
+            Ok(FragmentOutput::Multiple(frames)) => {
+                m_bus_parser::output::render_oms_capture_with_options(
+                    &frames, format, None, capture,
+                )
+            }
+            Err(OutputError::InvalidFrame { .. }) => {
+                m_bus_parser::output::render_application_oms(input, format, options, capture)
+            }
+            Err(error) => Err(error),
+        };
+    }
+    match render_hex(input, format, options) {
+        Err(OutputError::InvalidFrame { .. }) => render_application_hex(input, format, options),
+        result => result,
     }
 }
 
