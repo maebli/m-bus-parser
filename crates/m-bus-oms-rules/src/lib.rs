@@ -1,5 +1,7 @@
 #![no_std]
 
+pub mod telegram;
+
 use m_bus_core::{Function, SecurityMode};
 
 #[derive(Debug, Clone)]

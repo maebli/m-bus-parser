@@ -180,7 +180,7 @@ fn security_transfer_fields(
         fields.insert("application_mac_verified".into(), mac_verified.into());
         if *protocol == 1 {
             let records = user_data::parse_data_records(data);
-            let (records, error) = collect_records(Some(&records), None);
+            let (records, error, _) = collect_records(Some(&records), None);
             fields.insert("records".into(), serde_json::json!(records));
             return (
                 fields,

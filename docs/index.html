@@ -416,6 +416,10 @@
         #security-fields { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 4px 18px; margin: 8px 0 0; }
         #security-fields dt { color: #59636e; }
         #security-fields dd { margin: 0; }
+        #oms-findings { margin: 0; }
+        #oms-findings dt { font-weight: 600; }
+        #oms-findings dd { margin: 2px 0 10px; }
+        #oms-findings dd:last-child { margin-bottom: 0; }
         .output-toolbar { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; }
         .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
         .result-views { min-width: 0; }
@@ -1515,6 +1519,10 @@
                         <dl id="security-fields"></dl>
                     </div>
                 </details>
+                <details id="oms-checks" name="parser-disclosure" hidden>
+                    <summary>OMS 5.0.1 checks</summary>
+                    <div class="disclosure-content"><dl id="oms-findings"></dl></div>
+                </details>
             </section>
         </div>
         <details id="meter-catalog" name="parser-disclosure">
@@ -1965,7 +1973,28 @@
             return { status: 'Security status unavailable', tone: 'neutral', message: 'The parser did not return a security status for this input.' };
         }
 
+        function showOmsChecks(findings) {
+            const panel = document.getElementById('oms-checks');
+            const list = document.getElementById('oms-findings');
+            const labels = { passed: 'Passed', failed: 'Failed', could_not_check: 'Could not check', not_applicable: 'Not applicable' };
+            list.replaceChildren();
+            panel.hidden = !findings?.length;
+            if (panel.hidden) {
+                panel.open = false;
+                return;
+            }
+            for (const finding of findings) {
+                const title = document.createElement('dt');
+                const detail = document.createElement('dd');
+                const record = finding.record_number ? ` · record ${finding.record_number}` : '';
+                title.textContent = `${finding.rule} · ${labels[finding.status]}`;
+                detail.textContent = `${finding.detail} (${finding.reference}${record})`;
+                list.append(title, detail);
+            }
+        }
+
         function showSecurity(decoded, error) {
+            showOmsChecks(decoded?.oms_5_0_1_checks);
             const presentation = securityPresentation(decoded, error, document.getElementById('tls-enabled').checked);
             const security = decoded?.security;
             const mode = security?.mode_code;

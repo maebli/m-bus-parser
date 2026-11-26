@@ -7,7 +7,8 @@
 use core::str::FromStr;
 use std::fmt;
 
-use m_bus_core::{Function, SecurityMode};
+use m_bus_core::SecurityMode;
+use m_bus_oms_rules::telegram::{self, Link, RuleFinding, VolumeReadings};
 pub use m_bus_oms_rules::OmsSecurityModeCheck;
 use serde::Serialize;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -254,6 +255,7 @@ pub struct DecodedOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub application: Option<ApplicationOutput>,
     pub security: SecurityOutput,
+    pub oms_5_0_1_checks: [RuleFinding; 6],
     pub records: Vec<RecordOutput>,
     pub raw: RawOutput,
     pub diagnostics: Vec<Diagnostic>,
@@ -639,7 +641,7 @@ pub fn decode_data_records(data: &[u8]) -> Result<Vec<RecordOutput>, OutputError
         return Err(OutputError::EmptyInput);
     }
     let records = user_data::DataRecords::from(data);
-    let (output, error) = collect_records(Some(&records), None);
+    let (output, error, _) = collect_records(Some(&records), None);
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",
@@ -1184,7 +1186,7 @@ fn build_wired_output(
             address,
             control_field: None,
         },
-        function,
+        function.map_or(Link::Unavailable, Link::Wired),
         original,
         original,
         false,
@@ -1253,7 +1255,7 @@ fn build_wireless_output(
             address: None,
             control_field: Some(format!("{:02X}", parsed.frame.control_field)),
         },
-        parsed.frame.function,
+        Link::Wireless(parsed.frame.control_field),
         original,
         normalized,
         format_a_crc_stripped,
@@ -1271,7 +1273,7 @@ fn build_wireless_output(
 fn build_output(
     protocol: &str,
     frame: FrameOutput,
-    function: Option<Function>,
+    link: Link,
     original: &[u8],
     normalized: &[u8],
     format_a_crc_stripped: bool,
@@ -1357,7 +1359,7 @@ fn build_output(
     }
 
     let (meter, transport) = meter_and_transport(user_data, wireless_id);
-    let (record_outputs, record_error) = match user_data {
+    let (record_outputs, record_error, volumes) = match user_data {
         Some(user_data::UserDataBlock::FixedDataStructure {
             device_type_and_unit,
             status,
@@ -1367,6 +1369,7 @@ fn build_output(
         }) => (
             fixed_record_outputs(*device_type_and_unit, *status, counter1, counter2, payload),
             None,
+            VolumeReadings::default(),
         ),
         _ => collect_records(records, meter.identity.as_ref()),
     };
@@ -1431,8 +1434,31 @@ fn build_output(
         || (security_context.encrypted && !security_context.decrypted);
 
     let explicit_mode = mode.filter(|_| transport.configuration.is_some());
-    let oms_mode_check = OmsSecurityModeCheck::assess_5_0_1(function, explicit_mode);
+    let oms_mode_check = OmsSecurityModeCheck::assess_5_0_1(link.function(), explicit_mode);
+    let configuration = user_data
+        .and_then(|block| block.transport_payload())
+        .map(|(header, _)| header.configuration_field);
+    let unavailable = if security_context.encrypted && !security_context.decrypted {
+        Some("Decrypt the application payload to check its records.")
+    } else if fragment {
+        Some("Reassemble the telegram to check its records.")
+    } else if records.is_none() {
+        Some("No decoded variable M-Bus records are available.")
+    } else if record_error.is_some() {
+        Some("Only part of the record stream was decoded.")
+    } else {
+        None
+    };
+    let [encoding, unique, date] = volumes.findings(unavailable);
     DecodedOutput {
+        oms_5_0_1_checks: [
+            link.check(),
+            telegram::check_mode_zero_blocks(configuration),
+            oms_mode_check.finding(),
+            encoding,
+            unique,
+            date,
+        ],
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
         protocol: protocol.to_string(),
@@ -1765,9 +1791,10 @@ fn fixed_record_outputs(
 fn collect_records(
     records: Option<&user_data::DataRecords<'_>>,
     identity: Option<&MeterIdentity>,
-) -> (Vec<RecordOutput>, Option<(usize, String)>) {
+) -> (Vec<RecordOutput>, Option<(usize, String)>, VolumeReadings) {
+    let mut volumes = VolumeReadings::default();
     let Some(records) = records else {
-        return (Vec::new(), None);
+        return (Vec::new(), None, volumes);
     };
     let mut output = Vec::new();
     let mut offset = 0usize;
@@ -1778,6 +1805,12 @@ fn collect_records(
         match item {
             Ok(record) => {
                 let size = record.raw_bytes().len();
+                if let Some(header) = record
+                    .raw_bytes()
+                    .get(..record.data_record_header.get_size())
+                {
+                    volumes.observe(header, output.len() + 1);
+                }
                 let mut parsed = record_output(output.len(), &record);
                 if let (Some(identity), [0x0f, tail @ ..]) = (identity, record.raw_bytes()) {
                     parsed.manufacturer_fields = manufacturer_fields(identity, tail);
@@ -1818,7 +1851,7 @@ fn collect_records(
             }
         }
     }
-    (output, first_error)
+    (output, first_error, volumes)
 }
 
 fn multical_energy_register(identity: &MeterIdentity, raw: &[u8]) -> Option<(&'static str, u32)> {
