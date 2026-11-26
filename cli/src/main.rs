@@ -67,6 +67,11 @@ enum Command {
     },
     #[command(about = "Check a telegram against the supported OMS 5.0.1 rules")]
     CheckOms {
+        #[arg(
+            long,
+            help = "Confirm the capture is in order and includes every transmission, without a device restart"
+        )]
+        consecutive: bool,
         #[command(flatten)]
         input: TelegramInput,
         #[arg(short = 't', long, default_value = "json", value_parser = ["json", "xml", "csv"])]
@@ -171,15 +176,24 @@ fn run() -> Result<(), String> {
             let input = read_input(file, data, input_format)?;
             vendor::decode(&input, driver.as_deref(), key.as_deref())
         }
-        Command::CheckOms { input, format } => {
-            render_input(input, &format!("oms-{format}"), None, true, cli.color)
-        }
+        Command::CheckOms {
+            input,
+            format,
+            consecutive,
+        } => render_input(
+            input,
+            &format!("oms-{format}"),
+            None,
+            true,
+            cli.color,
+            consecutive,
+        ),
         Command::Parse {
             input,
             format,
             width,
             no_enrichment,
-        } => render_input(input, &format, width, no_enrichment, cli.color),
+        } => render_input(input, &format, width, no_enrichment, cli.color, false),
     }
 }
 
@@ -189,6 +203,7 @@ fn render_input(
     width: Option<usize>,
     no_enrichment: bool,
     color: ColorChoice,
+    consecutive: bool,
 ) -> Result<(), String> {
     let TelegramInput {
         file,
@@ -263,10 +278,10 @@ fn render_input(
                 result => result,
             }
         }
-        None => render_auto_detected(&input, output_format, &options),
+        None => render_auto_detected(&input, output_format, &options, consecutive),
     };
     #[cfg(not(feature = "decryption-mode-13"))]
-    let rendered = render_auto_detected(&input, output_format, &options);
+    let rendered = render_auto_detected(&input, output_format, &options, consecutive);
     let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
     print!("{rendered}");
     Ok(())
@@ -293,9 +308,15 @@ fn render_auto_detected(
     input: &str,
     format: OutputFormat,
     options: &RenderOptions,
+    consecutive: bool,
 ) -> Result<String, OutputError> {
-    match decode_capture_hex(input, &options.decode) {
-        Err(OutputError::InvalidFrame { .. }) => render_application_hex(input, format, options),
+    match (format, decode_capture_hex(input, &options.decode)) {
+        (OutputFormat::Oms(format), Ok(m_bus_parser::output::FragmentOutput::Multiple(frames))) => {
+            m_bus_parser::output::render_oms_capture(&frames, format, None, consecutive)
+        }
+        (_, Err(OutputError::InvalidFrame { .. })) => {
+            render_application_hex(input, format, options)
+        }
         _ => render_hex(input, format, options),
     }
 }

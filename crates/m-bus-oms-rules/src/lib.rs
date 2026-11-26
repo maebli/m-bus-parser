@@ -9,6 +9,7 @@ mod catalog;
 mod commands;
 pub mod layers;
 pub mod readings;
+pub mod sequence;
 pub mod telegram;
 
 use m_bus_core::{Function, SecurityMode};

@@ -717,7 +717,11 @@ pub(super) fn identify(
                 _ => None,
             }
         }
-        [0xfd, 0x20] | [0xfd, 0x21] | [0xfd, 0x22] => match (tariff, function, storage, recent) {
+        [0xfd, 0x20 | 0x21] => match (tariff, function, storage, recent) {
+            (0, 0, 1..=199, false) => Some(Tag("YD3!P", NoData)),
+            _ => None,
+        },
+        [0xfd, 0x22] => match (tariff, function, storage, recent) {
             (0, 0, 1..=199, false) => Some(Tag("YD3!P", Number)),
             _ => None,
         },

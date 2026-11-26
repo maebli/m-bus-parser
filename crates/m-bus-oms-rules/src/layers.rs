@@ -6,6 +6,9 @@ use crate::telegram::{Link, RuleFinding, RuleStatus};
 #[derive(Clone, Copy, Default)]
 pub struct LayerFields {
     pub device_type: Option<u8>,
+    pub command_target_type: Option<u8>,
+    pub wireless_sender_type: Option<u8>,
+    pub has_application_data: Option<bool>,
     pub mac_verified: bool,
     pub verification_prefix: Option<bool>,
     pub tpl_present: Option<bool>,
@@ -131,6 +134,42 @@ impl LayerFields {
             ) => Some(true),
             _ => None,
         };
+        let synchronous = self
+            .communication_control
+            .map(|cc| cc & 0x20 != 0)
+            .or_else(|| {
+                configuration
+                    .filter(|cf| matches!(cf.security_mode().to_bits(), 0 | 5))
+                    .map(|cf| cf.raw() & 0x2000 != 0)
+            });
+        if matches!(
+            link,
+            Link::Wireless(
+                0x46 | 0x08 | 0x18 | 0x28 | 0x38 | 0x01 | 0x11 | 0x21 | 0x31 | 0x10 | 0x20 | 0x30
+            )
+        ) {
+            results.push(finding(
+                "Asynchronous reply or installation",
+                ("§4.3.2.1", primary!(42, 164)),
+                synchronous.map(|sync| !sync),
+                "A meter reply or installation telegram must use asynchronous transmission.",
+            ));
+        }
+        if matches!(link, Link::Wireless(0x47)) {
+            results.push(finding(
+                "ACC-NR application data",
+                ("§8.2.3, Table 33", primary!(71, 510)),
+                self.has_application_data.map(|present| !present),
+                "An ACC-NR signals access and carries no application data.",
+            ));
+        }
+        if self.wireless_sender_type == Some(0x37)
+            && direction == Some(true)
+            && matches!(self.application_ci, Some(0x72 | 0x7a | 0x78))
+        {
+            results.push(finding("RF adapter application address", ("§3.1.3.4", primary!(32, 498)),
+                self.tpl_present.map(|present| present && !self.short_tpl), "An external meter-side RF adapter must transmit the application's address in a long TPL header."));
+        }
         if let Some(device) = self.device_type {
             let covered = matches!(device, 0x00 | 0x02..=0x04 | 0x06..=0x08 | 0x0a..=0x0d | 0x15..=0x16 | 0x18 | 0x1a | 0x1d..=0x21 | 0x25 | 0x28 | 0x31..=0x33 | 0x36..=0x38);
             results.push(RuleFinding {
@@ -302,6 +341,18 @@ impl LayerFields {
         } else {
             None
         };
+        if matches!(self.application_ci.or(self.outer_ci), Some(0x6e..=0x70))
+            && configuration.is_none_or(|cf| cf.security_mode().to_bits() != 13)
+        {
+            results.push(finding("Application error protection", ("§8.8, Table 42", primary!(79, 600)),
+                match (configuration, has_afl) {
+                    (Some(cf), _) if cf.security_mode().to_bits() != 0 => Some(false),
+                    (_, Some(true)) if self.authentication_type.is_some_and(|at| at != 0) => Some(false),
+                    (_, Some(false)) if configuration.is_some() || self.application_ci.or(self.outer_ci) == Some(0x70) => Some(true),
+                    _ => None,
+                },
+                "An unwrapped application error is sent in cleartext without authentication. Profile C has a separate exception."));
+        }
         if function.is_some_and(crate::requires_mode_zero) {
             results.push(finding(
                 "AFL on control messages",

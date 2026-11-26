@@ -148,6 +148,10 @@ impl<'a> Iterator for DataRecords<'a> {
 }
 
 impl<'a> DataRecords<'a> {
+    pub const fn consumed_bytes(&self) -> usize {
+        self.offset
+    }
+
     #[must_use]
     pub const fn new(data: &'a [u8], long_tpl_header: Option<&'a LongTplHeader>) -> Self {
         DataRecords {

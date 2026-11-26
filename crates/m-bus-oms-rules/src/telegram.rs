@@ -231,6 +231,13 @@ pub fn assess_telegram<H: AsRef<[u8]>>(
     ];
     fields.check(link, configuration, &mut findings);
     if matches!(availability, RecordAvailability::Fragmented) {
+        if matches!(link, Link::Wireless(_)) {
+            findings.push(RuleFinding {
+                rule: "Fragment destination address", reference: "§3.1.3.3",
+                source_url: primary!(31, 776), status: if fields.outer_ci == Some(0x8e) { Passed } else { Failed },
+                detail: "Each wireless data fragment requires a long ELL with the destination address.", record_number: None,
+            });
+        }
         let function = link.function();
         findings.push(RuleFinding {
             rule: "Fragment link function",
@@ -275,7 +282,12 @@ pub fn assess_telegram<H: AsRef<[u8]>>(
         let mut missing = availability.unchecked_reason();
         for (index, record) in records.into_iter().enumerate() {
             if let Some(record) = record {
-                findings.push(crate::commands::check(record, index + 1));
+                crate::commands::check_record(
+                    record,
+                    fields.command_target_type,
+                    index + 1,
+                    &mut findings,
+                );
             } else {
                 missing = Some("A command record header is unavailable.");
             }
@@ -295,6 +307,21 @@ pub fn assess_telegram<H: AsRef<[u8]>>(
 }
 
 pub type TelegramReport = OmsReport<Vec<RuleFinding>>;
+
+impl TelegramReport {
+    pub fn push(&mut self, finding: RuleFinding) {
+        match finding.status {
+            Passed => {
+                self.passed += 1;
+                self.assessed += 1;
+            }
+            Failed => self.assessed += 1,
+            CouldNotCheck => self.unchecked += 1,
+            NotApplicable => {}
+        }
+        self.findings.push(finding);
+    }
+}
 
 fn report<F: AsRef<[RuleFinding]>>(
     security_mode: OmsSecurityModeCheck,

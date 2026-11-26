@@ -10,7 +10,10 @@ use std::fmt;
 use m_bus_core::{ConfigurationField, Function, SecurityMode};
 use m_bus_oms_rules::telegram::{self, Link, RecordAvailability, TelegramReport as OmsReport};
 pub use m_bus_oms_rules::OmsSecurityModeCheck;
-use m_bus_oms_rules::{layers::LayerFields, readings::Reading};
+use m_bus_oms_rules::{
+    layers::LayerFields,
+    readings::{Reading, RecordProtection},
+};
 use serde::Serialize;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use wired_mbus_link_layer as wired;
@@ -27,7 +30,7 @@ mod application;
 mod fragments;
 mod messages;
 mod oms;
-pub use oms::{render_oms_reports, OmsFormat};
+pub use oms::{render_oms_capture, render_oms_reports, OmsFormat};
 mod profile;
 #[cfg(feature = "oms-gen3")]
 mod sml;
@@ -273,6 +276,14 @@ pub struct DecodedOutput {
 
 impl DecodedOutput {
     pub fn assess_oms_5_0_1(&self) -> OmsReport {
+        self.assess_oms_with_history(&mut Default::default(), false)
+    }
+
+    fn assess_oms_with_history(
+        &self,
+        history: &mut m_bus_oms_rules::sequence::AccessHistory,
+        consecutive: bool,
+    ) -> OmsReport {
         let frame = &self.frame;
         let transport = &self.transport;
         let control = frame
@@ -296,6 +307,32 @@ impl DecodedOutput {
                 .meter
                 .identity
                 .as_ref()
+                .and_then(|id| id.device_type_code),
+            wireless_sender_type: self
+                .meter
+                .identity
+                .iter()
+                .chain(&self.meter.alternate_identities)
+                .find(|id| id.source == "link.wireless")
+                .and_then(|id| id.device_type_code),
+            has_application_data: if !self.records.is_empty() {
+                Some(true)
+            } else if let Some(application) = &self.application {
+                Some(!application.payload_hex.is_empty())
+            } else if matches!(self.record_availability, RecordAvailability::Complete)
+                || (transport.header_kind.as_deref() == Some("ell")
+                    && transport.application_ci.is_none()
+                    && self.decode_state == "complete")
+            {
+                Some(false)
+            } else {
+                None
+            },
+            command_target_type: self
+                .meter
+                .identity
+                .as_ref()
+                .filter(|id| id.source == "tpl.long")
                 .and_then(|id| id.device_type_code),
             mac_verified: self.security.decryption_state == "decrypted_authenticated",
             verification_prefix: self.security.decrypted_payload_hex.as_deref().map(|plain| {
@@ -325,6 +362,7 @@ impl DecodedOutput {
         };
         let readings = self.records.iter().map(|record| {
             Some(Reading {
+                protection: record.transport_protection,
                 header: decode_hex_bytes(&record.header_hex).ok()?,
                 data: if record.data_hex.is_empty() {
                     Vec::new()
@@ -338,13 +376,19 @@ impl DecodedOutput {
                 subunit: record.subunit,
             })
         });
-        telegram::assess_telegram(
+        let mut report = telegram::assess_telegram(
             link,
             configuration,
             fields,
             self.record_availability,
             readings,
-        )
+        );
+        if let Some(access) = oms::access_observation(self, link, configuration) {
+            if let Some(finding) = history.observe(access, consecutive) {
+                report.push(finding);
+            }
+        }
+        report
     }
 }
 
@@ -485,6 +529,8 @@ pub struct SecurityOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RecordOutput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport_protection: Option<RecordProtection>,
     pub index: usize,
     pub function: String,
     pub storage_number: u64,
@@ -735,7 +781,7 @@ pub fn decode_data_records(data: &[u8]) -> Result<Vec<RecordOutput>, OutputError
         return Err(OutputError::EmptyInput);
     }
     let records = user_data::DataRecords::from(data);
-    let (output, error) = collect_records(Some(&records), None);
+    let (output, error) = collect_records(Some(&records), None, None);
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",
@@ -1490,7 +1536,11 @@ fn build_output(
             fixed_record_outputs(*device_type_and_unit, *status, counter1, counter2, payload),
             None,
         ),
-        _ => collect_records(records, meter.identity.as_ref()),
+        _ => collect_records(
+            records,
+            meter.identity.as_ref(),
+            oms::encrypted_record_prefix(&frame, user_data, &security_context),
+        ),
     };
     if let Some((offset, message)) = record_error.as_ref() {
         diagnostics.push(Diagnostic {
@@ -1881,6 +1931,7 @@ fn fixed_record_outputs(
         .into_iter()
         .enumerate()
         .map(|(index, reading)| RecordOutput {
+            transport_protection: None,
             index,
             function: if reading.stored {
                 "Stored value"
@@ -1916,6 +1967,7 @@ fn fixed_record_outputs(
 fn collect_records(
     records: Option<&user_data::DataRecords<'_>>,
     identity: Option<&MeterIdentity>,
+    encrypted_prefix: Option<usize>,
 ) -> (Vec<RecordOutput>, Option<(usize, String)>) {
     let Some(records) = records else {
         return (Vec::new(), None);
@@ -1925,11 +1977,22 @@ fn collect_records(
     let mut bases = Vec::new();
     let mut first_error = None;
     let mut profiles = profiles::ProfileHistory::default();
-    for item in records.clone() {
+    let mut records = records.clone();
+    while let Some(item) = records.next() {
         match item {
             Ok(record) => {
                 let size = record.raw_bytes().len();
                 let mut parsed = record_output(output.len(), &record);
+                let end = records.consumed_bytes();
+                parsed.transport_protection = encrypted_prefix.map(|boundary| {
+                    if end <= boundary {
+                        RecordProtection::Encrypted
+                    } else if end - size >= boundary {
+                        RecordProtection::Clear
+                    } else {
+                        RecordProtection::Mixed
+                    }
+                });
                 if let (Some(identity), [0x0f, tail @ ..]) = (identity, record.raw_bytes()) {
                     parsed.manufacturer_fields = manufacturer_fields(identity, tail);
                 }
@@ -2069,6 +2132,7 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
         .filter(|unit| !unit.is_empty());
 
     RecordOutput {
+        transport_protection: None,
         index,
         function,
         storage_number,

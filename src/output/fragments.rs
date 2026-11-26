@@ -227,6 +227,12 @@ fn afl_frame(frame: &[u8]) -> bool {
     link_payload(frame, &mut [0; 290]).is_ok_and(|(_, _, data)| is_fragment(data))
 }
 
+fn complete_wireless_frame(packet: &[u8]) -> bool {
+    let mut scratch = [0; 290];
+    let frame = wireless::strip_format_a_crcs(packet, &mut scratch).unwrap_or(packet);
+    wireless::WirelessFrame::try_from(frame).is_ok()
+}
+
 pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputError> {
     let mut lines = input.lines().map(str::trim).filter(|line| !line.is_empty());
     let (Some(first), Some(second)) = (lines.next(), lines.next()) else {
@@ -234,7 +240,8 @@ pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputEr
     };
     let first = decode_hex_bytes(first)?;
     let numbered = matches!(first.as_slice(), [1, 2..=255, _, ..]);
-    if !numbered && !complete_wired_frame(&first) && !afl_frame(&first) {
+    let wireless_lines = !numbered && !complete_wired_frame(&first) && !afl_frame(&first);
+    if wireless_lines && !complete_wireless_frame(&first) {
         return Ok(None);
     }
     let mut packets = vec![first];
@@ -243,6 +250,9 @@ pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputEr
             return Err(invalid("too many packets"));
         }
         packets.push(decode_hex_bytes(line)?);
+    }
+    if wireless_lines && !packets.iter().all(|packet| complete_wireless_frame(packet)) {
+        return Ok(None);
     }
     Ok(Some(packets))
 }
@@ -350,6 +360,16 @@ pub fn decode_fragment_frames(
     }
     if packets.len() > 1 && packets.iter().all(|packet| complete_wired_frame(packet)) {
         return decode_wired_packets(packets, options);
+    }
+    if packets.len() > 1
+        && packets.iter().all(|packet| complete_wireless_frame(packet))
+        && !packets.iter().any(|packet| afl_frame(packet))
+    {
+        let decoded = packets
+            .iter()
+            .map(|packet| decode_bytes_with_keys(packet, options, None, None))
+            .collect::<Result<_, _>>()?;
+        return Ok(FragmentOutput::Multiple(decoded));
     }
     if !matches!(packets.first(), Some([1, ..])) {
         return decode_afl_fragments(packets, options)

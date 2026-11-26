@@ -6,7 +6,22 @@ use crate::{
     telegram::{RuleFinding, RuleStatus},
 };
 
-pub(super) fn check<H: AsRef<[u8]>>(record: Reading<H>, number: usize) -> RuleFinding {
+pub(super) fn check_record<H: AsRef<[u8]>>(
+    record: Reading<H>,
+    target: Option<u8>,
+    number: usize,
+    findings: &mut Vec<RuleFinding>,
+) {
+    let encoding = check_encoding(&record, number, target, findings);
+    findings.push(encoding);
+}
+
+fn check_encoding<H: AsRef<[u8]>>(
+    record: &Reading<H>,
+    number: usize,
+    target: Option<u8>,
+    findings: &mut Vec<RuleFinding>,
+) -> RuleFinding {
     let mut finding = RuleFinding {
         rule: "Command encoding",
         reference: "Annex B, MB-Command-Tags",
@@ -60,6 +75,28 @@ pub(super) fn check<H: AsRef<[u8]>>(record: Reading<H>, number: usize) -> RuleFi
         (None, "CT1!") => Coding::IntegerOrVariable.accepts(coding),
         _ => return finding,
     };
+    if action.is_none() && tag.0 == "DC1!" {
+        crate::readings::check_disconnector_subunit(target, record.subunit, number, findings);
+        if valid {
+            let data = record.data.as_ref();
+            crate::readings::manual_release(data, number, findings);
+            let allowed = data
+                .split_first()
+                .is_some_and(|(value, rest)| *value <= 2 && rest.iter().all(|byte| *byte == 0));
+            findings.push(RuleFinding {
+                rule: "Disconnector command value",
+                reference: "Annex M, Table M.8",
+                source_url: annex_m!(20, 102),
+                status: if allowed {
+                    RuleStatus::Passed
+                } else {
+                    RuleStatus::Failed
+                },
+                detail: "A disconnector command accepts values 0, 1 and 2.",
+                record_number: Some(number),
+            });
+        }
+    }
     finding.source_url = match (action, tag.0) {
         (Some(0x0c | 0x0d), _) | (_, "CT1!" | "DC1!") => annex_b!(39),
         (_, "DT2!D" | "DT2!N" | "EJ1!") | (Some(0 | 1 | 15), "EW1!") => annex_b!(40),

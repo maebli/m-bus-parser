@@ -7,6 +7,7 @@ pub(super) struct Tag(pub &'static str, pub Coding);
 
 #[derive(Clone, Copy)]
 pub(super) enum Coding {
+    NoData,
     Integer,
     Number,
     NumberOrVariable,
@@ -26,6 +27,7 @@ impl Coding {
         let integer = matches!(dif, 1..=4 | 6 | 7);
         let number = integer || matches!(dif, 9..=12 | 14);
         match self {
+            Self::NoData => dif == 0,
             Self::Integer => integer,
             Self::Number => number,
             Self::NumberOrVariable => number || dif == 13,
@@ -42,7 +44,40 @@ impl Coding {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+pub enum RecordProtection {
+    Clear,
+    Encrypted,
+    Mixed,
+}
+
+fn encryption_required(tag: &str) -> Option<bool> {
+    match tag {
+        "ID4!" | "ID5!" | "ID6!" | "ID11!" => None,
+        "DT1!A" | "DT1!AR" | "DT1!AT" | "DT1!ART" | "DT1!Xn" | "DT2!A" | "DT2!AR" | "DT2!AT"
+        | "DT2!ART" | "DT2!Xn" | "DT3!A" | "DT3!AR" | "DT3!AT" | "DT3!ART" | "DT4!A" | "DT4!AR"
+        | "DT4!AT" | "DT4!ART" | "MM7!" | "MM12!" | "MM13!" | "MM14!" | "MM15!" | "MM16!"
+        | "MM17!" => Some(true),
+        _ => match tag.get(..2)? {
+            "ID" => Some(false),
+            "DP" | "DT" | "MM" => None,
+            "AD" | "CA" | "CC" | "CD" | "CT" | "DC" | "EC" | "EJ" | "ER" | "EW" | "FR" | "HC"
+            | "IR" | "LT" | "MO" | "ND" | "PD" | "PF" | "PH" | "PJ" | "PR" | "PT" | "PW" | "RE"
+            | "RF" | "RH" | "RP" | "TB" | "TC" | "TS" | "VC" | "VF" | "VM" | "VV" | "WS" | "YD" => {
+                Some(true)
+            }
+            _ => None,
+        },
+    }
+}
+
 pub struct Reading<H> {
+    pub protection: Option<RecordProtection>,
     pub header: H,
     pub data: H,
     pub profile_time: Option<bool>,
@@ -82,8 +117,29 @@ impl Readings {
                 record_number: Some(n)});
             return;
         }
+        let vib = &header[end + 1..];
+        if let [0xfd, descriptor @ (0x20..=0x22 | 0x24..=0x29)] = vib {
+            let interval = *descriptor >= 0x24;
+            let address_valid = reading.tariff == 0
+                && reading.subunit == 0
+                && dif & 0x30 == 0
+                && (!interval || reading.storage != 0);
+            results.push(RuleFinding {
+                rule: "Storage descriptor address", reference: "Annex K, K.2", source_url: primary!(124, 90),
+                status: if address_valid { RuleStatus::Passed } else { RuleStatus::Failed },
+                detail: "Tariff, function and subunit must be zero. A storage interval also requires a nonzero storage number.",
+                record_number: Some(n),
+            });
+            if matches!(descriptor, 0x20 | 0x21) {
+                results.push(RuleFinding {
+                    rule: "Storage range endpoint", reference: "Annex K, K.2.2", source_url: primary!(124, 790),
+                    status: if coding == 0 && reading.data.as_ref().is_empty() { RuleStatus::Passed } else { RuleStatus::Failed },
+                    detail: "A first or last cyclic storage number is carried in the DIB and has no data value.",record_number: Some(n),
+                });
+            }
+        }
         let Some(tag) = identify(
-            &header[end + 1..],
+            vib,
             reading.tariff,
             (dif >> 4) & 3,
             reading.storage,
@@ -94,6 +150,34 @@ impl Readings {
             return;
         };
         let valid = tag.1.accepts(coding);
+        if let Some(protection) = reading.protection {
+            let mut candidates = tag.0.split(" / ").map(encryption_required);
+            if let Some(Some(required)) = candidates.next()
+                && candidates.all(|candidate| candidate == Some(required))
+            {
+                let expected = if required {
+                    RecordProtection::Encrypted
+                } else {
+                    RecordProtection::Clear
+                };
+                results.push(RuleFinding {
+                    rule: "Data point encryption",
+                    reference: "§9.1 / Annex B.2",
+                    source_url: crate::sources::tag_page(tag.0),
+                    status: if protection == expected {
+                        RuleStatus::Passed
+                    } else {
+                        RuleStatus::Failed
+                    },
+                    detail: if required {
+                        "Annex B requires this data point to be encrypted."
+                    } else {
+                        "Annex B requires this data point to be in cleartext."
+                    },
+                    record_number: Some(n),
+                });
+            }
+        }
         results.push(RuleFinding {
             rule: tag.0,
             reference: "Annex B, MB-Data-Tags",
@@ -136,7 +220,30 @@ impl Readings {
                 record_number: Some(n),
             });
         }
+        if matches!(tag.0, "DC1!" | "DC2!") {
+            check_disconnector_subunit(device, reading.subunit, n, results);
+        }
         let data = reading.data.as_ref();
+        if matches!(tag.0, "ID7!" | "ID8!")
+            && let [14, serial @ ..] = data
+            && let Some(manufacturer) = serial.get(10..13).filter(|_| serial.len() == 14)
+        {
+            results.push(RuleFinding {
+                rule: "DIN manufacturer code",
+                reference: "§3.2, Table 6 / Annex B note 19",
+                source_url: primary!(36, 580),
+                status: if manufacturer.iter().all(u8::is_ascii_uppercase) {
+                    RuleStatus::Passed
+                } else {
+                    RuleStatus::Failed
+                },
+                detail: "The DIN address contains three uppercase manufacturer letters.",
+                record_number: Some(n),
+            });
+        }
+        if tag.0 == "DC1!" && valid {
+            manual_release(data, n, results);
+        }
         let check = match tag.0 {
             "DC1!" | "DC2!" if valid => Some((
                 "Disconnector state",
@@ -390,5 +497,45 @@ impl Readings {
                 record_number: Some(n),
             });
         }
+    }
+}
+
+pub(super) fn check_disconnector_subunit(
+    device: Option<u8>,
+    subunit: u64,
+    number: usize,
+    findings: &mut Vec<RuleFinding>,
+) {
+    let status = match device {
+        Some(0x01..=0x07 | 0x0a..=0x0d | 0x10 | 0x15..=0x17 | 0x28) if subunit == 1 => {
+            RuleStatus::Passed
+        }
+        Some(0x01..=0x07 | 0x0a..=0x0d | 0x10 | 0x15..=0x17 | 0x28) => RuleStatus::Failed,
+        Some(0x20 | 0x21) => return,
+        _ => RuleStatus::CouldNotCheck,
+    };
+    findings.push(RuleFinding {
+        rule: "Integrated disconnector subunit",
+        reference: "Annex M, M.2.4, Table M.8",
+        source_url: annex_m!(20, 102),
+        status,
+        detail: "A disconnector integrated in a meter uses subunit 1.",
+        record_number: Some(number),
+    });
+}
+
+pub(super) fn manual_release(data: &[u8], number: usize, findings: &mut Vec<RuleFinding>) {
+    if data
+        .split_first()
+        .is_some_and(|(value, rest)| *value == 2 && rest.iter().all(|byte| *byte == 0))
+    {
+        findings.push(RuleFinding {
+            rule: "Manual switch-on capability",
+            reference: "Annex M, Table M.8 note a",
+            source_url: annex_m!(20, 102),
+            status: RuleStatus::CouldNotCheck,
+            detail: "Value 2 requires manual switch-on. Check the declared disconnector type.",
+            record_number: Some(number),
+        });
     }
 }
