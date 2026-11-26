@@ -128,6 +128,19 @@ pub fn m_bus_render(
 }
 
 #[cfg(feature = "decryption-mode-13")]
+#[derive(Default, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ReportSettings {
+    capture: m_bus_parser::output::OmsCaptureOptions,
+    #[cfg(feature = "decryption-mode-10")]
+    lpwan_mac_key: Option<String>,
+    #[cfg(feature = "decryption-mode-10")]
+    lpwan_derivation_counter: Option<u8>,
+    #[cfg(feature = "decryption-mode-7")]
+    application_key: Option<String>,
+}
+
+#[cfg(feature = "decryption-mode-13")]
 #[wasm_bindgen]
 pub fn m_bus_render_oms_capture(
     input: &str,
@@ -136,34 +149,83 @@ pub fn m_bus_render_oms_capture(
     consecutive: bool,
     key_hex: Option<String>,
     session_json: Option<String>,
+    context_json: Option<String>,
 ) -> Result<String, JsValue> {
-    use m_bus_parser::output::{render_oms_capture, ImportedTlsSession};
+    use m_bus_parser::output::{
+        render_application_oms_with_keys, render_oms_capture_with_options, FragmentOutput,
+        ImportedTlsSession,
+    };
     let OutputFormat::Oms(format) = OutputFormat::from_str(format).map_err(error_to_js)? else {
         return Err(JsError::new("Expected an OMS report format.").into());
     };
-    let options = DecodeOptions::default();
-    let m_bus_parser::output::FragmentOutput::Multiple(mut frames) =
-        decode_capture_hex(input, &options).map_err(error_to_js)?
-    else {
-        return Err(JsError::new("Expected a capture with multiple telegrams.").into());
+    let settings: ReportSettings = context_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(|error| JsError::new(&error.to_string()))?
+        .unwrap_or_default();
+    let mut capture = settings.capture;
+    capture.consecutive = consecutive;
+    let options = decode_options(key_hex.as_deref(), None).map_err(error_to_js)?;
+    #[cfg(feature = "decryption-mode-7")]
+    let application_key = parse_key(settings.application_key.as_deref()).map_err(error_to_js)?;
+    #[cfg(not(feature = "decryption-mode-7"))]
+    let application_key: Option<[u8; 16]> = None;
+    let imported = session_json
+        .as_deref()
+        .map(ImportedTlsSession::from_json)
+        .transpose()
+        .map_err(error_to_js)?;
+    let session = imported.as_ref().map(ImportedTlsSession::session);
+    let mut frames = match decode_capture_hex(input, &DecodeOptions::default()) {
+        Ok(FragmentOutput::Multiple(frames)) => frames,
+        Ok(FragmentOutput::Single(frame)) => vec![*frame],
+        Err(frame_error) if selected != 0 => return Err(error_to_js(frame_error)),
+        Err(_) => {
+            let options = RenderOptions {
+                decode: options,
+                ..RenderOptions::default()
+            };
+            return render_application_oms_with_keys(
+                input,
+                format,
+                &options,
+                capture,
+                session.as_ref(),
+                application_key.as_ref(),
+            )
+            .map_err(error_to_js);
+        }
     };
     let frame = frames
         .get_mut(selected)
         .ok_or_else(|| JsError::new("Select a telegram in this capture."))?;
-    if let Some(json) = session_json {
-        let session = ImportedTlsSession::from_json(&json).map_err(error_to_js)?;
+    if let Some(session) = session {
         *frame = m_bus_parser::output::decode_hex_with_tls_session(
             &frame.raw.original_frame_hex,
             &options,
-            &session.session(),
+            &session,
         )
         .map_err(error_to_js)?;
-    } else if key_hex.is_some() {
-        let options = decode_options(key_hex.as_deref(), None).map_err(error_to_js)?;
-        *frame = m_bus_parser::decode_hex(&frame.raw.original_frame_hex, &options)
+    } else if options.key.is_some() {
+        let source = if frame.raw.fragment_frames_hex.len() > 1 {
+            frame.raw.fragment_frames_hex.join("\n")
+        } else {
+            frame.raw.original_frame_hex.clone()
+        };
+        *frame = m_bus_parser::decode_hex(&source, &options).map_err(error_to_js)?;
+    }
+    #[cfg(feature = "decryption-mode-10")]
+    if let Some(key) = parse_key(settings.lpwan_mac_key.as_deref()).map_err(error_to_js)? {
+        frame
+            .authenticate_lpwan_mac(&key, settings.lpwan_derivation_counter)
             .map_err(error_to_js)?;
     }
-    render_oms_capture(&frames, format, Some(selected), consecutive).map_err(error_to_js)
+    #[cfg(feature = "decryption-mode-7")]
+    if let Some(key) = application_key {
+        frame.authenticate_application(&key).map_err(error_to_js)?;
+    }
+    render_oms_capture_with_options(&frames, format, Some(selected), capture).map_err(error_to_js)
 }
 
 /// Render CI-prefixed application data or bare DIF/VIF records without a link frame.

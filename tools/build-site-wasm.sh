@@ -2,8 +2,11 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../wasm/site"
+site_toolchain=${SITE_RUST_TOOLCHAIN:-nightly-2026-05-16}
+rustup component add rust-src --toolchain "$site_toolchain"
 for module in parser syntax; do
-    wasm-pack build --target web --out-dir "pkg-$module" --out-name "$module" -- --features "$module"
+    rustup run "$site_toolchain" wasm-pack build --target web --out-dir "pkg-$module" --out-name "$module" . -- \
+        -Zbuild-std=std,panic_abort -Zbuild-std-features=optimize_for_size --features "$module"
     cp "pkg-$module/$module.js" "pkg-$module/${module}_bg.wasm" ../../docs/
 done
 

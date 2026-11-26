@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=4f041d498da7f656">
-    <link rel="modulepreload" href="./parser.js?v=fb9081663c763418">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=fdfe76877a6de526">
+    <link rel="modulepreload" href="./parser.js?v=5b1fd8b57f3f8456">
     <link rel="modulepreload" href="./input-format.js">
     <link rel="modulepreload" href="./tls-session.js">
     <link rel="modulepreload" href="./error-report.js">
@@ -489,6 +489,12 @@
             .oms-report .inline-reference { display: block; margin-top: 4px; }
         }
         .output-toolbar { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; }
+        #oms-context { position: relative; font-size: .85rem; }
+        #oms-context summary { cursor: pointer; }
+        .oms-settings { display: grid; gap: .5rem; padding: .6rem 0; }
+        #taf7-periods:not([hidden]) { display: grid; gap: .4rem; }
+        #taf7-periods label { display: flex; justify-content: space-between; gap: .6rem; }
+        #taf7-periods input { width: 8em; }
         .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
         .result-views { min-width: 0; }
         .result-views .parse-actions { margin: 0; gap: 4px; }
@@ -1844,7 +1850,30 @@
                     <input id="parse_oms-xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
-            <label id="consecutive-option" hidden><input id="consecutive-capture" type="checkbox"> No missing transmissions or meter restart</label>
+            <details id="oms-context" hidden>
+                <summary>Test settings</summary>
+                <div class="oms-settings">
+                    <label id="radio-mode-option" hidden>Declared radio mode
+                        <select id="oms-radio-mode">
+                            <option value="">Unknown</option><option value="c">C</option><option value="c1">C1</option>
+                            <option value="c2">C2</option><option value="other">Other</option>
+                        </select>
+                    </label>
+                    <label id="consecutive-option" hidden><input id="consecutive-capture" type="checkbox"> No missing transmissions or meter restart</label>
+                    <label id="application-key-option" hidden>ASP10 application key <input id="oms-application-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
+                    <div id="lpwan-mac-settings" hidden>
+                        <label>LPWAN MAC key <input id="lpwan-mac-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
+                        <label>Derivation counter <input id="lpwan-counter" type="number" min="0" max="255" step="1" placeholder="From frame"></label>
+                    </div>
+                    <label><input id="taf7" type="checkbox"> Declared TAF7 profile</label>
+                    <div id="taf7-periods" hidden>
+                        <label>Measuring period (ms)<input name="measuring_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                        <label>Registration period (ms)<input name="registration_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                        <label>Nominal transmission interval (ms)<input name="nominal_transmission_interval_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                        <label>Acceptance window (ms)<input name="acceptance_window_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                    </div>
+                </div>
+            </details>
             <div class="output-actions">
                 <button id="copy_output" title="Copy Output" hidden>
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1888,7 +1917,7 @@
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, m_bus_render_oms_capture, version } from "./parser.js?v=fb9081663c763418";
+        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, m_bus_render_oms_capture, version } from "./parser.js?v=5b1fd8b57f3f8456";
 
         import { normalizeInput } from "./input-format.js";
 
@@ -2163,7 +2192,7 @@
         async function loadSyntax() {
             const [module, wasm] = await Promise.all([
                 import("./syntax.js?v=428d019268ec04a2"),
-                fetch(new URL("./syntax_bg.wasm?v=31aa000a35391209", import.meta.url)),
+                fetch(new URL("./syntax_bg.wasm?v=89e792d0c99ed70f", import.meta.url)),
             ]);
             await module.default({ module_or_path: wasm });
             return module;
@@ -2277,7 +2306,7 @@
                 }
             });
 
-            await init({ module_or_path: new URL("./parser_bg.wasm?v=4f041d498da7f656", import.meta.url) });
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=fdfe76877a6de526", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
@@ -2289,7 +2318,19 @@
             const capturePosition = document.getElementById('capture-position');
             const captureFrame = document.getElementById('capture-frame');
             const consecutive = document.getElementById('consecutive-capture');
-            consecutive.addEventListener('change', () => parseInput(currentFormat));
+            const radioMode = document.getElementById('oms-radio-mode');
+            const applicationKey = document.getElementById('oms-application-key');
+            const applicationKeyOption = document.getElementById('application-key-option');
+            const macSettings = document.getElementById('lpwan-mac-settings');
+            const macKey = document.getElementById('lpwan-mac-key');
+            const macCounter = document.getElementById('lpwan-counter');
+            const taf7 = document.getElementById('taf7');
+            const periods = document.getElementById('taf7-periods');
+            const periodInputs = [...periods.querySelectorAll('input')];
+            document.getElementById('oms-context').addEventListener('change', () => {
+                periods.hidden = !taf7.checked;
+                parseInput(currentFormat);
+            });
             captureFrame.addEventListener('change', () => parseInput(currentFormat));
             let hasDecoded = false;
             let renderGeneration = 0;
@@ -2313,11 +2354,27 @@
                 document.getElementById(`mode-${mode}`).addEventListener('click', () => selectFormat(lastFormat[mode]));
             }
 
+            function updateApplicationKeyOption(telegram) {
+                const application = telegram?.application;
+                const fields = application?.decoded;
+                const selector = fields instanceof Map ? fields.get('data_selector') : fields?.data_selector;
+                applicationKeyOption.hidden = application?.protocol !== 'security_information_transfer' || selector !== 0x32;
+            }
+
+            function updateOmsOptions() {
+                updateApplicationKeyOption(inspectedTelegram);
+                macSettings.hidden = !inspectedTelegram?.lpwan?.body?.authentication_code;
+                document.getElementById('oms-context').hidden = !isOmsView(currentFormat) || !inspectedTelegram;
+                document.getElementById('radio-mode-option').hidden = !isOmsView(currentFormat) || inspectedTelegram?.frame?.kind !== 'wireless';
+                const wirelessCapture = captureFrames.some(({ frame }) => frame.kind === 'wireless' || frame.kind === 'lpwan');
+                document.getElementById('consecutive-option').hidden = !isOmsView(currentFormat) || !wirelessCapture;
+            }
+
             function setOutputView(format) {
                 currentFormat = format;
                 const selectedMode = isOmsView(format) ? 'oms' : 'parse';
                 lastFormat[selectedMode] = format;
-                document.getElementById('consecutive-option').hidden = selectedMode !== 'oms' || !captureFrames.some(frame => frame.frame.kind === 'wireless');
+                updateOmsOptions();
                 for (const mode of ['parse', 'oms']) {
                     const active = mode === selectedMode;
                     document.getElementById(`mode-${mode}`).setAttribute('aria-pressed', String(active));
@@ -2357,7 +2414,16 @@
                 clearTimeout(inspectionTimer);
                 inspectedTelegram = null;
                 const refreshChoices = capturePicker.hidden || captureInput !== telegramInput.value;
-                if (captureInput !== telegramInput.value) consecutive.checked = false;
+                if (captureInput !== telegramInput.value) {
+                    consecutive.checked = false;
+                    radioMode.value = '';
+                    applicationKey.value = '';
+                    macKey.value = '';
+                    macCounter.value = '';
+                    taf7.checked = false;
+                    periods.hidden = true;
+                    periodInputs.forEach(input => { input.value = ''; });
+                }
                 captureInput = telegramInput.value;
                 captureFrames = [];
 
@@ -2391,7 +2457,7 @@
                     }
                 }
                 capturePicker.hidden = captureFrames.length < 2;
-                document.getElementById('consecutive-option').hidden = !isOmsView(currentFormat) || !captureFrames.some(frame => frame.frame.kind === 'wireless');
+                updateOmsOptions();
                 updateDecodeButton();
             }
 
@@ -2487,7 +2553,13 @@
             const urlEncoding = urlParams.get('encoding');
             inputFormat.value = ['hex', 'base64'].includes(urlEncoding) ? urlEncoding : 'auto';
             if (urlData) {
-                document.getElementById('inputstring').value = urlData;
+                telegramInput.value = urlData;
+                inspectCurrentTelegram();
+                radioMode.value = ['c', 'c1', 'c2', 'other'].includes(urlParams.get('radioMode')) ? urlParams.get('radioMode') : '';
+                consecutive.checked = urlParams.get('consecutive') === '1';
+                taf7.checked = urlParams.get('taf7') === '1';
+                periods.hidden = !taf7.checked;
+                if (taf7.checked) periodInputs.forEach(input => { input.value = urlParams.get(input.name) || ''; });
                 parseInput(urlFormat || currentFormat);
             } else if (bundledExample) {
                 const protocol = urlParams.get('protocol') === 'wireless' ? 'wireless' : 'wired';
@@ -2500,9 +2572,22 @@
                 writeClipboard(window._lastRawOutput || '');
             });
 
+            function reportParams(inputString, format) {
+                const params = new URLSearchParams({ data: inputString, format, encoding: inputFormat.value });
+                if (isOmsView(format)) {
+                    if (taf7.checked) {
+                        params.set('taf7', '1');
+                        for (const input of periodInputs) if (input.value) params.set(input.name, input.value);
+                    }
+                    if (radioMode.value && !document.getElementById('radio-mode-option').hidden) params.set('radioMode', radioMode.value);
+                    if (consecutive.checked && !document.getElementById('consecutive-option').hidden) params.set('consecutive', '1');
+                }
+                return params;
+            }
+
             document.getElementById('share_button').addEventListener('click', () => {
                 const inputString = document.getElementById('inputstring').value;
-                const params = new URLSearchParams({ data: inputString, format: currentFormat, encoding: inputFormat.value });
+                const params = reportParams(inputString, currentFormat);
                 const shareUrl = `${location.origin}${location.pathname}?${params}`;
                 navigator.clipboard.writeText(shareUrl);
                 const btn = document.getElementById('share_button');
@@ -2578,7 +2663,7 @@
                 };
 
                 if (updateHistory) {
-                    const params = new URLSearchParams({ data: inputString, format, encoding: inputFormat.value });
+                    const params = reportParams(inputString, format);
                     history.replaceState(null, '', `?${params}`);
                 }
 
@@ -2628,8 +2713,28 @@
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
                         : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
                     attempt.decoded = result.decoded;
-                    let formattedResult = oms && selectedFrame
-                        ? m_bus_render_oms_capture(normalizeInput(inputString, inputFormat.value), captureFrame.selectedIndex, renderFormat, consecutive.checked, isTls ? undefined : aesKey || undefined, sessionJson)
+                    const context = {};
+                    if (oms && !document.getElementById('radio-mode-option').hidden && radioMode.value) context.radio_mode = radioMode.value;
+                    if (oms && taf7.checked) {
+                        context.taf7 = {};
+                        for (const input of periodInputs) {
+                            if (!input.value && !input.validity.badInput) continue;
+                            if (!input.reportValidity() || !Number.isSafeInteger(input.valueAsNumber)) {
+                                throw new Error('Enter a positive whole number of milliseconds.');
+                            }
+                            context.taf7[input.name] = input.valueAsNumber;
+                        }
+                    }
+                    const settings = { capture: context };
+                    updateApplicationKeyOption(result.decoded);
+                    if (oms && !applicationKeyOption.hidden && applicationKey.value.trim()) settings.application_key = applicationKey.value.trim();
+                    if (oms && !macSettings.hidden && macKey.value.trim()) {
+                        settings.lpwan_mac_key = macKey.value.trim();
+                        if (!macCounter.reportValidity()) throw new Error('Enter a derivation counter from 0 to 255.');
+                        if (macCounter.value) settings.lpwan_derivation_counter = macCounter.valueAsNumber;
+                    }
+                    let formattedResult = oms && (selectedFrame || context.radio_mode || context.taf7 || settings.lpwan_mac_key || settings.application_key)
+                        ? m_bus_render_oms_capture(normalizeInput(inputString, inputFormat.value), selectedFrame ? captureFrame.selectedIndex : 0, renderFormat, consecutive.checked, isTls ? undefined : aesKey || undefined, sessionJson, JSON.stringify(settings))
                         : result.output;
                     hasDecoded = true;
 

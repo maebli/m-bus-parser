@@ -219,11 +219,12 @@ export function m_bus_render(data, format, key_hex, width, include_enrichment) {
  * @param {boolean} consecutive
  * @param {string | null} [key_hex]
  * @param {string | null} [session_json]
+ * @param {string | null} [context_json]
  * @returns {string}
  */
-export function m_bus_render_oms_capture(input, selected, format, consecutive, key_hex, session_json) {
-    let deferred6_0;
-    let deferred6_1;
+export function m_bus_render_oms_capture(input, selected, format, consecutive, key_hex, session_json, context_json) {
+    let deferred7_0;
+    let deferred7_1;
     try {
         const ptr0 = passStringToWasm0(input, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
@@ -233,18 +234,20 @@ export function m_bus_render_oms_capture(input, selected, format, consecutive, k
         var len2 = WASM_VECTOR_LEN;
         var ptr3 = isLikeNone(session_json) ? 0 : passStringToWasm0(session_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len3 = WASM_VECTOR_LEN;
-        const ret = wasm.m_bus_render_oms_capture(ptr0, len0, selected, ptr1, len1, consecutive, ptr2, len2, ptr3, len3);
-        var ptr5 = ret[0];
-        var len5 = ret[1];
+        var ptr4 = isLikeNone(context_json) ? 0 : passStringToWasm0(context_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len4 = WASM_VECTOR_LEN;
+        const ret = wasm.m_bus_render_oms_capture(ptr0, len0, selected, ptr1, len1, consecutive, ptr2, len2, ptr3, len3, ptr4, len4);
+        var ptr6 = ret[0];
+        var len6 = ret[1];
         if (ret[3]) {
-            ptr5 = 0; len5 = 0;
+            ptr6 = 0; len6 = 0;
             throw takeFromExternrefTable0(ret[2]);
         }
-        deferred6_0 = ptr5;
-        deferred6_1 = len5;
-        return getStringFromWasm0(ptr5, len5);
+        deferred7_0 = ptr6;
+        deferred7_1 = len6;
+        return getStringFromWasm0(ptr6, len6);
     } finally {
-        wasm.__wbindgen_free(deferred6_0, deferred6_1, 1);
+        wasm.__wbindgen_free(deferred7_0, deferred7_1, 1);
     }
 }
 
