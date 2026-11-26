@@ -77,16 +77,33 @@ pub fn render_capture_hex_with_tls_session(
     session: &TlsSession<'_>,
 ) -> Result<String, OutputError> {
     require_tls_output_format(format)?;
-    let capture = decode_capture_hex(input, &options.decode)?;
-    let mut frames = match capture {
+    match decode_capture_hex_with_tls_session(input, &options.decode, session)? {
+        FragmentOutput::Single(frame) => match format {
+            OutputFormat::Oms(format) => render_oms_capture_with_options(
+                std::slice::from_ref(frame.as_ref()),
+                format,
+                None,
+                capture_options,
+            ),
+            _ => render_decoded(&frame, format, options),
+        },
+        FragmentOutput::Multiple(frames) => match format {
+            OutputFormat::Oms(format) => {
+                render_oms_capture_with_options(&frames, format, None, capture_options)
+            }
+            _ => render_capture(FragmentOutput::Multiple(frames), format, options),
+        },
+    }
+}
+
+pub fn decode_capture_hex_with_tls_session(
+    input: &str,
+    options: &DecodeOptions,
+    session: &TlsSession<'_>,
+) -> Result<FragmentOutput, OutputError> {
+    let mut frames = match decode_capture_hex(input, options)? {
         FragmentOutput::Single(frame) => {
-            let frame = apply(&frame, &options.decode, session)?;
-            return match format {
-                OutputFormat::Oms(format) => {
-                    render_oms_capture_with_options(&[frame], format, None, capture_options)
-                }
-                _ => render_decoded(&frame, format, options),
-            };
+            return apply(&frame, options, session).map(|f| FragmentOutput::Single(Box::new(f)))
         }
         FragmentOutput::Multiple(frames) => frames,
     };
@@ -125,13 +142,8 @@ pub fn render_capture_hex_with_tls_session(
             sequence_number: number,
             ..*session
         };
-        *frame = apply(frame, &options.decode, &next)?;
+        *frame = apply(frame, options, &next)?;
         sequence = number.checked_add(records as u64);
     }
-    match format {
-        OutputFormat::Oms(format) => {
-            render_oms_capture_with_options(&frames, format, None, capture_options)
-        }
-        _ => render_capture(FragmentOutput::Multiple(frames), format, options),
-    }
+    Ok(FragmentOutput::Multiple(frames))
 }

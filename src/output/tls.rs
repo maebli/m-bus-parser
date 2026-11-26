@@ -1,6 +1,6 @@
 mod capture;
 use super::*;
-pub use capture::render_capture_hex_with_tls_session;
+pub use capture::{decode_capture_hex_with_tls_session, render_capture_hex_with_tls_session};
 use m_bus_core::decryption::mode13::{Mode13Error, TlsContentType, TlsDirection};
 
 pub fn decode_hex_with_tls_session(

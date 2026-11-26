@@ -50,7 +50,8 @@ mod tls_session;
 use m_bus_core::decryption::mode13::TlsSession;
 #[cfg(feature = "decryption-mode-13")]
 pub use tls::{
-    decode_hex_with_tls_session, render_capture_hex_with_tls_session, render_hex_with_tls_session,
+    decode_capture_hex_with_tls_session, decode_hex_with_tls_session,
+    render_capture_hex_with_tls_session, render_hex_with_tls_session,
 };
 #[cfg(feature = "decryption-mode-13")]
 pub use tls_session::ImportedTlsSession;

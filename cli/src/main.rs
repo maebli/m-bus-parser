@@ -140,6 +140,21 @@ struct ValidationArgs {
     consecutive: bool,
     #[arg(long, value_name = "MODE", value_parser = parse_radio_mode, help = "Declared wireless mode: c, c1, c2 or other")]
     radio_mode: Option<OmsRadioMode>,
+    #[cfg(feature = "decryption-mode-10")]
+    #[arg(
+        long,
+        value_name = "KEY",
+        help = "Persistent LPWAN MAC key, separate from the application key"
+    )]
+    lpwan_mac_key: Option<String>,
+    #[cfg(feature = "decryption-mode-10")]
+    #[arg(
+        long,
+        requires = "lpwan_mac_key",
+        value_name = "COUNTER",
+        help = "MAC derivation counter when omitted by the frame"
+    )]
+    lpwan_derivation_counter: Option<u8>,
     #[arg(long, help = "Check the declared TAF7 use case")]
     taf7: bool,
     #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared TAF7 measuring period in milliseconds")]
@@ -164,8 +179,8 @@ fn parse_radio_mode(value: &str) -> Result<OmsRadioMode, String> {
     }
 }
 
-impl From<ValidationArgs> for OmsCaptureOptions {
-    fn from(args: ValidationArgs) -> Self {
+impl From<&ValidationArgs> for OmsCaptureOptions {
+    fn from(args: &ValidationArgs) -> Self {
         let has_taf7 = args.taf7
             || args.taf7_measuring_period_ms.is_some()
             || args.taf7_registration_period_ms.is_some()
@@ -235,7 +250,7 @@ fn run() -> Result<(), String> {
             None,
             true,
             cli.color,
-            validation.into(),
+            validation,
         ),
         Command::Parse {
             input,
@@ -259,7 +274,7 @@ fn render_input(
     width: Option<usize>,
     no_enrichment: bool,
     color: ColorChoice,
-    capture: OmsCaptureOptions,
+    validation: ValidationArgs,
 ) -> Result<(), String> {
     let TelegramInput {
         file,
@@ -305,45 +320,77 @@ fn render_input(
         },
         table_width: width,
     };
+    let capture = OmsCaptureOptions::from(&validation);
     #[cfg(feature = "decryption-mode-13")]
-    let rendered = match tls_session {
-        Some(path) => {
-            let json = fs::read_to_string(&path).map_err(|error| {
+    let imported = tls_session
+        .as_ref()
+        .map(|path| {
+            let json = fs::read_to_string(path).map_err(|error| {
                 format!(
                     "[input.tls_session] failed to read {}: {error}",
                     path.display()
                 )
             })?;
-            let imported = m_bus_parser::output::ImportedTlsSession::from_json(&json)
-                .map_err(|error| format!("[{}] {error}", error.code()))?;
-            let session = imported.session();
+            m_bus_parser::output::ImportedTlsSession::from_json(&json)
+                .map_err(|error| format!("[{}] {error}", error.code()))
+        })
+        .transpose()?;
+    #[cfg(feature = "decryption-mode-13")]
+    let session = imported.as_ref().map(|imported| imported.session());
+    let rendered = if let OutputFormat::Oms(format) = output_format {
+        #[cfg(feature = "decryption-mode-13")]
+        let decoded = match session.as_ref() {
+            Some(session) => m_bus_parser::output::decode_capture_hex_with_tls_session(
+                &input,
+                &options.decode,
+                session,
+            ),
+            None => decode_capture_hex(&input, &options.decode),
+        };
+        #[cfg(not(feature = "decryption-mode-13"))]
+        let decoded = decode_capture_hex(&input, &options.decode);
+        match decoded {
+            Ok(frames) => render_checked_frames(frames, format, &validation),
+            Err(OutputError::InvalidFrame { .. }) => {
+                #[cfg(feature = "decryption-mode-13")]
+                if let Some(session) = &session {
+                    m_bus_parser::output::render_application_oms_with_tls_session(
+                        &input, format, &options, capture, session,
+                    )
+                } else {
+                    m_bus_parser::output::render_application_oms(&input, format, &options, capture)
+                }
+                #[cfg(not(feature = "decryption-mode-13"))]
+                m_bus_parser::output::render_application_oms(&input, format, &options, capture)
+            }
+            Err(error) => Err(error),
+        }
+    } else {
+        #[cfg(feature = "decryption-mode-13")]
+        if let Some(session) = &session {
             match m_bus_parser::output::render_capture_hex_with_tls_session(
                 &input,
                 output_format,
                 &options,
                 capture,
-                &session,
+                session,
             ) {
-                Err(OutputError::InvalidFrame { .. }) => match output_format {
-                    OutputFormat::Oms(format) => {
-                        m_bus_parser::output::render_application_oms_with_tls_session(
-                            &input, format, &options, capture, &session,
-                        )
-                    }
-                    _ => m_bus_parser::output::render_application_hex_with_tls_session(
+                Err(OutputError::InvalidFrame { .. }) => {
+                    m_bus_parser::output::render_application_hex_with_tls_session(
                         &input,
                         output_format,
                         &options,
-                        &session,
-                    ),
-                },
+                        session,
+                    )
+                }
                 result => result,
             }
+        } else {
+            render_auto_detected(&input, output_format, &options)
         }
-        None => render_auto_detected(&input, output_format, &options, capture),
+        #[cfg(not(feature = "decryption-mode-13"))]
+        render_auto_detected(&input, output_format, &options)
     };
-    #[cfg(not(feature = "decryption-mode-13"))]
-    let rendered = render_auto_detected(&input, output_format, &options, capture);
     let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
     print!("{rendered}");
     Ok(())
@@ -366,36 +413,37 @@ fn read_input(
     normalize_input(&input, input_format)
 }
 
+fn render_checked_frames(
+    mut output: FragmentOutput,
+    format: m_bus_parser::output::OmsFormat,
+    validation: &ValidationArgs,
+) -> Result<String, OutputError> {
+    let frames = match &mut output {
+        FragmentOutput::Single(frame) => std::slice::from_mut(frame.as_mut()),
+        FragmentOutput::Multiple(frames) => frames.as_mut_slice(),
+    };
+    #[cfg(feature = "decryption-mode-10")]
+    if let Some(value) = &validation.lpwan_mac_key {
+        let key = parse_key(value).map_err(|_| OutputError::InvalidOption {
+            option: "lpwan-mac-key",
+            message: "Expected 32 hexadecimal characters.".into(),
+        })?;
+        for frame in &mut *frames {
+            frame.authenticate_lpwan_mac(&key, validation.lpwan_derivation_counter)?;
+        }
+    }
+    m_bus_parser::output::render_oms_capture_with_options(frames, format, None, validation.into())
+}
+
 fn render_auto_detected(
     input: &str,
     format: OutputFormat,
     options: &RenderOptions,
-    capture: OmsCaptureOptions,
 ) -> Result<String, OutputError> {
-    if let OutputFormat::Oms(format) = format {
-        return match decode_capture_hex(input, &options.decode) {
-            Ok(FragmentOutput::Single(frame)) => {
-                m_bus_parser::output::render_oms_capture_with_options(
-                    std::slice::from_ref(frame.as_ref()),
-                    format,
-                    None,
-                    capture,
-                )
-            }
-            Ok(FragmentOutput::Multiple(frames)) => {
-                m_bus_parser::output::render_oms_capture_with_options(
-                    &frames, format, None, capture,
-                )
-            }
-            Err(OutputError::InvalidFrame { .. }) => {
-                m_bus_parser::output::render_application_oms(input, format, options, capture)
-            }
-            Err(error) => Err(error),
-        };
-    }
-    match render_hex(input, format, options) {
+    match decode_capture_hex(input, &options.decode) {
         Err(OutputError::InvalidFrame { .. }) => render_application_hex(input, format, options),
-        result => result,
+        Err(error) => Err(error),
+        Ok(_) => render_hex(input, format, options),
     }
 }
 
