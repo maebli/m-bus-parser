@@ -432,6 +432,14 @@ impl DecodedOutput {
             readings,
             options.taf7,
         );
+        if let Some(wired) = oms::wired_observation(self) {
+            wired.check(
+                transport.outer_ci.is_some(),
+                transport.header_kind.as_deref() == Some("long_tpl"),
+                self.security.mode_code.is_some_and(|mode| mode != 0),
+                &mut report,
+            );
+        }
         if let Some(mac) = &self.lpwan {
             mac.check(
                 mac.upper_layer_octets != 0,

@@ -60,6 +60,22 @@ pub(super) fn encrypted_record_prefix(
     }
 }
 
+pub(super) fn wired_observation(
+    frame: &DecodedOutput,
+) -> Option<m_bus_oms_rules::wired::WiredObservation> {
+    use m_bus_oms_rules::wired::WiredObservation;
+    let offset = match frame.frame.kind.as_str() {
+        "single_character" => return Some(WiredObservation::Ack),
+        "short" => 4,
+        "long" | "control" => 10,
+        _ => return None,
+    };
+    let control = u8::from_str_radix(frame.frame.control_field.as_deref()?, 16).ok()?;
+    let address =
+        u8::from_str_radix(frame.raw.normalized_frame_hex.get(offset..offset + 2)?, 16).ok()?;
+    Some(WiredObservation::Frame { control, address })
+}
+
 pub(super) fn access_observation(
     frame: &DecodedOutput,
     link: Link,
@@ -228,6 +244,7 @@ pub fn render_oms_capture_with_options(
     }
     let mut history = Default::default();
     let mut reports = Vec::new();
+    let mut previous_wired: Option<m_bus_oms_rules::wired::WiredObservation> = None;
     let mut previous: Option<ExchangeFrame> = None;
     let mut lpwan = m_bus_oms_rules::lpwan::LpwanHistory::default();
     let mut key_information = KeyInformationHistory::default();
@@ -236,6 +253,13 @@ pub fn render_oms_capture_with_options(
         if let Some(mac) = &frame.lpwan {
             lpwan.observe(mac, consecutive, &mut report);
         }
+        let wired = wired_observation(frame);
+        if consecutive {
+            if let (Some(request), Some(reply)) = (previous_wired, wired) {
+                request.check_reply(reply, &mut report);
+            }
+        }
+        previous_wired = wired;
         let current = exchange_frame(frame);
         if let (Some(request), Some(reply)) = (previous, current) {
             request.check_reply(reply, consecutive, &mut report);
