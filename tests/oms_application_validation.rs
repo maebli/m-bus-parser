@@ -787,3 +787,76 @@ fn symbolic_profile_times_detect_conflicting_storage_allocations() {
         Some("failed")
     );
 }
+
+#[test]
+fn application_selection_checks_its_extended_parameter_and_reported_content() {
+    use m_bus_parser::{decode_bytes, DecodeOptions};
+
+    let wired = |ci, parameters: &[u8]| {
+        let mut body = vec![if ci == 0x66 { 8 } else { 0x53 }, 4, ci];
+        body.extend(parameters);
+        let length = body.len() as u8;
+        let check = body.iter().fold(0u8, |acc, b| acc.wrapping_add(*b));
+        let mut frame = vec![0x68, length, length, 0x68];
+        frame.extend(body);
+        frame.extend([check, 0x16]);
+        decode_bytes(&frame, &DecodeOptions::default())
+            .unwrap()
+            .assess_oms_5_0_1()
+    };
+    for (ci, data, expected) in [
+        (0x50, &[][..], "passed"),
+        (0x50, &[0; 10], "passed"),
+        (0x50, &[0; 11], "failed"),
+        (0x54, &[], "passed"),
+        (0x54, &[1], "failed"),
+        (0x66, &[0xf0, 0x10], "passed"),
+        (0x66, &[], "failed"),
+    ] {
+        assert_eq!(
+            outcome(&wired(ci, data), "Application selection parameters"),
+            Some(expected),
+            "{ci:02x} {data:?}"
+        );
+    }
+    let selected = |cf, data: &'static [u8]| {
+        report(
+            7,
+            cf,
+            0x10,
+            RecordAvailability::Complete,
+            vec![
+                record(&[2, 0xfd, 0xfd, 0], data),
+                record(&[1, 0xfd, 0x23], &[0]),
+            ],
+        )
+    };
+    assert_eq!(
+        outcome(
+            &selected(0x8700, &[0x70, 1]),
+            "Static application descriptor block"
+        ),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(
+            &selected(0x0701, &[0xf0, 0x10]),
+            "Selected application message content"
+        ),
+        Some("passed")
+    );
+    assert_eq!(
+        outcome(
+            &selected(0x0702, &[0xf0, 0x10]),
+            "Selected application message content"
+        ),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(
+            &selected(0x0700, &[0xf0, 0x10]),
+            "Selected application message content"
+        ),
+        Some("could_not_check")
+    );
+}

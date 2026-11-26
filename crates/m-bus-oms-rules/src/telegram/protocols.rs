@@ -9,6 +9,25 @@ pub struct ApplicationProtocolEvidence {
     pub sml_file: Option<bool>,
     pub sml_v2: Option<Result<SmlBlock, ()>>,
     pub association: Option<DlmsAssociation>,
+    pub selection_length: Option<usize>,
+}
+
+pub(crate) fn selected_application(parameters: &[u8]) -> Option<(u16, u64)> {
+    if parameters.is_empty() || parameters.len() > 10 {
+        return None;
+    }
+    let mut application = 0;
+    let mut extended = true;
+    let mut block = 0;
+    for (position, byte) in parameters.iter().enumerate() {
+        let selector = byte >> 4;
+        if extended {
+            application += u16::from(selector);
+            extended = selector == 15;
+        }
+        block |= u64::from(byte & 15) << (4 * position);
+    }
+    Some((application, block))
 }
 
 #[derive(Clone, Copy)]
@@ -174,6 +193,26 @@ impl ApplicationProtocolEvidence {
                 record_number: None,
             })
         };
+        if matches!(ci, 0x50 | 0x53..=0x57 | 0x66..=0x68) {
+            let query = matches!(ci, 0x54..=0x56);
+            let response = matches!(ci, 0x66..=0x68);
+            record(
+                "Application selection parameters",
+                "§8.10 / EN 13757-3, §7.2–7.3",
+                primary!(80, 218),
+                self.selection_length.map(|length| {
+                    if query {
+                        length == 0
+                    } else if response {
+                        (1..=10).contains(&length)
+                    } else {
+                        length <= 10
+                    }
+                }),
+                "A query has no parameter. A selection or status response carries up to ten parameter bytes. An empty selection command resets the application.",
+            );
+            return;
+        }
         if matches!(ci, 0x64 | 0x65 | 0x7e | 0x7f) {
             record(
                 "SML message structure and checksum",

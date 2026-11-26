@@ -1,4 +1,5 @@
 mod protocols;
+pub(crate) use protocols::selected_application;
 pub use protocols::{ApplicationProtocolEvidence, DlmsAssociation, SmlBlock};
 
 use crate::{
@@ -275,7 +276,9 @@ pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
         });
     }
     let application = fields.application_ci.or(fields.outer_ci);
-    if let Some(ci @ (0x60 | 0x61 | 0x64 | 0x65 | 0x7c..=0x7f)) = application {
+    if let Some(ci @ (0x50 | 0x53..=0x57 | 0x66..=0x68 | 0x60 | 0x61 | 0x64 | 0x65 | 0x7c..=0x7f)) =
+        application
+    {
         fields.application_protocol.check(ci, &mut findings);
     } else if fields.readings_possible() {
         let mut readings = Readings::default();
@@ -333,6 +336,12 @@ pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
                     record_number: None,
                 });
             }
+        }
+        if matches!(link, Link::Wireless(0x44))
+            && let Some(cf) = configuration
+            && let Some(index) = fields.content_index(cf)
+        {
+            readings.check_selected_content((cf.raw() >> 14) as u8, index, &mut findings);
         }
         readings.finish(unavailable, &mut findings);
     } else if matches!(

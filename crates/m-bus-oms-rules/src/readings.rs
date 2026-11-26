@@ -145,7 +145,7 @@ pub(super) struct Readings {
     due_dates: BTreeSet<u64>,
     sensor_types: BTreeSet<u8>,
     descriptors: BTreeMap<(bool, u64), u8>,
-    static_selection_block: Option<u8>,
+    selected_application: Option<(u16, u64, usize)>,
     first_descriptor: Option<usize>,
     maximum_registers: BTreeMap<MaximumPowerRegister, MaximumPowerPair>,
     profiles: profiles::Profiles,
@@ -436,9 +436,10 @@ impl Readings {
         }
         if tag.0 == "MM6!"
             && valid
-            && let [code @ 0x70..=0x7e] = reading.data.as_ref()
+            && let Some((application, block)) =
+                crate::telegram::selected_application(reading.data.as_ref())
         {
-            self.static_selection_block = Some(code & 15);
+            self.selected_application = Some((application, block, n));
         }
         let data = reading.data.as_ref();
         if tag.0 == "ID11!"
@@ -879,6 +880,32 @@ impl Readings {
         });
     }
 
+    pub(super) fn check_selected_content(
+        &self,
+        content: u8,
+        index: u8,
+        findings: &mut Vec<RuleFinding>,
+    ) {
+        let Some((application, _, number)) = self.selected_application else {
+            return;
+        };
+        let expected = match application {
+            7 => (2, 0),
+            16..=18 => (0, application - 15),
+            26..=29 => (0, application - 22),
+            46..=49 => (1, application - 46),
+            54..=57 => (1, application - 46),
+            _ => return,
+        };
+        findings.push(RuleFinding {
+            rule: "Selected application message content", reference: "§8.10, Table 41", source_url: primary!(80, 388),
+            status: if (content, index) == (0, 0) { RuleStatus::CouldNotCheck }
+                else if expected == (content, u16::from(index)) { RuleStatus::Passed } else { RuleStatus::Failed },
+            detail: "The application reported in MM6! must agree with the content and index on a differentiated data push.",
+            record_number: Some(number),
+        });
+    }
+
     pub(super) fn finish(&self, unavailable: Option<&'static str>, results: &mut Vec<RuleFinding>) {
         if let Some(n) = self.unknown {
             results.push(RuleFinding {
@@ -887,7 +914,9 @@ impl Readings {
                 record_number: Some(n),
             });
         }
-        if let (Some(block), Some(number)) = (self.static_selection_block, self.first_descriptor) {
+        if let (Some((7, block, _)), Some(number)) =
+            (self.selected_application, self.first_descriptor)
+        {
             results.push(RuleFinding {
                 rule: "Static application descriptor block", reference: "§8.10", source_url: primary!(80, 257),
                 status: if block <= 1 { RuleStatus::Passed } else { RuleStatus::Failed },
