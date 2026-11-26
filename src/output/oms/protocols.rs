@@ -65,6 +65,13 @@ pub(in crate::output) fn application_protocol(
             &bytes
         };
         evidence.association = DlmsAssociation::from_mbus_payload(bytes);
+        #[cfg(feature = "oms-gen5")]
+        {
+            let padded = frame.security.decrypted_payload_hex.is_some()
+                && matches!(frame.security.mode_code, Some(5 | 7));
+            evidence.dlms_service =
+                Some(m_bus_oms_rules::dlms::DlmsService::inspect(bytes, padded));
+        }
     } else {
         #[cfg(feature = "oms-gen3")]
         {

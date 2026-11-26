@@ -1,14 +1,23 @@
 use super::{RuleFinding, RuleStatus};
 use alloc::vec::Vec;
 
+macro_rules! sml_page {
+    ($page:literal) => {
+        concat!("https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Publikationen/TechnischeRichtlinien/TR03109/TR-03109-1_Anlage_Feinspezifikation_Drahtgebundene_LMN-Schnittstelle_Teilb.pdf?__blob=publicationFile&v=1#page=", stringify!($page))
+    };
+}
+
 #[derive(Clone, Copy, Default)]
 pub struct ApplicationProtocolEvidence {
     pub sml_envelope: Option<bool>,
     pub sml_body: Option<bool>,
     pub sml_transport: Option<bool>,
     pub sml_file: Option<bool>,
+    pub sml_file_groups: Option<bool>,
+    pub sml_file_address: Option<bool>,
     pub sml_v2: Option<Result<SmlBlock, ()>>,
     pub association: Option<DlmsAssociation>,
+    pub dlms_service: Option<crate::dlms::DlmsService>,
     pub selection_length: Option<usize>,
 }
 
@@ -69,6 +78,19 @@ impl SmlBlock {
             }
             report.push(finding);
         }
+        if let Some(evidence) = file {
+            for (name, valid) in [
+                ("Reassembled SML message groups", evidence.sml_file_groups),
+                (
+                    "Reassembled SML request addressing",
+                    evidence.sml_file_address,
+                ),
+            ] {
+                if let Some(valid) = valid {
+                    report.push(sml_transfer_finding(name, valid, "Checks the group sequence or server addressing of the reconstructed SML file."));
+                }
+            }
+        }
     }
 
     pub fn check_size(self, maximum: u16, report: &mut super::TelegramReport) {
@@ -111,7 +133,7 @@ fn sml_transfer_finding(rule: &'static str, valid: bool, detail: &'static str) -
     RuleFinding {
         rule,
         reference: "§8.6 / SML 1.04, §8.2",
-        source_url: primary!(78, 212),
+        source_url: sml_page!(69),
         status: if valid {
             RuleStatus::Passed
         } else {
@@ -247,15 +269,15 @@ impl ApplicationProtocolEvidence {
         if matches!(ci, 0x64 | 0x65 | 0x7e | 0x7f) {
             record(
                 "SML message structure and checksum",
-                "§8.6 / SML specification",
-                primary!(78, 212),
+                "§8.6 / SML 1.04, §5",
+                sml_page!(17),
                 self.sml_envelope,
                 "Checks the six-field message envelope and the CRC of each readable SML binary message.",
             );
             record(
                 "SML message body schema",
                 "§8.6 / SML 1.04, §5.1",
-                primary!(78, 212),
+                sml_page!(20),
                 self.sml_body,
                 "Checks each recognized message schema, including its parameter trees, time choices, profile and value lists, and COSEM attribute descriptors.",
             );
@@ -263,7 +285,7 @@ impl ApplicationProtocolEvidence {
                 record(
                     "SML version 1 transport",
                     "§8.6 / SML 1.04, §8.1",
-                    primary!(78, 212),
+                    sml_page!(68),
                     Some(valid),
                     "The escaped frame must have valid padding, a complete end marker and a matching transport CRC.",
                 );
@@ -271,10 +293,28 @@ impl ApplicationProtocolEvidence {
             if let Some(valid) = self.sml_file {
                 record(
                     "SML file open and close",
-                    "§8.6 / SML 1.04, §5.1.1–5.1.4",
-                    primary!(78, 212),
+                    "§8.6 / SML 1.04, §4.1",
+                    sml_page!(16),
                     Some(valid),
-                    "A complete SML request or response file starts and ends with the corresponding public open and close messages.",
+                    "Validates request, response and combined file boundaries. A response to a request may use an attention message at either end.",
+                );
+            }
+            if let Some(valid) = self.sml_file_groups {
+                record(
+                    "SML file message groups",
+                    "§8.6 / SML 1.04, §5",
+                    sml_page!(17),
+                    Some(valid),
+                    "Each group occupies a contiguous range within its request or response file.",
+                );
+            }
+            if let Some(valid) = self.sml_file_address {
+                record(
+                    "SML file request addressing",
+                    "§8.6 / SML 1.04, §5.1.1",
+                    sml_page!(21),
+                    Some(valid),
+                    "Every request with a server ID field follows the addressed or broadcast mode of its open request.",
                 );
             }
             if let Some(block) = self.sml_v2 {
@@ -302,7 +342,7 @@ impl ApplicationProtocolEvidence {
                 association.mandatory_fields,
                 "An association carries an application-context OID. The response also carries its result and diagnostic.",
             );
-        } else {
+        } else if self.dlms_service.is_none() {
             record(
                 "DLMS application payload",
                 "§8.5",
@@ -310,6 +350,9 @@ impl ApplicationProtocolEvidence {
                 None,
                 "An association APDU is needed to assess its fields. Other COSEM services require a service-specific decoder.",
             );
+        }
+        if let Some(service) = self.dlms_service {
+            service.findings(ci, rows);
         }
     }
 }
