@@ -420,7 +420,7 @@
         .oms-report h3 { margin: 8px 0 14px; font-size: 1rem; }
         .oms-report a { color: #0969da; }
         body.dark-mode .oms-report a { color: #79c0ff; }
-        #oms-view-picker { align-self: center; margin: 0; }
+        #oms-view-picker { margin: 4px 16px 8px; }
         #oms-findings { margin: 0; }
         #oms-findings dt[data-status="not_applicable"], #oms-findings dt[data-status="not_applicable"] + dd { color: #6e7781; }
         body.dark-mode #oms-findings dt[data-status="not_applicable"], body.dark-mode #oms-findings dt[data-status="not_applicable"] + dd { color: #929ba5; }
@@ -1484,7 +1484,6 @@
             </div>
             <div class="decode-actions">
                 <button type="submit" id="decode-button" disabled>Loading parser…</button>
-                <button type="button" id="check-oms" class="utility-control" disabled>Check OMS</button>
             </div>
             <details id="tls-panel" class="tls-panel" name="parser-disclosure">
                 <summary id="tls-summary">TLS session · mode 13</summary>
@@ -1772,20 +1771,13 @@
                     <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
                     <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
                     <input id="parse_product" type="button" value="3D" aria-pressed="false" />
+                    <input id="parse_oms" type="button" value="OMS" aria-pressed="false" />
                     <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
                     <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
                     <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
-            <label id="oms-view-picker" hidden>OMS report
-                <select id="oms-format">
-                    <option value="oms">Overview</option>
-                    <option value="oms-json">JSON</option>
-                    <option value="oms-xml">XML</option>
-                    <option value="oms-csv">CSV</option>
-                </select>
-            </label>
             <div class="output-actions">
                 <button id="copy_output" title="Copy Output" hidden>
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1802,6 +1794,14 @@
                 </a>
             </div>
         </div>
+        <label id="oms-view-picker" hidden>OMS report
+            <select id="oms-format">
+                <option value="oms">Overview</option>
+                <option value="oms-json">JSON</option>
+                <option value="oms-xml">XML</option>
+                <option value="oms-csv">CSV</option>
+            </select>
+        </label>
         <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
         <template id="parser-note-template">
@@ -2219,13 +2219,20 @@
             const decodeButton = document.getElementById('decode-button');
             const parserApi = { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
             decodeButton.disabled = false;
-            const omsButton = document.getElementById('check-oms');
             const omsFormat = document.getElementById('oms-format');
             const isOmsView = format => ['oms', 'oms-json', 'oms-xml', 'oms-csv'].includes(format);
-            let decodeFormat = 'table';
-            omsButton.disabled = false;
-            omsButton.addEventListener('click', () => parseInput(omsFormat.value));
-            omsFormat.addEventListener('change', () => parseInput(omsFormat.value));
+            omsFormat.addEventListener('change', () => selectFormat(omsFormat.value));
+
+            function setOutputView(format) {
+                currentFormat = format;
+                const oms = isOmsView(format);
+                if (oms) omsFormat.value = format;
+                document.getElementById('oms-view-picker').hidden = !oms;
+                const selected = `parse_${oms ? 'oms' : format}`;
+                document.querySelectorAll('.parse-actions input').forEach(button => {
+                    button.setAttribute('aria-pressed', String(button.id === selected));
+                });
+            }
 
             function updateDecodeButton() {
                 const security = inspectedTelegram?.security;
@@ -2245,11 +2252,10 @@
                 document.getElementById('tls-summary').textContent = isTls
                     ? tlsEnabled ? 'TLS session · enabled' : 'TLS session · required for decryption'
                     : 'TLS session · mode 13';
-                if (isTls && currentFormat === 'xml') currentFormat = 'json';
+                if (isTls && currentFormat === 'xml') setOutputView('json');
                 document.querySelectorAll('.parse-actions input').forEach(button => {
                     button.disabled = isTls && button.id === 'parse_xml';
                     button.title = button.disabled ? 'TLS output supports JSON, YAML, Table, CSV, and Diagram.' : '';
-                    button.setAttribute('aria-pressed', String(button.id === `parse_${currentFormat}`));
                 });
             }
 
@@ -2331,14 +2337,11 @@
 
             document.getElementById('parser-form').addEventListener('submit', event => {
                 event.preventDefault();
-                parseInput(isOmsView(currentFormat) ? decodeFormat : currentFormat);
+                parseInput(currentFormat);
             });
 
             function selectFormat(format) {
-                currentFormat = format;
-                document.querySelectorAll('.parse-actions input').forEach(button => {
-                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
-                });
+                setOutputView(format);
                 if (hasDecoded) parseInput(format);
             }
 
@@ -2412,6 +2415,8 @@
             document.getElementById('parse_csv').addEventListener('click', () => {
                 selectFormat("csv");
             });
+
+            document.getElementById('parse_oms').addEventListener('click', () => selectFormat(omsFormat.value));
 
             document.getElementById('parse_product').addEventListener('click', () => selectFormat('product'));
 
@@ -2487,14 +2492,7 @@
                 const oms = isOmsView(format);
                 if (!oms && !['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview', 'product'].includes(format)) format = 'table';
                 if (isTls && format === 'xml') format = 'json';
-                if (oms) omsFormat.value = format;
-                else decodeFormat = format;
-                document.getElementById('oms-view-picker').hidden = !oms;
-                document.querySelector('.result-views').hidden = oms;
-                currentFormat = format;
-                document.querySelectorAll('.parse-actions input').forEach(button => {
-                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
-                });
+                setOutputView(format);
                 const inputString = document.getElementById('inputstring').value;
                 const aesKey = document.getElementById('aeskey').value.trim();
                 const outputContainer = document.getElementById('output');
