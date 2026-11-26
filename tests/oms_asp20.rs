@@ -1,4 +1,5 @@
 #![cfg(all(feature = "std", feature = "oms-gen5"))]
+#![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
 use m_bus_parser::output::{decode_bytes, decode_bytes_with_application_key, DecodeOptions};
 
@@ -75,4 +76,54 @@ fn asp20_uses_transport_meter_and_direction() {
         decode_bytes_with_application_key(&frame(false, COMMAND), &Default::default(), &KEY)
             .is_err()
     );
+}
+
+#[test]
+fn asp20_authenticates_reassembled_data_and_application_only_long_headers() {
+    use m_bus_parser::output::{render_application_oms_with_application_key, OmsFormat};
+    for (command, protected) in [(true, COMMAND), (false, RESPONSE)] {
+        let bytes = frame(command, protected);
+        let application = &bytes[10..];
+        let result = render_application_oms_with_application_key(
+            &hex::encode(application),
+            OmsFormat::Json,
+            &Default::default(),
+            Default::default(),
+            &KEY,
+        );
+        if command {
+            let report: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+            assert!(report["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(
+                    |f| f["rule"] == "ASP20 application authentication" && f["status"] == "passed"
+                ));
+        } else {
+            assert_eq!(
+                result.unwrap_err().code(),
+                "security.application_address_unavailable"
+            );
+        }
+        let first = application.len() / 2;
+        let make_fragment = |id, flag, segment: &[u8]| {
+            let mut fragment = bytes[..10].to_vec();
+            if !command {
+                fragment[1] = 8;
+            }
+            fragment.extend_from_slice(&[0x90, 2, id, flag]);
+            fragment.extend_from_slice(segment);
+            fragment[0] = (fragment.len() - 1) as u8;
+            fragment
+        };
+        let a = make_fragment(1, 0x40, &application[..first]);
+        let b = make_fragment(2, 0, &application[first..]);
+        let mut decoded = m_bus_parser::decode_fragments(&[&a, &b], &Default::default()).unwrap();
+        decoded.authenticate_application(&KEY).unwrap();
+        assert_eq!(
+            decoded.application.unwrap().decoded.unwrap()["apdu_hex"],
+            "01132A"
+        );
+    }
 }

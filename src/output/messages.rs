@@ -311,6 +311,9 @@ impl DecodedOutput {
             let llc = mac.llc.as_ref()?;
             return if downlink { llc.receiver } else { llc.sender };
         }
+        if self.frame.kind == "reassembled" {
+            return super::fragments::application_meter(&self.raw.fragment_frames_hex, downlink);
+        }
         let exchange = super::oms::exchange_frame(self)?;
         if downlink {
             exchange.receiver

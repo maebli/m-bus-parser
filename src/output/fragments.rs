@@ -21,6 +21,37 @@ pub(super) fn wireless_destination(frames: &[String]) -> Option<bool> {
     addressed
 }
 
+pub(super) fn application_meter(frames: &[String], downlink: bool) -> Option<[u8; 8]> {
+    frames.iter().find_map(|hex| {
+        let bytes = decode_hex_bytes(hex).ok()?;
+        let mut scratch = [0; 290];
+        let (link, from_meter, data) = link_payload(&bytes, &mut scratch).ok()?;
+        if from_meter == downlink || !is_fragment(data) {
+            return None;
+        }
+        match link {
+            Link::Wireless(_, receiver) if downlink => receiver,
+            Link::Wireless(_, _) => wireless::strip_format_a_crcs(&bytes, &mut scratch)
+                .unwrap_or(&bytes)
+                .get(2..10)?
+                .try_into()
+                .ok(),
+            Link::Lpwan(_, _) => {
+                let header = m_bus_oms_rules::lpwan::LpwanHeader::parse(&bytes)
+                    .ok()?
+                    .0
+                    .llc?;
+                if downlink {
+                    header.receiver
+                } else {
+                    header.sender
+                }
+            }
+            Link::Wired(_) => None,
+        }
+    })
+}
+
 fn invalid(message: &str) -> OutputError {
     OutputError::Rendering {
         code: "fragment.invalid",
