@@ -267,7 +267,9 @@ fn transport_payload(wire: &[u8], mut remaining: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-fn version_two_block(wire: &[u8]) -> Option<m_bus_oms_rules::telegram::SmlBlock> {
+pub(super) fn version_two_block(
+    wire: &[u8],
+) -> Option<(m_bus_oms_rules::telegram::SmlBlock, Vec<u8>)> {
     let [0x1b, 0x1b, 0x1b, 0x1b, 2, control, file, 1, rest @ ..] = wire else {
         return None;
     };
@@ -297,13 +299,16 @@ fn version_two_block(wire: &[u8]) -> Option<m_bus_oms_rules::telegram::SmlBlock>
     if (block == 0 || control & 0x80 != 0) && !decoded.is_empty() {
         return None;
     }
-    Some(m_bus_oms_rules::telegram::SmlBlock {
-        control: *control,
-        file: *file,
-        negotiation,
-        payload_len: decoded.len(),
-        wire_len: wire.len(),
-    })
+    Some((
+        m_bus_oms_rules::telegram::SmlBlock {
+            control: *control,
+            file: *file,
+            negotiation,
+            payload_len: decoded.len(),
+            wire_len: wire.len(),
+        },
+        decoded,
+    ))
 }
 
 pub(super) fn inspect(
@@ -314,10 +319,10 @@ pub(super) fn inspect(
     while let Some(rest) = data.strip_prefix(&[0x2f]) {
         data = rest;
     }
-    let mut file_bounds = None;
+    let mut complete_file = false;
     let file;
     if data.starts_with(&[0x1b, 0x1b, 0x1b, 0x1b, 2]) {
-        evidence.sml_v2 = Some(version_two_block(data).ok_or(()));
+        evidence.sml_v2 = Some(version_two_block(data).map(|(block, _)| block).ok_or(()));
         return;
     }
     if let Some(stream) = data.strip_prefix(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1]) {
@@ -327,10 +332,19 @@ pub(super) fn inspect(
             return;
         };
         data = bytes;
-        file_bounds = Some((None, None));
+        complete_file = true;
     } else if data.first() != Some(&0x76) {
         return;
     }
+    inspect_messages(data, complete_file, evidence);
+}
+
+pub(super) fn inspect_messages(
+    data: &[u8],
+    complete_file: bool,
+    evidence: &mut m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
+) {
+    let mut file_bounds = complete_file.then_some((None, None));
     let mut shapes = Some(true);
     let mut message_fields = true;
     let result = messages(data, |_, group, abort, tag, fields| {

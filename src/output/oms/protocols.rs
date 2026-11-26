@@ -89,13 +89,74 @@ impl Route {
     }
 }
 
+#[cfg(feature = "oms-gen3")]
+#[derive(Default)]
+struct FileBlocks {
+    next: u8,
+    last: Option<(u8, usize)>,
+    data: Vec<u8>,
+}
+
 #[derive(Default)]
 pub(super) struct SmlTransfers {
+    #[cfg(feature = "oms-gen3")]
+    files: std::collections::BTreeMap<(Route, u8), FileBlocks>,
     previous: Option<(Route, m_bus_oms_rules::telegram::SmlBlock)>,
     maximum: std::collections::BTreeMap<(Route, u8), u16>,
 }
 
 impl SmlTransfers {
+    #[cfg(feature = "oms-gen3")]
+    fn assemble(
+        &mut self,
+        route: Route,
+        block: m_bus_oms_rules::telegram::SmlBlock,
+        data: &[u8],
+        report: &mut super::OmsReport,
+    ) {
+        let key = (route, block.file);
+        if block.control == 0 {
+            self.files.retain(|(active, _), _| *active != route);
+            self.files.insert(
+                key,
+                FileBlocks {
+                    next: 1,
+                    ..Default::default()
+                },
+            );
+            return;
+        }
+        if block.control & 0x80 != 0 {
+            return;
+        }
+        let number = block.control & 0x3f;
+        let mut collected = self.files.remove(&key);
+        if let Some(file) = &mut collected {
+            if let Some((_, start)) = file.last.filter(|(last, _)| *last == number) {
+                file.data.truncate(start);
+            } else if number != file.next {
+                collected = None;
+            }
+        }
+        if let Some(file) = &mut collected {
+            file.last = Some((number, file.data.len()));
+            file.next = if number == 63 { 1 } else { number + 1 };
+            file.data.extend_from_slice(data);
+        }
+        if block.control & 0x40 == 0 {
+            if let Some(file) = collected {
+                self.files.insert(key, file);
+            }
+        } else {
+            let evidence = collected.map(|file| {
+                let mut evidence = ApplicationProtocolEvidence::default();
+                crate::output::sml::inspect_messages(&file.data, true, &mut evidence);
+                evidence
+            });
+            block.check_file(evidence, report);
+        }
+    }
+
     pub(super) fn observe(
         &mut self,
         frame: &DecodedOutput,
@@ -130,7 +191,33 @@ impl SmlTransfers {
             ) => Route::Wired(address, control & 0x40 != 0),
             _ => return,
         };
-        let Some(Ok(block)) = application_protocol(frame).sml_v2 else {
+        #[cfg(feature = "oms-gen3")]
+        let block = {
+            let clear = frame.security.decrypted_payload_hex.as_deref().or_else(|| {
+                if matches!(
+                    frame.record_availability,
+                    RecordAvailability::Encrypted | RecordAvailability::Fragmented
+                ) {
+                    return None;
+                }
+                Some(frame.application.as_ref()?.payload_hex.as_str())
+            });
+            let Some(bytes) = clear.and_then(|hex| decode_hex_bytes(hex).ok()) else {
+                return;
+            };
+            let start = bytes.iter().position(|b| *b != 0x2f).unwrap_or(bytes.len());
+            let Some((block, data)) = bytes
+                .get(start..)
+                .and_then(crate::output::sml::version_two_block)
+            else {
+                return;
+            };
+            self.assemble(route, block, &data, report);
+            block
+        };
+        #[cfg(not(feature = "oms-gen3"))]
+        let Some(Ok(block)) = application_protocol(frame).sml_v2
+        else {
             return;
         };
         if block.control == 0 {

@@ -860,3 +860,84 @@ fn application_selection_checks_its_extended_parameter_and_reported_content() {
         Some("could_not_check")
     );
 }
+
+#[test]
+fn sml_version_two_checks_the_file_across_retries_and_missing_blocks() {
+    use m_bus_parser::{
+        decode_bytes,
+        output::{render_oms_capture, OmsFormat},
+        DecodeOptions,
+    };
+    fn packet(control: u8, payload: &[u8]) -> m_bus_parser::output::DecodedOutput {
+        let mut wire = vec![0x1b, 0x1b, 0x1b, 0x1b, 2, control, 9, 1];
+        if control == 0 {
+            wire.extend([
+                0x1b, 0x1b, 0x1b, 0x1b, 3, 0, 0x13, 0x88, 0x1b, 0x1b, 0x1b, 0x1b, 4, 0, 0, 64,
+            ]);
+        }
+        wire.extend_from_slice(payload);
+        let padding = (4 - wire.len() % 4) % 4;
+        wire.resize(wire.len() + padding, 0);
+        wire.extend([0x1b, 0x1b, 0x1b, 0x1b, 0x1a, padding as u8]);
+        wire.extend(crc16::State::<crc16::X_25>::calculate(&wire).to_le_bytes());
+        let mut body = vec![8, 4, 0x7f, 0, 0, 0, 0];
+        body.extend(wire);
+        let len = body.len() as u8;
+        let mut frame = vec![0x68, len, len, 0x68];
+        let checksum = body.iter().fold(0u8, |a, b| a.wrapping_add(*b));
+        frame.extend(body);
+        frame.extend([checksum, 0x16]);
+        decode_bytes(&frame, &DecodeOptions::default()).unwrap()
+    }
+    fn message(tag: u16, fields: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![0x76, 2, 1, 0x62, 0, 0x62, 0, 0x72, 0x63];
+        bytes.extend(tag.to_be_bytes());
+        bytes.extend(fields);
+        let crc = crc16::State::<crc16::X_25>::calculate(&bytes);
+        bytes.push(0x63);
+        bytes.extend(crc.to_le_bytes());
+        bytes.push(0);
+        bytes
+    }
+    let mut file = message(0x0101, &[0x76, 1, 1, 2, 0x42, 2, 0x24, 1, 1]);
+    file.extend(message(0x0201, &[0x71, 1]));
+    let verify = |last, bytes: &[u8]| {
+        let (first, tail) = bytes.split_at(12);
+        let frames = [
+            packet(0, &[]),
+            packet(1, first),
+            packet(1, first),
+            packet(last, tail),
+        ];
+        let output = render_oms_capture(&frames, OmsFormat::Json, Some(3), true).unwrap();
+        serde_json::from_str::<serde_json::Value>(&output).unwrap()
+    };
+    let status = |result: &serde_json::Value, rule: &str| {
+        result["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["rule"] == rule)
+            .unwrap()["status"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let good = verify(0x42, &file);
+    for rule in [
+        "Reassembled SML message checksums",
+        "Reassembled SML message bodies",
+        "Reassembled SML file open and close",
+    ] {
+        assert_eq!(status(&good, rule), "passed");
+    }
+    assert_eq!(
+        status(&verify(0x43, &file), "Reassembled SML message checksums"),
+        "could_not_check"
+    );
+    file[2] ^= 1;
+    assert_eq!(
+        status(&verify(0x42, &file), "Reassembled SML message checksums"),
+        "failed"
+    );
+}

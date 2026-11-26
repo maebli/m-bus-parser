@@ -40,6 +40,37 @@ pub struct SmlBlock {
 }
 
 impl SmlBlock {
+    pub fn check_file(
+        self,
+        file: Option<ApplicationProtocolEvidence>,
+        report: &mut super::TelegramReport,
+    ) {
+        for (name, result) in [
+            (
+                "Reassembled SML message checksums",
+                file.and_then(|f| f.sml_envelope),
+            ),
+            (
+                "Reassembled SML message bodies",
+                file.and_then(|f| f.sml_body),
+            ),
+            (
+                "Reassembled SML file open and close",
+                file.and_then(|f| f.sml_file),
+            ),
+        ] {
+            let mut finding = sml_transfer_finding(
+                name,
+                result == Some(true),
+                "Checks the SML file assembled from the observed sequence of data blocks. Missing blocks or unsupported fields leave the result unknown.",
+            );
+            if result.is_none() {
+                finding.status = RuleStatus::CouldNotCheck;
+            }
+            report.push(finding);
+        }
+    }
+
     pub fn check_size(self, maximum: u16, report: &mut super::TelegramReport) {
         if self.negotiation.is_some() || self.control & 0x80 != 0 {
             return;
