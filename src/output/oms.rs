@@ -94,8 +94,6 @@ fn clock_fields(fields: &serde_json::Value) -> Option<m_bus_oms_rules::layers::C
     })
 }
 
-pub(super) fn encrypted_record_prefix(
-    frame: &super::FrameOutput,
 pub(super) fn check_sitp_clocks(frame: &DecodedOutput, report: &mut OmsReport) {
     let Some(fields) = frame
         .application
@@ -114,6 +112,8 @@ pub(super) fn check_sitp_clocks(frame: &DecodedOutput, report: &mut OmsReport) {
     }
 }
 
+pub(super) fn encrypted_record_prefix(
+    frame: &super::FrameOutput,
     block: Option<&crate::user_data::UserDataBlock<'_>>,
     security: &super::SecurityContext,
 ) -> Option<usize> {
@@ -294,7 +294,11 @@ fn exchange_frame(frame: &DecodedOutput) -> Option<ExchangeFrame> {
         },
         key_id: frame.security.key_id,
         key_version: frame.security.key_version,
-        tls_hello: frame.security.tls.as_ref().and_then(|tls| tls.records.iter().find_map(|record| record.hello)),
+        tls_hello: frame
+            .security
+            .tls
+            .as_ref()
+            .and_then(|tls| tls.records.iter().find_map(|record| record.hello)),
         security_counter: frame.security.message_counter,
         verified_encryption: frame.security.decryption_state == "decrypted_authenticated"
             && frame
@@ -358,6 +362,7 @@ pub fn render_oms_capture_with_options(
     let mut previous: Option<ExchangeFrame> = None;
     let mut lpwan = m_bus_oms_rules::lpwan::LpwanHistory::default();
     let mut key_information = KeyInformationHistory::default();
+    let mut sitp_history = m_bus_oms_rules::sitp::History::default();
     let mut reading_history = readings::CaptureReadings::default();
     let mut sml_history = protocols::SmlTransfers::default();
     for (index, frame) in frames.iter().enumerate() {
@@ -365,7 +370,6 @@ pub fn render_oms_capture_with_options(
         if let Some(mac) = &frame.lpwan {
             lpwan.observe(mac, consecutive, &mut report);
         }
-    let mut sitp_history = m_bus_oms_rules::sitp::History::default();
         let wired = wired_observation(frame);
         if consecutive {
             if let Some(observation) = wired {
@@ -383,12 +387,6 @@ pub fn render_oms_capture_with_options(
         }
         previous_wired = wired;
         let current = exchange_frame(frame);
-        if let (Some(request), Some(reply)) = (previous, current) {
-            request.check_reply(reply, consecutive, &mut report);
-        }
-        if let Some(frame) = current {
-            if options.radio_mode.is_some_and(OmsRadioMode::is_c) {
-                key_information.check_mode_c_ell(frame, &mut report);
         if let Some(exchange) = current {
             if let (Some(receiver), Some((command, blocks))) =
                 (exchange.receiver, sitp_blocks(frame))
@@ -403,6 +401,12 @@ pub fn render_oms_capture_with_options(
                 );
             }
         }
+        if let (Some(request), Some(reply)) = (previous, current) {
+            request.check_reply(reply, consecutive, &mut report);
+        }
+        if let Some(frame) = current {
+            if options.radio_mode.is_some_and(OmsRadioMode::is_c) {
+                key_information.check_mode_c_ell(frame, &mut report);
             }
             key_information.observe(frame, consecutive, &mut report);
         }

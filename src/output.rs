@@ -57,12 +57,13 @@ pub use tls::{
 pub use tls_session::ImportedTlsSession;
 #[cfg(not(feature = "decryption-mode-13"))]
 struct TlsSession<'a>(core::marker::PhantomData<&'a ()>);
-pub use application::{render_application_hex, render_application_oms};
 #[cfg(feature = "decryption-mode-7")]
 pub use application::render_application_oms_with_application_key;
+pub use application::{render_application_hex, render_application_oms};
 #[cfg(feature = "decryption-mode-13")]
 pub use application::{
-    render_application_hex_with_tls_session, render_application_oms_with_keys, render_application_oms_with_tls_session,
+    render_application_hex_with_tls_session, render_application_oms_with_keys,
+    render_application_oms_with_tls_session,
 };
 use messages::application_output;
 
@@ -394,8 +395,8 @@ impl DecodedOutput {
             tls: self.security.tls.as_ref().map(|tls| {
                 let has = |name| tls.records.iter().any(|r| r.content_type == name);
                 m_bus_oms_rules::layers::TlsFields {
-                    channel_request: tls.protocol == "channel_request",
                     cmac_verified: tls.cmac_verified,
+                    channel_request: tls.protocol == "channel_request",
                     handshake_or_alert: has("handshake")
                         || has("change_cipher_spec")
                         || has("alert"),
@@ -470,12 +471,12 @@ impl DecodedOutput {
                 &mut report,
             );
         }
-        if let Some(mac) = &self.lpwan {
-            mac.check(
         if let Some((command, blocks)) = oms::sitp_blocks(self) {
             m_bus_oms_rules::sitp::assess(&blocks, command, &mut report);
             oms::check_sitp_clocks(self, &mut report);
         }
+        if let Some(mac) = &self.lpwan {
+            mac.check(
                 mac.upper_layer_octets != 0,
                 transport.header_kind.as_deref() == Some("short_tpl"),
                 transport.header_kind.as_deref() == Some("long_tpl"),
@@ -607,6 +608,7 @@ pub struct TlsRecordOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TlsOutput {
+    pub cmac_verified: bool,
     pub protocol: String,
     pub records: Vec<TlsRecordOutput>,
 }
@@ -622,7 +624,6 @@ pub struct SecurityOutput {
     pub key_supplied: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_id: Option<u8>,
-    pub cmac_verified: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_version: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
