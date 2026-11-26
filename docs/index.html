@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=fc7f6f523fd94baa">
-    <link rel="modulepreload" href="./parser.js?v=8d2bb41cb43d20b7">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=4f041d498da7f656">
+    <link rel="modulepreload" href="./parser.js?v=fb9081663c763418">
     <link rel="modulepreload" href="./input-format.js">
     <link rel="modulepreload" href="./tls-session.js">
     <link rel="modulepreload" href="./error-report.js">
@@ -1572,7 +1572,7 @@
             <details class="input-help" name="parser-disclosure">
                 <summary>Help</summary>
                 <div class="disclosure-content">
-                    <p class="key-help" id="input-help"><em>Paste a telegram or a wired stream. For a split message, paste one packet per line in order. You can also paste application-layer data or DIF/VIF records.</em></p>
+                    <p class="key-help" id="input-help"><em>Paste a telegram or a wired stream. For a wireless capture or a split message, paste one packet per line in transmission order. You can also paste application-layer data or DIF/VIF records.</em></p>
                     <p class="key-help" id="aeskey-help">Enter the key supplied with the meter. Leave empty to inspect the telegram headers.</p>
                     <p class="key-help">Keys stay in this browser tab and are excluded from share links and reports.</p>
                 </div>
@@ -1844,6 +1844,7 @@
                     <input id="parse_oms-xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
+            <label id="consecutive-option" hidden><input id="consecutive-capture" type="checkbox"> No missing transmissions or meter restart</label>
             <div class="output-actions">
                 <button id="copy_output" title="Copy Output" hidden>
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1863,7 +1864,7 @@
         <template id="oms-table-template">
             <section class="oms-report">
                 <h3 id="oms-report-heading"><a target="_blank" rel="noopener noreferrer"></a><small></small></h3>
-                <p class="oms-scope">Checks apply to this telegram. Device behaviour and timing require a test sequence.</p>
+                <p class="oms-scope">Checks use the selected telegram and any preceding telegrams in the capture.</p>
                 <table aria-labelledby="oms-report-heading">
                     <thead><tr><th scope="col">Result</th><th scope="col">Rule</th><th scope="col" class="reference-column">Reference</th></tr></thead>
                     <tbody></tbody>
@@ -1887,7 +1888,7 @@
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./parser.js?v=8d2bb41cb43d20b7";
+        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, m_bus_render_oms_capture, version } from "./parser.js?v=fb9081663c763418";
 
         import { normalizeInput } from "./input-format.js";
 
@@ -2276,7 +2277,7 @@
                 }
             });
 
-            await init({ module_or_path: new URL("./parser_bg.wasm?v=fc7f6f523fd94baa", import.meta.url) });
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=4f041d498da7f656", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
@@ -2287,6 +2288,8 @@
             const captureLabel = document.getElementById('capture-label');
             const capturePosition = document.getElementById('capture-position');
             const captureFrame = document.getElementById('capture-frame');
+            const consecutive = document.getElementById('consecutive-capture');
+            consecutive.addEventListener('change', () => parseInput(currentFormat));
             captureFrame.addEventListener('change', () => parseInput(currentFormat));
             let hasDecoded = false;
             let renderGeneration = 0;
@@ -2314,6 +2317,7 @@
                 currentFormat = format;
                 const selectedMode = isOmsView(format) ? 'oms' : 'parse';
                 lastFormat[selectedMode] = format;
+                document.getElementById('consecutive-option').hidden = selectedMode !== 'oms' || !captureFrames.some(frame => frame.frame.kind === 'wireless');
                 for (const mode of ['parse', 'oms']) {
                     const active = mode === selectedMode;
                     document.getElementById(`mode-${mode}`).setAttribute('aria-pressed', String(active));
@@ -2353,6 +2357,7 @@
                 clearTimeout(inspectionTimer);
                 inspectedTelegram = null;
                 const refreshChoices = capturePicker.hidden || captureInput !== telegramInput.value;
+                if (captureInput !== telegramInput.value) consecutive.checked = false;
                 captureInput = telegramInput.value;
                 captureFrames = [];
 
@@ -2386,6 +2391,7 @@
                     }
                 }
                 capturePicker.hidden = captureFrames.length < 2;
+                document.getElementById('consecutive-option').hidden = !isOmsView(currentFormat) || !captureFrames.some(frame => frame.frame.kind === 'wireless');
                 updateDecodeButton();
             }
 
@@ -2622,7 +2628,9 @@
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
                         : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
                     attempt.decoded = result.decoded;
-                    let formattedResult = result.output;
+                    let formattedResult = oms && selectedFrame
+                        ? m_bus_render_oms_capture(normalizeInput(inputString, inputFormat.value), captureFrame.selectedIndex, renderFormat, consecutive.checked, isTls ? undefined : aesKey || undefined, sessionJson)
+                        : result.output;
                     hasDecoded = true;
 
                     if (table) {

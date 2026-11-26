@@ -127,6 +127,45 @@ pub fn m_bus_render(
     render_hex(data, format, &options).map_err(error_to_js)
 }
 
+#[cfg(feature = "decryption-mode-13")]
+#[wasm_bindgen]
+pub fn m_bus_render_oms_capture(
+    input: &str,
+    selected: usize,
+    format: &str,
+    consecutive: bool,
+    key_hex: Option<String>,
+    session_json: Option<String>,
+) -> Result<String, JsValue> {
+    use m_bus_parser::output::{render_oms_capture, ImportedTlsSession};
+    let OutputFormat::Oms(format) = OutputFormat::from_str(format).map_err(error_to_js)? else {
+        return Err(JsError::new("Expected an OMS report format.").into());
+    };
+    let options = DecodeOptions::default();
+    let m_bus_parser::output::FragmentOutput::Multiple(mut frames) =
+        decode_capture_hex(input, &options).map_err(error_to_js)?
+    else {
+        return Err(JsError::new("Expected a capture with multiple telegrams.").into());
+    };
+    let frame = frames
+        .get_mut(selected)
+        .ok_or_else(|| JsError::new("Select a telegram in this capture."))?;
+    if let Some(json) = session_json {
+        let session = ImportedTlsSession::from_json(&json).map_err(error_to_js)?;
+        *frame = m_bus_parser::output::decode_hex_with_tls_session(
+            &frame.raw.original_frame_hex,
+            &options,
+            &session.session(),
+        )
+        .map_err(error_to_js)?;
+    } else if key_hex.is_some() {
+        let options = decode_options(key_hex.as_deref(), None).map_err(error_to_js)?;
+        *frame = m_bus_parser::decode_hex(&frame.raw.original_frame_hex, &options)
+            .map_err(error_to_js)?;
+    }
+    render_oms_capture(&frames, format, Some(selected), consecutive).map_err(error_to_js)
+}
+
 /// Render CI-prefixed application data or bare DIF/VIF records without a link frame.
 #[wasm_bindgen]
 pub fn m_bus_render_application(
