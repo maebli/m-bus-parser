@@ -23,10 +23,14 @@ impl DecodedOutput {
             return Ok(());
         };
         if application.protocol != "security_information_transfer"
-            || fields
+            || (fields
                 .get("data_selector")
                 .and_then(serde_json::Value::as_u64)
                 != Some(0x32)
+                && !fields
+                    .get("blocks")
+                    .and_then(|v| v.as_array())
+                    .is_some_and(|bs| bs.iter().any(|b| b["data_selector"] == 0x32)))
         {
             return Ok(());
         }
@@ -43,21 +47,41 @@ impl DecodedOutput {
         } else {
             &raw
         };
-        let Ok(ApplicationPayload::SecurityTransfer {
-            data_selector: 0x32,
-            body,
-            ..
-        }) = user_data::application_message::parse_sitp(payload)
-        else {
-            return Err(OutputError::Decryption {
-                code: "security.application_mac_unavailable",
-                message: "The decoded SITP command does not contain a complete ASP10 container."
-                    .into(),
-            });
-        };
-        let result = verify_sitp(body, key);
-        fields.insert("application_mac_verified".into(), result.is_ok().into());
+        let result = verify_sitp_blocks(payload, key);
+        if let Some(blocks) = fields
+            .get_mut("blocks")
+            .and_then(|value| value.as_array_mut())
+        {
+            for block in blocks.iter_mut().filter(|b| b["data_selector"] == 0x32) {
+                block["application_mac_verified"] = result.is_ok().into();
+            }
+        } else {
+            fields.insert("application_mac_verified".into(), result.is_ok().into());
+        }
         result
+    }
+}
+
+#[cfg(feature = "decryption-mode-7")]
+fn verify_sitp_blocks(payload: &[u8], key: &[u8; 16]) -> Result<(), OutputError> {
+    let mut found = false;
+    for block in m_bus_application_layer::sitp::SitpBlocks::new(payload) {
+        let block = block.map_err(|e| OutputError::Decryption {
+            code: "security.application_mac_unavailable",
+            message: e.to_string(),
+        })?;
+        if block.data_selector == 0x32 {
+            verify_sitp(block.body, key)?;
+            found = true;
+        }
+    }
+    if found {
+        Ok(())
+    } else {
+        Err(OutputError::Decryption {
+            code: "security.application_mac_unavailable",
+            message: "No ASP10 block is available.".into(),
+        })
     }
 }
 
@@ -72,6 +96,10 @@ pub(super) fn verify_application(
             Some(bytes) => message.decode_payload(bytes),
             None => message.decode(),
         };
+        if let Ok(ApplicationPayload::SecurityTransferBlocks(raw)) = payload {
+            verify_sitp_blocks(raw, key)?;
+            return Ok(true);
+        }
         if let Ok(ApplicationPayload::SecurityTransfer {
             data_selector: 0x32,
             body,
@@ -172,6 +200,29 @@ pub(super) fn application_output(
                     }
                     Some(value.into())
                 }
+                ApplicationPayload::SecurityTransferBlocks(raw) => {
+                    let mut values = Vec::new();
+                    for block in m_bus_application_layer::sitp::SitpBlocks::new(raw).flatten() {
+                        let (mut fields, warning) = security_transfer_fields(
+                            block.data_selector,
+                            block.body,
+                            security.application_mac_verified,
+                        );
+                        diagnostic = diagnostic.or(warning);
+                        for (name, value) in [
+                            ("block_id", block.block_id),
+                            ("block_control", block.block_control),
+                            ("recipient", block.recipient),
+                            ("data_selector", block.data_selector),
+                            ("key_id", block.key_id),
+                            ("key_version", block.key_version),
+                        ] {
+                            fields.insert(name.into(), value.into());
+                        }
+                        values.push(fields);
+                    }
+                    Some(serde_json::json!({"blocks":values}))
+                }
                 ApplicationPayload::External(_) => None,
                 ApplicationPayload::Error { code, details } => Some(serde_json::json!({
                     "error_code": code,
@@ -267,6 +318,21 @@ fn security_transfer_fields(
                 format!("Unsupported SITP protocol ID {protocol:#04x}"),
             )),
         );
+    }
+    if selector == 0x23 && body.len().is_multiple_of(6) && body.len() <= 256 * 6 {
+        let counters:Vec<_> = body.chunks_exact(6).filter_map(|entry| {
+            let [key_id,key_version,a,b,c,d] = entry else {return None};
+            Some(serde_json::json!({"key_id":key_id,"key_version":key_version,"key_counter":u32::from_le_bytes([*a,*b,*c,*d])}))
+        }).collect();
+        fields.insert("key_counters".into(), counters.into());
+        return (fields, None);
+    }
+    if matches!(selector, 0x00..=0x03 | 0x10..=0x13 | 0x20..=0x21 | 0x30..=0x31 | 0x33..=0x37) {
+        fields.insert("structure_length".into(), body.len().into());
+        if matches!(selector, 1..=3 | 0x20 | 0x30..=0x31 | 0x33..=0x37) {
+            fields.insert("protected_data_hex".into(), hex_string(body).into());
+        }
+        return (fields, None);
     }
     fields.insert("body_hex".into(), hex_string(body).into());
     (

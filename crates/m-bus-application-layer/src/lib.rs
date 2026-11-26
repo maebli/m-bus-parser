@@ -41,6 +41,7 @@ use m_bus_core::decryption::DecryptionError::{NotEncrypted, UnknownEncryptionSta
 pub use m_bus_core::ApplicationLayerError;
 
 pub mod application_message;
+pub mod sitp;
 pub mod compact;
 pub mod data_information;
 pub mod data_record;

@@ -169,6 +169,7 @@ pub enum ApplicationPayload<'a> {
     Format(FormatFrame<'a>),
     Compact(CompactFrame<'a>),
     External(&'a [u8]),
+    SecurityTransferBlocks(&'a [u8]),
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -351,23 +352,26 @@ impl<'a> ApplicationMessage<'a> {
 }
 
 pub fn parse_sitp(payload: &[u8]) -> Result<ApplicationPayload<'_>, ApplicationLayerError> {
-    let [low, high, fields @ ..] = payload else {
-        return Err(ApplicationLayerError::InsufficientData);
-    };
-    require_length(fields, usize::from(u16::from_le_bytes([*low, *high])))?;
-    let [block_id, block_control, recipient, data_selector, key_id, key_version, body @ ..] =
-        fields
-    else {
-        return Err(ApplicationLayerError::InsufficientData);
-    };
+    let mut blocks = crate::sitp::SitpBlocks::new(payload);
+    let first = blocks
+        .next()
+        .transpose()?
+        .ok_or(ApplicationLayerError::InsufficientData)?;
+    if let Some(second) = blocks.next() {
+        second?;
+        for block in blocks {
+            block?;
+        }
+        return Ok(ApplicationPayload::SecurityTransferBlocks(payload));
+    }
     Ok(ApplicationPayload::SecurityTransfer {
-        block_id: *block_id,
-        block_control: *block_control,
-        recipient: *recipient,
-        data_selector: *data_selector,
-        key_id: *key_id,
-        key_version: *key_version,
-        body,
+        block_id: first.block_id,
+        block_control: first.block_control,
+        recipient: first.recipient,
+        data_selector: first.data_selector,
+        key_id: first.key_id,
+        key_version: first.key_version,
+        body: first.body,
     })
 }
 

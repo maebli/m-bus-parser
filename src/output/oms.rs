@@ -33,14 +33,48 @@ impl OmsFormat {
     }
 }
 
-pub(super) fn clock_fields(
-    application: Option<&super::ApplicationOutput>,
-) -> Option<m_bus_oms_rules::layers::ClockFields> {
-    let application = application?;
-    if application.protocol != "security_information_transfer" {
+pub(super) fn sitp_blocks(
+    frame: &DecodedOutput,
+) -> Option<(bool, Vec<m_bus_oms_rules::sitp::Block>)> {
+    let app = frame.application.as_ref()?;
+    if app.protocol != "security_information_transfer" || app.decoded.is_none() {
         return None;
     }
-    let fields = application.decoded.as_ref()?;
+    let command = matches!(app.control_information.as_str(), "C3" | "C6");
+    let fields = super::decode_hex_bytes(
+        frame
+            .security
+            .decrypted_payload_hex
+            .as_deref()
+            .unwrap_or(&app.payload_hex),
+    )
+    .ok()?;
+    let fields =
+        if frame.security.mode_code == Some(5) && frame.security.decrypted_payload_hex.is_some() {
+            fields.strip_prefix(&[0x2f, 0x2f])?
+        } else {
+            &fields
+        };
+    let blocks = m_bus_application_layer::sitp::SitpBlocks::new(fields)
+        .map(|b| {
+            let b = b.ok()?;
+            Some(m_bus_oms_rules::sitp::Block::new(
+                [
+                    b.block_id,
+                    b.block_control,
+                    b.recipient,
+                    b.data_selector,
+                    b.key_id,
+                    b.key_version,
+                ],
+                b.body,
+            ))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some((command, blocks))
+}
+
+fn clock_fields(fields: &serde_json::Value) -> Option<m_bus_oms_rules::layers::ClockFields> {
     if fields.get("protocol_id")?.as_u64()? != 4 {
         return None;
     }
@@ -58,6 +92,24 @@ pub(super) fn clock_fields(
 
 pub(super) fn encrypted_record_prefix(
     frame: &super::FrameOutput,
+pub(super) fn check_sitp_clocks(frame: &DecodedOutput, report: &mut OmsReport) {
+    let Some(fields) = frame
+        .application
+        .as_ref()
+        .and_then(|app| app.decoded.as_ref())
+    else {
+        return;
+    };
+    let blocks = fields
+        .get("blocks")
+        .and_then(serde_json::Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_else(|| core::slice::from_ref(fields));
+    for clock in blocks.iter().filter_map(clock_fields) {
+        clock.assess(report);
+    }
+}
+
     block: Option<&crate::user_data::UserDataBlock<'_>>,
     security: &super::SecurityContext,
 ) -> Option<usize> {
@@ -308,6 +360,7 @@ pub fn render_oms_capture_with_options(
         if let Some(mac) = &frame.lpwan {
             lpwan.observe(mac, consecutive, &mut report);
         }
+    let mut sitp_history = m_bus_oms_rules::sitp::History::default();
         let wired = wired_observation(frame);
         if consecutive {
             if let Some(observation) = wired {
@@ -331,6 +384,20 @@ pub fn render_oms_capture_with_options(
         if let Some(frame) = current {
             if options.radio_mode.is_some_and(OmsRadioMode::is_c) {
                 key_information.check_mode_c_ell(frame, &mut report);
+        if let Some(exchange) = current {
+            if let (Some(receiver), Some((command, blocks))) =
+                (exchange.receiver, sitp_blocks(frame))
+            {
+                sitp_history.observe(
+                    exchange.sender,
+                    receiver,
+                    &blocks,
+                    command,
+                    consecutive,
+                    &mut report,
+                );
+            }
+        }
             }
             key_information.observe(frame, consecutive, &mut report);
         }

@@ -377,7 +377,6 @@ impl DecodedOutput {
                 .as_ref()
                 .and_then(|ell| u8::from_str_radix(&ell.communication_control, 16).ok()),
             radio_mode: options.radio_mode,
-            sitp_clock: oms::clock_fields(self.application.as_ref()),
             ell_encryption_mode: transport
                 .ell
                 .as_ref()
@@ -457,6 +456,10 @@ impl DecodedOutput {
         }
         if let Some(mac) = &self.lpwan {
             mac.check(
+        if let Some((command, blocks)) = oms::sitp_blocks(self) {
+            m_bus_oms_rules::sitp::assess(&blocks, command, &mut report);
+            oms::check_sitp_clocks(self, &mut report);
+        }
                 mac.upper_layer_octets != 0,
                 transport.header_kind.as_deref() == Some("short_tpl"),
                 transport.header_kind.as_deref() == Some("long_tpl"),

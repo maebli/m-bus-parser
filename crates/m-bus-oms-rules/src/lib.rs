@@ -12,6 +12,7 @@ pub mod layers;
 pub mod lpwan;
 pub mod readings;
 pub mod sequence;
+pub mod sitp;
 pub mod telegram;
 pub mod tls_hello;
 pub mod wired;

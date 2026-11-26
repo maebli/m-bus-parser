@@ -289,3 +289,61 @@ fn fresh_authenticated_counters_use_sender_specific_increments() {
         assert_eq!(found.status.as_str(), expected);
     }
 }
+
+#[test]
+fn security_transfer_validates_every_block_and_matches_the_response() {
+    let request = frame(
+        0x43,
+        GATEWAY,
+        &format!("8E8001{METER}C3785634129315330301000000060000070000FFFF060001090000FFFF0000"),
+    );
+    let response = |second_id| {
+        frame(8, METER, &format!("8E8001{GATEWAY}C401000000070000870022FFFF000C00{second_id:02X}890023FFFF210201000000"))
+    };
+    let decoded = request
+        .application
+        .as_ref()
+        .unwrap()
+        .decoded
+        .as_ref()
+        .unwrap();
+    assert_eq!(decoded["blocks"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        status(&report(&request), "SITP block control and data structure"),
+        Some("passed")
+    );
+    let valid = response(1);
+    let decoded = valid
+        .application
+        .as_ref()
+        .unwrap()
+        .decoded
+        .as_ref()
+        .unwrap();
+    assert_eq!(decoded["blocks"][1]["key_counters"][0]["key_counter"], 1);
+    for (reply, expected) in [(valid, "passed"), (response(2), "failed")] {
+        let options = OmsCaptureOptions {
+            consecutive: true,
+            ..Default::default()
+        };
+        let checked: Value = serde_json::from_str(
+            &render_oms_capture_with_options(
+                &[request.clone(), reply],
+                OmsFormat::Json,
+                Some(1),
+                options,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            status(&checked, "SITP command and response blocks"),
+            Some(expected)
+        );
+    }
+    let invalid = frame(8, METER, "C401000000070000870022FFFF12");
+    assert_eq!(
+        status(&report(&invalid), "SITP reserved status code"),
+        Some("failed")
+    );
+}
