@@ -295,8 +295,25 @@
         }
 
         .input-heading { justify-content: space-between; gap: 8px 16px; margin: 2px 0 8px; }
-        .telegram-heading { display: grid; }
+        .telegram-heading { display: grid; min-width: 0; max-width: 100%; }
         .telegram-heading label { margin: 0; }
+        #capture-frame {
+            justify-self: start;
+            max-width: 100%;
+            min-height: 24px;
+            font: inherit;
+            font-size: 0.75rem;
+            color: #59636e;
+            background: transparent;
+            border: 0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #capture-frame:hover { text-decoration: underline; }
+        #capture-frame:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
+        #capture-frame:not([hidden]) + #detected-meter { display: none; }
+        body.dark-mode #capture-frame { color: #b1bac4; color-scheme: dark; }
+        body.dark-mode #capture-frame:focus-visible { outline-color: #4493f8; }
         .encoding-picker {
             display: flex;
             flex-wrap: wrap;
@@ -1386,6 +1403,7 @@
         <div class="input-heading">
             <div class="telegram-heading">
                 <label for="inputstring">Telegram</label>
+                <select id="capture-frame" aria-label="Select telegram from capture" hidden></select>
                 <span id="detected-meter" aria-live="polite">Meter and security mode are detected automatically</span>
             </div>
             <div class="encoding-picker" role="radiogroup" aria-labelledby="encoding-label">
@@ -1400,7 +1418,6 @@
         <textarea rows="2" cols="80"
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
-        <label id="capture-picker" hidden>Decoded frame <select id="capture-frame"></select></label>
         <div class="input-tools">
             <div id="meter-key-fields">
                 <label for="aeskey" id="aeskey-label" class="visually-hidden">Meter key <span class="key-help">(optional)</span></label>
@@ -1448,7 +1465,7 @@
             <details class="input-help" name="parser-disclosure">
                 <summary>Help</summary>
                 <div class="disclosure-content">
-                    <p class="key-help" id="input-help"><em>Accepts wired and wireless frames and joined wired streams. Paste ordered OMS or ACRIOS packets one per line. For a single payload, also tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
+                    <p class="key-help" id="input-help"><em>Paste a telegram or a wired stream. For a split message, paste one packet per line in order. You can also paste application-layer data or DIF/VIF records.</em></p>
                     <p class="key-help" id="aeskey-help">Enter the key supplied with the meter. Leave empty to inspect the telegram headers.</p>
                     <p class="key-help">Keys stay in this browser tab and are excluded from share links and reports.</p>
                 </div>
@@ -2108,7 +2125,6 @@
             let inspectedTelegram = null;
             let captureFrames = [];
             let captureInput;
-            const capturePicker = document.getElementById('capture-picker');
             const captureFrame = document.getElementById('capture-frame');
             captureFrame.addEventListener('change', () => parseInput(currentFormat));
             let hasDecoded = false;
@@ -2153,11 +2169,10 @@
             function inspectCurrentTelegram() {
                 clearTimeout(inspectionTimer);
                 inspectedTelegram = null;
-                const selected = captureInput === telegramInput.value ? captureFrame.selectedIndex : 0;
+                const refreshChoices = captureFrame.hidden || captureInput !== telegramInput.value;
                 captureInput = telegramInput.value;
                 captureFrames = [];
-                capturePicker.hidden = true;
-                captureFrame.replaceChildren();
+
                 if (!telegramInput.value.trim()) {
                     document.getElementById('security-panel').hidden = true;
                     document.getElementById('security-details').hidden = true;
@@ -2169,12 +2184,13 @@
                         const decoded = inspectTelegram(parserApi, normalizeInput(telegramInput.value, inputFormat.value));
                         if (Array.isArray(decoded)) {
                             captureFrames = decoded;
-                            decoded.forEach((frame, i) => {
-                                const id = frame.meter.identity?.id || frame.frame.kind;
-                                captureFrame.add(new Option(`${i + 1} of ${decoded.length} · ${id}`, String(i)));
-                            });
-                            captureFrame.selectedIndex = selected >= 0 && selected < decoded.length ? selected : 0;
-                            capturePicker.hidden = false;
+                            if (refreshChoices) {
+                                captureFrame.replaceChildren(...decoded.map((frame, i) => {
+                                    const identity = frame.meter.identity;
+                                    const label = [identity?.manufacturer_code, identity?.id, identity?.device_type].filter(Boolean).join(' · ') || frame.frame.kind;
+                                    return new Option(`${label} · ${i + 1} of ${decoded.length}`, String(i));
+                                }));
+                            }
                             inspectedTelegram = decoded[captureFrame.selectedIndex];
                         } else {
                             inspectedTelegram = decoded;
@@ -2184,6 +2200,7 @@
                         showSecurity(null, error);
                     }
                 }
+                captureFrame.hidden = captureFrames.length < 2;
                 updateDecodeButton();
             }
 
@@ -2204,6 +2221,7 @@
 
             telegramInput.addEventListener('input', () => {
                 clearResult();
+                captureFrame.hidden = true;
                 inspectedTelegram = null;
                 document.getElementById('security-panel').hidden = true;
                 document.getElementById('security-details').hidden = true;
