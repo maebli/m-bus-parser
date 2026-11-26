@@ -109,6 +109,37 @@ fn mac_fields_and_llc_flags_reject_invalid_values() {
 }
 
 #[test]
+fn mac_management_fields_use_assigned_encodings() {
+    for (block, valid) in [
+        (&[0x11, 0x40][..], true),
+        (&[0x11, 0x80], false),
+        (&[0x15, 0x15], true),
+        (&[0x15, 0x09], false),
+        (&[0x25, 0x04, 0x1f], true),
+        (&[0x25, 0x04, 0x80], false),
+        (&[0x16, 0x8c], true),
+        (&[0x16, 0x10], false),
+        (&[0xa1, 1, 0, 23], true),
+        (&[0xa1, 1, 1, 23], false),
+        (&[0xb3, 1, 15, 15, 31], true),
+        (&[0xb3, 1, 15, 15, 32], false),
+        (&[0xb0, 1, 255, 0, 3], true),
+        (&[0xb0, 1, 255, 1, 3], false),
+    ] {
+        let mut data = vec![0x20, block.len() as u8];
+        data.extend_from_slice(block);
+        let output = m_bus_parser::decode_bytes(&packet(&data), &Default::default()).unwrap();
+        let result = output
+            .assess_oms_5_0_1()
+            .findings
+            .into_iter()
+            .find(|f| f.rule == "LPWAN MAC block values")
+            .unwrap();
+        assert_eq!(result.status.as_str() == "passed", valid, "{block:02X?}");
+    }
+}
+
+#[test]
 fn malformed_mac_fields_do_not_read_past_the_frame() {
     let mut frame = hex::decode(MSNR).unwrap();
     frame[1] ^= 1;
@@ -162,7 +193,11 @@ fn authenticated_command_exchange_checks_counters_and_block_ids() {
     }
     let report = render_oms_capture(&frames, OmsFormat::Json, Some(1), true).unwrap();
     let report: serde_json::Value = serde_json::from_str(&report).unwrap();
-    for rule in ["LPWAN MAC response counter", "LPWAN MAC response blocks"] {
+    for rule in [
+        "LPWAN MAC response counter",
+        "LPWAN MAC response blocks",
+        "LPWAN MAC response values",
+    ] {
         assert!(report["findings"]
             .as_array()
             .unwrap()

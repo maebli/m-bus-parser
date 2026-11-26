@@ -96,16 +96,34 @@ impl MacBlock {
         if matches!(kind, 12 | 13) && matches!(self.id, 0 | 1 | 7 | 0x10 | 0x11 | 0x13 | 0x14) {
             return false;
         }
-        match self.id {
-            0 => (1..=2).contains(&n) && self.value[0] & 0xf8 == 0,
-            1 | 3 | 6 | 0x12 => n == 1,
-            2 | 0x11 => n == 2,
-            4 => n == 3 || (n == 1 && kind != 0),
-            5 => (1..=2).contains(&n),
-            7 => n == 2 && kind == 0,
-            0x10 => (3..=8).contains(&n),
-            0x13 => (2..=3).contains(&n),
-            0x14 => (1..=3).contains(&n),
+        match (self.id, self.value.as_slice()) {
+            (0, [power, rest @ ..]) => {
+                power & 0xf8 == 0 && (rest.len() == 1 || (kind == 0 && rest.is_empty()))
+            }
+            (1, [status]) => status >> 6 != 2,
+            (3 | 0x12, [_]) | (2, [_, _]) => true,
+            (4, [_, _, _]) => true,
+            (4, [_]) => kind != 0,
+            (5, [mode]) => matches!(mode & 0x0f, 5..=8),
+            (5, [mode, coding]) => mode & 0x0f <= 4 && coding & 0x80 == 0,
+            (6, [parameters]) => parameters & 0x70 == 0,
+            (7, [_, _]) => kind == 0,
+            (0x10, [_, low, high, rest @ ..]) => {
+                low & 0x7f == 0
+                    && high & 0xe0 == 0
+                    && rest.len() <= 5
+                    && rest
+                        .iter()
+                        .enumerate()
+                        .all(|(i, b)| if i == 4 { b & 0x80 == 0 } else { *b == 0 })
+            }
+            (0x11, [0, _]) => true,
+            (0x13, [_, _]) => true,
+            (0x13, [uplink, downlink, coding]) => {
+                (uplink | downlink) & 0x0f != 0 && coding & 0xe0 == 0
+            }
+            (0x14, data) => (1..=3).contains(&data.len()),
+            (0..=7 | 0x10..=0x14, _) => false,
             _ => true,
         }
     }
@@ -378,7 +396,7 @@ impl LpwanHeader {
                     "Annex Q, Tables Q.92–105",
                     annex_q!(103, 155),
                     b.blocks.iter().all(|block| block.valid_value(kind)),
-                    "The block length and GET or SET operation must be valid for its identifier.",
+                    "The block length, operation, management fields and reserved bits must match its identifier.",
                 );
                 check(
                     "LPWAN MAC block identifiers",
@@ -495,7 +513,7 @@ struct PendingCommand {
     gateway: Option<[u8; 8]>,
     response: bool,
     counter: Option<u16>,
-    block_ids: Option<Vec<u8>>,
+    blocks: Option<Vec<MacBlock>>,
 }
 
 impl LpwanHistory {
@@ -521,9 +539,9 @@ impl LpwanHistory {
                         gateway,
                         response: frame.header & 15 == 13,
                         counter: body.and_then(|body| body.message_counter),
-                        block_ids: body
+                        blocks: body
                             .filter(|body| body.authenticated)
-                            .map(|body| body.blocks.iter().map(|block| block.id).collect()),
+                            .map(|body| body.blocks.clone()),
                     },
                 );
             }
@@ -560,13 +578,37 @@ impl LpwanHistory {
                         record_number: None,
                     });
                 }
-                if let Some(mut expected) = pending.block_ids
+                if let Some(commands) = pending.blocks
                     && body.authenticated
                 {
+                    let mut expected: Vec<_> = commands.iter().map(|b| b.id).collect();
                     let mut ids: Vec<_> = body.blocks.iter().map(|block| block.id).collect();
                     expected.sort_unstable();
                     ids.sort_unstable();
                     report.push(RuleFinding { rule: "LPWAN MAC response blocks", reference: "Annex Q, §Q.3.3.4.3", source_url: annex_q!(84, 672), status: if ids == expected { RuleStatus::Passed } else { RuleStatus::Failed }, detail: "The response returns the identifiers of all blocks in the authenticated command.", record_number: None });
+                    if ids == expected && !ids.windows(2).any(|pair| pair[0] == pair[1]) {
+                        let valid = body.blocks.iter().all(|answer| {
+                            let Some(request) = commands.iter().find(|b| b.id == answer.id) else {
+                                return false;
+                            };
+                            if answer.value.is_empty() {
+                                return true;
+                            }
+                            if !request.value.is_empty() {
+                                return answer.value == request.value;
+                            }
+                            match (answer.id, answer.value.as_slice()) {
+                                (2, [_, msb]) => msb & 0x80 == 0,
+                                (4, data) => data.len() == 3,
+                                _ => true,
+                            }
+                        });
+                        report.push(RuleFinding {
+                            rule: "LPWAN MAC response values", reference: "Annex Q, §Q.3.3.4.3 and Tables Q.94, Q.96",
+                            source_url: annex_q!(84, 672),status: if valid { RuleStatus::Passed } else { RuleStatus::Failed },
+                            detail: "A successful SET returns the written value. GET returns the requested field. An unsuccessful operation returns an empty block.", record_number: None
+                        });
+                    }
                 }
             }
             if pending.response {

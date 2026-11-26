@@ -7,6 +7,20 @@ enum Link {
     Lpwan(wireless::ManufacturerId, Option<[u8; 8]>),
 }
 
+pub(super) fn wireless_destination(frames: &[String]) -> Option<bool> {
+    let mut addressed = None;
+    for hex in frames {
+        let bytes = decode_hex_bytes(hex).ok()?;
+        let mut scratch = [0; 290];
+        if let Ok((Link::Wireless(_, receiver), _, data)) = link_payload(&bytes, &mut scratch) {
+            if is_fragment(data) {
+                addressed = Some(addressed.unwrap_or(true) && receiver.is_some());
+            }
+        }
+    }
+    addressed
+}
+
 fn invalid(message: &str) -> OutputError {
     OutputError::Rendering {
         code: "fragment.invalid",

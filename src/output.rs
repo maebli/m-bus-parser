@@ -463,6 +463,9 @@ impl DecodedOutput {
                 manufacturer,
             ));
         }
+        if let Some(addressed) = fragments::wireless_destination(&self.raw.fragment_frames_hex) {
+            report.push(m_bus_oms_rules::telegram::fragment_destination(addressed));
+        }
         firmware::assess(self, &mut report);
         oms::check_current_din(self, &mut report);
         if let Some(wired) = oms::wired_observation(self) {

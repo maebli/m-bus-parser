@@ -225,6 +225,17 @@ pub fn static_content(configuration: ConfigurationField) -> bool {
     }
 }
 
+pub fn fragment_destination(addressed: bool) -> RuleFinding {
+    RuleFinding {
+        rule: "Fragment destination address",
+        reference: "§3.1.3.3",
+        source_url: primary!(31, 776),
+        status: if addressed { Passed } else { Failed },
+        detail: "Each wireless data fragment requires a long ELL with the destination address.",
+        record_number: None,
+    }
+}
+
 pub fn assess_telegram<H: AsRef<[u8]>>(
     link: Link,
     configuration: Option<ConfigurationField>,
@@ -255,11 +266,7 @@ pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
     fields.check(link, configuration, &mut findings);
     if matches!(availability, RecordAvailability::Fragmented) {
         if matches!(link, Link::Wireless(_)) {
-            findings.push(RuleFinding {
-                rule: "Fragment destination address", reference: "§3.1.3.3",
-                source_url: primary!(31, 776), status: if fields.outer_ci == Some(0x8e) { Passed } else { Failed },
-                detail: "Each wireless data fragment requires a long ELL with the destination address.", record_number: None,
-            });
+            findings.push(fragment_destination(fields.outer_ci == Some(0x8e)));
         }
         let function = link.function();
         findings.push(RuleFinding {

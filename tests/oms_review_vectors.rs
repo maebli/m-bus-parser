@@ -95,6 +95,28 @@ fn tr06_a6_authenticates_a_mac_only_final_fragment() {
     let [first, last] = TR06_READING.map(|s| hex::decode(s).unwrap());
     let frames = [first.as_slice(), last.as_slice()];
     let output = decode_fragments(&frames, &keyed()).unwrap();
+    let addressed = |frame: &DecodedOutput| {
+        frame
+            .assess_oms_5_0_1()
+            .findings
+            .into_iter()
+            .find(|f| f.rule == "Fragment destination address")
+            .unwrap()
+            .status
+            .as_str()
+    };
+    assert_eq!(addressed(&output), "failed");
+    let ell = [0x8e, 0, 0, 0x93, 0x44, 0x11, 0x11, 0x11, 0x11, 1, 0x31];
+    let add_destination = |packet: &[u8]| {
+        let mut frame = packet.to_vec();
+        frame.splice(10..10, ell);
+        frame[0] += ell.len() as u8;
+        frame
+    };
+    let addressed_fragments = frames.map(add_destination);
+    let reassembled =
+        decode_fragments(&addressed_fragments.each_ref().map(Vec::as_slice), &keyed()).unwrap();
+    assert_eq!(addressed(&reassembled), "passed");
     assert_eq!(output.decode_state, "complete");
     assert_eq!(output.security.decryption_state, "decrypted_authenticated");
     assert_eq!(output.records[0].value.value, Some("23456.789".into()));
