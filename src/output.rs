@@ -336,6 +336,12 @@ impl DecodedOutput {
                 .chain(&self.meter.alternate_identities)
                 .find(|id| id.source == "link.wireless")
                 .and_then(|id| id.device_type_code),
+            wireless_receiver_type: transport
+                .ell
+                .as_ref()
+                .and_then(|header| header.receiver_address.as_deref())
+                .and_then(|address| address.get(10..12))
+                .and_then(|code| u8::from_str_radix(code, 16).ok()),
             has_application_data: if !self.records.is_empty() {
                 Some(true)
             } else if let Some(application) = &self.application {

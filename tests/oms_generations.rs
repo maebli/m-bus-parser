@@ -543,6 +543,24 @@ fn access_only_frames_and_external_adapters_use_the_expected_headers() {
         status(&short, "RF adapter application address"),
         Some("failed")
     );
+    let dlms = check(0x44, adapter, "7D010000000110C401C100060000001C");
+    assert_eq!(
+        status(&dlms, "RF adapter application address"),
+        Some("failed")
+    );
+    let gateway = "9344111111110131";
+    let command = radio_telegram(
+        0x53,
+        gateway,
+        "8E0001934444332211553761010000001001C001C1000100002B0100FF0200",
+    );
+    assert_eq!(
+        status(
+            &capture_report(&[command], false),
+            "RF adapter application address"
+        ),
+        Some("failed")
+    );
     let long = check(0x44, adapter, "8C200172443322119344550701000000011301");
     assert_eq!(
         status(&long, "RF adapter application address"),

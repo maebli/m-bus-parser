@@ -31,6 +31,7 @@ pub struct LayerFields {
     pub device_type: Option<u8>,
     pub command_target_type: Option<u8>,
     pub wireless_sender_type: Option<u8>,
+    pub wireless_receiver_type: Option<u8>,
     pub has_application_data: Option<bool>,
     pub mac_verified: bool,
     pub verification_prefix: Option<bool>,
@@ -268,12 +269,19 @@ impl LayerFields {
                 "An ACC-NR signals access and carries no application data.",
             ));
         }
-        if self.wireless_sender_type == Some(0x37)
-            && direction == Some(true)
-            && matches!(self.application_ci, Some(0x72 | 0x7a | 0x78))
+        let adapter = match direction {
+            Some(true) => self.wireless_sender_type,
+            Some(false) => self.wireless_receiver_type,
+            None => None,
+        };
+        if adapter == Some(0x37)
+            && self.application_ci.is_some_and(|ci| {
+                !matches!(ci, 0x8a | 0x8b | 0x93)
+                    && (uplink_ci(ci).is_some() || matches!(ci, 0x73 | 0x76..=0x79))
+            })
         {
             results.push(finding("RF adapter application address", ("§3.1.3.4", primary!(32, 498)),
-                self.tpl_present.map(|present| present && !self.short_tpl), "An external meter-side RF adapter must transmit the application's address in a long TPL header."));
+                self.tpl_present.map(|present| present && !self.short_tpl), "Application messages sent through an external meter-side RF adapter require the application address in a long TPL header."));
         }
         if let Some(device) = self.device_type {
             let covered = matches!(device, 0x00 | 0x02..=0x04 | 0x06..=0x08 | 0x0a..=0x0d | 0x15..=0x16 | 0x18 | 0x1a | 0x1d..=0x21 | 0x25 | 0x28 | 0x31..=0x33 | 0x36..=0x38);
