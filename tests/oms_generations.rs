@@ -324,7 +324,7 @@ fn annex_b_registrations_keep_their_encoding_and_storage_identity() {
 
 #[cfg(feature = "oms-gen5")]
 #[test]
-fn annex_n_validation_distinguishes_the_breaker_omission_from_missing_context() {
+fn annex_n_validation_identifies_the_documented_breaker_and_address_discrepancies() {
     for example in examples().iter().filter(|e| {
         e.expected == "complete" && e.pages.iter().any(|page| page.starts_with("5.0.1/"))
     }) {
@@ -337,6 +337,12 @@ fn annex_n_validation_distinguishes_the_breaker_omission_from_missing_context() 
             .collect();
         if example.pages.iter().any(|p| p == "5.0.1/83") {
             assert_eq!(failures, ["Physical state (DC2!)"]);
+        } else if example
+            .pages
+            .iter()
+            .any(|p| matches!(p.as_str(), "5.0.1/9" | "5.0.1/65"))
+        {
+            assert_eq!(failures, ["Wired response primary address"]);
         } else {
             assert!(failures.is_empty(), "{:?}: {failures:?}", example.pages);
         }
