@@ -41,11 +41,11 @@ use m_bus_core::decryption::DecryptionError::{NotEncrypted, UnknownEncryptionSta
 pub use m_bus_core::ApplicationLayerError;
 
 pub mod application_message;
-pub mod sitp;
 pub mod compact;
 pub mod data_information;
 pub mod data_record;
 pub mod extended_link_layer;
+pub mod sitp;
 pub mod value_information;
 pub mod variable_user_data;
 
@@ -657,7 +657,10 @@ impl<'a> UserDataBlock<'a> {
         let authentication = AuthenticationHeader::parse(data)?;
         let mut block = Self::try_from(authentication.transport)?;
         if !block.transport_payload().is_some_and(|(header, _)| {
-            matches!(header.configuration_field.security_mode().to_bits(), 7 | 10 | 13)
+            matches!(
+                header.configuration_field.security_mode().to_bits(),
+                7 | 10 | 13
+            )
         }) {
             return Err(ApplicationLayerError::InvalidPayload {
                 field: "authenticated security mode",
