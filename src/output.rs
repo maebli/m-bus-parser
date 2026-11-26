@@ -2934,17 +2934,17 @@ fn render_table(
         Cell::Label,
     );
     for finding in &decoded.oms_5_0_1_checks {
-        let status = match finding.status {
-            telegram::RuleStatus::Passed => "Passed",
-            telegram::RuleStatus::Failed => "Failed",
-            telegram::RuleStatus::CouldNotCheck => "Could not check",
-            telegram::RuleStatus::NotApplicable => "Not applicable",
+        let (status, cell) = match finding.status {
+            telegram::RuleStatus::Passed => ("Passed", Cell::Passed),
+            telegram::RuleStatus::Failed => ("Failed", Cell::Failed),
+            telegram::RuleStatus::CouldNotCheck => ("Could not check", Cell::Text),
+            telegram::RuleStatus::NotApplicable => ("Not applicable", Cell::Text),
         };
         let mut heading = format!("{status} · {}", finding.rule);
         if let Some(number) = finding.record_number {
             heading.push_str(&format!(" · record {number}"));
         }
-        push_text(&mut output, "", &heading, width, style, Cell::Label);
+        push_text(&mut output, "", &heading, width, style, cell);
         let detail = format!("{} ({})", finding.detail, finding.reference);
         push_text(&mut output, "  ", &detail, width, style, Cell::Text);
     }

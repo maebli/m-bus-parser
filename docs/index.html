@@ -703,6 +703,10 @@
             font: 0.875rem/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
+        body { --oms-pass: #116329; --oms-fail: #b42318; }
+        body.dark-mode { --oms-pass: #7ee787; --oms-fail: #ff8182; }
+        .table-passed, #oms-findings dt[data-status="passed"] { color: var(--oms-pass); font-weight: 700; }
+        .table-failed, #oms-findings dt[data-status="failed"] { color: var(--oms-fail); font-weight: 700; }
         .text-table .table-label { color: #065e78; }
         .text-table .table-reading { color: #116329; }
         .text-table .table-bytes { color: #6639a6; }
@@ -1987,6 +1991,7 @@
                 const title = document.createElement('dt');
                 const detail = document.createElement('dd');
                 const record = finding.record_number ? ` · record ${finding.record_number}` : '';
+                title.dataset.status = finding.status;
                 title.textContent = `${finding.rule} · ${labels[finding.status]}`;
                 detail.textContent = `${finding.detail} (${finding.reference}${record})`;
                 list.append(title, detail);
