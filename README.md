@@ -31,7 +31,7 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 - Responsive, Unicode-aware tables for narrow terminals and browser cards
 - **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
-- Available as a **Rust library**, **CLI**, **WebAssembly (npm)** and **Python bindings**
+- Available as a **Rust library**, **CLI**, and **WebAssembly (npm)**, with bindings for **Python**, [**C**](./c/examples/parse.c), and [**Java**](./java/examples/Parse.java)
 
 Stack usage, linked footprint, and decode latency are measured by eagerly
 parsing a wired frame and consuming all of its application-layer records with a
