@@ -436,6 +436,16 @@ impl DecodedOutput {
             readings,
             options.taf7,
         );
+        if let Some(manufacturer) = self
+            .meter
+            .identity
+            .as_ref()
+            .and_then(|id| id.manufacturer_code.as_deref())
+        {
+            report.push(m_bus_oms_rules::address::manufacturer_allocation(
+                manufacturer,
+            ));
+        }
         oms::check_current_din(self, &mut report);
         if let Some(wired) = oms::wired_observation(self) {
             wired.check(

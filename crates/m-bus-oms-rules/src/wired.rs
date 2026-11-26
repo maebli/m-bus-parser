@@ -74,3 +74,44 @@ impl WiredObservation {
         }
     }
 }
+
+#[derive(Default)]
+pub struct WiredAccessHistory {
+    last: alloc::collections::BTreeMap<u8, (bool, u8)>,
+}
+
+impl WiredAccessHistory {
+    pub fn observe(
+        &mut self,
+        request: Option<WiredObservation>,
+        response: WiredObservation,
+        access: Option<u8>,
+        report: &mut TelegramReport,
+    ) {
+        let WiredObservation::Frame { control, address } = response else {
+            return;
+        };
+        if control & 0x4f != 0x08 || !(1..=250).contains(&address) {
+            return;
+        }
+        let prior = self.last.remove(&address);
+        let Some(WiredObservation::Frame {
+            control: req,
+            address: dest,
+        }) = request
+        else {
+            return;
+        };
+        if !matches!(req & 0xdf, 0x5a | 0x5b) || dest != address {
+            return;
+        }
+        let Some(access) = access else { return };
+        let bit = req & 0x20 != 0;
+        if let Some((last_bit, last_access)) = prior
+            && bit != last_bit
+        {
+            report.push(finding("Wired response access number", "§7.2.2.2 / EN 13757-7:2018 §7.5.5.3", primary!(61, 263), access == last_access.wrapping_add(1), "The slave increments its own access number for each new RSP-UD. Repeated master requests are excluded."));
+        }
+        self.last.insert(address, (bit, access));
+    }
+}

@@ -75,11 +75,53 @@ fn only_the_current_din_address_is_compared_with_the_application_address() {
         data.push(category);
         let frame = decode_bytes(&long(8, 1, &data), &Default::default()).unwrap();
         let report = frame.assess_oms_5_0_1();
+        assert!(report
+            .findings
+            .iter()
+            .any(|f| f.rule == "FLAG manufacturer allocation" && f.status.as_str() == "passed"));
         let result = report
             .findings
             .iter()
             .find(|f| f.rule == "Current DIN address conversion")
             .map(|f| f.status.as_str());
         assert_eq!(result, status);
+    }
+}
+
+#[test]
+fn wired_counter_increments_for_fresh_unicast_replies() {
+    let request = |control: u8| {
+        decode_bytes(&[0x10, control, 1, control + 1, 0x16], &Default::default()).unwrap()
+    };
+    let reply = |access| {
+        decode_bytes(
+            &long(
+                8,
+                1,
+                &[
+                    0x72, 0x78, 0x56, 0x34, 0x12, 0xa7, 0x3d, 1, 7, access, 0, 0, 0,
+                ],
+            ),
+            &Default::default(),
+        )
+        .unwrap()
+    };
+    for (control, access, expected) in [
+        (0x7b, 0, Some("passed")),
+        (0x7b, 2, Some("failed")),
+        (0x5b, 255, None),
+    ] {
+        let frames = [request(0x5b), reply(255), request(control), reply(access)];
+        let report: serde_json::Value = serde_json::from_str(
+            &render_oms_capture(&frames, OmsFormat::Json, Some(3), true).unwrap(),
+        )
+        .unwrap();
+        let actual = report["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["rule"] == "Wired response access number")
+            .and_then(|f| f["status"].as_str());
+        assert_eq!(actual, expected);
     }
 }

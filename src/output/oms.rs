@@ -298,6 +298,7 @@ pub fn render_oms_capture_with_options(
     let mut history = Default::default();
     let mut reports = Vec::new();
     let mut previous_wired: Option<m_bus_oms_rules::wired::WiredObservation> = None;
+    let mut wired_access = m_bus_oms_rules::wired::WiredAccessHistory::default();
     let mut previous: Option<ExchangeFrame> = None;
     let mut lpwan = m_bus_oms_rules::lpwan::LpwanHistory::default();
     let mut key_information = KeyInformationHistory::default();
@@ -309,6 +310,15 @@ pub fn render_oms_capture_with_options(
         }
         let wired = wired_observation(frame);
         if consecutive {
+            if let Some(observation) = wired {
+                let access = frame
+                    .transport
+                    .access_numbers
+                    .iter()
+                    .find(|field| matches!(field.source.as_str(), "tpl" | "tpl.long" | "tpl.short"))
+                    .map(|field| field.value);
+                wired_access.observe(previous_wired, observation, access, &mut report);
+            }
             if let (Some(request), Some(reply)) = (previous_wired, wired) {
                 request.check_reply(reply, &mut report);
             }

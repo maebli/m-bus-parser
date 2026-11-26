@@ -48,3 +48,25 @@ pub fn current_din_address(
         record_number: Some(number),
     })
 }
+
+pub fn manufacturer_allocation(code: &str) -> RuleFinding {
+    let listed = include_str!("flag-ids.txt")
+        .split_ascii_whitespace()
+        .any(|id| id == code);
+    RuleFinding {
+        rule: "FLAG manufacturer allocation",
+        reference: "§3.1.5",
+        source_url: primary!(35, 716),
+        status: if listed {
+            RuleStatus::Passed
+        } else {
+            RuleStatus::CouldNotCheck
+        },
+        detail: if listed {
+            "The transmitted manufacturer code appears in the DLMS UA registered FLAG ID directory snapshot."
+        } else {
+            "The code is absent from the directory snapshot. Verify its assignment against the current DLMS UA registry."
+        },
+        record_number: None,
+    }
+}
