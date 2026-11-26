@@ -297,39 +297,53 @@
         .input-heading { justify-content: space-between; gap: 8px 16px; margin: 2px 0 8px; }
         .telegram-heading { display: grid; min-width: 0; max-width: 100%; }
         .telegram-heading label { margin: 0; }
-        #capture-picker {
+        #capture-picker:not([hidden]) {
             position: relative;
+            display: inline-flex;
+            align-items: center;
             justify-self: start;
-            max-width: 100%;
-            color: #59636e;
-        }
-        #capture-position {
-            position: absolute;
-            inset-inline-end: 1.5rem;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 0.75rem;
-            font-variant-numeric: tabular-nums;
-            pointer-events: none;
-        }
-        #capture-frame {
-            box-sizing: border-box;
-            padding-inline-end: 7em;
+            gap: 0.3em;
             max-width: 100%;
             min-height: 24px;
-            font: inherit;
-            font-size: 0.75rem;
-            color: inherit;
-            background: transparent;
-            border: 0;
             border-radius: 4px;
-            cursor: pointer;
+            color: #59636e;
+            font-size: 0.75rem;
         }
-        #capture-frame:hover { text-decoration: underline; }
-        #capture-frame:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
+        #capture-picker::after {
+            content: "";
+            width: 0.4em;
+            height: 0.4em;
+            margin-inline: 0.2em;
+            border: solid currentColor;
+            border-width: 0 1px 1px 0;
+            transform: translateY(-1px) rotate(45deg);
+            flex: none;
+        }
+        #capture-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #capture-position {
+            color: #6e7781;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        #capture-frame {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 1;
+        }
+        #capture-picker:hover #capture-label { text-decoration: underline; }
+        #capture-picker:has(:focus-visible) { outline: 2px solid #0969da; outline-offset: 2px; }
         #capture-picker:not([hidden]) + #detected-meter { display: none; }
-        body.dark-mode #capture-picker { color: #b1bac4; color-scheme: dark; }
-        body.dark-mode #capture-frame:focus-visible { outline-color: #4493f8; }
+        body.dark-mode #capture-picker:not([hidden]) { color: #b1bac4; color-scheme: dark; }
+        body.dark-mode #capture-position { color: #929ba5; }
+        body.dark-mode #capture-picker:has(:focus-visible) { outline-color: #4493f8; }
         .encoding-picker {
             display: flex;
             flex-wrap: wrap;
@@ -1421,6 +1435,7 @@
                 <label for="inputstring">Telegram</label>
                 <span id="capture-picker" hidden>
                     <select id="capture-frame" aria-label="Select telegram from capture" aria-describedby="capture-position"></select>
+                    <span id="capture-label" aria-hidden="true"></span>
                     <span id="capture-position"></span>
                 </span>
                 <span id="detected-meter" aria-live="polite">Meter and security mode are detected automatically</span>
@@ -2145,6 +2160,7 @@
             let captureFrames = [];
             let captureInput;
             const capturePicker = document.getElementById('capture-picker');
+            const captureLabel = document.getElementById('capture-label');
             const capturePosition = document.getElementById('capture-position');
             const captureFrame = document.getElementById('capture-frame');
             captureFrame.addEventListener('change', () => parseInput(currentFormat));
@@ -2213,7 +2229,8 @@
                                 }));
                             }
                             inspectedTelegram = decoded[captureFrame.selectedIndex];
-                            capturePosition.textContent = `${captureFrame.selectedIndex + 1} of ${decoded.length}`;
+                            captureLabel.textContent = captureFrame.selectedOptions[0]?.text ?? '';
+                            capturePosition.textContent = `· ${captureFrame.selectedIndex + 1} of ${decoded.length}`;
                         } else {
                             inspectedTelegram = decoded;
                         }
