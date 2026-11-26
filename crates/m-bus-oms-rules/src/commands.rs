@@ -50,6 +50,15 @@ fn check_encoding<H: AsRef<[u8]>>(
     let mut base = Vec::from(vib);
     let mut action = None;
     let mut tag = tag_for(vib);
+    if tag.is_none() && matches!(base.last(), Some(0x13 | 0x1e | 0x1f)) && base.len() >= 3 {
+        let action_byte = base[base.len() - 2];
+        if matches!(action_byte, 0x80..=0x82 | 0x86..=0x87 | 0x8c..=0x8d | 0x8f) {
+            base.pop();
+            if let Some(last) = base.last_mut() {
+                *last &= 0x7f;
+            }
+        }
+    }
     if tag.is_none() && base.len() >= 2 {
         action = base.pop();
         if let Some(last) = base.last_mut() {

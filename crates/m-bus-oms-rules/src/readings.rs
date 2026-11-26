@@ -1,4 +1,7 @@
-use alloc::{collections::BTreeSet, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    vec::Vec,
+};
 
 use crate::catalog::{identify, meter_tag};
 use crate::telegram::{RuleFinding, RuleStatus};
@@ -96,6 +99,21 @@ pub struct Reading<H> {
     pub storage: u64,
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
+struct MaximumPowerRegister {
+    export: bool,
+    recent: bool,
+    tariff: u64,
+    subunit: u64,
+    storage: u64,
+}
+
+struct MaximumPowerPair {
+    record: usize,
+    power: bool,
+    timestamp: bool,
+}
+
 type TagGroup = (&'static str, &'static [&'static str], bool);
 
 #[derive(Default)]
@@ -104,6 +122,8 @@ pub(super) struct Readings {
     due_readings: Vec<(usize, u64)>,
     due_dates: BTreeSet<u64>,
     sensor_types: BTreeSet<u8>,
+    descriptors: BTreeMap<(bool, u64), u8>,
+    maximum_registers: BTreeMap<MaximumPowerRegister, MaximumPowerPair>,
     profiles: profiles::Profiles,
     pub(super) taf7: Option<Taf7Parameters>,
     first_duplicate: Option<usize>,
@@ -151,6 +171,70 @@ impl Readings {
             return;
         }
 
+        if vib == [0xfd, 0x23]
+            && let [index] = reading.data.as_ref()
+            && coding == 1
+        {
+            let tariff = *index >= 128;
+            let (number, other) = if tariff {
+                (reading.tariff, reading.subunit)
+            } else {
+                (reading.subunit, reading.tariff)
+            };
+            let address_valid = number > 0
+                && other == 0
+                && reading.storage == 0
+                && dif & 0x30 == 0
+                && !(end > 0 && header[end] == 0);
+            results.push(RuleFinding {
+                rule: "Descriptor register address", reference: "Annex K, K.3–K.4", source_url: primary!(125, 836),
+                status: if address_valid { RuleStatus::Passed } else { RuleStatus::Failed },
+                detail: "The index selects either a nonzero tariff or a nonzero subunit. The other register, storage and function must be zero.", record_number: Some(n),
+            });
+            if address_valid
+                && let Some(previous) = self.descriptors.insert((tariff, number), *index)
+            {
+                results.push(RuleFinding {
+                    rule: "Stable descriptor definition",
+                    reference: "Annex K, K.1",
+                    source_url: primary!(123, 469),
+                    status: if previous == *index {
+                        RuleStatus::Passed
+                    } else {
+                        RuleStatus::Failed
+                    },
+                    detail: "Each declared tariff or subunit keeps the same index definition.",
+                    record_number: Some(n),
+                });
+            }
+            let permitted: &[u8] = match index {
+                1..=4 => &[0x02],
+                160..=163 | 232..=233 => &[0x04, 0x0a, 0x0b, 0x0c, 0x0d],
+                164 | 191 => &[
+                    0x03, 0x04, 0x06, 0x07, 0x0a, 0x0b, 0x0c, 0x0d, 0x15, 0x16, 0x28,
+                ],
+                165 | 190 | 230..=231 => &[0x02, 0x04, 0x0a, 0x0b, 0x0c, 0x0d],
+                _ => &[],
+            };
+            if !permitted.is_empty() {
+                results.push(RuleFinding {
+                    rule: "Descriptor index for medium",
+                    reference: "Annex K, Tables K.4–K.5",
+                    source_url: if tariff {
+                        primary!(126, 190)
+                    } else {
+                        primary!(125, 361)
+                    },
+                    status: match device {
+                        Some(d) if permitted.contains(&d) => RuleStatus::Passed,
+                        Some(_) => RuleStatus::Failed,
+                        None => RuleStatus::CouldNotCheck,
+                    },
+                    detail: "The declared descriptor index must be assigned to the meter medium.",
+                    record_number: Some(n),
+                });
+            }
+        }
         if let [0xfd, descriptor @ (0x20..=0x22 | 0x24..=0x29)] = vib {
             let interval = *descriptor >= 0x24;
             let address_valid = reading.tariff == 0
@@ -184,28 +268,40 @@ impl Readings {
         };
         let valid = tag.1.accepts(coding);
         if let Some(protection) = reading.protection {
-            let mut candidates = tag.0.split(" / ").map(encryption_required);
-            if let Some(Some(required)) = candidates.next()
-                && candidates.all(|candidate| candidate == Some(required))
-            {
-                let expected = if required {
-                    RecordProtection::Encrypted
-                } else {
-                    RecordProtection::Clear
-                };
+            let mut requires_clear = false;
+            let mut requires_encrypted = false;
+            let mut optional = false;
+            for candidate in tag.0.split(" / ") {
+                match encryption_required(candidate) {
+                    Some(true) => requires_encrypted = true,
+                    Some(false) => requires_clear = true,
+                    None => optional = true,
+                }
+            }
+            if requires_clear || requires_encrypted {
+                let accepted = optional
+                    || requires_encrypted && protection == RecordProtection::Encrypted
+                    || requires_clear && protection == RecordProtection::Clear;
+                let rejected = requires_clear && protection != RecordProtection::Clear
+                    || requires_encrypted && protection != RecordProtection::Encrypted;
+                let ambiguous = accepted && rejected;
                 results.push(RuleFinding {
                     rule: "Data point encryption",
                     reference: "§9.1 / Annex B.2",
                     source_url: crate::sources::tag_page(tag.0),
-                    status: if protection == expected {
-                        RuleStatus::Passed
-                    } else {
+                    status: if ambiguous {
+                        RuleStatus::CouldNotCheck
+                    } else if rejected {
                         RuleStatus::Failed
-                    },
-                    detail: if required {
-                        "Annex B requires this data point to be encrypted."
                     } else {
-                        "Annex B requires this data point to be in cleartext."
+                        RuleStatus::Passed
+                    },
+                    detail: if ambiguous {
+                        "The candidate tags have different protection requirements for these bytes."
+                    } else if requires_encrypted {
+                        "Annex B requires encryption for the protected tag."
+                    } else {
+                        "Annex B requires this tag to be in cleartext."
                     },
                     record_number: Some(n),
                 });
@@ -252,6 +348,44 @@ impl Readings {
                 },
                 record_number: Some(n),
             });
+        }
+        if device == Some(0x0d)
+            && reading.subunit == 0
+            && matches!(tag.0, "EJ1!T" | "EW1!T" | "VM1!T")
+        {
+            results.push(RuleFinding {
+                rule: "Combined meter cooling tariff", reference: "Annex B, note 15", source_url: annex_b!(13, 818),
+                status: if reading.tariff == 1 { RuleStatus::Passed } else { RuleStatus::Failed },
+                detail: "The combined heat and cooling meter uses tariff 1 for this cooling register.", record_number: Some(n),
+            });
+        }
+        if device == Some(0x02)
+            && let Some((kind, suffix)) = tag.0.split_once('!')
+            && matches!(suffix, "A" | "AT" | "AR" | "ART")
+            && matches!(kind, "PW1" | "PW3" | "DT1" | "DT2" | "DT3" | "DT4")
+        {
+            let export = matches!(kind, "PW3" | "DT3" | "DT4");
+            let recent = suffix.contains('R');
+            let register = MaximumPowerRegister {
+                export,
+                recent,
+                tariff: reading.tariff,
+                subunit: reading.subunit,
+                storage: reading.storage,
+            };
+            let pair = self
+                .maximum_registers
+                .entry(register)
+                .or_insert(MaximumPowerPair {
+                    record: n,
+                    power: false,
+                    timestamp: false,
+                });
+            if kind.starts_with("PW") {
+                pair.power = true;
+            } else {
+                pair.timestamp = true;
+            }
         }
         if matches!(tag.0, "DC1!" | "DC2!") {
             check_disconnector_subunit(device, reading.subunit, n, results);
@@ -695,6 +829,15 @@ impl Readings {
                 rule: "Unmapped record encoding", reference: "§8.4.4", source_url: primary!(75, 148), status: RuleStatus::CouldNotCheck,
                 detail: "The record does not match a supported Annex B reading. Other EN 13757 data points are permitted.",
                 record_number: Some(n),
+            });
+        }
+        for pair in self.maximum_registers.values() {
+            results.push(RuleFinding {
+                rule: "Power maximum and time of maximum", reference: "Annex A, note 2",
+                source_url: "https://oms-group.org/wp-content/uploads/2024/05/OMS-Spec_Vol2_AnnexA_F121.pdf#page=6&view=FitH,668",
+                status: if pair.power && pair.timestamp { RuleStatus::Passed } else if unavailable.is_none() && self.unknown.is_none() { RuleStatus::Failed } else { RuleStatus::CouldNotCheck },
+                detail: "An electricity maximum-power register and its time must occur together for the same direction, tariff, subunit and storage number.",
+                record_number: Some(pair.record),
             });
         }
         if let Some(parameters) = self.taf7 {

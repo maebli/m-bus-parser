@@ -273,3 +273,133 @@ fn compact_profile_checks_ignore_primary_vif_and_validate_complete_elements() {
         Some("failed")
     );
 }
+
+#[test]
+fn descriptor_index_selects_its_register_and_rejects_contradictory_definitions() {
+    let make = |data: &'static [u8]| {
+        let mut reading = record(&[0x81, 0x40, 0xfd, 0x23], data).unwrap();
+        reading.subunit = 1;
+        Some(reading)
+    };
+    let water = report(
+        7,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![make(&[1]), make(&[9])],
+    );
+    assert_eq!(
+        outcome(&water, "Descriptor index for medium"),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(&water, "Stable descriptor definition"),
+        Some("failed")
+    );
+    let malformed = report(
+        7,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![make(&[128])],
+    );
+    assert_eq!(
+        outcome(&malformed, "Descriptor register address"),
+        Some("failed")
+    );
+}
+
+#[test]
+fn readout_list_actions_allow_the_final_compact_profile_modifier() {
+    let regs = [0x00, 0x93, 0x8c, 0x13];
+    let request = telegram::assess_telegram(
+        Link::Wireless(0x53),
+        None,
+        LayerFields {
+            application_ci: Some(0x51),
+            ..Default::default()
+        },
+        RecordAvailability::Complete,
+        vec![record(&regs, &[])],
+    );
+    assert_eq!(outcome(&request, "Command encoding"), Some("passed"));
+    let request = telegram::assess_telegram(
+        Link::Wireless(0x53),
+        None,
+        LayerFields {
+            application_ci: Some(0x51),
+            ..Default::default()
+        },
+        RecordAvailability::Complete,
+        vec![record(&[1, 0x93, 0x8c, 0x13], &[0])],
+    );
+    assert_eq!(outcome(&request, "Command encoding"), Some("failed"));
+}
+
+#[test]
+fn electricity_maximum_register_pairs_require_the_same_direction_and_tariff() {
+    let power = || record(&[0x11, 0x28], &[1]);
+    let date = || record(&[0x12, 0x6c], &[1, 1]);
+    let matched = report(
+        2,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![power(), date()],
+    );
+    assert_eq!(
+        outcome(&matched, "Power maximum and time of maximum"),
+        Some("passed")
+    );
+    let wrong_direction = report(
+        2,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![power(), record(&[0x12, 0xec, 0x3c], &[1, 1])],
+    );
+    assert!(
+        wrong_direction
+            .findings
+            .iter()
+            .filter(|f| f.rule == "Power maximum and time of maximum")
+            .all(|f| f.status.as_str() == "failed")
+    );
+    let mut tariff = date().unwrap();
+    tariff.tariff = 1;
+    let wrong_tariff = report(
+        2,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![power(), Some(tariff)],
+    );
+    assert_eq!(
+        outcome(&wrong_tariff, "Power maximum and time of maximum"),
+        Some("failed")
+    );
+    let partial = report(2, 0x0702, 0x10, RecordAvailability::Partial, vec![power()]);
+    assert_eq!(
+        outcome(&partial, "Power maximum and time of maximum"),
+        Some("could_not_check")
+    );
+}
+
+#[test]
+fn ambiguous_protection_reports_missing_context() {
+    use m_bus_oms_rules::readings::RecordProtection;
+    let mut timestamp = record(&[0xc4, 1, 0x6d], &[0; 4]).unwrap();
+    timestamp.storage = 3;
+    timestamp.protection = Some(RecordProtection::Clear);
+    let ambiguous = report(
+        0x1f,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![Some(timestamp)],
+    );
+    assert_eq!(
+        outcome(&ambiguous, "Data point encryption"),
+        Some("could_not_check")
+    );
+}
