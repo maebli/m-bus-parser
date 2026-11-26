@@ -1,3 +1,5 @@
+mod schema;
+
 use super::*;
 use serde_json::{json, Value};
 
@@ -142,100 +144,6 @@ fn messages(
     Ok(())
 }
 
-#[derive(Clone, Copy)]
-enum Shape {
-    Octets,
-    OptionalByte,
-    Uint32,
-    Uint64,
-    OptionalBoolean,
-    List,
-    OptionalList,
-    Int8,
-    Int16,
-}
-
-fn body_shape(tag: u64, fields: &[Field<'_>]) -> Option<bool> {
-    use Shape::*;
-    let shape: &[Shape] = match tag {
-        0x0100 => &[Octets, Octets, Octets, Octets, Octets, Octets, OptionalByte],
-        0x0101 => &[Octets, Octets, Octets, Octets, OptionalList, OptionalByte],
-        0x0200 | 0x0201 => &[Octets],
-        0x0300 | 0x0400 => &[
-            Octets,
-            Octets,
-            Octets,
-            OptionalBoolean,
-            OptionalList,
-            OptionalList,
-            List,
-            OptionalList,
-            OptionalList,
-        ],
-        0x0301 => &[Octets, List, Uint32, List, List, List, Octets, Octets],
-        0x0401 => &[
-            Octets, List, Uint32, List, List, Uint64, List, Octets, Octets,
-        ],
-        0x0500 => &[Octets, Octets, Octets, List, Octets],
-        0x0501 => &[Octets, List, List],
-        0x0600 => &[Octets, Octets, Octets, List, List],
-        0x0700 => &[Octets, Octets, Octets, Octets, Octets],
-        0x0701 => &[
-            Octets,
-            Octets,
-            Octets,
-            OptionalList,
-            List,
-            Octets,
-            OptionalList,
-        ],
-        0xff01 => &[Octets, Octets, Octets, OptionalList],
-        0x0800 => &[
-            Octets,
-            Octets,
-            Octets,
-            Octets,
-            Octets,
-            Int16,
-            Int16,
-            OptionalList,
-        ],
-        0x0801 => &[Octets, Octets, Octets, Int16, Int16, List],
-        0x0900 => &[Octets, Octets, Octets, Octets, Octets, Int16, Int16, List],
-        0x0901 | 0x0a01 => &[Octets, Octets, Octets, Int16, Int16, OptionalList],
-        0x0a00 => &[
-            Octets,
-            Octets,
-            Octets,
-            Octets,
-            Octets,
-            Int16,
-            Int16,
-            Int8,
-            OptionalList,
-        ],
-        _ => return None,
-    };
-    Some(
-        fields.len() == shape.len()
-            && fields
-                .iter()
-                .zip(shape)
-                .all(|(field, shape)| match (field, shape) {
-                    (Field::Bytes([]), OptionalByte | OptionalBoolean | OptionalList) => true,
-                    (Field::Bytes(_), Octets)
-                    | (Field::Bool(_), OptionalBoolean)
-                    | (Field::List(_), List | OptionalList) => true,
-                    (Field::Unsigned(n), OptionalByte) => u8::try_from(*n).is_ok(),
-                    (Field::Unsigned(n), Uint32) => u32::try_from(*n).is_ok(),
-                    (Field::Unsigned(_), Uint64) => true,
-                    (Field::Signed(n), Int8) => i8::try_from(*n).is_ok(),
-                    (Field::Signed(n), Int16) => i16::try_from(*n).is_ok(),
-                    _ => false,
-                }),
-    )
-}
-
 fn transport_payload(wire: &[u8], mut remaining: &[u8]) -> Option<Vec<u8>> {
     const ESCAPE: [u8; 4] = [0x1b; 4];
     let mut payload = Vec::new();
@@ -355,7 +263,7 @@ pub(super) fn inspect_messages(
         message_fields &= u8::try_from(group).is_ok()
             && u8::try_from(abort).is_ok()
             && u32::try_from(tag).is_ok();
-        shapes = match (shapes, body_shape(tag, fields)) {
+        shapes = match (shapes, schema::body_shape(tag, fields)) {
             (Some(false), _) | (_, Some(false)) => Some(false),
             (None, _) | (_, None) => None,
             _ => Some(true),

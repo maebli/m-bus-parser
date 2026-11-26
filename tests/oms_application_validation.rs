@@ -941,3 +941,91 @@ fn sml_version_two_checks_the_file_across_retries_and_missing_blocks() {
         "failed"
     );
 }
+
+fn sml_message(tag: u16, fields: &[u8], group: u8, abort: u8) -> Vec<u8> {
+    let mut message = vec![0x76, 2, 1, 0x62, group, 0x62, abort, 0x72, 0x63];
+    message.extend(tag.to_be_bytes());
+    message.extend_from_slice(fields);
+    let crc = crc16::State::<crc16::X_25>::calculate(&message);
+    message.push(0x63);
+    message.extend(crc.to_le_bytes());
+    message.push(0);
+    message
+}
+
+fn assess_sml(bytes: &[u8]) -> TelegramReport {
+    use m_bus_parser::{decode_hex, DecodeOptions};
+    let hex = format!(
+        "{:02X}4493157856341233077F01000000{}",
+        14 + bytes.len(),
+        hex::encode(bytes)
+    );
+    decode_hex(&hex, &DecodeOptions::default())
+        .unwrap()
+        .assess_oms_5_0_1()
+}
+
+#[test]
+fn sml_checks_recursive_trees_local_times_and_cosem_descriptors() {
+    let check = |tag, fields: &[u8]| {
+        let report = assess_sml(&sml_message(tag, fields, 1, 0));
+        outcome(&report, "SML message body schema")
+            .unwrap()
+            .to_owned()
+    };
+    let mut tree = vec![
+        0x73, 1, 0x71, 2, 1, 0x73, 2, 1, 1, 0x71, 0x73, 2, 2, 0x72, 0x62, 4, 0x72, 0x62, 3, 0x73,
+        0x62, 100, 0x52, 1, 0x52, 2, 1,
+    ];
+    assert_eq!(check(0x0501, &tree), "passed");
+    tree[22] = 0x62;
+    assert_eq!(check(0x0501, &tree), "failed");
+    tree[22] = 0x52;
+    tree[15] = 7;
+    assert_eq!(check(0x0501, &tree), "failed");
+    let mut get = vec![
+        0x78, 1, 1, 1, 1, 1, 0x52, 1, 0x52, 1, 0x71, 0x72, 0x52, 3, 0x72, 0x62, 1, 0x71, 0x62, 1,
+    ];
+    assert_eq!(check(0x0800, &get), "passed");
+    get[12] = 0x62;
+    assert_eq!(check(0x0800, &get), "failed");
+    let action = [0x79, 1, 1, 1, 1, 1, 0x52, 1, 0x52, 0, 0x62, 8, 0x52, 5];
+    assert_eq!(check(0x0a00, &action), "passed");
+    let mut time_list = vec![
+        0x77, 1, 1, 1, 1, 0x71, 0x77, 2, 1, 1, 1, 1, 1, 0x72, 0x62, 1, 0x72, 0x62, 2, 0x62, 20, 1,
+        1, 1,
+    ];
+    assert_eq!(check(0x0701, &time_list), "passed");
+    time_list[15] = 5;
+    assert_eq!(check(0x0701, &time_list), "failed");
+}
+
+#[test]
+fn sml_profile_periods_match_the_headers_and_keep_seconds_in_order() {
+    let mut body = vec![
+        0x78, 1, 0x72, 0x62, 1, 0x62, 20, 0x62, 15, 0x71, 2, 1, 0x71, 0x73, 2, 1, 0x62, 2, 0x52, 1,
+        0x72,
+    ];
+    let period = |seconds| {
+        [
+            0x74, 0x72, 0x62, 1, 0x62, seconds, 0x62, 0, 0x71, 0x72, 0x52, 4, 1, 1,
+        ]
+    };
+    body.extend(period(12));
+    body.extend(period(18));
+    body.extend([1, 1]);
+    let status = |data: &[u8]| {
+        outcome(
+            &assess_sml(&sml_message(0x0301, data, 0, 0)),
+            "SML message body schema",
+        )
+        .unwrap()
+        .to_owned()
+    };
+    assert_eq!(status(&body), "passed");
+    body[40] = 10;
+    assert_eq!(status(&body), "failed");
+    body[40] = 18;
+    body.splice(12..20, [0x70]);
+    assert_eq!(status(&body), "failed");
+}

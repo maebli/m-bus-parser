@@ -257,7 +257,7 @@ impl ApplicationProtocolEvidence {
                 "§8.6 / SML 1.04, §5.1",
                 primary!(78, 212),
                 self.sml_body,
-                "Checks the field count and top-level field types of the recognized SML request and response bodies.",
+                "Checks each recognized message schema, including its parameter trees, time choices, profile and value lists, and COSEM attribute descriptors.",
             );
             if let Some(valid) = self.sml_transport {
                 record(
