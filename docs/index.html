@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=fdfe76877a6de526">
-    <link rel="modulepreload" href="./parser.js?v=5b1fd8b57f3f8456">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=0335ab50be47581b">
+    <link rel="modulepreload" href="./parser.js?v=ea35fbf04cf5eb6e">
     <link rel="modulepreload" href="./input-format.js">
     <link rel="modulepreload" href="./tls-session.js">
     <link rel="modulepreload" href="./error-report.js">
@@ -1853,6 +1853,14 @@
             <details id="oms-context" hidden>
                 <summary>Test settings</summary>
                 <div class="oms-settings">
+                    <label>Declared national profile
+                        <select id="oms-national-profile">
+                            <option value="">Unknown</option>
+                            <option value="bsi-unidirectional">BSI unidirectional</option>
+                            <option value="bsi-bidirectional">BSI bidirectional</option>
+                            <option value="idis">IDIS</option>
+                        </select>
+                    </label>
                     <label id="radio-mode-option" hidden>Declared radio mode
                         <select id="oms-radio-mode">
                             <option value="">Unknown</option><option value="c">C</option><option value="c1">C1</option>
@@ -1860,7 +1868,13 @@
                         </select>
                     </label>
                     <label id="consecutive-option" hidden><input id="consecutive-capture" type="checkbox"> No missing transmissions or meter restart</label>
-                    <label id="application-key-option" hidden>ASP10 application key <input id="oms-application-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
+                    <label id="tls-key-option" hidden>OMS communication key <input id="oms-tls-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
+                    <label id="application-key-option" hidden>Application key <input id="oms-application-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
+                    <label id="wrapping-key-option" hidden>Wrapping key <input id="oms-wrapping-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
+                    <div id="firmware-settings" hidden>
+                        <label>Firmware image (optional for captures) <input id="oms-firmware" type="file"></label>
+                        <label>Image key <input id="oms-image-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
+                    </div>
                     <div id="lpwan-mac-settings" hidden>
                         <label>LPWAN MAC key <input id="lpwan-mac-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
                         <label>Derivation counter <input id="lpwan-counter" type="number" min="0" max="255" step="1" placeholder="From frame"></label>
@@ -1917,7 +1931,7 @@
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, m_bus_render_oms_capture, version } from "./parser.js?v=5b1fd8b57f3f8456";
+        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, m_bus_render_oms_capture, m_bus_check_firmware, version } from "./parser.js?v=ea35fbf04cf5eb6e";
 
         import { normalizeInput } from "./input-format.js";
 
@@ -2192,7 +2206,7 @@
         async function loadSyntax() {
             const [module, wasm] = await Promise.all([
                 import("./syntax.js?v=428d019268ec04a2"),
-                fetch(new URL("./syntax_bg.wasm?v=89e792d0c99ed70f", import.meta.url)),
+                fetch(new URL("./syntax_bg.wasm?v=28e594b23efee3d2", import.meta.url)),
             ]);
             await module.default({ module_or_path: wasm });
             return module;
@@ -2306,7 +2320,7 @@
                 }
             });
 
-            await init({ module_or_path: new URL("./parser_bg.wasm?v=fdfe76877a6de526", import.meta.url) });
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=0335ab50be47581b", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
@@ -2319,6 +2333,14 @@
             const captureFrame = document.getElementById('capture-frame');
             const consecutive = document.getElementById('consecutive-capture');
             const radioMode = document.getElementById('oms-radio-mode');
+            const nationalProfile = document.getElementById('oms-national-profile');
+            const tlsKeyOption = document.getElementById('tls-key-option');
+            const tlsKey = document.getElementById('oms-tls-key');
+            const wrappingKey = document.getElementById('oms-wrapping-key');
+            const wrappingKeyOption = document.getElementById('wrapping-key-option');
+            const firmwareSettings = document.getElementById('firmware-settings');
+            const firmwareFile = document.getElementById('oms-firmware');
+            const imageKey = document.getElementById('oms-image-key');
             const applicationKey = document.getElementById('oms-application-key');
             const applicationKeyOption = document.getElementById('application-key-option');
             const macSettings = document.getElementById('lpwan-mac-settings');
@@ -2354,15 +2376,27 @@
                 document.getElementById(`mode-${mode}`).addEventListener('click', () => selectFormat(lastFormat[mode]));
             }
 
-            function updateApplicationKeyOption(telegram) {
+            function updateApplicationEvidence(telegram) {
+                tlsKeyOption.hidden = telegram?.security?.mode_code !== 13 || telegram?.transport?.authentication_type == null;
+                const field = (object, name) => object instanceof Map ? object.get(name) : object?.[name];
                 const application = telegram?.application;
-                const fields = application?.decoded;
-                const selector = fields instanceof Map ? fields.get('data_selector') : fields?.data_selector;
-                applicationKeyOption.hidden = application?.protocol !== 'security_information_transfer' || selector !== 0x32;
+                const payload = application?.decoded;
+                const blocks = [payload, ...(field(payload, 'blocks') || [])];
+                applicationKeyOption.hidden = application?.protocol !== 'security_information_transfer' || !blocks.some(block => [0x32, 0x36].includes(field(block, 'data_selector')));
+                wrappingKeyOption.hidden = application?.protocol !== 'security_information_transfer' || !blocks.some(block => {
+                    const keyId = field(block, 'key_id');
+                    return keyId != null && keyId !== 255 && [1, 2, 3, 32, 48].includes(field(block, 'data_selector'));
+                });
+                firmwareSettings.hidden = !blocks.some(block => {
+                    const image = field(block, 'image_transfer');
+                    const segments = field(image, 'segments') || [image];
+                    return segments.some(segment => field(segment, 'function') === 0 && field(segment, 'mac_algorithm') === 4
+                        && field(segment, 'mac_key_id') === 24 && field(segment, 'mac')?.length === 16);
+                });
             }
 
             function updateOmsOptions() {
-                updateApplicationKeyOption(inspectedTelegram);
+                updateApplicationEvidence(inspectedTelegram);
                 macSettings.hidden = !inspectedTelegram?.lpwan?.body?.authentication_code;
                 document.getElementById('oms-context').hidden = !isOmsView(currentFormat) || !inspectedTelegram;
                 document.getElementById('radio-mode-option').hidden = !isOmsView(currentFormat) || inspectedTelegram?.frame?.kind !== 'wireless';
@@ -2417,7 +2451,12 @@
                 if (captureInput !== telegramInput.value) {
                     consecutive.checked = false;
                     radioMode.value = '';
+                    nationalProfile.value = '';
                     applicationKey.value = '';
+                    tlsKey.value = '';
+                    wrappingKey.value = '';
+                    imageKey.value = '';
+                    firmwareFile.value = '';
                     macKey.value = '';
                     macCounter.value = '';
                     taf7.checked = false;
@@ -2556,6 +2595,7 @@
                 telegramInput.value = urlData;
                 inspectCurrentTelegram();
                 radioMode.value = ['c', 'c1', 'c2', 'other'].includes(urlParams.get('radioMode')) ? urlParams.get('radioMode') : '';
+                nationalProfile.value = urlParams.get('nationalProfile') || '';
                 consecutive.checked = urlParams.get('consecutive') === '1';
                 taf7.checked = urlParams.get('taf7') === '1';
                 periods.hidden = !taf7.checked;
@@ -2575,6 +2615,7 @@
             function reportParams(inputString, format) {
                 const params = new URLSearchParams({ data: inputString, format, encoding: inputFormat.value });
                 if (isOmsView(format)) {
+                    if (nationalProfile.value) params.set('nationalProfile', nationalProfile.value);
                     if (taf7.checked) {
                         params.set('taf7', '1');
                         for (const input of periodInputs) if (input.value) params.set(input.name, input.value);
@@ -2709,11 +2750,12 @@
                     }
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
                     const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : format === 'oms' ? 'oms-json' : format;
-                    const result = sessionJson
+                    const result = sessionJson && !(oms && selectedFrame)
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
                         : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
                     attempt.decoded = result.decoded;
                     const context = {};
+                    if (oms && nationalProfile.value) context.national_profile = nationalProfile.value;
                     if (oms && !document.getElementById('radio-mode-option').hidden && radioMode.value) context.radio_mode = radioMode.value;
                     if (oms && taf7.checked) {
                         context.taf7 = {};
@@ -2726,16 +2768,32 @@
                         }
                     }
                     const settings = { capture: context };
-                    updateApplicationKeyOption(result.decoded);
+                    updateApplicationEvidence(result.decoded);
+                    if (oms && !wrappingKeyOption.hidden && wrappingKey.value.trim()) settings.wrapping_key = wrappingKey.value.trim();
                     if (oms && !applicationKeyOption.hidden && applicationKey.value.trim()) settings.application_key = applicationKey.value.trim();
                     if (oms && !macSettings.hidden && macKey.value.trim()) {
                         settings.lpwan_mac_key = macKey.value.trim();
                         if (!macCounter.reportValidity()) throw new Error('Enter a derivation counter from 0 to 255.');
                         if (macCounter.value) settings.lpwan_derivation_counter = macCounter.valueAsNumber;
                     }
-                    let formattedResult = oms && (selectedFrame || context.radio_mode || context.taf7 || settings.lpwan_mac_key || settings.application_key)
-                        ? m_bus_render_oms_capture(normalizeInput(inputString, inputFormat.value), selectedFrame ? captureFrame.selectedIndex : 0, renderFormat, consecutive.checked, isTls ? undefined : aesKey || undefined, sessionJson, JSON.stringify(settings))
-                        : result.output;
+                    let formattedResult = result.output;
+                    const firmware = !firmwareSettings.hidden && imageKey.value.trim() && firmwareFile.files[0];
+                    const communicationKey = !tlsKeyOption.hidden && tlsKey.value.trim();
+                    if (oms && !firmware && !firmwareSettings.hidden && imageKey.value.trim()) settings.capture_image_key = imageKey.value.trim();
+                    if (oms && (selectedFrame || communicationKey || Object.keys(context).length || Object.keys(settings).length > 1 || firmware)) {
+                        const fullInput = normalizeInput(inputString, inputFormat.value);
+                        const selected = selectedFrame ? captureFrame.selectedIndex : 0;
+                        const transportKey = (isTls ? communicationKey : aesKey) || undefined;
+                        if (firmware) {
+                            settings.firmware_key = imageKey.value.trim();
+                            context.consecutive = consecutive.checked;
+                            const bytes = new Uint8Array(await firmware.arrayBuffer());
+                            if (generation !== renderGeneration) return;
+                            formattedResult = m_bus_check_firmware(fullInput, selected, renderFormat, transportKey, sessionJson, JSON.stringify(settings), bytes);
+                        } else {
+                            formattedResult = m_bus_render_oms_capture(fullInput, selected, renderFormat, consecutive.checked, transportKey, sessionJson, JSON.stringify(settings));
+                        }
+                    }
                     hasDecoded = true;
 
                     if (table) {

@@ -138,6 +138,22 @@ struct ReportSettings {
     lpwan_derivation_counter: Option<u8>,
     #[cfg(feature = "decryption-mode-7")]
     application_key: Option<String>,
+    #[cfg(feature = "decryption-mode-7")]
+    firmware_key: Option<String>,
+    #[cfg(feature = "decryption-mode-7")]
+    capture_image_key: Option<String>,
+    #[cfg(feature = "decryption-mode-7")]
+    wrapping_key: Option<String>,
+}
+
+#[cfg(feature = "decryption-mode-13")]
+impl ReportSettings {
+    fn from_json(json: Option<&str>) -> Result<Self, JsValue> {
+        json.map(serde_json::from_str)
+            .transpose()
+            .map(|settings| settings.unwrap_or_default())
+            .map_err(|error| JsError::new(&error.to_string()).into())
+    }
 }
 
 #[cfg(feature = "decryption-mode-13")]
@@ -151,21 +167,75 @@ pub fn m_bus_render_oms_capture(
     session_json: Option<String>,
     context_json: Option<String>,
 ) -> Result<String, JsValue> {
+    let mut settings = ReportSettings::from_json(context_json.as_deref())?;
+    settings.capture.consecutive = consecutive;
+    render_oms_with_settings(
+        input,
+        selected,
+        format,
+        key_hex,
+        session_json,
+        settings,
+        |_| Ok(()),
+    )
+}
+
+#[cfg(all(feature = "decryption-mode-13", feature = "decryption-mode-7"))]
+#[wasm_bindgen]
+pub fn m_bus_check_firmware(
+    input: &str,
+    selected: usize,
+    format: &str,
+    key_hex: Option<String>,
+    session_json: Option<String>,
+    context_json: &str,
+    firmware: &[u8],
+) -> Result<String, JsValue> {
+    let settings = ReportSettings::from_json(Some(context_json))?;
+    let key = parse_key(settings.firmware_key.as_deref())
+        .map_err(error_to_js)?
+        .ok_or_else(|| JsError::new("Supply the firmware image key."))?;
+    render_oms_with_settings(
+        input,
+        selected,
+        format,
+        key_hex,
+        session_json,
+        settings,
+        |frame| frame.verify_firmware_image(firmware, &key),
+    )
+}
+
+#[cfg(feature = "decryption-mode-13")]
+fn render_oms_with_settings(
+    input: &str,
+    selected: usize,
+    format: &str,
+    key_hex: Option<String>,
+    session_json: Option<String>,
+    settings: ReportSettings,
+    verify: impl FnOnce(&mut m_bus_parser::output::DecodedOutput) -> Result<(), OutputError>,
+) -> Result<String, JsValue> {
     use m_bus_parser::output::{
-        render_application_oms_with_keys, render_oms_capture_with_options, FragmentOutput,
+        render_application_oms_with_evidence, render_oms_capture_with_options, FragmentOutput,
         ImportedTlsSession,
     };
     let OutputFormat::Oms(format) = OutputFormat::from_str(format).map_err(error_to_js)? else {
         return Err(JsError::new("Expected an OMS report format.").into());
     };
-    let settings: ReportSettings = context_json
-        .as_deref()
-        .map(serde_json::from_str)
-        .transpose()
-        .map_err(|error| JsError::new(&error.to_string()))?
-        .unwrap_or_default();
-    let mut capture = settings.capture;
-    capture.consecutive = consecutive;
+    let capture = settings.capture;
+    #[cfg(feature = "decryption-mode-7")]
+    let wrapping_key = parse_key(settings.wrapping_key.as_deref()).map_err(error_to_js)?;
+    #[cfg(feature = "decryption-mode-7")]
+    let capture_image_key =
+        parse_key(settings.capture_image_key.as_deref()).map_err(error_to_js)?;
+    let verify_evidence = |frame: &mut m_bus_parser::output::DecodedOutput| {
+        #[cfg(feature = "decryption-mode-7")]
+        if let Some(key) = wrapping_key.as_ref() {
+            frame.verify_key_wrap(key)?;
+        }
+        verify(frame)
+    };
     let options = decode_options(key_hex.as_deref(), None).map_err(error_to_js)?;
     #[cfg(feature = "decryption-mode-7")]
     let application_key = parse_key(settings.application_key.as_deref()).map_err(error_to_js)?;
@@ -177,37 +247,62 @@ pub fn m_bus_render_oms_capture(
         .transpose()
         .map_err(error_to_js)?;
     let session = imported.as_ref().map(ImportedTlsSession::session);
-    let mut frames = match decode_capture_hex(input, &DecodeOptions::default()) {
-        Ok(FragmentOutput::Multiple(frames)) => frames,
-        Ok(FragmentOutput::Single(frame)) => vec![*frame],
+    #[cfg(feature = "decryption-mode-7")]
+    let check_image_blocks = capture_image_key.is_some();
+    #[cfg(not(feature = "decryption-mode-7"))]
+    let check_image_blocks = false;
+    let decoded = match decode_capture_hex(input, &DecodeOptions::default()) {
+        Ok(capture) => match session.as_ref() {
+            Some(session) => {
+                m_bus_parser::output::decode_capture_hex_with_tls_session(input, &options, session)
+                    .map_err(error_to_js)?
+            }
+            None if check_image_blocks && options.key.is_some() => {
+                decode_capture_hex(input, &options).map_err(error_to_js)?
+            }
+            None => capture,
+        },
         Err(frame_error) if selected != 0 => return Err(error_to_js(frame_error)),
         Err(_) => {
             let options = RenderOptions {
                 decode: options,
                 ..RenderOptions::default()
             };
-            return render_application_oms_with_keys(
+            return render_application_oms_with_evidence(
                 input,
                 format,
                 &options,
                 capture,
                 session.as_ref(),
                 application_key.as_ref(),
+                |frame| {
+                    #[cfg(feature = "decryption-mode-7")]
+                    if let Some(key) = capture_image_key.as_ref() {
+                        m_bus_parser::output::verify_captured_firmware(
+                            std::slice::from_mut(frame),
+                            key,
+                        )?;
+                    }
+                    verify_evidence(frame)
+                },
             )
             .map_err(error_to_js);
         }
     };
+    let mut frames = match decoded {
+        FragmentOutput::Multiple(frames) => frames,
+        FragmentOutput::Single(frame) => vec![*frame],
+    };
+    #[cfg(feature = "decryption-mode-7")]
+    if let Some(key) = application_key.as_ref().filter(|_| check_image_blocks) {
+        for frame in &mut frames {
+            frame.authenticate_application(key).map_err(error_to_js)?;
+        }
+    }
     let frame = frames
         .get_mut(selected)
         .ok_or_else(|| JsError::new("Select a telegram in this capture."))?;
-    if let Some(session) = session {
-        *frame = m_bus_parser::output::decode_hex_with_tls_session(
-            &frame.raw.original_frame_hex,
-            &options,
-            &session,
-        )
-        .map_err(error_to_js)?;
-    } else if options.key.is_some() {
+    if session.is_none() && !check_image_blocks && options.key.is_some() {
         let source = if frame.raw.fragment_frames_hex.len() > 1 {
             frame.raw.fragment_frames_hex.join("\n")
         } else {
@@ -222,8 +317,13 @@ pub fn m_bus_render_oms_capture(
             .map_err(error_to_js)?;
     }
     #[cfg(feature = "decryption-mode-7")]
-    if let Some(key) = application_key {
+    if let Some(key) = application_key.filter(|_| !check_image_blocks) {
         frame.authenticate_application(&key).map_err(error_to_js)?;
+    }
+    verify_evidence(frame).map_err(error_to_js)?;
+    #[cfg(feature = "decryption-mode-7")]
+    if let Some(key) = capture_image_key.as_ref() {
+        m_bus_parser::output::verify_captured_firmware(&mut frames, key).map_err(error_to_js)?;
     }
     render_oms_capture_with_options(&frames, format, Some(selected), capture).map_err(error_to_js)
 }
