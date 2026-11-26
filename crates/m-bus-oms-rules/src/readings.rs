@@ -6,6 +6,7 @@ use alloc::{
 use crate::catalog::{identify, meter_tag};
 use crate::telegram::{RuleFinding, RuleStatus};
 
+pub mod history;
 mod profiles;
 
 #[derive(Clone, Copy, Debug, Default)]

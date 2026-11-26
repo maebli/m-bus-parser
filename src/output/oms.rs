@@ -1,3 +1,5 @@
+mod readings;
+
 use super::{ConfigurationField, DecodedOutput, Link, OmsReport, OutputError};
 use crate::rscada_xml::xml_encode;
 use m_bus_oms_rules::sequence::{AccessObservation, ExchangeFrame, KeyInformationHistory};
@@ -186,6 +188,7 @@ fn exchange_frame(frame: &DecodedOutput) -> Option<ExchangeFrame> {
         },
         key_id: frame.security.key_id,
         key_version: frame.security.key_version,
+        tls_hello: frame.security.tls.as_ref().and_then(|tls| tls.records.iter().find_map(|record| record.hello)),
         security_counter: frame.security.message_counter,
         verified_encryption: frame.security.decryption_state == "decrypted_authenticated"
             && frame
@@ -248,6 +251,7 @@ pub fn render_oms_capture_with_options(
     let mut previous: Option<ExchangeFrame> = None;
     let mut lpwan = m_bus_oms_rules::lpwan::LpwanHistory::default();
     let mut key_information = KeyInformationHistory::default();
+    let mut reading_history = readings::CaptureReadings::default();
     for (index, frame) in frames.iter().enumerate() {
         let mut report = frame.assess_oms_with_history(&mut history, options);
         if let Some(mac) = &frame.lpwan {
@@ -270,6 +274,7 @@ pub fn render_oms_capture_with_options(
             }
             key_information.observe(frame, consecutive, &mut report);
         }
+        reading_history.observe(frame, &mut report, consecutive);
         previous = current;
         if selected.is_none_or(|selected| selected == index) {
             reports.push(report);

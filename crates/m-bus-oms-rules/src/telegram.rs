@@ -213,6 +213,14 @@ pub fn assess_5_0_1<H: AsRef<[u8]>>(
     report(security_mode, findings)
 }
 
+pub fn static_content(configuration: ConfigurationField) -> bool {
+    match configuration.security_mode().to_bits() {
+        5 => configuration.mode_specific_lower() & 12 == 8,
+        7 | 10 | 13 => configuration.raw() >> 14 == 2,
+        _ => false,
+    }
+}
+
 pub fn assess_telegram<H: AsRef<[u8]>>(
     link: Link,
     configuration: Option<ConfigurationField>,
@@ -286,13 +294,7 @@ pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
                 &mut findings,
             );
         }
-        if matches!(link, Link::Wireless(0x44))
-            && configuration.is_some_and(|cf| match cf.security_mode().to_bits() {
-                5 => cf.mode_specific_lower() & 12 == 8,
-                7 | 10 | 13 => cf.raw() >> 14 == 2,
-                _ => false,
-            })
-        {
+        if matches!(link, Link::Wireless(0x44)) && configuration.is_some_and(static_content) {
             readings.required_sensor_tags(
                 fields.device_type,
                 true,

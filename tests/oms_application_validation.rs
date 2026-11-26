@@ -1,4 +1,5 @@
 #![cfg(all(feature = "std", feature = "oms-gen5"))]
+#![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
 use m_bus_core::ConfigurationField;
 use m_bus_oms_rules::{
@@ -19,12 +20,12 @@ fn record<'a>(header: &'a [u8], data: &'a [u8]) -> Option<Reading<&'a [u8]>> {
     })
 }
 
-fn report<'a>(
+fn report(
     device: u8,
     cf: u16,
     ext: u16,
     availability: RecordAvailability,
-    records: Vec<Option<Reading<&'a [u8]>>>,
+    records: Vec<Option<Reading<&[u8]>>>,
 ) -> TelegramReport {
     telegram::assess_telegram(
         Link::Wireless(0x44),
@@ -358,13 +359,11 @@ fn electricity_maximum_register_pairs_require_the_same_direction_and_tariff() {
         RecordAvailability::Complete,
         vec![power(), record(&[0x12, 0xec, 0x3c], &[1, 1])],
     );
-    assert!(
-        wrong_direction
-            .findings
-            .iter()
-            .filter(|f| f.rule == "Power maximum and time of maximum")
-            .all(|f| f.status.as_str() == "failed")
-    );
+    assert!(wrong_direction
+        .findings
+        .iter()
+        .filter(|f| f.rule == "Power maximum and time of maximum")
+        .all(|f| f.status.as_str() == "failed"));
     let mut tariff = date().unwrap();
     tariff.tariff = 1;
     let wrong_tariff = report(
@@ -401,5 +400,59 @@ fn ambiguous_protection_reports_missing_context() {
     assert_eq!(
         outcome(&ambiguous, "Data point encryption"),
         Some("could_not_check")
+    );
+}
+
+#[test]
+fn capture_keeps_immutable_identifiers_and_static_billing_dates_per_device() {
+    use m_bus_parser::{
+        decode_hex,
+        output::{render_oms_capture, OmsFormat},
+        DecodeOptions,
+    };
+    let frame = |sender, body: &str| {
+        let packet = format!("{:02X}44{sender}{body}", 9 + body.len() / 2);
+        decode_hex(&packet, &DecodeOptions::default()).unwrap()
+    };
+    let sensor = "9315785634123307";
+    let other = "9315785634133307";
+    let first = "7A010000000D780E3434333332323131313053445137";
+    let second = "7A020000000D780E3534333332323131313053445137";
+    let frames = [
+        frame(sensor, first),
+        frame(other, second),
+        frame(sensor, second),
+    ];
+    let report: serde_json::Value =
+        serde_json::from_str(&render_oms_capture(&frames, OmsFormat::Json, None, true).unwrap())
+            .unwrap();
+    let status = |report: &serde_json::Value, name| {
+        report["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["rule"] == name)
+            .map(|f| f["status"].clone())
+    };
+    assert!(status(&report[1], "Initial DIN address across capture").is_none());
+    assert_eq!(
+        status(&report[2], "Initial DIN address across capture"),
+        Some("failed".into())
+    );
+    let due = [
+        frame(sensor, "7A01000805426C1F11"),
+        frame(other, "7A02000000411301"),
+        frame(sensor, "7A02000000411301"),
+    ];
+    let report: serde_json::Value =
+        serde_json::from_str(&render_oms_capture(&due, OmsFormat::Json, None, true).unwrap())
+            .unwrap();
+    assert_eq!(
+        status(&report[1], "Due date for billing value"),
+        Some("could_not_check".into())
+    );
+    assert_eq!(
+        status(&report[2], "Due date for billing value"),
+        Some("passed".into())
     );
 }
