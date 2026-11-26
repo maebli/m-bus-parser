@@ -416,12 +416,54 @@
         #security-fields { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 4px 18px; margin: 8px 0 0; }
         #security-fields dt { color: #59636e; }
         #security-fields dd { margin: 0; }
-        .output-modes { display: flex; gap: 12px; padding: 0 12px; border-bottom: 1px solid #d1d9e0; }
-        .output-modes button { padding: 9px 4px; background: transparent; border: 0; border-bottom: 2px solid transparent; font: inherit; font-weight: 600; color: inherit; cursor: pointer; }
-        .output-modes button[aria-pressed="true"] { border-bottom-color: #0969da; }
-        body.dark-mode .output-modes { border-color: #3d444d; }
-        body.dark-mode .output-modes button[aria-pressed="true"] { border-color: #4493f8; }
+        .output-modes {
+            position: relative;
+            display: inline-grid;
+            grid-template-columns: repeat(2, 1fr);
+            align-self: flex-start;
+            width: max-content;
+            margin: 8px 12px 4px;
+            padding: 2px;
+            border-radius: 8px;
+            background: #eff2f5;
+            color: #52606d;
+        }
+        .output-modes::before {
+            content: "";
+            position: absolute;
+            inset: 2px auto 2px 2px;
+            width: calc(50% - 2px);
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px #18233124;
+            transition: transform 160ms ease-out;
+        }
+        .output-modes:has(#mode-oms[aria-pressed="true"])::before { transform: translateX(100%); }
+        .output-modes button {
+            position: relative;
+            min-height: 26px;
+            padding: 2px 9px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: inherit;
+            font-weight: 500;
+            line-height: 1.3;
+            font-family: inherit;
+            font-size: 0.78rem;
+            cursor: pointer;
+        }
+        .output-modes button[aria-pressed="true"] { color: #202a35; }
+        .output-modes button:focus-visible { outline: 2px solid #3973bd; outline-offset: 1px; }
+        body.dark-mode .output-modes { background: #242b33; color: #b1bbc5; }
+        body.dark-mode .output-modes::before { background: #3a434e; }
+        body.dark-mode .output-modes button[aria-pressed="true"] { color: #f0f3f6; }
+        @media (prefers-reduced-motion: reduce) {
+            .output-modes::before { transition: none; }
+        }
 
+        .oms-scope { margin: 0 0 10px; font-size: 0.78rem; }
+        .oms-report .rule-reference a { color: inherit; text-underline-offset: 2px; }
         .oms-report { --rule-line: #d1d9e0; --rule-muted: #59636e; --rule-header: #f6f8fa; padding: 8px clamp(8px, 2vw, 20px) 18px; }
         body.dark-mode .oms-report { --rule-line: #3d444d; --rule-muted: #a4aeb9; --rule-header: #212830; }
         .oms-report h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 14px; font-size: 1rem; }
@@ -1781,7 +1823,7 @@
     <div id="output-container">
         <div class="output-modes" role="group" aria-label="Operation">
             <button type="button" id="mode-parse" aria-controls="parse-formats" aria-pressed="true">Parse</button>
-            <button type="button" id="mode-oms" aria-controls="oms-formats" aria-pressed="false">OMS check</button>
+            <button type="button" id="mode-oms" aria-controls="oms-formats" aria-pressed="false">OMS validation</button>
         </div>
         <div class="output-toolbar">
             <div class="result-views">
@@ -1795,7 +1837,7 @@
                     <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
                 </div>
-                <div id="oms-formats" class="parse-actions" role="group" aria-label="OMS check format" hidden>
+                <div id="oms-formats" class="parse-actions" role="group" aria-label="OMS validation format" hidden>
                     <input id="parse_oms" type="button" value="Table" aria-pressed="false" />
                     <input id="parse_oms-json" type="button" value="JSON" aria-pressed="false" />
                     <input id="parse_oms-csv" type="button" value="CSV" aria-pressed="false" />
@@ -1821,6 +1863,7 @@
         <template id="oms-table-template">
             <section class="oms-report">
                 <h3 id="oms-report-heading"><a target="_blank" rel="noopener noreferrer"></a><small></small></h3>
+                <p class="oms-scope">Checks apply to this telegram. Device behaviour and timing require a test sequence.</p>
                 <table aria-labelledby="oms-report-heading">
                     <thead><tr><th scope="col">Result</th><th scope="col">Rule</th><th scope="col" class="reference-column">Reference</th></tr></thead>
                     <tbody></tbody>
@@ -2018,7 +2061,7 @@
         function renderOmsReport(container, report) {
             const view = document.getElementById('oms-table-template').content.cloneNode(true);
             const link = view.querySelector('h3 a');
-            link.href = report.specification;
+            link.href = report.specification + "#page=23&view=FitH,842";
             link.textContent = `OMS ${report.version} · ${report.passed}/${report.assessed} passed`;
             if (report.unchecked) view.querySelector('h3 small').textContent = `${report.unchecked} could not be checked`;
 
@@ -2040,12 +2083,17 @@
                 detail.textContent = finding.record_number ? `Record ${finding.record_number} · ${finding.detail}` : finding.detail;
                 const reference = document.createElement('span');
                 reference.className = 'rule-reference inline-reference';
-                reference.textContent = finding.reference;
+                const source = document.createElement('a');
+                source.href = finding.source_url || report.specification;
+                source.textContent = finding.reference;
+                source.target = '_blank';
+                source.rel = 'noopener noreferrer';
+                reference.append(source);
                 rule.append(detail, reference);
                 row.append(rule);
                 const citation = row.insertCell();
                 citation.className = 'rule-reference reference-column';
-                citation.textContent = finding.reference;
+                citation.append(source.cloneNode(true));
             }
             container.replaceChildren(view);
         }
@@ -2621,7 +2669,7 @@
                     hasDecoded = true;
                     window._lastRawOutput = formattedResult;
                     if (oms) {
-                        outputSummary.textContent = 'OMS check results';
+                        outputSummary.textContent = 'OMS validation results';
                     } else if (['key_missing', 'session_required'].includes(result.security?.decryption_state)) {
                         outputSummary.textContent = 'Header information only. The payload remains encrypted.';
                     } else if (result.mode === 'application') {
