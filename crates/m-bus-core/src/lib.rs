@@ -785,6 +785,18 @@ impl ConfigurationField {
     pub const fn mode_specific_upper(&self) -> u8 {
         ((self.raw >> 13) & 0b0000_0111) as u8
     }
+
+    /// Whether the payload behind this field is encrypted.
+    ///
+    /// Security mode 5 with N = 0 (bits 7-4) names the mode but sends no
+    /// encrypted block (OMS Vol. 2, 7.2.4.3).
+    pub const fn is_encrypted(&self) -> bool {
+        match self.security_mode() {
+            SecurityMode::NoEncryption => false,
+            SecurityMode::AesCbc128IvNonZero => self.mode_specific_lower() >> 4 != 0,
+            _ => true,
+        }
+    }
 }
 
 impl From<u16> for ConfigurationField {

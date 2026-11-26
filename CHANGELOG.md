@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Monthly inverse compact profiles with signed BCD differences now show the
   historical readings when the telegram includes the matching base reading.
   The ZENNER water-meter example contains 14 monthly readings.
+- Mode 5 payloads now decrypt only the number of 16-byte blocks given in bits
+  4 to 7 of the configuration field. The rest of the payload is plaintext and
+  is passed through unchanged. Before, every full block was decrypted, so a
+  plaintext tail of 16 bytes or more came out as garbage (OMS Vol. 2 Annex N,
+  N.6.3 shows such a partially encrypted frame). A block count of 15 means the
+  whole payload is encrypted, and a larger count than the payload holds is
+  rejected.
+- Mode 5 frames with a block count of 0 carry no encrypted data and now decode
+  without a key. Before, they were reported as `key_missing` with no records.
 
 ## [0.5.2] - 2026-09-23
 

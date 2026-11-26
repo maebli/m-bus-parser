@@ -905,11 +905,7 @@ pub struct ShortTplHeader {
 impl LongTplHeader {
     #[must_use]
     pub fn is_encrypted(&self) -> bool {
-        use m_bus_core::SecurityMode;
-        !matches!(
-            self.short_tpl_header.configuration_field.security_mode(),
-            SecurityMode::NoEncryption
-        )
+        self.short_tpl_header.is_encrypted()
     }
 }
 
@@ -965,11 +961,7 @@ impl ShortTplHeader {
 
     #[must_use]
     pub fn is_encrypted(&self) -> bool {
-        use m_bus_core::SecurityMode;
-        !matches!(
-            self.configuration_field.security_mode(),
-            SecurityMode::NoEncryption
-        )
+        self.configuration_field.is_encrypted()
     }
 
     #[cfg(feature = "decryption-api")]
@@ -1020,6 +1012,31 @@ impl ShortTplHeader {
             }
             .decrypt_into(provider, output);
         }
+
+        #[cfg(feature = "decryption-mode-5")]
+        if context.security_mode == m_bus_core::SecurityMode::AesCbc128IvNonZero {
+            use crate::decryption::DecryptionError;
+
+            // Bits 7-4 of the configuration field give the number of encrypted
+            // 16-byte blocks. Anything after them is sent in plaintext. N = 15
+            // means the whole payload is encrypted (OMS Vol. 2, 7.2.4.3).
+            let encrypted_len = match self.configuration_field.mode_specific_lower() >> 4 {
+                15 => data.len(),
+                blocks => usize::from(blocks) * 16,
+            };
+            let (encrypted, plaintext) = data
+                .split_at_checked(encrypted_len)
+                .ok_or(DecryptionError::InvalidDataLength)?;
+            let decrypted_len =
+                EncryptedPayload::new(encrypted, context).decrypt_into(provider, output)?;
+            let len = decrypted_len + plaintext.len();
+            output
+                .get_mut(decrypted_len..len)
+                .ok_or(DecryptionError::InvalidDataLength)?
+                .copy_from_slice(plaintext);
+            return Ok(len);
+        }
+
         EncryptedPayload::new(data, context).decrypt_into(provider, output)
     }
 }

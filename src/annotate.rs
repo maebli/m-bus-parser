@@ -1641,11 +1641,7 @@ fn is_long_tpl_encrypted(app_data: &[u8]) -> bool {
         return false;
     }
     // Configuration field is at bytes 11-12 (relative to app_data)
-    let config = m_bus_core::ConfigurationField::from_bytes(app_data[11], app_data[12]);
-    !matches!(
-        config.security_mode(),
-        m_bus_core::SecurityMode::NoEncryption
-    )
+    m_bus_core::ConfigurationField::from_bytes(app_data[11], app_data[12]).is_encrypted()
 }
 
 /// Check if a short TPL header indicates encryption.
@@ -1653,14 +1649,8 @@ fn is_short_tpl_encrypted(app_data: &[u8], skip_count: usize) -> bool {
     if app_data.len() < skip_count + 4 {
         return false;
     }
-    let config = m_bus_core::ConfigurationField::from_bytes(
-        app_data[skip_count + 2],
-        app_data[skip_count + 3],
-    );
-    !matches!(
-        config.security_mode(),
-        m_bus_core::SecurityMode::NoEncryption
-    )
+    m_bus_core::ConfigurationField::from_bytes(app_data[skip_count + 2], app_data[skip_count + 3])
+        .is_encrypted()
 }
 
 /// Render annotated segments as a human-readable text visualization.
@@ -1979,7 +1969,7 @@ mod tests {
             0x00, // Device type
             0x18, // Access number
             0x00, // Status
-            0x00, 0x05, // Config: security mode 5 (bits 12-8 of MSB = 0x05)
+            0x10, 0x05, // Config: security mode 5, one encrypted block
             // Encrypted payload (8 bytes)
             0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22,
         ];
@@ -2002,6 +1992,31 @@ mod tests {
             !segments.iter().any(|s| s.kind == SegmentKind::Dif),
             "should not parse DIF in encrypted payload"
         );
+    }
+
+    #[test]
+    fn test_encrypted_short_tpl() {
+        // Status 00 and config 20 05 only read as encrypted when the
+        // configuration field is taken from its own offset.
+        let user_data: Vec<u8> = vec![
+            0x7A, // CI = short TPL
+            0x18, // Access number
+            0x00, // Status
+            0x20, 0x05, // Config: security mode 5, two encrypted blocks
+            // Encrypted payload (8 bytes)
+            0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22,
+        ];
+        let data = make_long_frame(0x08, 0x01, &user_data);
+
+        let segments = annotate_frame(&data).expect("should parse");
+        assert_contiguous(&segments, data.len());
+
+        let enc_seg = segments
+            .iter()
+            .find(|s| s.kind == SegmentKind::EncryptedPayload)
+            .expect("should have encrypted payload segment");
+        assert_eq!(enc_seg.start, 11); // 6 + 5
+        assert_eq!(enc_seg.end, 19); // 11 + 8
     }
 
     #[test]

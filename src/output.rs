@@ -875,11 +875,7 @@ fn security_fields(
                 .short_tpl_header
                 .configuration_field
                 .security_mode();
-            (
-                !matches!(mode, SecurityMode::NoEncryption),
-                Some(mode),
-                false,
-            )
+            (long_tpl_header.is_encrypted(), Some(mode), false)
         }
         Some(UserDataBlock::VariableDataStructureWithShortTplHeader {
             extended_link_layer,
@@ -893,11 +889,7 @@ fn security_fields(
             if ell_encrypted && matches!(mode, SecurityMode::NoEncryption) {
                 (true, None, true)
             } else {
-                (
-                    !matches!(mode, SecurityMode::NoEncryption),
-                    Some(mode),
-                    ell_encrypted,
-                )
+                (short_tpl_header.is_encrypted(), Some(mode), ell_encrypted)
             }
         }
         _ => (false, None, false),
