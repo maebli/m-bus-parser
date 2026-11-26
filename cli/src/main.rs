@@ -140,6 +140,11 @@ struct ValidationArgs {
     consecutive: bool,
     #[arg(long, value_name = "MODE", value_parser = parse_radio_mode, help = "Declared wireless mode: c, c1, c2 or other")]
     radio_mode: Option<OmsRadioMode>,
+    #[arg(
+        long,
+        help = "Declared Annex E meter interface: bsi-unidirectional, bsi-bidirectional or idis"
+    )]
+    national_profile: Option<m_bus_parser::output::OmsNationalProfile>,
     #[cfg(feature = "decryption-mode-7")]
     #[arg(
         long,
@@ -198,6 +203,7 @@ impl From<&ValidationArgs> for OmsCaptureOptions {
         Self {
             consecutive: args.consecutive,
             radio_mode: args.radio_mode,
+            national_profile: args.national_profile,
             taf7: has_taf7.then_some(Taf7Parameters {
                 measuring_period_ms: args.taf7_measuring_period_ms,
                 registration_period_ms: args.taf7_registration_period_ms,

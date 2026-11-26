@@ -8,6 +8,7 @@ use m_bus_oms_rules::sequence::{AccessObservation, ExchangeFrame, KeyInformation
 use std::fmt::Write;
 
 pub use m_bus_oms_rules::layers::OmsRadioMode;
+pub use m_bus_oms_rules::national::OmsNationalProfile;
 pub use m_bus_oms_rules::readings::Taf7Parameters;
 
 #[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
@@ -15,6 +16,7 @@ pub use m_bus_oms_rules::readings::Taf7Parameters;
 pub struct OmsCaptureOptions {
     pub consecutive: bool,
     pub radio_mode: Option<OmsRadioMode>,
+    pub national_profile: Option<OmsNationalProfile>,
     pub taf7: Option<Taf7Parameters>,
 }
 

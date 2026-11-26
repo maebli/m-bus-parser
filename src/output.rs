@@ -33,7 +33,7 @@ mod messages;
 mod oms;
 pub use oms::{
     render_oms_capture, render_oms_capture_with_options, render_oms_reports, OmsCaptureOptions,
-    OmsFormat, OmsRadioMode, Taf7Parameters,
+    OmsFormat, OmsNationalProfile, OmsRadioMode, Taf7Parameters,
 };
 mod profile;
 #[cfg(feature = "oms-gen3")]
@@ -437,6 +437,20 @@ impl DecodedOutput {
             readings,
             options.taf7,
         );
+        if let Some(profile) = options.national_profile {
+            let clock = self
+                .application
+                .as_ref()
+                .is_some_and(|a| matches!(a.protocol.as_str(), "clock_set" | "clock_adjust"));
+            profile.check(
+                link,
+                self.lpwan.is_some(),
+                fields,
+                configuration,
+                clock,
+                &mut report,
+            );
+        }
         if let Some(manufacturer) = self
             .meter
             .identity

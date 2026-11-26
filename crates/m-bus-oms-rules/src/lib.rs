@@ -10,6 +10,7 @@ mod catalog;
 mod commands;
 pub mod layers;
 pub mod lpwan;
+pub mod national;
 pub mod readings;
 pub mod sequence;
 pub mod sitp;
