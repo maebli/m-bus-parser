@@ -8,7 +8,7 @@ use core::str::FromStr;
 use std::fmt;
 
 use m_bus_core::{ConfigurationField, Function, SecurityMode};
-use m_bus_oms_rules::telegram::{self, Link, OmsReport, RecordAvailability, RuleFinding};
+use m_bus_oms_rules::telegram::{self, Link, OmsReport, RecordAvailability};
 pub use m_bus_oms_rules::OmsSecurityModeCheck;
 use serde::Serialize;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -25,6 +25,8 @@ use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 mod application;
 mod fragments;
 mod messages;
+mod oms;
+pub use oms::{render_oms_reports, OmsFormat};
 mod profile;
 #[cfg(feature = "oms-gen3")]
 mod sml;
@@ -58,6 +60,7 @@ const MINIMUM_TABLE_WIDTH: usize = 32;
 #[non_exhaustive]
 pub enum OutputFormat {
     Table,
+    Oms(OmsFormat),
     TableAnsi,
     TableHtml,
     Json,
@@ -76,6 +79,7 @@ impl OutputFormat {
             Self::Table => "table",
             Self::TableAnsi => "table-ansi",
             Self::TableHtml => "table-html",
+            Self::Oms(format) => format.as_str(),
             Self::Json => "json",
             Self::Yaml => "yaml",
             Self::Csv => "csv",
@@ -101,6 +105,9 @@ impl FromStr for OutputFormat {
             "table" | "table_format" => Ok(Self::Table),
             "table-ansi" => Ok(Self::TableAnsi),
             "table-html" => Ok(Self::TableHtml),
+            "oms-json" => Ok(Self::Oms(OmsFormat::Json)),
+            "oms-xml" => Ok(Self::Oms(OmsFormat::Xml)),
+            "oms-csv" => Ok(Self::Oms(OmsFormat::Csv)),
             "json" => Ok(Self::Json),
             "yaml" | "yml" => Ok(Self::Yaml),
             "csv" => Ok(Self::Csv),
@@ -255,7 +262,6 @@ pub struct DecodedOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub application: Option<ApplicationOutput>,
     pub security: SecurityOutput,
-    pub oms_5_0_1_checks: [RuleFinding; 6],
     pub record_availability: RecordAvailability,
     pub records: Vec<RecordOutput>,
     pub raw: RawOutput,
@@ -409,7 +415,6 @@ pub struct TlsOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SecurityOutput {
-    pub oms_5_0_1_security_mode_check: OmsSecurityModeCheck,
     pub payload_protection: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
@@ -760,6 +765,7 @@ fn render_capture(
         FragmentOutput::Multiple(frames) => frames.as_slice(),
     };
     match format {
+        OutputFormat::Oms(format) => return render_oms_reports(frames, format),
         OutputFormat::Json => {
             return serde_json::to_string_pretty(&capture).map_err(|e| OutputError::Serialization {
                 format: "json",
@@ -834,6 +840,7 @@ fn render_decoded(
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
     match format {
+        OutputFormat::Oms(format) => render_oms_reports(std::slice::from_ref(decoded), format),
         OutputFormat::Json => {
             serde_json::to_string_pretty(decoded).map_err(|error| OutputError::Serialization {
                 format: "json",
@@ -1487,10 +1494,8 @@ fn build_output(
     } else {
         RecordAvailability::Complete
     };
-    let report = assess_oms_5_0_1(&frame, &transport, record_availability, &record_outputs);
     DecodedOutput {
         record_availability,
-        oms_5_0_1_checks: report.findings,
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
         protocol: protocol.to_string(),
@@ -1499,7 +1504,6 @@ fn build_output(
         transport,
         application,
         security: SecurityOutput {
-            oms_5_0_1_security_mode_check: report.security_mode,
             payload_protection: payload_protection.to_string(),
             mode: mode.map(|value| value.to_string()),
             mode_code: mode.map(|value| value.to_bits()),
@@ -2923,30 +2927,6 @@ fn render_table(
 
     for record in &decoded.records {
         push_record_reading(&mut output, record, width, style);
-    }
-    output.push('\n');
-    push_text(
-        &mut output,
-        "",
-        "OMS 5.0.1 checks",
-        width,
-        style,
-        Cell::Label,
-    );
-    for finding in &decoded.oms_5_0_1_checks {
-        let (status, cell) = match finding.status {
-            telegram::RuleStatus::Passed => ("Passed", Cell::Passed),
-            telegram::RuleStatus::Failed => ("Failed", Cell::Failed),
-            telegram::RuleStatus::CouldNotCheck => ("Could not check", Cell::Text),
-            telegram::RuleStatus::NotApplicable => ("Not applicable", Cell::Text),
-        };
-        let mut heading = format!("{status} · {}", finding.rule);
-        if let Some(number) = finding.record_number {
-            heading.push_str(&format!(" · record {number}"));
-        }
-        push_text(&mut output, "", &heading, width, style, cell);
-        let detail = format!("{} ({})", finding.detail, finding.reference);
-        push_text(&mut output, "  ", &detail, width, style, Cell::Text);
     }
     if !decoded.diagnostics.is_empty() {
         output.push_str("Diagnostics\n");

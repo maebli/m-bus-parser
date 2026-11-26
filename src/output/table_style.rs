@@ -10,8 +10,6 @@ pub(super) enum Cell<'a> {
     Text,
     Label,
     Reading,
-    Passed,
-    Failed,
     Bytes,
     Website(&'a str),
 }
@@ -30,8 +28,6 @@ impl TableStyle {
             Cell::Text => ("", ""),
             Cell::Label => ("label", "\x1b[36m"),
             Cell::Reading => ("reading", "\x1b[32m"),
-            Cell::Passed => ("passed", "\x1b[1;32m"),
-            Cell::Failed => ("failed", "\x1b[1;31m"),
             Cell::Bytes => ("bytes", "\x1b[35m"),
             Cell::Website(_) => ("link", "\x1b[4;34m"),
         };

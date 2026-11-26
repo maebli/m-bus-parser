@@ -17,6 +17,17 @@ pub enum RuleStatus {
 
 use RuleStatus::{CouldNotCheck, Failed, NotApplicable, Passed};
 
+impl RuleStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Passed => "passed",
+            Failed => "failed",
+            CouldNotCheck => "could_not_check",
+            NotApplicable => "not_applicable",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct RuleFinding {
@@ -134,7 +145,14 @@ pub enum RecordAvailability {
     Unavailable,
 }
 
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct OmsReport {
+    pub version: &'static str,
+    pub specification: &'static str,
+    pub passed: usize,
+    pub assessed: usize,
+    pub unchecked: usize,
     pub security_mode: OmsSecurityModeCheck,
     pub findings: [RuleFinding; 6],
 }
@@ -168,15 +186,33 @@ pub fn assess_5_0_1<H: AsRef<[u8]>>(
         configuration.map(|field| field.security_mode()),
     );
     let [encoding, unique, date] = volumes.findings(unavailable);
+    let findings = [
+        link.check(),
+        check_mode_zero_blocks(configuration),
+        security_mode.finding(),
+        encoding,
+        unique,
+        date,
+    ];
+    let passed = findings
+        .iter()
+        .filter(|f| matches!(f.status, Passed))
+        .count();
+    let failed = findings
+        .iter()
+        .filter(|f| matches!(f.status, Failed))
+        .count();
+    let unchecked = findings
+        .iter()
+        .filter(|f| matches!(f.status, CouldNotCheck))
+        .count();
     OmsReport {
-        findings: [
-            link.check(),
-            check_mode_zero_blocks(configuration),
-            security_mode.finding(),
-            encoding,
-            unique,
-            date,
-        ],
+        version: "5.0.1",
+        specification: "https://oms-group.org/wp-content/uploads/2024/10/OMS-Spec_Vol2_Primary_v501_01.pdf",
+        passed,
+        assessed: passed + failed,
+        unchecked,
+        findings,
         security_mode,
     }
 }

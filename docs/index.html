@@ -416,7 +416,14 @@
         #security-fields { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 4px 18px; margin: 8px 0 0; }
         #security-fields dt { color: #59636e; }
         #security-fields dd { margin: 0; }
+        .oms-report { padding: 0 16px 16px; }
+        .oms-report h3 { margin: 8px 0 14px; font-size: 1rem; }
+        .oms-report a { color: #0969da; }
+        body.dark-mode .oms-report a { color: #79c0ff; }
+        #oms-view-picker { align-self: center; margin: 0; }
         #oms-findings { margin: 0; }
+        #oms-findings dt[data-status="not_applicable"], #oms-findings dt[data-status="not_applicable"] + dd { color: #6e7781; }
+        body.dark-mode #oms-findings dt[data-status="not_applicable"], body.dark-mode #oms-findings dt[data-status="not_applicable"] + dd { color: #929ba5; }
         #oms-findings dt { font-weight: 600; }
         #oms-findings dd { margin: 2px 0 10px; }
         #oms-findings dd:last-child { margin-bottom: 0; }
@@ -428,6 +435,7 @@
         .result-views input[type="button"]:hover { background: #eff2f5; }
         .result-views input[type="button"][aria-pressed="true"] { background: #ddf4ff; border-color: #0969da; color: #0550ae; box-shadow: none; }
         .result-views input[type="button"]:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
+        #oms-view-picker[hidden],
         #copy_output[hidden],
         #download_output[hidden],
         #security-panel[hidden] { display: none; }
@@ -705,8 +713,8 @@
 
         body { --oms-pass: #116329; --oms-fail: #b42318; }
         body.dark-mode { --oms-pass: #7ee787; --oms-fail: #ff8182; }
-        .table-passed, #oms-findings dt[data-status="passed"] { color: var(--oms-pass); font-weight: 700; }
-        .table-failed, #oms-findings dt[data-status="failed"] { color: var(--oms-fail); font-weight: 700; }
+        #oms-findings dt[data-status="passed"] { color: var(--oms-pass); font-weight: 700; }
+        #oms-findings dt[data-status="failed"] { color: var(--oms-fail); font-weight: 700; }
         .text-table .table-label { color: #065e78; }
         .text-table .table-reading { color: #116329; }
         .text-table .table-bytes { color: #6639a6; }
@@ -1476,6 +1484,7 @@
             </div>
             <div class="decode-actions">
                 <button type="submit" id="decode-button" disabled>Loading parser…</button>
+                <button type="button" id="check-oms" class="utility-control" disabled>Check OMS</button>
             </div>
             <details id="tls-panel" class="tls-panel" name="parser-disclosure">
                 <summary id="tls-summary">TLS session · mode 13</summary>
@@ -1522,10 +1531,6 @@
                         <p id="security-message"></p>
                         <dl id="security-fields"></dl>
                     </div>
-                </details>
-                <details id="oms-checks" name="parser-disclosure" hidden>
-                    <summary>OMS 5.0.1 checks</summary>
-                    <div class="disclosure-content"><dl id="oms-findings"></dl></div>
                 </details>
             </section>
         </div>
@@ -1773,6 +1778,14 @@
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
+            <label id="oms-view-picker" hidden>OMS report
+                <select id="oms-format">
+                    <option value="oms">Overview</option>
+                    <option value="oms-json">JSON</option>
+                    <option value="oms-xml">XML</option>
+                    <option value="oms-csv">CSV</option>
+                </select>
+            </label>
             <div class="output-actions">
                 <button id="copy_output" title="Copy Output" hidden>
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1977,17 +1990,23 @@
             return { status: 'Security status unavailable', tone: 'neutral', message: 'The parser did not return a security status for this input.' };
         }
 
-        function showOmsChecks(findings) {
-            const panel = document.getElementById('oms-checks');
-            const list = document.getElementById('oms-findings');
+        function renderOmsReport(container, report) {
+            const section = document.createElement('section');
+            section.className = 'oms-report';
+            const heading = document.createElement('h3');
+            const link = document.createElement('a');
+            link.href = report.specification;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = `OMS ${report.version} · ${report.passed}/${report.assessed} passed`;
+            heading.append(link);
+            if (report.unchecked) heading.append(` · ${report.unchecked} could not be checked`);
+            const list = document.createElement('dl');
+            list.id = 'oms-findings';
             const labels = { passed: 'Passed', failed: 'Failed', could_not_check: 'Could not check', not_applicable: 'Not applicable' };
-            list.replaceChildren();
-            panel.hidden = !findings?.length;
-            if (panel.hidden) {
-                panel.open = false;
-                return;
-            }
-            for (const finding of findings) {
+            section.append(heading, list);
+            container.replaceChildren(section);
+            for (const finding of report.findings) {
                 const title = document.createElement('dt');
                 const detail = document.createElement('dd');
                 const record = finding.record_number ? ` · record ${finding.record_number}` : '';
@@ -1999,24 +2018,15 @@
         }
 
         function showSecurity(decoded, error) {
-            showOmsChecks(decoded?.oms_5_0_1_checks);
             const presentation = securityPresentation(decoded, error, document.getElementById('tls-enabled').checked);
             const security = decoded?.security;
             const mode = security?.mode_code;
             const identity = decoded?.meter?.identity;
-            const check = security?.oms_5_0_1_security_mode_check;
-            const profile = check?.candidate_profile;
-            const checkLabel = {
-                listed: profile ? `Mode matches profile ${profile}` : 'Mode 0 is listed',
-                not_listed: 'Mode outside the listed profiles',
-                requires_mode_0: 'This link function requires mode 0',
-                undetermined: 'Undetermined · no explicit transport mode',
-            }[check?.result];
             const panel = document.getElementById('security-panel');
             panel.hidden = false;
             panel.dataset.tone = presentation.tone;
             document.getElementById('security-status').textContent = presentation.status;
-            document.getElementById('security-mode').textContent = [mode !== undefined ? `Mode ${mode}` : '', checkLabel ? `OMS 5.0.1 mode check · ${checkLabel}` : ''].filter(Boolean).join(' · ');
+            document.getElementById('security-mode').textContent = mode === undefined ? '' : `Mode ${mode}`;
             document.getElementById('security-message').textContent = presentation.message;
             document.getElementById('detected-meter').textContent = identity
                 ? [identity.manufacturer_code, identity.id, identity.device_type].filter(Boolean).join(' · ')
@@ -2025,7 +2035,6 @@
             fields.replaceChildren();
             const details = [
                 ['Mode', mode !== undefined ? `${mode} · ${security.mode}` : 'Not reported'],
-                ['OMS 5.0.1 · Table 43, security mode only', checkLabel],
                 ['Authentication', presentation.status],
                 ['Configuration', decoded?.transport?.configuration?.raw],
             ];
@@ -2210,6 +2219,13 @@
             const decodeButton = document.getElementById('decode-button');
             const parserApi = { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
             decodeButton.disabled = false;
+            const omsButton = document.getElementById('check-oms');
+            const omsFormat = document.getElementById('oms-format');
+            const isOmsView = format => ['oms', 'oms-json', 'oms-xml', 'oms-csv'].includes(format);
+            let decodeFormat = 'table';
+            omsButton.disabled = false;
+            omsButton.addEventListener('click', () => parseInput(omsFormat.value));
+            omsFormat.addEventListener('change', () => parseInput(omsFormat.value));
 
             function updateDecodeButton() {
                 const security = inspectedTelegram?.security;
@@ -2315,7 +2331,7 @@
 
             document.getElementById('parser-form').addEventListener('submit', event => {
                 event.preventDefault();
-                parseInput(currentFormat);
+                parseInput(isOmsView(currentFormat) ? decodeFormat : currentFormat);
             });
 
             function selectFormat(format) {
@@ -2355,7 +2371,7 @@
                         if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                         event.preventDefault();
                         const params = new URL(sample.href).searchParams;
-                        loadSample(params.get('data'), '', null, currentFormat === 'product' ? currentFormat : params.get('format'));
+                        loadSample(params.get('data'), '', null, currentFormat === 'product' || isOmsView(currentFormat) ? currentFormat : params.get('format'));
                     }
                     meterCatalog.querySelector('summary').focus();
                 });
@@ -2468,8 +2484,13 @@
                 inspectCurrentTelegram();
                 const isTls = inspectedTelegram?.security?.mode_code === 13;
                 format = format === 'table_format' ? 'table' : format;
-                if (!['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview', 'product'].includes(format)) format = 'table';
+                const oms = isOmsView(format);
+                if (!oms && !['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview', 'product'].includes(format)) format = 'table';
                 if (isTls && format === 'xml') format = 'json';
+                if (oms) omsFormat.value = format;
+                else decodeFormat = format;
+                document.getElementById('oms-view-picker').hidden = !oms;
+                document.querySelector('.result-views').hidden = oms;
                 currentFormat = format;
                 document.querySelectorAll('.parse-actions input').forEach(button => {
                     button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
@@ -2515,15 +2536,15 @@
                 let language = 'plaintext';
                 let extension = 'txt';
                 let mimeType = 'text/plain';
-                if (format === 'json' || format === 'product') {
+                if (format === 'json' || format === 'product' || format === 'oms' || format === 'oms-json') {
                     language = 'json'; extension = 'json'; mimeType = 'application/json';
                 } else if (format === 'yaml') {
                     language = 'yaml'; extension = 'yaml'; mimeType = 'application/yaml';
-                } else if (format === 'csv') {
+                } else if (format === 'csv' || format === 'oms-csv') {
                     language = 'csv'; extension = 'csv'; mimeType = 'text/csv';
                 } else if (format === 'mermaid') {
                     extension = 'mmd';
-                } else if (format === 'xml') {
+                } else if (format === 'xml' || format === 'oms-xml') {
                     language = 'xml'; extension = 'xml'; mimeType = 'application/xml';
                 } else if (format === 'hexview') {
                     extension = 'json'; mimeType = 'application/json';
@@ -2540,7 +2561,7 @@
                         attempt.tableWidth = width;
                     }
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
-                    const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : format;
+                    const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : format === 'oms' ? 'oms-json' : format;
                     const result = sessionJson
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
                         : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
@@ -2560,6 +2581,8 @@
                         if (result.plaintext) {
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
+                    } else if (format === 'oms') {
+                        renderOmsReport(outputContainer, JSON.parse(formattedResult));
                     } else if (format === 'product') {
                         const { renderProduct } = await loadProductView();
                         if (generation !== renderGeneration) return;
@@ -2581,7 +2604,7 @@
                     const unparsedRecord = result.decoded.records.find(record =>
                         record.value.kind === 'manufacturer_specific' && record.data_hex && !record.manufacturer_fields?.length
                     );
-                    if (unparsedRecord) {
+                    if (!oms && unparsedRecord) {
                         const note = document.getElementById('parser-note-template').content.cloneNode(true);
                         note.querySelector('.parser-note-record').textContent = '#' + unparsedRecord.index;
                         outputContainer.append(note);
@@ -2589,7 +2612,9 @@
                     showSecurity(result.decoded);
                     hasDecoded = true;
                     window._lastRawOutput = formattedResult;
-                    if (['key_missing', 'session_required'].includes(result.security?.decryption_state)) {
+                    if (oms) {
+                        outputSummary.textContent = 'OMS check results';
+                    } else if (['key_missing', 'session_required'].includes(result.security?.decryption_state)) {
                         outputSummary.textContent = 'Header information only. The payload remains encrypted.';
                     } else if (result.mode === 'application') {
                         outputSummary.textContent = 'Parsed as application-layer data without a link-layer frame.';
@@ -2597,7 +2622,7 @@
                         outputSummary.textContent = `${result.mode === 'wireless' ? 'Wireless' : 'Wired'} telegram · ${document.getElementById('parse_' + format).value}`;
                     }
                     if (result.diagnostics.length) {
-                        if (format !== 'mermaid') {
+                        if (!oms && format !== 'mermaid') {
                             const warning = document.createElement('pre');
                             warning.className = 'output-error';
                             warning.textContent = result.diagnostics.map(item => `[${item.code}] ${item.message}`).join('\n');
@@ -2668,7 +2693,7 @@
             const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
             const downloadLink = document.getElementById('download_output');
             downloadLink.href = url;
-            downloadLink.download = `m-bus-output.${extension}`;
+            downloadLink.download = `${currentFormat.startsWith('oms') ? 'oms-report' : 'm-bus-output'}.${extension}`;
             window._lastDownloadUrl = url;
         }
 

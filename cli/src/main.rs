@@ -65,47 +65,20 @@ enum Command {
         #[arg(short, long, help = "Hexadecimal meter key for this telegram")]
         key: Option<String>,
     },
+    #[command(about = "Check a telegram against the supported OMS 5.0.1 rules")]
+    CheckOms {
+        #[command(flatten)]
+        input: TelegramInput,
+        #[arg(short = 't', long, default_value = "json", value_parser = ["json", "xml", "csv"])]
+        format: String,
+    },
     /// Parse an M-Bus data file
     Parse {
-        #[arg(
-            short = 'f',
-            long,
-            conflicts_with = "data",
-            help = "File containing a hex or Base64 M-Bus frame"
-        )]
-        file: Option<PathBuf>,
-
-        #[arg(
-            short = 'd',
-            long,
-            conflicts_with = "file",
-            help = "Hex or Base64 M-Bus frame"
-        )]
-        data: Option<String>,
-
-        #[arg(
-            long,
-            value_enum,
-            default_value = "auto",
-            help = "Input encoding (auto prefers valid hex)"
-        )]
-        input_format: InputFormat,
-
+        #[command(flatten)]
+        input: TelegramInput,
         /// Output format: table, json, yaml, csv, mermaid, xml, annotated, annotated-text
         #[arg(short = 't', long, default_value = "table")]
         format: String,
-
-        /// Decryption key (exactly 32 hexadecimal characters)
-        #[arg(short = 'k', long)]
-        key: Option<String>,
-
-        #[cfg(feature = "decryption-mode-13")]
-        #[arg(
-            long,
-            conflicts_with = "key",
-            help = "JSON file containing TLS session data for mode 13"
-        )]
-        tls_session: Option<PathBuf>,
 
         /// Table width in terminal columns (auto-detected for interactive output)
         #[arg(long)]
@@ -115,6 +88,44 @@ enum Command {
         #[arg(long)]
         no_enrichment: bool,
     },
+}
+#[derive(clap::Args)]
+struct TelegramInput {
+    #[arg(
+        short = 'f',
+        long,
+        conflicts_with = "data",
+        help = "File containing a hex or Base64 M-Bus frame"
+    )]
+    file: Option<PathBuf>,
+
+    #[arg(
+        short = 'd',
+        long,
+        conflicts_with = "file",
+        help = "Hex or Base64 M-Bus frame"
+    )]
+    data: Option<String>,
+
+    #[arg(
+        long,
+        value_enum,
+        default_value = "auto",
+        help = "Input encoding (auto prefers valid hex)"
+    )]
+    input_format: InputFormat,
+
+    /// Decryption key (exactly 32 hexadecimal characters)
+    #[arg(short = 'k', long)]
+    key: Option<String>,
+
+    #[cfg(feature = "decryption-mode-13")]
+    #[arg(
+        long,
+        conflicts_with = "key",
+        help = "JSON file containing TLS session data for mode 13"
+    )]
+    tls_session: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
@@ -160,91 +171,105 @@ fn run() -> Result<(), String> {
             let input = read_input(file, data, input_format)?;
             vendor::decode(&input, driver.as_deref(), key.as_deref())
         }
+        Command::CheckOms { input, format } => {
+            render_input(input, &format!("oms-{format}"), None, true, cli.color)
+        }
         Command::Parse {
-            file,
-            data,
-            input_format,
+            input,
             format,
-            key,
-            #[cfg(feature = "decryption-mode-13")]
-            tls_session,
             width,
             no_enrichment,
-        } => {
-            let input = read_input(file, data, input_format)?;
-            let output_format = OutputFormat::from_str(&format)
+        } => render_input(input, &format, width, no_enrichment, cli.color),
+    }
+}
+
+fn render_input(
+    input: TelegramInput,
+    format: &str,
+    width: Option<usize>,
+    no_enrichment: bool,
+    color: ColorChoice,
+) -> Result<(), String> {
+    let TelegramInput {
+        file,
+        data,
+        input_format,
+        key,
+        #[cfg(feature = "decryption-mode-13")]
+        tls_session,
+    } = input;
+    let input = read_input(file, data, input_format)?;
+    let output_format =
+        OutputFormat::from_str(format).map_err(|error| format!("[{}] {error}", error.code()))?;
+    let use_color = match color {
+        ColorChoice::Always => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => {
+            io::stdout().is_terminal()
+                && std::env::var_os("NO_COLOR").unwrap_or_default().is_empty()
+                && std::env::var_os("TERM").as_deref() != Some(std::ffi::OsStr::new("dumb"))
+        }
+    };
+    let output_format = if output_format == OutputFormat::Table && use_color {
+        OutputFormat::TableAnsi
+    } else {
+        output_format
+    };
+    let key = key
+        .as_deref()
+        .map(parse_key)
+        .transpose()
+        .map_err(|error| format!("[option.invalid] {error}"))?;
+    let width = width.or_else(|| {
+        if io::stdout().is_terminal() {
+            terminal_size().map(|(Width(columns), _)| usize::from(columns))
+        } else {
+            Some(100)
+        }
+    });
+    let options = RenderOptions {
+        decode: DecodeOptions {
+            key,
+            include_enrichment: !no_enrichment,
+        },
+        table_width: width,
+    };
+    #[cfg(feature = "decryption-mode-13")]
+    let rendered = match tls_session {
+        Some(path) => {
+            let json = fs::read_to_string(&path).map_err(|error| {
+                format!(
+                    "[input.tls_session] failed to read {}: {error}",
+                    path.display()
+                )
+            })?;
+            let imported = m_bus_parser::output::ImportedTlsSession::from_json(&json)
                 .map_err(|error| format!("[{}] {error}", error.code()))?;
-            let use_color = match cli.color {
-                ColorChoice::Always => true,
-                ColorChoice::Never => false,
-                ColorChoice::Auto => {
-                    io::stdout().is_terminal()
-                        && std::env::var_os("NO_COLOR").unwrap_or_default().is_empty()
-                        && std::env::var_os("TERM").as_deref() != Some(std::ffi::OsStr::new("dumb"))
-                }
-            };
-            let output_format = if output_format == OutputFormat::Table && use_color {
-                OutputFormat::TableAnsi
-            } else {
-                output_format
-            };
-            let key = key
-                .as_deref()
-                .map(parse_key)
-                .transpose()
-                .map_err(|error| format!("[option.invalid] {error}"))?;
-            let width = width.or_else(|| {
-                if io::stdout().is_terminal() {
-                    terminal_size().map(|(Width(columns), _)| usize::from(columns))
-                } else {
-                    Some(100)
-                }
-            });
-            let options = RenderOptions {
-                decode: DecodeOptions {
-                    key,
-                    include_enrichment: !no_enrichment,
-                },
-                table_width: width,
-            };
-            #[cfg(feature = "decryption-mode-13")]
-            let rendered = match tls_session {
-                Some(path) => {
-                    let json = fs::read_to_string(&path).map_err(|error| {
-                        format!(
-                            "[input.tls_session] failed to read {}: {error}",
-                            path.display()
-                        )
-                    })?;
-                    let imported = m_bus_parser::output::ImportedTlsSession::from_json(&json)
-                        .map_err(|error| format!("[{}] {error}", error.code()))?;
-                    let session = imported.session();
-                    match m_bus_parser::output::render_hex_with_tls_session(
+            let session = imported.session();
+            match m_bus_parser::output::render_hex_with_tls_session(
+                &input,
+                output_format,
+                &options,
+                &session,
+            ) {
+                Err(OutputError::InvalidFrame { .. }) => {
+                    m_bus_parser::output::render_application_hex_with_tls_session(
                         &input,
                         output_format,
                         &options,
                         &session,
-                    ) {
-                        Err(OutputError::InvalidFrame { .. }) => {
-                            m_bus_parser::output::render_application_hex_with_tls_session(
-                                &input,
-                                output_format,
-                                &options,
-                                &session,
-                            )
-                        }
-                        result => result,
-                    }
+                    )
                 }
-                None => render_auto_detected(&input, output_format, &options),
-            };
-            #[cfg(not(feature = "decryption-mode-13"))]
-            let rendered = render_auto_detected(&input, output_format, &options);
-            let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
-            print!("{rendered}");
-            Ok(())
+                result => result,
+            }
         }
-    }
+        None => render_auto_detected(&input, output_format, &options),
+    };
+    #[cfg(not(feature = "decryption-mode-13"))]
+    let rendered = render_auto_detected(&input, output_format, &options);
+    let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
+    print!("{rendered}");
+    Ok(())
 }
 
 fn read_input(
