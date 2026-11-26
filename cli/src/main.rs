@@ -140,6 +140,13 @@ struct ValidationArgs {
     consecutive: bool,
     #[arg(long, value_name = "MODE", value_parser = parse_radio_mode, help = "Declared wireless mode: c, c1, c2 or other")]
     radio_mode: Option<OmsRadioMode>,
+    #[cfg(feature = "decryption-mode-7")]
+    #[arg(
+        long,
+        value_name = "KEY",
+        help = "Application key for SITP ASP10 authentication"
+    )]
+    application_key: Option<String>,
     #[cfg(feature = "decryption-mode-10")]
     #[arg(
         long,
@@ -161,6 +168,8 @@ struct ValidationArgs {
     taf7_measuring_period_ms: Option<u64>,
     #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared TAF7 registration period in milliseconds")]
     taf7_registration_period_ms: Option<u64>,
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared nominal TAF7 radio transmission interval in milliseconds")]
+    taf7_nominal_transmission_interval_ms: Option<u64>,
     #[arg(
         long,
         value_name = "MS",
@@ -183,6 +192,7 @@ impl From<&ValidationArgs> for OmsCaptureOptions {
     fn from(args: &ValidationArgs) -> Self {
         let has_taf7 = args.taf7
             || args.taf7_measuring_period_ms.is_some()
+            || args.taf7_nominal_transmission_interval_ms.is_some()
             || args.taf7_registration_period_ms.is_some()
             || args.taf7_acceptance_window_ms.is_some();
         Self {
@@ -192,6 +202,7 @@ impl From<&ValidationArgs> for OmsCaptureOptions {
                 measuring_period_ms: args.taf7_measuring_period_ms,
                 registration_period_ms: args.taf7_registration_period_ms,
                 acceptance_window_ms: args.taf7_acceptance_window_ms,
+                nominal_transmission_interval_ms: args.taf7_nominal_transmission_interval_ms,
             }),
         }
     }
@@ -422,6 +433,16 @@ fn render_checked_frames(
         FragmentOutput::Single(frame) => std::slice::from_mut(frame.as_mut()),
         FragmentOutput::Multiple(frames) => frames.as_mut_slice(),
     };
+    #[cfg(feature = "decryption-mode-7")]
+    if let Some(value) = &validation.application_key {
+        let key = parse_key(value).map_err(|_| OutputError::InvalidOption {
+            option: "application-key",
+            message: "Expected 32 hexadecimal characters.".into(),
+        })?;
+        for frame in &mut *frames {
+            frame.authenticate_application(&key)?;
+        }
+    }
     #[cfg(feature = "decryption-mode-10")]
     if let Some(value) = &validation.lpwan_mac_key {
         let key = parse_key(value).map_err(|_| OutputError::InvalidOption {
