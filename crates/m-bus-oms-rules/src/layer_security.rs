@@ -97,6 +97,17 @@ impl LayerFields {
         }
         if mode == Some(13) {
             self.check_tls(ci, has_afl, findings);
+            if matches!(
+                link.function(),
+                Some(m_bus_core::Function::SndNr | m_bus_core::Function::AccNr)
+            ) {
+                findings.push(finding(
+                    "Unsolicited TLS transmission",
+                    ("Annex F.3.6.1", annex_f!(23, 90)),
+                    Some(false),
+                    "SND-NR and ACC-NR must be sent outside the TLS channel.",
+                ));
+            }
         }
     }
 
@@ -112,13 +123,56 @@ impl LayerFields {
             .authentication_type
             .map(|at| at == 5)
             .or(has_afl.filter(|v| !v));
-        if tls.channel_request || tls.client_hello {
+        if tls.channel_request || tls.hello.is_some_and(|hello| hello.client) {
             findings.push(finding(
                 "TLS handshake CMAC",
                 ("Annex F.3.4.2–3, Tables F.10–12", annex_f!(17, 127)),
                 cmac,
                 "A channel request or ClientHello requires an eight-byte AFL CMAC.",
             ));
+        }
+        if let Some(hello) = tls.hello {
+            let reference = ("Annex F.3.1", annex_f!(12, 110));
+            findings.push(finding(
+                "TLS hello sender",
+                reference,
+                Some(if hello.client {
+                    matches!(ci, 0x9e | 0x9f)
+                } else {
+                    ci == 0x5f
+                }),
+                "The end device sends ClientHello and the gateway sends ServerHello.",
+            ));
+            findings.push(finding(
+                "TLS truncated HMAC extension",
+                reference,
+                Some(!hello.truncated_hmac),
+                "Client and server must omit the truncated-HMAC extension.",
+            ));
+            if let Some(uncompressed) = hello.uncompressed_points {
+                findings.push(finding(
+                    "TLS uncompressed point format",
+                    reference,
+                    Some(uncompressed),
+                    "The declared EC point formats must allow uncompressed points.",
+                ));
+            }
+            if let Some(required) = hello.required_curves {
+                findings.push(finding("TLS required elliptic curves", ("Annex F.3.1, Table F.2", annex_f!(13, 90)), Some(required),
+                    "An advertised supported-groups list must include secp256r1 and brainpoolP256r1."));
+            }
+            if let Some(size) = hello.maximum_fragment_length {
+                findings.push(finding(
+                    "TLS maximum fragment length",
+                    reference,
+                    Some((1..=4).contains(&size)),
+                    "The maximum-fragment-length code must select 512, 1024, 2048 or 4096 bytes.",
+                ));
+            }
+            if hello.client {
+                findings.push(finding("TLS encrypt-then-MAC offer", reference, hello.encrypt_then_mac.then_some(true),
+                    "Clients in meters newly installed from 2025 must offer encrypt-then-MAC. An omitted offer requires the installation date."));
+            }
         }
         if tls.application {
             findings.push(finding(

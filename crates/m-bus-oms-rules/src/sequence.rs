@@ -90,12 +90,14 @@ pub struct ExchangeFrame {
     pub key_id: Option<u8>,
     pub key_version: Option<u8>,
     pub verified_encryption: bool,
+    pub tls_hello: Option<crate::tls_hello::TlsHello>,
 }
 
 #[derive(Default)]
 pub struct KeyInformationHistory {
     requests: BTreeMap<[u8; 8], bool>,
     first_ell: BTreeMap<[u8; 8], bool>,
+    tls_offers: BTreeMap<([u8; 8], [u8; 8]), bool>,
 }
 
 impl KeyInformationHistory {
@@ -128,6 +130,30 @@ impl KeyInformationHistory {
         consecutive: bool,
         report: &mut crate::telegram::TelegramReport,
     ) {
+        if let (Some(hello), Some(receiver)) = (current.tls_hello, current.receiver) {
+            if hello.client {
+                self.tls_offers
+                    .insert((current.sender, receiver), hello.encrypt_then_mac);
+            } else if self.tls_offers.remove(&(receiver, current.sender)) == Some(true) {
+                let valid = if hello.encrypt_then_mac {
+                    Some(true)
+                } else {
+                    hello.selected_gcm
+                };
+                report.push(RuleFinding {
+                    rule: "TLS server encrypt-then-MAC selection",
+                    reference: "Annex F.3.1",
+                    source_url: "https://oms-group.org/wp-content/uploads/2025/07/OMS-Spec_Vol2_AnnexF_C111.pdf#page=12&view=FitH,110",
+                    status: match (valid, consecutive) {
+                        (Some(true), true) => RuleStatus::Passed,
+                        (Some(false), true) => RuleStatus::Failed,
+                        _ => RuleStatus::CouldNotCheck,
+                    },
+                    detail: "When the client offers encrypt-then-MAC, the server must select GCM or negotiate encrypt-then-MAC.",
+                    record_number: None,
+                });
+            }
+        }
         if matches!(current.function, 0x43 | 0x53 | 0x73) {
             if current.fragmented {
                 self.requests.clear();

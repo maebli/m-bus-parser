@@ -160,3 +160,79 @@ fn mode_d_response_follows_the_last_addressed_key_version_request() {
         Some("could_not_check")
     );
 }
+
+#[test]
+fn tls_hello_extensions_are_assessed_in_the_capture() {
+    let send = |client, extensions: &str| {
+        let (kind, fields, control, sender, receiver, tpl) = if client {
+            (1, "0002C0230100", 8, METER, GATEWAY, "9E")
+        } else {
+            (2, "C02300", 0x43, GATEWAY, METER, "5F7856341293153303")
+        };
+        let body = format!(
+            "0303{}00{fields}{:04X}{extensions}",
+            "00".repeat(32),
+            extensions.len() / 2
+        );
+        let handshake = format!("{kind:02X}{:06X}{body}", body.len() / 2);
+        frame(
+            control,
+            sender,
+            &format!(
+                "8E8001{receiver}{tpl}0100FF0D01160303{:04X}{handshake}",
+                handshake.len() / 2
+            ),
+        )
+    };
+    let client = send(true, "000A000600040017001A000B0002010000160000");
+    let hello = report(&client);
+    for rule in [
+        "TLS hello sender",
+        "TLS truncated HMAC extension",
+        "TLS required elliptic curves",
+        "TLS uncompressed point format",
+        "TLS encrypt-then-MAC offer",
+    ] {
+        assert_eq!(status(&hello, rule), Some("passed"), "{rule}");
+    }
+    assert_eq!(status(&hello, "TLS handshake CMAC"), Some("failed"));
+    let server = send(false, "00040000");
+    let options = OmsCaptureOptions {
+        consecutive: true,
+        ..Default::default()
+    };
+    let response: Value = serde_json::from_str(
+        &render_oms_capture_with_options(&[client, server], OmsFormat::Json, Some(1), options)
+            .unwrap(),
+    )
+    .unwrap();
+    for rule in [
+        "TLS truncated HMAC extension",
+        "TLS server encrypt-then-MAC selection",
+    ] {
+        assert_eq!(status(&response, rule), Some("failed"), "{rule}");
+    }
+}
+
+#[test]
+fn table_42_security_depends_on_protocol_and_link() {
+    let clear_select = report(&frame(0x43, GATEWAY, "5378563412931533030100000000"));
+    assert_eq!(
+        status(&clear_select, "Application protocol encryption"),
+        Some("failed")
+    );
+    assert_eq!(
+        status(&clear_select, "Application protocol authentication"),
+        Some("failed")
+    );
+    let tls_push = report(&frame(0x44, METER, "7A0100FF0D01170303000100"));
+    assert_eq!(
+        status(&tls_push, "Unsolicited TLS transmission"),
+        Some("failed")
+    );
+    let dlms = report(&frame(0x44, METER, "7D0100000000"));
+    assert_eq!(
+        status(&dlms, "Application protocol encryption"),
+        Some("could_not_check")
+    );
+}

@@ -400,7 +400,7 @@ impl DecodedOutput {
                         .records
                         .iter()
                         .any(|r| r.content_type == "alert" && r.length == 2),
-                    client_hello: tls.records.iter().any(|r| r.client_hello),
+                    hello: tls.records.iter().find_map(|r| r.hello),
                 }
             }),
             authentication_type: transport.authentication_type,
@@ -566,7 +566,7 @@ pub struct ApplicationOutput {
 #[derive(Debug, Clone, Serialize)]
 pub struct TlsRecordOutput {
     #[serde(skip)]
-    pub client_hello: bool,
+    pub hello: Option<m_bus_oms_rules::tls_hello::TlsHello>,
     pub content_type: String,
     pub length: usize,
 }

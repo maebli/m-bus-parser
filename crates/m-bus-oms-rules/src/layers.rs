@@ -58,7 +58,7 @@ pub struct TlsFields {
     pub application: bool,
     pub alert: bool,
     pub clear_alert: bool,
-    pub client_hello: bool,
+    pub hello: Option<crate::tls_hello::TlsHello>,
 }
 
 fn finding(

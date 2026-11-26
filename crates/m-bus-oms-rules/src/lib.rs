@@ -12,6 +12,7 @@ pub mod lpwan;
 pub mod readings;
 pub mod sequence;
 pub mod telegram;
+pub mod tls_hello;
 pub mod wired;
 
 use m_bus_core::{Function, SecurityMode};

@@ -72,10 +72,9 @@ pub(super) fn prepare_mode13(
         records: payload
             .records()
             .map(|record| TlsRecordOutput {
-                client_hello: record.content_type == TlsContentType::Handshake
-                    && matches!(record.payload, [1, high, mid, low, 3, 3, ..] if
-                        record.payload.len() >= 45 && (u32::from_be_bytes([0, *high, *mid, *low]) as usize + 4) <= record.payload.len()
-                        && u32::from_be_bytes([0, *high, *mid, *low]) >= 41),
+                hello: (record.content_type == TlsContentType::Handshake)
+                    .then(|| m_bus_oms_rules::tls_hello::TlsHello::parse(record.payload))
+                    .flatten(),
                 content_type: match record.content_type {
                     TlsContentType::ChannelRequest => "channel_request",
                     TlsContentType::ChangeCipherSpec => "change_cipher_spec",
