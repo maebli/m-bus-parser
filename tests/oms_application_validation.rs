@@ -650,3 +650,65 @@ fn published_sml_response_and_framed_sml_files_have_valid_structure() {
         Some("failed")
     );
 }
+
+#[test]
+fn sml_version_two_negotiation_checks_acknowledgements_and_limits() {
+    use m_bus_parser::{
+        decode_bytes,
+        output::{render_oms_capture, OmsFormat},
+        DecodeOptions,
+    };
+    let packet = |control: u8, block: u8, timeout: u16, size: u16| {
+        let mut wire = vec![0x1b, 0x1b, 0x1b, 0x1b, 2, block, 3, 1];
+        wire.extend([0x1b, 0x1b, 0x1b, 0x1b, 3, 0]);
+        wire.extend(timeout.to_be_bytes());
+        wire.extend([0x1b, 0x1b, 0x1b, 0x1b, 4, 0]);
+        wire.extend(size.to_be_bytes());
+        wire.extend([0x1b, 0x1b, 0x1b, 0x1b, 0x1a, 0]);
+        wire.extend(crc16::State::<crc16::X_25>::calculate(&wire).to_le_bytes());
+        let mut body = vec![
+            control,
+            4,
+            if control == 0x53 { 0x65 } else { 0x7f },
+            0,
+            0,
+            0,
+            0,
+        ];
+        body.extend(wire);
+        let len = body.len() as u8;
+        let check = body.iter().fold(0u8, |acc, b| acc.wrapping_add(*b));
+        let mut frame = vec![0x68, len, len, 0x68];
+        frame.extend(body);
+        frame.extend([check, 0x16]);
+        decode_bytes(&frame, &DecodeOptions::default()).unwrap()
+    };
+    let check = |timeout, size| {
+        let reports = render_oms_capture(
+            &[packet(0x53, 0, 5000, 64), packet(8, 0x80, timeout, size)],
+            OmsFormat::Json,
+            None,
+            true,
+        )
+        .unwrap();
+        serde_json::from_str::<serde_json::Value>(&reports).unwrap()
+    };
+    for (timeout, size, result) in [
+        (5000, 32, "passed"),
+        (2000, 64, "failed"),
+        (5000, 96, "failed"),
+    ] {
+        let report = check(timeout, size);
+        let find = |rule| {
+            report[1]["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|f| f["rule"] == rule)
+                .map(|f| f["status"].as_str().unwrap())
+        };
+        assert_eq!(find("SML version 2 block"), Some("passed"));
+        assert_eq!(find("SML block acknowledgement"), Some("passed"));
+        assert_eq!(find("SML negotiated transfer limits"), Some(result));
+    }
+}

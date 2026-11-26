@@ -236,9 +236,8 @@ fn body_shape(tag: u64, fields: &[Field<'_>]) -> Option<bool> {
     )
 }
 
-fn version_one_file(wire: &[u8]) -> Option<Vec<u8>> {
+fn transport_payload(wire: &[u8], mut remaining: &[u8]) -> Option<Vec<u8>> {
     const ESCAPE: [u8; 4] = [0x1b; 4];
-    let mut remaining = wire.strip_prefix(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1])?;
     let mut payload = Vec::new();
     loop {
         let next = remaining.windows(4).position(|window| window == ESCAPE)?;
@@ -268,6 +267,45 @@ fn version_one_file(wire: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
+fn version_two_block(wire: &[u8]) -> Option<m_bus_oms_rules::telegram::SmlBlock> {
+    let [0x1b, 0x1b, 0x1b, 0x1b, 2, control, file, 1, rest @ ..] = wire else {
+        return None;
+    };
+    let block = control & 0x3f;
+    if block == 0 && control & 0x40 != 0 {
+        return None;
+    }
+    let (negotiation, body) = if block == 0 {
+        if let [0x1b, 0x1b, 0x1b, 0x1b, 3, 0, hi, lo, 0x1b, 0x1b, 0x1b, 0x1b, 4, 0, msb, lsb, body @ ..] =
+            rest
+        {
+            let timeout = u16::from_be_bytes([*hi, *lo]);
+            let size = u16::from_be_bytes([*msb, *lsb]);
+            if timeout == 0 || size == 0 {
+                return None;
+            }
+            (Some((timeout, size)), body)
+        } else if *control == 0x80 {
+            (None, rest)
+        } else {
+            return None;
+        }
+    } else {
+        (None, rest)
+    };
+    let decoded = transport_payload(wire, body)?;
+    if (block == 0 || control & 0x80 != 0) && !decoded.is_empty() {
+        return None;
+    }
+    Some(m_bus_oms_rules::telegram::SmlBlock {
+        control: *control,
+        file: *file,
+        negotiation,
+        payload_len: decoded.len(),
+        wire_len: wire.len(),
+    })
+}
+
 pub(super) fn inspect(
     data: &[u8],
     evidence: &mut m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
@@ -278,8 +316,12 @@ pub(super) fn inspect(
     }
     let mut file_bounds = None;
     let file;
-    if data.starts_with(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1]) {
-        file = version_one_file(data);
+    if data.starts_with(&[0x1b, 0x1b, 0x1b, 0x1b, 2]) {
+        evidence.sml_v2 = Some(version_two_block(data).ok_or(()));
+        return;
+    }
+    if let Some(stream) = data.strip_prefix(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1]) {
+        file = transport_payload(data, stream);
         evidence.sml_transport = Some(file.is_some());
         let Some(bytes) = file.as_deref() else {
             return;

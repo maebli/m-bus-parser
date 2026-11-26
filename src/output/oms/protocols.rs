@@ -40,3 +40,82 @@ pub(in crate::output) fn application_protocol(
     }
     evidence
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Route {
+    Wireless([u8; 8], [u8; 8]),
+    Wired(u8, bool),
+}
+
+impl Route {
+    fn reversed(self) -> Self {
+        match self {
+            Self::Wireless(from, to) => Self::Wireless(to, from),
+            Self::Wired(address, master) => Self::Wired(address, !master),
+        }
+    }
+}
+
+#[derive(Default)]
+pub(super) struct SmlTransfers {
+    previous: Option<(Route, m_bus_oms_rules::telegram::SmlBlock)>,
+    maximum: std::collections::BTreeMap<(Route, u8), u16>,
+}
+
+impl SmlTransfers {
+    pub(super) fn observe(
+        &mut self,
+        frame: &DecodedOutput,
+        wireless: Option<m_bus_oms_rules::sequence::ExchangeFrame>,
+        wired: Option<m_bus_oms_rules::wired::WiredObservation>,
+        report: &mut super::OmsReport,
+    ) {
+        let previous = self.previous.take();
+        if !frame
+            .application
+            .as_ref()
+            .is_some_and(|app| app.protocol == "sml")
+        {
+            return;
+        }
+        let route = match (wireless, wired) {
+            (Some(link), _) => match link.receiver {
+                Some(to) => Route::Wireless(link.sender, to),
+                None => match previous {
+                    Some((Route::Wireless(from, to), _)) if link.sender == to => {
+                        Route::Wireless(to, from)
+                    }
+                    _ => return,
+                },
+            },
+            (
+                _,
+                Some(m_bus_oms_rules::wired::WiredObservation::Frame {
+                    control,
+                    address: address @ 0..=250,
+                }),
+            ) => Route::Wired(address, control & 0x40 != 0),
+            _ => return,
+        };
+        let Some(Ok(block)) = application_protocol(frame).sml_v2 else {
+            return;
+        };
+        if block.control == 0 {
+            self.maximum.remove(&(route, block.file));
+        }
+        if let Some((last_route, last)) = previous {
+            if route == last_route.reversed() {
+                last.check_reply(block, report);
+                if last.control == 0 && block.control == 0x80 && last.file == block.file {
+                    if let Some((_, limit)) = block.negotiation {
+                        self.maximum.insert((last_route, block.file), limit);
+                    }
+                }
+            }
+        }
+        if let Some(maximum) = self.maximum.get(&(route, block.file)) {
+            block.check_size(*maximum, report);
+        }
+        self.previous = Some((route, block));
+    }
+}

@@ -7,7 +7,69 @@ pub struct ApplicationProtocolEvidence {
     pub sml_body: Option<bool>,
     pub sml_transport: Option<bool>,
     pub sml_file: Option<bool>,
+    pub sml_v2: Option<Result<SmlBlock, ()>>,
     pub association: Option<DlmsAssociation>,
+}
+
+#[derive(Clone, Copy)]
+pub struct SmlBlock {
+    pub control: u8,
+    pub file: u8,
+    pub negotiation: Option<(u16, u16)>,
+    pub payload_len: usize,
+    pub wire_len: usize,
+}
+
+impl SmlBlock {
+    pub fn check_size(self, maximum: u16, report: &mut super::TelegramReport) {
+        if self.negotiation.is_some() || self.control & 0x80 != 0 {
+            return;
+        }
+        let mut finding = sml_transfer_finding(
+            "SML negotiated block size",
+            self.payload_len <= usize::from(maximum),
+            "The transmitted block must fit the negotiated maximum. The reported size includes a separate transport envelope.",
+        );
+        if self.payload_len <= usize::from(maximum) && self.wire_len > usize::from(maximum) {
+            finding.status = RuleStatus::CouldNotCheck;
+            finding.detail = "The payload fits but its transport envelope exceeds the limit. The block-size accounting convention is needed.";
+        }
+        report.push(finding);
+    }
+    pub fn check_reply(self, reply: Self, rows: &mut super::TelegramReport) {
+        if self.control & 0x80 != 0 || reply.control & 0x80 == 0 {
+            return;
+        }
+        let acknowledged = self.control | 0x80 == reply.control;
+        let block = self.control & 0x3f;
+        let previous = block.saturating_sub(1);
+        let rejected =
+            block != 0 && (reply.control == 0x80 | previous || block == 1 && reply.control == 0xbf);
+        let valid = self.file == reply.file && (acknowledged || rejected);
+        rows.push(sml_transfer_finding("SML block acknowledgement", valid,
+            "The reply must identify the same file and either acknowledge this block or reject it with the preceding block number."));
+        if let (Some((timeout, size)), Some((chosen_timeout, chosen_size))) =
+            (self.negotiation, reply.negotiation)
+        {
+            rows.push(sml_transfer_finding("SML negotiated transfer limits", chosen_timeout >= timeout && chosen_size <= size,
+                "A receiver may increase the proposed timeout and decrease the proposed maximum block size."));
+        }
+    }
+}
+
+fn sml_transfer_finding(rule: &'static str, valid: bool, detail: &'static str) -> RuleFinding {
+    RuleFinding {
+        rule,
+        reference: "§8.6 / SML 1.04, §8.2",
+        source_url: primary!(78, 212),
+        status: if valid {
+            RuleStatus::Passed
+        } else {
+            RuleStatus::Failed
+        },
+        detail,
+        record_number: None,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -144,6 +206,9 @@ impl ApplicationProtocolEvidence {
                     Some(valid),
                     "A complete SML request or response file starts and ends with the corresponding public open and close messages.",
                 );
+            }
+            if let Some(block) = self.sml_v2 {
+                rows.push(sml_transfer_finding("SML version 2 block", block.is_ok(), "Checks the reserved version byte, initial negotiation controls, ACK payload, escape padding and transport CRC."));
             }
         } else if let Some(association) = self.association {
             record(

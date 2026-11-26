@@ -1,5 +1,5 @@
 mod protocols;
-pub use protocols::{ApplicationProtocolEvidence, DlmsAssociation};
+pub use protocols::{ApplicationProtocolEvidence, DlmsAssociation, SmlBlock};
 
 use crate::{
     layers::LayerFields,
