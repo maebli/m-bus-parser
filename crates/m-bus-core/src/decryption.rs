@@ -4,6 +4,10 @@ pub mod mode13;
 use crate::{DeviceType, ManufacturerCode, SecurityMode};
 
 #[cfg(feature = "decryption-mode-10")]
+mod lpwan;
+#[cfg(feature = "decryption-mode-10")]
+pub use lpwan::LpwanMacSecurity;
+#[cfg(feature = "decryption-mode-10")]
 mod mode10;
 #[cfg(feature = "decryption-mode-10")]
 pub use mode10::Mode10Payload;

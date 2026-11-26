@@ -133,3 +133,47 @@ fn independent_mac_frames_produce_ordered_reports() {
         .unwrap()
         .contains("LPWAN MAC response body"));
 }
+
+#[test]
+fn published_mac_commands_and_response_authenticate_with_the_independent_mac_key() {
+    let key: [u8; 16] = core::array::from_fn(|i| 0x10 + i as u8);
+    for input in [MCMD, MCMD_REQ, MRSP] {
+        let mut frame = decode_hex(input, &Default::default()).unwrap();
+        frame.authenticate_lpwan_mac(&key, None).unwrap();
+        let body = frame.lpwan.as_ref().unwrap().body.as_ref().unwrap();
+        assert!(body.authenticated);
+        assert_eq!(body.blocks[0].id, 0);
+        assert!(frame
+            .assess_oms_5_0_1()
+            .findings
+            .iter()
+            .any(|f| f.rule == "LPWAN MAC authentication" && f.status.as_str() == "passed"));
+        assert!(frame.authenticate_lpwan_mac(&[0; 16], None).is_err());
+        assert!(frame.lpwan.unwrap().body.unwrap().blocks.is_empty());
+    }
+}
+
+#[test]
+fn authenticated_command_exchange_checks_counters_and_block_ids() {
+    let key = core::array::from_fn(|i| 0x10 + i as u8);
+    let mut frames = [MCMD_REQ, MRSP].map(|data| decode_hex(data, &Default::default()).unwrap());
+    for frame in &mut frames {
+        frame.authenticate_lpwan_mac(&key, None).unwrap();
+    }
+    let report = render_oms_capture(&frames, OmsFormat::Json, Some(1), true).unwrap();
+    let report: serde_json::Value = serde_json::from_str(&report).unwrap();
+    for rule in ["LPWAN MAC response counter", "LPWAN MAC response blocks"] {
+        assert!(report["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["rule"] == rule && f["status"] == "passed"));
+    }
+    let frame =
+        m_bus_parser::decode_bytes(&packet(&[0x20, 2, 0x10, 0]), &Default::default()).unwrap();
+    assert!(frame
+        .assess_oms_5_0_1()
+        .findings
+        .iter()
+        .any(|f| f.rule == "LPWAN MAC block protection" && f.status.as_str() == "failed"));
+}
