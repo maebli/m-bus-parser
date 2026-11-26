@@ -297,13 +297,29 @@
         .input-heading { justify-content: space-between; gap: 8px 16px; margin: 2px 0 8px; }
         .telegram-heading { display: grid; min-width: 0; max-width: 100%; }
         .telegram-heading label { margin: 0; }
-        #capture-frame {
+        #capture-picker {
+            position: relative;
             justify-self: start;
+            max-width: 100%;
+            color: #59636e;
+        }
+        #capture-position {
+            position: absolute;
+            inset-inline-end: 1.25rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            font-variant-numeric: tabular-nums;
+            pointer-events: none;
+        }
+        #capture-frame {
+            box-sizing: border-box;
+            padding-inline-end: 7em;
             max-width: 100%;
             min-height: 24px;
             font: inherit;
             font-size: 0.75rem;
-            color: #59636e;
+            color: inherit;
             background: transparent;
             border: 0;
             border-radius: 4px;
@@ -311,8 +327,8 @@
         }
         #capture-frame:hover { text-decoration: underline; }
         #capture-frame:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
-        #capture-frame:not([hidden]) + #detected-meter { display: none; }
-        body.dark-mode #capture-frame { color: #b1bac4; color-scheme: dark; }
+        #capture-picker:not([hidden]) + #detected-meter { display: none; }
+        body.dark-mode #capture-picker { color: #b1bac4; color-scheme: dark; }
         body.dark-mode #capture-frame:focus-visible { outline-color: #4493f8; }
         .encoding-picker {
             display: flex;
@@ -1403,7 +1419,10 @@
         <div class="input-heading">
             <div class="telegram-heading">
                 <label for="inputstring">Telegram</label>
-                <select id="capture-frame" aria-label="Select telegram from capture" hidden></select>
+                <span id="capture-picker" hidden>
+                    <select id="capture-frame" aria-label="Select telegram from capture" aria-describedby="capture-position"></select>
+                    <span id="capture-position"></span>
+                </span>
                 <span id="detected-meter" aria-live="polite">Meter and security mode are detected automatically</span>
             </div>
             <div class="encoding-picker" role="radiogroup" aria-labelledby="encoding-label">
@@ -2125,6 +2144,8 @@
             let inspectedTelegram = null;
             let captureFrames = [];
             let captureInput;
+            const capturePicker = document.getElementById('capture-picker');
+            const capturePosition = document.getElementById('capture-position');
             const captureFrame = document.getElementById('capture-frame');
             captureFrame.addEventListener('change', () => parseInput(currentFormat));
             let hasDecoded = false;
@@ -2169,7 +2190,7 @@
             function inspectCurrentTelegram() {
                 clearTimeout(inspectionTimer);
                 inspectedTelegram = null;
-                const refreshChoices = captureFrame.hidden || captureInput !== telegramInput.value;
+                const refreshChoices = capturePicker.hidden || captureInput !== telegramInput.value;
                 captureInput = telegramInput.value;
                 captureFrames = [];
 
@@ -2188,10 +2209,11 @@
                                 captureFrame.replaceChildren(...decoded.map((frame, i) => {
                                     const identity = frame.meter.identity;
                                     const label = [identity?.manufacturer_code, identity?.id, identity?.device_type].filter(Boolean).join(' · ') || frame.frame.kind;
-                                    return new Option(`${label} · ${i + 1} of ${decoded.length}`, String(i));
+                                    return new Option(label, String(i));
                                 }));
                             }
                             inspectedTelegram = decoded[captureFrame.selectedIndex];
+                            capturePosition.textContent = `${captureFrame.selectedIndex + 1} of ${decoded.length}`;
                         } else {
                             inspectedTelegram = decoded;
                         }
@@ -2200,7 +2222,7 @@
                         showSecurity(null, error);
                     }
                 }
-                captureFrame.hidden = captureFrames.length < 2;
+                capturePicker.hidden = captureFrames.length < 2;
                 updateDecodeButton();
             }
 
@@ -2221,7 +2243,7 @@
 
             telegramInput.addEventListener('input', () => {
                 clearResult();
-                captureFrame.hidden = true;
+                capturePicker.hidden = true;
                 inspectedTelegram = null;
                 document.getElementById('security-panel').hidden = true;
                 document.getElementById('security-details').hidden = true;
