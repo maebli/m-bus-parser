@@ -3,6 +3,8 @@ use crate::telegram::{RuleFinding, RuleStatus, TelegramReport};
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImageTransfer {
+    pub segment_id: Option<u8>,
+    pub segment_length: Option<u16>,
     pub function: u8,
     pub subfunction: Option<u8>,
     pub image_identifier: Option<[u8; 8]>,
@@ -136,14 +138,18 @@ impl ImageTransfer {
         command: bool,
         report: &mut TelegramReport,
     ) {
+        if matches!(self.function, 1 | 8 | 0x88 | 0x70..=0x7f | 0xf0..=0xff) {
+            report.push(RuleFinding {rule:"OMS firmware transfer function", reference:"Annex M, section M.2.6.1",source_url:annex_m!(26,150),status:RuleStatus::NotApplicable,detail:"UC-05 specifies the unicast transfer procedure. This function belongs to another ITP operation.",record_number:None});
+            return;
+        }
         let source = match self.function & 0x7f {
-            0 => ("Annex M, Table M.17", annex_m!(29, 140)),
-            2 => ("Annex M, Table M.18", annex_m!(30, 174)),
+            0 => ("Annex M, Table M.17", annex_m!(29, 161)),
+            2 => ("Annex M, Table M.18", annex_m!(30, 205)),
             3 => ("Annex M, Table M.19", annex_m!(31, 77)),
-            4 => ("Annex M, Table M.16", annex_m!(28, 177)),
-            5 => ("Annex M, Table M.20", annex_m!(32, 140)),
-            6 => ("Annex M, Table M.21", annex_m!(33, 153)),
-            _ => ("Annex M, Table M.22", annex_m!(34, 127)),
+            4 => ("Annex M, Table M.16", annex_m!(28, 210)),
+            5 => ("Annex M, Table M.20", annex_m!(32, 161)),
+            6 => ("Annex M, Table M.21", annex_m!(33, 178)),
+            _ => ("Annex M, Table M.22", annex_m!(34, 144)),
         };
         let mut check = |rule, valid: Option<bool>, detail| {
             report.push(RuleFinding {
@@ -236,10 +242,13 @@ impl ImageTransfer {
         if function == 0x83 {
             check(
                 "Firmware lost block list",
-                Some(self.lost_total.is_some_and(|total| match self.lost_list_count {
-                    Some(entries) => entries > 0 && entries <= usize::from(total),
-                    None => total == 0 || self.subfunction.is_some_and(|f| f & 1 != 0),
-                })),
+                Some(
+                    self.lost_total
+                        .is_some_and(|total| match self.lost_list_count {
+                            Some(entries) => entries > 0 && entries <= usize::from(total),
+                            None => total == 0 || self.subfunction.is_some_and(|f| f & 1 != 0),
+                        }),
+                ),
                 "The completion response requires the total lost count. A reported list must fit the total and omit entries when no blocks were lost.",
             );
         }
@@ -267,4 +276,57 @@ impl ImageTransfer {
             }
         }
     }
+}
+
+impl ImageTransfer {
+    pub fn check_block_dimensions(
+        &self,
+        prepared: Option<(u16, u16)>,
+        report: &mut TelegramReport,
+    ) {
+        let mut check = |rule, valid: Option<bool>, detail| {
+            report.push(RuleFinding {
+                rule,
+                reference: "Annex M, Table M.18",
+                source_url: annex_m!(30, 205),
+                status: match valid {
+                    Some(true) => RuleStatus::Passed,
+                    Some(false) => RuleStatus::Failed,
+                    None => RuleStatus::CouldNotCheck,
+                },
+                detail,
+                record_number: None,
+            });
+        };
+        let count = prepared.map(|(count, _)| count);
+        check(
+            "Firmware transfer block number",
+            self.block_number
+                .zip(count)
+                .map(|(block, total)| block < total),
+            "The block number must be within the range declared by a preceding prepare for this meter and image.",
+        );
+        check(
+            "Firmware transfer block size",
+            self.data_length
+                .zip(prepared)
+                .map(|(bytes, (_, size))| bytes == usize::from(size)),
+            "Each transmitted image block must have the declared number of bytes, including image-provider padding.",
+        );
+        if let Some(remaining) = self.remaining {
+            check(
+                "Firmware remaining block count",
+                count.map(|total| remaining < total),
+                "The remaining count must be less than the declared number of blocks.",
+            );
+        }
+    }
+}
+
+pub fn check_segments(complete: bool, report: &mut TelegramReport) {
+    report.push(RuleFinding{rule:"Firmware transfer segments",reference:"Annex M, section M.2.6; EN 13757-3 I.2.2",source_url:annex_m!(26,150),status:if complete {RuleStatus::Passed} else {RuleStatus::Failed},detail:"The APDU must contain complete length-prefixed segments with a segment ID and function.",record_number:None});
+}
+
+pub fn check_reply(matches: Option<bool>, report: &mut TelegramReport) {
+    report.push(RuleFinding{rule:"Firmware response segment",reference:"Annex M, section M.2.6; EN 13757-3 I.2.2",source_url:annex_m!(26,114),status:match matches {Some(true)=>RuleStatus::Passed,Some(false)=>RuleStatus::Failed,None=>RuleStatus::CouldNotCheck},detail:"Each response segment must identify the corresponding command by segment ID, function and image.",record_number:None});
 }

@@ -206,13 +206,13 @@ pub fn assess(blocks: &[Block], command: bool, report: &mut TelegramReport) {
                 "An active key counter list contains at most 256 six-octet entries.",
             );
         }
-        if matches!(block.selector, 0x01..=0x03 | 0x20 | 0x30) && block.key != 0xff {
+        if crate::key_wrap::is_wrapped_structure(block.selector) {
             check(
                 "AES-KWP container length",
                 reference,
                 url,
-                block.body_len >= 16 && block.body_len.is_multiple_of(8),
-                "An AES-KWP wrapped container is at least 16 bytes and contains whole eight-byte units.",
+                crate::key_wrap::valid_wire_length(block.selector, block.body_len),
+                "The selected structure sets its encoded length. An application container adds a four-byte external counter.",
             );
         }
     }

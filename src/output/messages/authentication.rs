@@ -31,7 +31,7 @@ impl DecodedOutput {
             &raw
         };
         let downlink = matches!(application.control_information.as_str(), "C3" | "C6");
-        let meter = self.sitp_meter(application, downlink);
+        let meter = self.application_meter(application, downlink);
         let blocks = m_bus_application_layer::sitp::SitpBlocks::new(payload)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| OutputError::Decryption {
@@ -120,35 +120,6 @@ impl DecodedOutput {
             field["application_mac_verified"] = true.into();
         }
         Ok(true)
-    }
-
-    fn sitp_meter(&self, app: &ApplicationOutput, downlink: bool) -> Option<[u8; 8]> {
-        if matches!(app.control_information.as_str(), "C3" | "C5") {
-            let prefix = self
-                .raw
-                .payload_hex
-                .as_ref()?
-                .strip_suffix(&app.payload_hex)?;
-            let header = prefix.get(prefix.len().checked_sub(26)?..)?;
-            if header.get(..2)? != app.control_information {
-                return None;
-            }
-            let bytes = decode_hex_bytes(header.get(2..18)?).ok()?;
-            let [a, b, c, d, m, n, v, t] = *bytes.as_slice() else {
-                return None;
-            };
-            return Some([m, n, a, b, c, d, v, t]);
-        }
-        if let Some(mac) = self.lpwan.as_ref() {
-            let llc = mac.llc.as_ref()?;
-            return if downlink { llc.receiver } else { llc.sender };
-        }
-        let exchange = super::super::oms::exchange_frame(self)?;
-        if downlink {
-            exchange.receiver
-        } else {
-            Some(exchange.sender)
-        }
     }
 }
 

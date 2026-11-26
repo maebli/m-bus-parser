@@ -110,6 +110,9 @@ pub(super) fn check_sitp_clocks(frame: &DecodedOutput, report: &mut OmsReport) {
     for block in blocks.iter().filter(|b| b["data_selector"] == 0x36) {
         m_bus_oms_rules::sitp::assess_asp20(block["application_mac_verified"].as_bool(), report);
     }
+    for block in blocks {
+        super::key_wrap::assess(block, report);
+    }
     for clock in blocks.iter().filter_map(clock_fields) {
         clock.assess(report);
     }
@@ -367,6 +370,7 @@ pub fn render_oms_capture_with_options(
     let mut key_information = KeyInformationHistory::default();
     let mut sitp_history = m_bus_oms_rules::sitp::History::default();
     let mut reading_history = readings::CaptureReadings::default();
+    let mut firmware_history = super::firmware::History::default();
     let mut sml_history = protocols::SmlTransfers::default();
     for (index, frame) in frames.iter().enumerate() {
         let mut report = frame.assess_oms_with_history(&mut history, options);
@@ -389,6 +393,7 @@ pub fn render_oms_capture_with_options(
             }
         }
         previous_wired = wired;
+        firmware_history.observe(frame, &mut report, consecutive);
         let current = exchange_frame(frame);
         if let Some(exchange) = current {
             if let (Some(receiver), Some((command, blocks))) =

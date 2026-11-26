@@ -29,6 +29,7 @@ use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 mod application;
 mod firmware;
 mod fragments;
+mod key_wrap;
 mod lpwan;
 mod messages;
 mod oms;

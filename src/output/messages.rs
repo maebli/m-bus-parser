@@ -284,3 +284,38 @@ fn application_error_description(code: u8) -> &'static str {
         _ => "Reserved or manufacturer-defined application error",
     }
 }
+
+impl DecodedOutput {
+    pub(super) fn application_meter(
+        &self,
+        app: &ApplicationOutput,
+        downlink: bool,
+    ) -> Option<[u8; 8]> {
+        if matches!(app.control_information.as_str(), "C0" | "C2" | "C3" | "C5") {
+            let prefix = self
+                .raw
+                .payload_hex
+                .as_ref()?
+                .strip_suffix(&app.payload_hex)?;
+            let header = prefix.get(prefix.len().checked_sub(26)?..)?;
+            if header.get(..2)? != app.control_information {
+                return None;
+            }
+            let bytes = decode_hex_bytes(header.get(2..18)?).ok()?;
+            let [a, b, c, d, m, n, v, t] = *bytes.as_slice() else {
+                return None;
+            };
+            return Some([m, n, a, b, c, d, v, t]);
+        }
+        if let Some(mac) = self.lpwan.as_ref() {
+            let llc = mac.llc.as_ref()?;
+            return if downlink { llc.receiver } else { llc.sender };
+        }
+        let exchange = super::oms::exchange_frame(self)?;
+        if downlink {
+            exchange.receiver
+        } else {
+            Some(exchange.sender)
+        }
+    }
+}

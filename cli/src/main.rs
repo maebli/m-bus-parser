@@ -7,14 +7,14 @@ use std::str::FromStr;
 use clap::{ColorChoice, Parser, Subcommand};
 use m_bus_parser::output::{FragmentOutput, OmsCaptureOptions, OmsRadioMode, Taf7Parameters};
 use m_bus_parser::{
-    DecodeOptions, OutputError, OutputFormat, RenderOptions, decode_capture_hex,
-    output::render_application_hex, render_hex,
+    decode_capture_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
+    OutputFormat, RenderOptions,
 };
-use terminal_size::{Width, terminal_size};
+use terminal_size::{terminal_size, Width};
 
 mod input;
 mod vendor;
-use input::{InputFormat, normalize_input};
+use input::{normalize_input, InputFormat};
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -36,7 +36,9 @@ struct Cli {
 enum Command {
     #[command(about = "List drivers provided by the installed wmbusmeters executable")]
     Drivers,
-    #[command(about = "Decode OMS AFL fragments, ACRIOS packets, or a joined wired stream as JSON")]
+    #[command(
+        about = "Decode OMS AFL fragments, ACRIOS packets, or a joined wired stream as JSON"
+    )]
     ParseFragments {
         #[arg(required = true, num_args = 1..)]
         frames: Vec<String>,
@@ -166,6 +168,9 @@ struct ValidationArgs {
         help = "Firmware image key (ID 18)"
     )]
     firmware_key: Option<String>,
+    #[cfg(feature = "oms-gen5")]
+    #[arg(long, value_name="KEY", value_parser=parse_key, help="Wrapping key for SITP AES-KWP integrity checks")]
+    wrapping_key: Option<[u8; 16]>,
     #[cfg(feature = "decryption-mode-10")]
     #[arg(
         long,
@@ -402,8 +407,12 @@ fn render_input(
                         key.as_ref(),
                         |_frame| {
                             #[cfg(feature = "oms-gen5")]
-                            if let Some((data, key)) = &image {
-                                _frame.verify_firmware_image(data, key)?;
+                            if let Some(evidence) = &image {
+                                _frame.verify_firmware_image(&evidence.image, &evidence.key)?;
+                            }
+                            #[cfg(feature = "oms-gen5")]
+                            if let Some(key) = &validation.wrapping_key {
+                                _frame.verify_key_wrap(key)?;
                             }
                             Ok(())
                         },
@@ -474,10 +483,16 @@ fn read_input(
     normalize_input(&input, input_format)
 }
 
+#[cfg(feature = "oms-gen5")]
+struct FirmwareEvidence {
+    image: Vec<u8>,
+    key: [u8; 16],
+}
+
 #[cfg(feature = "decryption-mode-7")]
 impl ValidationArgs {
     #[cfg(feature = "oms-gen5")]
-    fn firmware_evidence(&self) -> Result<Option<(Vec<u8>, [u8; 16])>, OutputError> {
+    fn firmware_evidence(&self) -> Result<Option<FirmwareEvidence>, OutputError> {
         let (Some(file), Some(key)) = (&self.firmware_image, &self.firmware_key) else {
             return Ok(None);
         };
@@ -489,7 +504,7 @@ impl ValidationArgs {
             option: "firmware-image",
             message: e.to_string(),
         })?;
-        Ok(Some((image, key)))
+        Ok(Some(FirmwareEvidence { image, key }))
     }
 
     fn sitp_key(&self) -> Result<Option<[u8; 16]>, OutputError> {
@@ -520,9 +535,15 @@ fn render_checked_frames(
         }
     }
     #[cfg(feature = "oms-gen5")]
-    if let Some((image, key)) = validation.firmware_evidence()? {
+    if let Some(key) = &validation.wrapping_key {
         for frame in &mut *frames {
-            frame.verify_firmware_image(&image, &key)?;
+            frame.verify_key_wrap(key)?;
+        }
+    }
+    #[cfg(feature = "oms-gen5")]
+    if let Some(evidence) = validation.firmware_evidence()? {
+        for frame in &mut *frames {
+            frame.verify_firmware_image(&evidence.image, &evidence.key)?;
         }
     }
     #[cfg(feature = "decryption-mode-10")]
