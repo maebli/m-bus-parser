@@ -712,3 +712,78 @@ fn sml_version_two_negotiation_checks_acknowledgements_and_limits() {
         assert_eq!(find("SML negotiated transfer limits"), Some(result));
     }
 }
+
+#[test]
+fn dated_history_checks_cyclic_endpoints_and_storage_counts() {
+    let at = |header: &'static [u8], data: &'static [u8], storage| {
+        let mut value = record(header, data).unwrap();
+        value.storage = storage;
+        Some(value)
+    };
+    let base = || {
+        vec![
+            at(&[0x81, 4, 0x13], &[1], 8),
+            at(&[0xc1, 4, 0x13], &[2], 9),
+            at(&[0x82, 4, 0x6c], &[2, 1], 8),
+            at(&[0xc2, 4, 0x6c], &[1, 1], 9),
+        ]
+    };
+    let mut misplaced = base();
+    misplaced.push(at(&[0x81, 4, 0xfd, 0x22], &[2], 8));
+    let inconsistent = report(7, 0x0702, 0x10, RecordAvailability::Complete, misplaced);
+    assert_eq!(
+        outcome(&inconsistent, "Storage range date endpoint"),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(&inconsistent, "Cyclic storage range start"),
+        Some("failed")
+    );
+    let mut right = base();
+    right.push(at(&[0xc1, 4, 0xfd, 0x22], &[2], 9));
+    right.push(at(&[0xc0, 4, 0xfd, 0x20], &[], 9));
+    let consistent = report(7, 0x0702, 0x10, RecordAvailability::Complete, right);
+    assert_eq!(
+        outcome(&consistent, "Storage range date endpoint"),
+        Some("passed")
+    );
+    assert_eq!(
+        outcome(&consistent, "Cyclic storage range start"),
+        Some("passed")
+    );
+    assert_eq!(
+        outcome(&consistent, "Unique Annex B readings"),
+        Some("passed")
+    );
+    let bad = report(
+        7,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![at(&[0x81, 4, 0xfd, 0x22], &[0], 8)],
+    );
+    assert_eq!(outcome(&bad, "Storage block size"), Some("failed"));
+}
+
+#[test]
+fn symbolic_profile_times_detect_conflicting_storage_allocations() {
+    let profile = |header: &'static [u8], data: &'static [u8]| {
+        let mut item = record(header, data).unwrap();
+        item.storage = 8;
+        Some(item)
+    };
+    let report = report(
+        7,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![
+            profile(&[0x8d, 4, 0x93, 0x1f], &[3, 1, 60, 4]),
+            profile(&[0x8d, 4, 0x96, 0x13], &[3, 1, 60, 5]),
+        ],
+    );
+    assert_eq!(
+        outcome(&report, "Compact profile reference times"),
+        Some("failed")
+    );
+}

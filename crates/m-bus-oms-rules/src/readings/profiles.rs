@@ -1,6 +1,9 @@
 use super::{Coding, Reading, Taf7Parameters};
 use crate::telegram::{RuleFinding, RuleStatus};
-use alloc::{collections::BTreeSet, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    vec::Vec,
+};
 
 #[derive(Ord, PartialOrd, PartialEq, Eq)]
 struct Register {
@@ -13,6 +16,7 @@ struct Register {
 
 #[derive(Default)]
 pub(in crate::readings) struct Profiles {
+    intervals: BTreeMap<(u64, u64, u64, u8), i64>,
     inverse: bool,
     base_time: bool,
     actuality: bool,
@@ -149,6 +153,34 @@ impl Profiles {
             "The length must cover two control bytes and a whole number of encoded elements.",
             Some(n),
         ));
+        let interval = layout.and_then(|(control, distance, _)| {
+            let scale = [1_000, 60_000, 3_600_000, 86_400_000][usize::from(control >> 4 & 3)];
+            (1..=250)
+                .contains(&distance)
+                .then_some(u64::from(distance) * scale)
+        });
+        if let (Some(spacing), Some((_, _, count))) = (interval, layout)
+            && count != 0
+            && terminal
+        {
+            let start = (
+                reading.storage,
+                reading.tariff,
+                reading.subunit,
+                dif >> 4 & 3,
+            );
+            let shift = if kind == 0x13 {
+                -(spacing as i64)
+            } else {
+                spacing as i64
+            };
+            if let Some(&previous) = self.intervals.get(&start) {
+                results.push(check("Compact profile reference times", "Annex G, G.3", primary!(105, 640),
+                    Some(previous == shift), "Profiles sharing their base storage and next storage number must assign the same time to both positions.", Some(n)));
+            } else {
+                self.intervals.insert(start, shift);
+            }
+        }
         let Some(parameters) = taf7 else {
             return true;
         };
@@ -169,7 +201,7 @@ impl Profiles {
             "The TAF7 compact profile uses storage number 3.",
             Some(n),
         ));
-        if let Some((control, distance, count)) = layout {
+        if let Some((control, _, count)) = layout {
             if control >> 6 != 0 && terminal {
                 let mut base_vib = vib[..index].to_vec();
                 if let Some(last) = base_vib.last_mut() {
@@ -177,13 +209,6 @@ impl Profiles {
                 }
                 self.differential.push((n, register(base_vib)));
             }
-            let interval = match distance {
-                1..=250 => Some(
-                    u64::from(distance)
-                        * [1_000, 60_000, 3_600_000, 86_400_000][usize::from(control >> 4 & 3)],
-                ),
-                _ => None,
-            };
             results.push(check("TAF7 measurement count", "Annex R, R.2.3 equation 6", annex_r!(11, 430),
                 interval.zip(parameters.nominal_transmission_interval_ms).map(|(spacing, nominal)| {
                     nominal != 0 && (count as u128) * u128::from(spacing) == 3 * u128::from(nominal) + 2 * u128::from(spacing)

@@ -8,6 +8,7 @@ use crate::telegram::{RuleFinding, RuleStatus};
 
 pub mod history;
 mod profiles;
+mod ranges;
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize))]
@@ -71,6 +72,25 @@ pub enum RecordProtection {
     Mixed,
 }
 
+fn descriptor_count(coding: u8, data: &[u8]) -> Option<u64> {
+    if Coding::Integer.accepts(coding) && data.last().is_some_and(|byte| byte & 0x80 == 0) {
+        return data.iter().rev().try_fold(0u64, |count, byte| {
+            count.checked_mul(256)?.checked_add(u64::from(*byte))
+        });
+    }
+    if matches!(coding, 9..=12 | 14) {
+        return data
+            .iter()
+            .rev()
+            .flat_map(|byte| [byte >> 4, byte & 15])
+            .try_fold(0u64, |count, digit| {
+                (digit < 10).then_some(())?;
+                count.checked_mul(10)?.checked_add(u64::from(digit))
+            });
+    }
+    None
+}
+
 fn encryption_required(tag: &str) -> Option<bool> {
     match tag {
         "ID4!" | "ID5!" | "ID6!" | "ID11!" => None,
@@ -129,6 +149,8 @@ pub(super) struct Readings {
     first_descriptor: Option<usize>,
     maximum_registers: BTreeMap<MaximumPowerRegister, MaximumPowerPair>,
     profiles: profiles::Profiles,
+    ranges: ranges::StorageRanges,
+    range_encodings: BTreeSet<(u8, u64, u64, u64)>,
     pub(super) taf7: Option<Taf7Parameters>,
     first_duplicate: Option<usize>,
     unknown: Option<usize>,
@@ -243,17 +265,24 @@ impl Readings {
             }
         }
         if let [0xfd, descriptor @ (0x20..=0x22 | 0x24..=0x29)] = vib {
-            let interval = *descriptor >= 0x24;
             let address_valid = reading.tariff == 0
                 && reading.subunit == 0
                 && dif & 0x30 == 0
-                && (!interval || reading.storage != 0);
+                && (1..=199).contains(&reading.storage)
+                && !(end > 0 && header[end] == 0);
             results.push(RuleFinding {
                 rule: "Storage descriptor address", reference: "Annex K, K.2", source_url: primary!(124, 90),
                 status: if address_valid { RuleStatus::Passed } else { RuleStatus::Failed },
-                detail: "Tariff, function and subunit must be zero. A storage interval also requires a nonzero storage number.",
+                detail: "The Annex B storage descriptor uses storage 1–199 with zero tariff, function and subunit and no final zero DIFE.",
                 record_number: Some(n),
             });
+            if *descriptor == 0x22 {
+                results.push(RuleFinding {
+                    rule: "Storage block size", reference: "Annex K, Table K.3", source_url: primary!(124, 790),
+                    status: if descriptor_count(coding, reading.data.as_ref()).is_some_and(|count| count > 0) { RuleStatus::Passed } else { RuleStatus::Failed },
+                    detail: "The declared storage block size must be a positive count of the applied storage numbers.", record_number: Some(n),
+                });
+            }
             if matches!(descriptor, 0x20 | 0x21) {
                 results.push(RuleFinding {
                     rule: "Storage range endpoint", reference: "Annex K, K.2.2", source_url: primary!(124, 790),
@@ -262,6 +291,9 @@ impl Readings {
                 });
             }
         }
+        let historical_date =
+            self.ranges
+                .observe_date(&reading, vib, dif, end > 0 && header[end] == 0);
         let Some(tag) = identify(
             vib,
             reading.tariff,
@@ -270,10 +302,15 @@ impl Readings {
             end > 0 && header[end] == 0,
             coding,
         ) else {
-            self.unknown.get_or_insert(n);
+            if !historical_date {
+                self.unknown.get_or_insert(n);
+            }
             return;
         };
         let valid = tag.1.accepts(coding);
+        if valid {
+            self.ranges.observe(tag.0, &reading, vib, n);
+        }
         if let Some(protection) = reading.protection {
             let mut requires_clear = false;
             let mut requires_encrypted = false;
@@ -505,10 +542,16 @@ impl Readings {
                 record_number: Some(n),
             });
         }
-        if !self
-            .seen
-            .insert((tag.0, reading.tariff, reading.subunit, reading.storage))
-        {
+        let newly_seen =
+            self.seen
+                .insert((tag.0, reading.tariff, reading.subunit, reading.storage));
+        let distinct = if let ("YD3!P", [0xfd, kind]) = (tag.0, vib) {
+            self.range_encodings
+                .insert((*kind, reading.tariff, reading.subunit, reading.storage))
+        } else {
+            newly_seen
+        };
+        if !distinct {
             self.first_duplicate.get_or_insert(n);
         }
         if tag.0.ends_with("!D") && tag.0 != "DT2!D" {
@@ -860,6 +903,8 @@ impl Readings {
                 record_number: Some(pair.record),
             });
         }
+        self.ranges
+            .finish(unavailable.is_none() && self.fully_mapped(), results);
         if let Some(parameters) = self.taf7 {
             self.profiles
                 .finish(parameters, unavailable.is_none(), results);
