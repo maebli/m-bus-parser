@@ -2,8 +2,8 @@ use super::{RuleFinding, RuleStatus};
 use alloc::vec::Vec;
 
 macro_rules! sml_page {
-    ($page:literal) => {
-        concat!("https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Publikationen/TechnischeRichtlinien/TR03109/TR-03109-1_Anlage_Feinspezifikation_Drahtgebundene_LMN-Schnittstelle_Teilb.pdf?__blob=publicationFile&v=1#page=", stringify!($page))
+    ($page:literal, $height:literal) => {
+        concat!("https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Publikationen/TechnischeRichtlinien/TR03109/TR-03109-1_Anlage_Feinspezifikation_Drahtgebundene_LMN-Schnittstelle_Teilb.pdf?__blob=publicationFile&v=1#page=", stringify!($page), "&view=FitH,", stringify!($height))
     };
 }
 
@@ -133,7 +133,7 @@ fn sml_transfer_finding(rule: &'static str, valid: bool, detail: &'static str) -
     RuleFinding {
         rule,
         reference: "§8.6 / SML 1.04, §8.2",
-        source_url: sml_page!(69),
+        source_url: sml_page!(69, 551),
         status: if valid {
             RuleStatus::Passed
         } else {
@@ -267,17 +267,21 @@ impl ApplicationProtocolEvidence {
             return;
         }
         if matches!(ci, 0x64 | 0x65 | 0x7e | 0x7f) {
+            if let Some(block) = self.sml_v2 {
+                rows.push(sml_transfer_finding("SML version 2 block", block.is_ok(), "Checks the reserved version byte, initial negotiation controls, ACK payload, escape padding and transport CRC."));
+                return;
+            }
             record(
                 "SML message structure and checksum",
                 "§8.6 / SML 1.04, §5",
-                sml_page!(17),
+                sml_page!(17, 618),
                 self.sml_envelope,
                 "Checks the six-field message envelope and the CRC of each readable SML binary message.",
             );
             record(
                 "SML message body schema",
                 "§8.6 / SML 1.04, §5.1",
-                sml_page!(20),
+                sml_page!(20, 228),
                 self.sml_body,
                 "Checks each recognized message schema, including its parameter trees, time choices, profile and value lists, and COSEM attribute descriptors.",
             );
@@ -285,7 +289,7 @@ impl ApplicationProtocolEvidence {
                 record(
                     "SML version 1 transport",
                     "§8.6 / SML 1.04, §8.1",
-                    sml_page!(68),
+                    sml_page!(67, 198),
                     Some(valid),
                     "The escaped frame must have valid padding, a complete end marker and a matching transport CRC.",
                 );
@@ -294,7 +298,7 @@ impl ApplicationProtocolEvidence {
                 record(
                     "SML file open and close",
                     "§8.6 / SML 1.04, §4.1",
-                    sml_page!(16),
+                    sml_page!(16, 690),
                     Some(valid),
                     "Validates request, response and combined file boundaries. A response to a request may use an attention message at either end.",
                 );
@@ -303,7 +307,7 @@ impl ApplicationProtocolEvidence {
                 record(
                     "SML file message groups",
                     "§8.6 / SML 1.04, §5",
-                    sml_page!(17),
+                    sml_page!(17, 501),
                     Some(valid),
                     "Each group occupies a contiguous range within its request or response file.",
                 );
@@ -312,13 +316,10 @@ impl ApplicationProtocolEvidence {
                 record(
                     "SML file request addressing",
                     "§8.6 / SML 1.04, §5.1.1",
-                    sml_page!(21),
+                    sml_page!(21, 426),
                     Some(valid),
                     "Every request with a server ID field follows the addressed or broadcast mode of its open request.",
                 );
-            }
-            if let Some(block) = self.sml_v2 {
-                rows.push(sml_transfer_finding("SML version 2 block", block.is_ok(), "Checks the reserved version byte, initial negotiation controls, ACK payload, escape padding and transport CRC."));
             }
         } else if let Some(association) = self.association {
             record(

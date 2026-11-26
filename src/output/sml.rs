@@ -1,3 +1,4 @@
+mod file;
 mod schema;
 
 use super::*;
@@ -252,16 +253,15 @@ pub(super) fn inspect_messages(
     complete_file: bool,
     evidence: &mut m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
 ) {
-    let mut file_bounds = complete_file.then_some((None, None));
+    let mut file_messages = complete_file.then(Vec::new);
     let mut shapes = Some(true);
     let mut message_fields = true;
     let result = messages(data, |_, group, abort, tag, fields| {
-        if let Some((first, last)) = &mut file_bounds {
-            first.get_or_insert(tag);
-            *last = Some(tag);
+        if let Some(messages) = &mut file_messages {
+            messages.push(file::Message::new(tag, group, fields));
         }
         message_fields &= u8::try_from(group).is_ok()
-            && u8::try_from(abort).is_ok()
+            && matches!(abort, 0 | 1 | 2 | 255)
             && u32::try_from(tag).is_ok();
         shapes = match (shapes, schema::body_shape(tag, fields)) {
             (Some(false), _) | (_, Some(false)) => Some(false),
@@ -276,12 +276,9 @@ pub(super) fn inspect_messages(
         Err(_) => Some(false),
     };
     if result.is_ok() {
-        evidence.sml_file = file_bounds.map(|(first, last)| {
-            matches!(
-                (first, last),
-                (Some(0x0100), Some(0x0200)) | (Some(0x0101), Some(0x0201))
-            )
-        });
+        if let Some(messages) = file_messages {
+            file::check(&messages, evidence);
+        }
         evidence.sml_body = shapes;
     }
 }

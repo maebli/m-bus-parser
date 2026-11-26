@@ -1029,3 +1029,57 @@ fn sml_profile_periods_match_the_headers_and_keep_seconds_in_order() {
     body.splice(12..20, [0x70]);
     assert_eq!(status(&body), "failed");
 }
+
+#[test]
+fn sml_accepts_attention_and_combined_files_and_checks_group_and_address_consistency() {
+    let file = |messages: &[Vec<u8>]| {
+        let mut bytes = vec![0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1];
+        for message in messages {
+            bytes.extend(message);
+        }
+        let pad = (4 - bytes.len() % 4) % 4;
+        bytes.resize(bytes.len() + pad, 0);
+        bytes.extend([0x1b, 0x1b, 0x1b, 0x1b, 0x1a, pad as u8]);
+        bytes.extend(crc16::State::<crc16::X_25>::calculate(&bytes).to_le_bytes());
+        assess_sml(&bytes)
+    };
+    let open = || sml_message(0x0100, &[0x77, 1, 2, 1, 2, 8, 2, 3, 1, 1, 1], 1, 0);
+    let get = |addressed| {
+        if addressed {
+            sml_message(0x0700, &[0x75, 2, 1, 2, 3, 1, 1, 1], 2, 1)
+        } else {
+            sml_message(0x0700, &[0x75, 2, 1, 1, 1, 1, 1], 2, 1)
+        }
+    };
+    let close = |group| sml_message(0x0200, &[0x71, 1], group, 0);
+    let attention = || sml_message(0xff01, &[0x74, 2, 3, 2, 1, 1, 1], 4, 0);
+    let response = || sml_message(0x0201, &[0x71, 1], 5, 0);
+    let combined = file(&[open(), get(true), close(3), attention(), response()]);
+    for name in [
+        "SML file open and close",
+        "SML file message groups",
+        "SML file request addressing",
+    ] {
+        assert_eq!(outcome(&combined, name), Some("passed"));
+    }
+    let mixed = file(&[open(), get(false), close(1)]);
+    assert_eq!(outcome(&mixed, "SML file message groups"), Some("failed"));
+    assert_eq!(
+        outcome(&mixed, "SML file request addressing"),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(
+            &file(&[open(), open(), close(3)]),
+            "SML file open and close"
+        ),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(
+            &assess_sml(&sml_message(0x0200, &[0x71, 1], 2, 5)),
+            "SML message structure and checksum"
+        ),
+        Some("failed")
+    );
+}
