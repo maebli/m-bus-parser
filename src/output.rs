@@ -320,6 +320,7 @@ impl DecodedOutput {
             .and_then(|field| u16::from_str_radix(&field.raw, 16).ok())
             .map(ConfigurationField::from);
         let fields = LayerFields {
+            application_protocol: oms::application_protocol(self),
             device_type: self
                 .meter
                 .identity

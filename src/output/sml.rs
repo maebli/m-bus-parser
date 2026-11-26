@@ -100,8 +100,11 @@ fn list_entry(entry: &Field<'_>) -> Option<Value> {
     )
 }
 
-pub(super) fn decode(mut data: &[u8]) -> Result<Value, &'static str> {
-    let mut messages = Vec::new();
+fn messages(
+    mut data: &[u8],
+    mut visit: impl FnMut(&[u8], u64, u64, u64, &[Field<'_>]) -> Result<(), &'static str>,
+) -> Result<(), &'static str> {
+    let mut read_message = false;
     while let Some(rest) = data.strip_prefix(&[0x2f]) {
         data = rest;
     }
@@ -127,7 +130,202 @@ pub(super) fn decode(mut data: &[u8]) -> Result<Value, &'static str> {
         let [Field::Unsigned(tag), Field::List(fields)] = body.as_slice() else {
             return Err("invalid SML message body");
         };
-        let content = match (*tag, fields.as_slice()) {
+        visit(transaction, *group, *abort, *tag, fields)?;
+        read_message = true;
+        while let Some(rest) = data.strip_prefix(&[0x2f]) {
+            data = rest;
+        }
+    }
+    if !read_message {
+        return Err("empty SML payload");
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum Shape {
+    Octets,
+    OptionalByte,
+    Uint32,
+    Uint64,
+    OptionalBoolean,
+    List,
+    OptionalList,
+    Int8,
+    Int16,
+}
+
+fn body_shape(tag: u64, fields: &[Field<'_>]) -> Option<bool> {
+    use Shape::*;
+    let shape: &[Shape] = match tag {
+        0x0100 => &[Octets, Octets, Octets, Octets, Octets, Octets, OptionalByte],
+        0x0101 => &[Octets, Octets, Octets, Octets, OptionalList, OptionalByte],
+        0x0200 | 0x0201 => &[Octets],
+        0x0300 | 0x0400 => &[
+            Octets,
+            Octets,
+            Octets,
+            OptionalBoolean,
+            OptionalList,
+            OptionalList,
+            List,
+            OptionalList,
+            OptionalList,
+        ],
+        0x0301 => &[Octets, List, Uint32, List, List, List, Octets, Octets],
+        0x0401 => &[
+            Octets, List, Uint32, List, List, Uint64, List, Octets, Octets,
+        ],
+        0x0500 => &[Octets, Octets, Octets, List, Octets],
+        0x0501 => &[Octets, List, List],
+        0x0600 => &[Octets, Octets, Octets, List, List],
+        0x0700 => &[Octets, Octets, Octets, Octets, Octets],
+        0x0701 => &[
+            Octets,
+            Octets,
+            Octets,
+            OptionalList,
+            List,
+            Octets,
+            OptionalList,
+        ],
+        0xff01 => &[Octets, Octets, Octets, OptionalList],
+        0x0800 => &[
+            Octets,
+            Octets,
+            Octets,
+            Octets,
+            Octets,
+            Int16,
+            Int16,
+            OptionalList,
+        ],
+        0x0801 => &[Octets, Octets, Octets, Int16, Int16, List],
+        0x0900 => &[Octets, Octets, Octets, Octets, Octets, Int16, Int16, List],
+        0x0901 | 0x0a01 => &[Octets, Octets, Octets, Int16, Int16, OptionalList],
+        0x0a00 => &[
+            Octets,
+            Octets,
+            Octets,
+            Octets,
+            Octets,
+            Int16,
+            Int16,
+            Int8,
+            OptionalList,
+        ],
+        _ => return None,
+    };
+    Some(
+        fields.len() == shape.len()
+            && fields
+                .iter()
+                .zip(shape)
+                .all(|(field, shape)| match (field, shape) {
+                    (Field::Bytes([]), OptionalByte | OptionalBoolean | OptionalList) => true,
+                    (Field::Bytes(_), Octets)
+                    | (Field::Bool(_), OptionalBoolean)
+                    | (Field::List(_), List | OptionalList) => true,
+                    (Field::Unsigned(n), OptionalByte) => u8::try_from(*n).is_ok(),
+                    (Field::Unsigned(n), Uint32) => u32::try_from(*n).is_ok(),
+                    (Field::Unsigned(_), Uint64) => true,
+                    (Field::Signed(n), Int8) => i8::try_from(*n).is_ok(),
+                    (Field::Signed(n), Int16) => i16::try_from(*n).is_ok(),
+                    _ => false,
+                }),
+    )
+}
+
+fn version_one_file(wire: &[u8]) -> Option<Vec<u8>> {
+    const ESCAPE: [u8; 4] = [0x1b; 4];
+    let mut remaining = wire.strip_prefix(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1])?;
+    let mut payload = Vec::new();
+    loop {
+        let next = remaining.windows(4).position(|window| window == ESCAPE)?;
+        let (plain, escape) = remaining.split_at_checked(next)?;
+        payload.extend_from_slice(plain);
+        let control = escape.strip_prefix(&ESCAPE)?;
+        if let Some(rest) = control.strip_prefix(&ESCAPE) {
+            payload.extend_from_slice(&ESCAPE);
+            remaining = rest;
+        } else {
+            let [0x1a, padding @ 0..=3, lo, hi] = control else {
+                return None;
+            };
+            let covered = wire.get(..wire.len().checked_sub(2)?)?;
+            if crc16::State::<crc16::X_25>::calculate(covered) != u16::from_le_bytes([*lo, *hi])
+                || !payload.len().is_multiple_of(4)
+            {
+                return None;
+            }
+            let length = payload.len().checked_sub(usize::from(*padding))?;
+            if payload.get(length..)?.iter().any(|byte| *byte != 0) {
+                return None;
+            }
+            payload.truncate(length);
+            return Some(payload);
+        }
+    }
+}
+
+pub(super) fn inspect(
+    data: &[u8],
+    evidence: &mut m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
+) {
+    let mut data = data;
+    while let Some(rest) = data.strip_prefix(&[0x2f]) {
+        data = rest;
+    }
+    let mut file_bounds = None;
+    let file;
+    if data.starts_with(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1]) {
+        file = version_one_file(data);
+        evidence.sml_transport = Some(file.is_some());
+        let Some(bytes) = file.as_deref() else {
+            return;
+        };
+        data = bytes;
+        file_bounds = Some((None, None));
+    } else if data.first() != Some(&0x76) {
+        return;
+    }
+    let mut shapes = Some(true);
+    let mut message_fields = true;
+    let result = messages(data, |_, group, abort, tag, fields| {
+        if let Some((first, last)) = &mut file_bounds {
+            first.get_or_insert(tag);
+            *last = Some(tag);
+        }
+        message_fields &= u8::try_from(group).is_ok()
+            && u8::try_from(abort).is_ok()
+            && u32::try_from(tag).is_ok();
+        shapes = match (shapes, body_shape(tag, fields)) {
+            (Some(false), _) | (_, Some(false)) => Some(false),
+            (None, _) | (_, None) => None,
+            _ => Some(true),
+        };
+        Ok(())
+    });
+    evidence.sml_envelope = match result {
+        Ok(()) => Some(message_fields),
+        Err("invalid SML message") => None,
+        Err(_) => Some(false),
+    };
+    if result.is_ok() {
+        evidence.sml_file = file_bounds.map(|(first, last)| {
+            matches!(
+                (first, last),
+                (Some(0x0100), Some(0x0200)) | (Some(0x0101), Some(0x0201))
+            )
+        });
+        evidence.sml_body = shapes;
+    }
+}
+
+pub(super) fn decode(data: &[u8]) -> Result<Value, &'static str> {
+    let mut messages_out = Vec::new();
+    messages(data, |transaction, group, abort, tag, fields| {
+        let content = match (tag, fields) {
             (
                 0x0701,
                 [client, server, name, time, Field::List(entries), signature, gateway_time],
@@ -142,13 +340,8 @@ pub(super) fn decode(mut data: &[u8]) -> Result<Value, &'static str> {
             }
             _ => return Err("unsupported SML message type"),
         };
-        messages.push(json!({"transaction_id":hex_string(transaction),"group":group,"abort_on_error":abort,"body":content}));
-        while let Some(rest) = data.strip_prefix(&[0x2f]) {
-            data = rest;
-        }
-    }
-    if messages.is_empty() {
-        return Err("empty SML payload");
-    }
-    Ok(json!({"messages":messages}))
+        messages_out.push(json!({"transaction_id":hex_string(transaction),"group":group,"abort_on_error":abort,"body":content}));
+        Ok(())
+    })?;
+    Ok(json!({"messages":messages_out}))
 }

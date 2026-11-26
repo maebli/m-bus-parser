@@ -196,6 +196,7 @@ fn taf7_checks_registers_and_timing_only_for_a_declared_use_case() {
         )
     };
     let parameters = Taf7Parameters {
+        nominal_transmission_interval_ms: Some(6000),
         measuring_period_ms: Some(3000),
         acceptance_window_ms: Some(9000),
         registration_period_ms: Some(900_000),
@@ -214,6 +215,11 @@ fn taf7_checks_registers_and_timing_only_for_a_declared_use_case() {
     ] {
         assert_eq!(outcome(&all, rule), Some("passed"), "{rule}");
     }
+    assert_eq!(outcome(&all, "TAF7 measurement count"), Some("failed"));
+    let mut right_count = records();
+    right_count[0].as_mut().unwrap().data = &[7, 0x41, 6, 1, 2, 3, 4, 5];
+    let sized = parse(Some(parameters), right_count, RecordAvailability::Complete);
+    assert_eq!(outcome(&sized, "TAF7 measurement count"), Some("passed"));
     let mut wrong_register = records();
     wrong_register[3].as_mut().unwrap().tariff = 1;
     let wrong = parse(
@@ -454,5 +460,193 @@ fn capture_keeps_immutable_identifiers_and_static_billing_dates_per_device() {
     assert_eq!(
         status(&report[2], "Due date for billing value"),
         Some("passed".into())
+    );
+}
+
+#[test]
+fn application_selection_must_precede_list_edits_and_descriptors_stay_in_blocks_zero_or_one() {
+    let select = || record(&[1, 0xfd, 0xfd, 0x80, 0], &[0x70]);
+    let add = || record(&[0, 0xfd, 0xbc, 0x0c], &[]);
+    let run = |readings| {
+        telegram::assess_telegram(
+            Link::Wireless(0x53),
+            None,
+            LayerFields {
+                application_ci: Some(0x51),
+                ..Default::default()
+            },
+            RecordAvailability::Complete,
+            readings,
+        )
+    };
+    assert_eq!(
+        outcome(
+            &run(vec![select(), add()]),
+            "Readout-list application selection order"
+        ),
+        Some("passed")
+    );
+    assert_eq!(
+        outcome(
+            &run(vec![add(), select()]),
+            "Readout-list application selection order"
+        ),
+        Some("failed")
+    );
+    let selected = |block| {
+        report(
+            7,
+            0x0702,
+            0x10,
+            RecordAvailability::Complete,
+            vec![
+                record(&[1, 0xfd, 0xfd, 0], block),
+                record(&[1, 0xfd, 0x23], &[0]),
+            ],
+        )
+    };
+    assert_eq!(
+        outcome(&selected(&[0x71]), "Static application descriptor block"),
+        Some("passed")
+    );
+    assert_eq!(
+        outcome(&selected(&[0x72]), "Static application descriptor block"),
+        Some("failed")
+    );
+}
+
+#[test]
+fn protocol_envelopes_check_transmitted_lengths_directions_and_checksums() {
+    use m_bus_parser::{decode_hex, DecodeOptions};
+    let run = |ci: u8, payload: &[u8]| {
+        let body = payload
+            .iter()
+            .map(|b| format!("{b:02X}"))
+            .collect::<String>();
+        let packet = format!(
+            "{:02X}449315785634123307{ci:02X}01000000{body}",
+            14 + payload.len()
+        );
+        decode_hex(&packet, &DecodeOptions::default())
+            .unwrap()
+            .assess_oms_5_0_1()
+    };
+    let mut sml = vec![0x76, 2, 1, 0x62, 1, 0x62, 0, 0x72, 0x63, 1, 1, 0x70];
+    let crc = crc16::State::<crc16::X_25>::calculate(&sml);
+    sml.push(0x63);
+    sml.extend(crc.to_le_bytes());
+    sml.push(0);
+    assert_eq!(
+        outcome(&run(0x7f, &sml), "SML message structure and checksum"),
+        Some("passed")
+    );
+    sml[2] ^= 1;
+    assert_eq!(
+        outcome(&run(0x7f, &sml), "SML message structure and checksum"),
+        Some("failed")
+    );
+    let mut aare = vec![
+        0x10, 1, 0x61, 15, 0xa1, 3, 6, 1, 42, 0xa2, 3, 2, 1, 0, 0xa3, 3, 2, 1, 0,
+    ];
+    let good = run(0x7d, &aare);
+    assert_eq!(
+        outcome(&good, "DLMS association BER length"),
+        Some("passed")
+    );
+    assert_eq!(outcome(&good, "DLMS association fields"), Some("passed"));
+    aare[2] = 0x60;
+    assert_eq!(
+        outcome(&run(0x7d, &aare), "DLMS association direction"),
+        Some("failed")
+    );
+    aare[3] = 30;
+    assert_eq!(
+        outcome(&run(0x7d, &aare), "DLMS association BER length"),
+        Some("failed")
+    );
+}
+
+#[test]
+fn published_sml_response_and_framed_sml_files_have_valid_structure() {
+    use m_bus_parser::{decode_hex, DecodeOptions};
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/oms-annex-n.json")).unwrap();
+    let case = fixtures
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| {
+            case["pages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|page| page == "3.0.1/94")
+        })
+        .unwrap();
+    let packet = decode_hex(
+        case["frames"][0].as_str().unwrap(),
+        &DecodeOptions {
+            key: Some(
+                hex::decode(case["key"].as_str().unwrap())
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let published = packet.assess_oms_5_0_1();
+    assert_eq!(
+        outcome(&published, "SML message structure and checksum"),
+        Some("passed")
+    );
+    assert_eq!(
+        outcome(&published, "SML message body schema"),
+        Some("passed")
+    );
+
+    let message = |tag: u16, fields: &[u8]| {
+        let mut data = vec![0x76, 2, 1, 0x62, 0, 0x62, 0, 0x72, 0x63];
+        data.extend(tag.to_be_bytes());
+        data.extend_from_slice(fields);
+        let crc = crc16::State::<crc16::X_25>::calculate(&data);
+        data.push(0x63);
+        data.extend(crc.to_le_bytes());
+        data.push(0);
+        data
+    };
+    let mut frame = vec![0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1];
+    frame.extend(message(0x0101, &[0x76, 1, 1, 2, 0x42, 2, 0x24, 1, 1]));
+    frame.extend(message(0x0201, &[0x71, 1]));
+    let padding = (4 - frame.len() % 4) % 4;
+    frame.resize(frame.len() + padding, 0);
+    frame.extend([0x1b, 0x1b, 0x1b, 0x1b, 0x1a, padding as u8]);
+    frame.extend(crc16::State::<crc16::X_25>::calculate(&frame).to_le_bytes());
+    let assess = |data: &[u8]| {
+        decode_hex(
+            &format!(
+                "{:02X}4493157856341233077F01000000{}",
+                14 + data.len(),
+                hex::encode(data)
+            ),
+            &DecodeOptions::default(),
+        )
+        .unwrap()
+        .assess_oms_5_0_1()
+    };
+    let result = assess(&frame);
+    for rule in [
+        "SML version 1 transport",
+        "SML file open and close",
+        "SML message body schema",
+        "SML message structure and checksum",
+    ] {
+        assert_eq!(outcome(&result, rule), Some("passed"), "{rule}");
+    }
+    *frame.last_mut().unwrap() ^= 1;
+    assert_eq!(
+        outcome(&assess(&frame), "SML version 1 transport"),
+        Some("failed")
     );
 }

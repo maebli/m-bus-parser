@@ -27,6 +27,7 @@ impl OmsRadioMode {
 
 #[derive(Clone, Copy, Default)]
 pub struct LayerFields {
+    pub application_protocol: crate::telegram::ApplicationProtocolEvidence,
     pub device_type: Option<u8>,
     pub command_target_type: Option<u8>,
     pub wireless_sender_type: Option<u8>,

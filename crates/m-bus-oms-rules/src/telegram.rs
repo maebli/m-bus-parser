@@ -1,3 +1,6 @@
+mod protocols;
+pub use protocols::{ApplicationProtocolEvidence, DlmsAssociation};
+
 use crate::{
     layers::LayerFields,
     readings::{Reading, Readings},
@@ -271,7 +274,10 @@ pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
             record_number: None,
         });
     }
-    if fields.readings_possible() {
+    let application = fields.application_ci.or(fields.outer_ci);
+    if let Some(ci @ (0x60 | 0x61 | 0x64 | 0x65 | 0x7c..=0x7f)) = application {
+        fields.application_protocol.check(ci, &mut findings);
+    } else if fields.readings_possible() {
         let mut readings = Readings::default();
         readings.taf7 = taf7;
         let mut unavailable = availability.unchecked_reason();
@@ -333,6 +339,7 @@ pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
         fields.application_ci.or(fields.outer_ci),
         Some(0x51 | 0x5a | 0x5b)
     ) {
+        let mut selection = crate::commands::ReadoutSelection::default();
         let mut missing = availability.unchecked_reason();
         for (index, record) in records.into_iter().enumerate() {
             if let Some(record) = record {
@@ -341,11 +348,13 @@ pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
                     fields.command_target_type,
                     index + 1,
                     &mut findings,
+                    &mut selection,
                 );
             } else {
                 missing = Some("A command record header is unavailable.");
             }
         }
+        selection.finish(missing.is_none(), &mut findings);
         if let Some(reason) = missing {
             findings.push(RuleFinding {
                 rule: "Command records",

@@ -6,13 +6,33 @@ use crate::{
     telegram::{RuleFinding, RuleStatus},
 };
 
+#[derive(Default)]
+pub(super) struct ReadoutSelection {
+    address: Option<usize>,
+    first_edit: Option<usize>,
+}
+
+impl ReadoutSelection {
+    pub(super) fn finish(self, complete: bool, results: &mut Vec<RuleFinding>) {
+        let Some(edit) = self.first_edit else {
+            return;
+        };
+        results.push(RuleFinding {
+            rule: "Readout-list application selection order", reference: "Annex M, Table M.37", source_url: annex_m!(48, 543),
+            status: match self.address { Some(n) if n < edit => RuleStatus::Passed, Some(_) => RuleStatus::Failed, None if complete => RuleStatus::Failed, None => RuleStatus::CouldNotCheck },
+            detail: "The setMM6! command must select the application before the first readout-list addition or deletion.", record_number: Some(edit),
+        });
+    }
+}
+
 pub(super) fn check_record<H: AsRef<[u8]>>(
     record: Reading<H>,
     target: Option<u8>,
     number: usize,
     findings: &mut Vec<RuleFinding>,
+    selection: &mut ReadoutSelection,
 ) {
-    let encoding = check_encoding(&record, number, target, findings);
+    let encoding = check_encoding(&record, number, target, findings, selection);
     findings.push(encoding);
 }
 
@@ -21,6 +41,7 @@ fn check_encoding<H: AsRef<[u8]>>(
     number: usize,
     target: Option<u8>,
     findings: &mut Vec<RuleFinding>,
+    selection: &mut ReadoutSelection,
 ) -> RuleFinding {
     let mut finding = RuleFinding {
         rule: "Command encoding",
@@ -84,6 +105,17 @@ fn check_encoding<H: AsRef<[u8]>>(
         (None, "CT1!") => Coding::IntegerOrVariable.accepts(coding),
         _ => return finding,
     };
+    if valid {
+        match (action, tag.0) {
+            (Some(0), "MM6!") => {
+                selection.address.get_or_insert(number);
+            }
+            (Some(0x0c | 0x0d), _) => {
+                selection.first_edit.get_or_insert(number);
+            }
+            _ => {}
+        }
+    }
     if action.is_none() && tag.0 == "DC1!" {
         crate::readings::check_disconnector_subunit(target, record.subunit, number, findings);
         if valid {

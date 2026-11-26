@@ -169,7 +169,7 @@ impl Profiles {
             "The TAF7 compact profile uses storage number 3.",
             Some(n),
         ));
-        if let Some((control, distance, _)) = layout {
+        if let Some((control, distance, count)) = layout {
             if control >> 6 != 0 && terminal {
                 let mut base_vib = vib[..index].to_vec();
                 if let Some(last) = base_vib.last_mut() {
@@ -184,6 +184,10 @@ impl Profiles {
                 ),
                 _ => None,
             };
+            results.push(check("TAF7 measurement count", "Annex R, R.2.3 equation 6", annex_r!(11, 430),
+                interval.zip(parameters.nominal_transmission_interval_ms).map(|(spacing, nominal)| {
+                    nominal != 0 && (count as u128) * u128::from(spacing) == 3 * u128::from(nominal) + 2 * u128::from(spacing)
+                }), "The encoded number of profile values must equal three nominal transmission intervals divided by the profile interval, plus two.", Some(n)));
             results.push(check(
                 "TAF7 profile interval and acceptance window",
                 "Annex R, R.2.3 equation 2",

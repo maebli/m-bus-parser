@@ -1,4 +1,6 @@
+mod protocols;
 mod readings;
+pub(super) use protocols::application_protocol;
 
 use super::{ConfigurationField, DecodedOutput, Link, OmsReport, OutputError};
 use crate::rscada_xml::xml_encode;

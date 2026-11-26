@@ -15,6 +15,7 @@ pub struct Taf7Parameters {
     pub measuring_period_ms: Option<u64>,
     pub registration_period_ms: Option<u64>,
     pub acceptance_window_ms: Option<u64>,
+    pub nominal_transmission_interval_ms: Option<u64>,
 }
 
 pub(super) struct Tag(pub &'static str, pub Coding);
@@ -124,6 +125,8 @@ pub(super) struct Readings {
     due_dates: BTreeSet<u64>,
     sensor_types: BTreeSet<u8>,
     descriptors: BTreeMap<(bool, u64), u8>,
+    static_selection_block: Option<u8>,
+    first_descriptor: Option<usize>,
     maximum_registers: BTreeMap<MaximumPowerRegister, MaximumPowerPair>,
     profiles: profiles::Profiles,
     pub(super) taf7: Option<Taf7Parameters>,
@@ -172,6 +175,9 @@ impl Readings {
             return;
         }
 
+        if matches!(vib, [0xfd, 0x20..=0x29]) {
+            self.first_descriptor.get_or_insert(n);
+        }
         if vib == [0xfd, 0x23]
             && let [index] = reading.data.as_ref()
             && coding == 1
@@ -390,6 +396,12 @@ impl Readings {
         }
         if matches!(tag.0, "DC1!" | "DC2!") {
             check_disconnector_subunit(device, reading.subunit, n, results);
+        }
+        if tag.0 == "MM6!"
+            && valid
+            && let [code @ 0x70..=0x7e] = reading.data.as_ref()
+        {
+            self.static_selection_block = Some(code & 15);
         }
         let data = reading.data.as_ref();
         if tag.0 == "ID11!"
@@ -830,6 +842,13 @@ impl Readings {
                 rule: "Unmapped record encoding", reference: "§8.4.4", source_url: primary!(75, 148), status: RuleStatus::CouldNotCheck,
                 detail: "The record does not match a supported Annex B reading. Other EN 13757 data points are permitted.",
                 record_number: Some(n),
+            });
+        }
+        if let (Some(block), Some(number)) = (self.static_selection_block, self.first_descriptor) {
+            results.push(RuleFinding {
+                rule: "Static application descriptor block", reference: "§8.10", source_url: primary!(80, 257),
+                status: if block <= 1 { RuleStatus::Passed } else { RuleStatus::Failed },
+                detail: "When MM6! identifies static application 7, its descriptors must be in block 0 or 1.", record_number: Some(number),
             });
         }
         for pair in self.maximum_registers.values() {

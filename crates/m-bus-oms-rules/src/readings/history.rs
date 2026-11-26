@@ -64,7 +64,7 @@ impl DeviceReadingHistory {
                         previous == &reading.data,
                         "Initial DIN address across capture",
                         "§8.4.5.2",
-                        primary!(76, 873),
+                        primary!(76, 948),
                         "The initial DIN address must stay unchanged for this meter.",
                     )
                 }
