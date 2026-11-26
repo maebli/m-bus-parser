@@ -63,9 +63,10 @@ fn xml(reports: &[OmsReport]) -> String {
             }
             let _ = writeln!(
                 out,
-                "><rule>{}</rule><reference>{}</reference><detail>{}</detail></finding>",
+                "><rule>{}</rule><reference>{}</reference><source_url>{}</source_url><detail>{}</detail></finding>",
                 xml_encode(finding.rule),
                 xml_encode(finding.reference),
+                xml_encode(finding.source_url),
                 xml_encode(finding.detail)
             );
         }
@@ -91,6 +92,7 @@ fn csv(reports: &[OmsReport]) -> Result<String, Box<dyn std::error::Error>> {
         "status",
         "detail",
         "record_number",
+        "source_url",
     ])?;
     for (index, report) in reports.iter().enumerate() {
         for finding in &report.findings {
@@ -108,6 +110,7 @@ fn csv(reports: &[OmsReport]) -> Result<String, Box<dyn std::error::Error>> {
                 finding.status.as_str(),
                 finding.detail,
                 finding.record_number,
+                finding.source_url,
             ))?;
         }
     }

@@ -1,5 +1,14 @@
 #![no_std]
 
+extern crate alloc;
+
+#[macro_use]
+mod sources;
+
+mod catalog;
+mod commands;
+pub mod layers;
+pub mod readings;
 pub mod telegram;
 
 use m_bus_core::{Function, SecurityMode};
@@ -15,19 +24,7 @@ pub struct OmsSecurityModeCheck {
 impl OmsSecurityModeCheck {
     #[must_use]
     pub fn assess_5_0_1(function: Option<Function>, explicit_mode: Option<SecurityMode>) -> Self {
-        let requires_zero = matches!(
-            function,
-            Some(
-                Function::ReqUd1 { .. }
-                    | Function::ReqUd2 { .. }
-                    | Function::SndNk { .. }
-                    | Function::AccNr
-                    | Function::AccDmd
-                    | Function::Ack
-                    | Function::Nack
-                    | Function::CnfIr
-            )
-        );
+        let requires_zero = function.is_some_and(requires_mode_zero);
         let (result, candidate_profile) = match explicit_mode.map(|mode| mode.to_bits()) {
             None => ("undetermined", None),
             Some(n) if n != 0 && requires_zero => ("requires_mode_0", None),
@@ -43,4 +40,18 @@ impl OmsSecurityModeCheck {
             candidate_profile,
         }
     }
+}
+
+fn requires_mode_zero(function: Function) -> bool {
+    matches!(
+        function,
+        Function::ReqUd1 { .. }
+            | Function::ReqUd2 { .. }
+            | Function::SndNk { .. }
+            | Function::AccNr
+            | Function::AccDmd
+            | Function::Ack
+            | Function::Nack
+            | Function::CnfIr
+    )
 }

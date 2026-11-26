@@ -1,0 +1,80 @@
+use alloc::vec::Vec;
+
+use crate::{
+    catalog::identify,
+    readings::{Coding, Reading},
+    telegram::{RuleFinding, RuleStatus},
+};
+
+pub(super) fn check<H: AsRef<[u8]>>(record: Reading<H>, number: usize) -> RuleFinding {
+    let mut finding = RuleFinding {
+        rule: "Command encoding",
+        reference: "Annex B, MB-Command-Tags",
+        source_url: annex_b!(39),
+        status: RuleStatus::CouldNotCheck,
+        detail: "No listed command was identified for this record.",
+        record_number: Some(number),
+    };
+    let header = record.header.as_ref();
+    let Some(end) = header.iter().position(|byte| byte & 0x80 == 0) else {
+        return finding;
+    };
+    let dif = header[0];
+    let coding = dif & 15;
+    let vib = &header[end + 1..];
+    let tag_for = |vib: &[u8]| {
+        identify(
+            vib,
+            record.tariff,
+            (dif >> 4) & 3,
+            record.storage,
+            end > 0 && header[end] == 0,
+            coding,
+        )
+    };
+    let mut base = Vec::from(vib);
+    let mut action = None;
+    let mut tag = tag_for(vib);
+    if tag.is_none() && base.len() >= 2 {
+        action = base.pop();
+        if let Some(last) = base.last_mut() {
+            if *last & 0x80 == 0 {
+                return finding;
+            }
+            *last &= 0x7f;
+        }
+        tag = tag_for(&base);
+    }
+    let Some(tag) = tag else { return finding };
+    let valid = match (action, tag.0) {
+        (Some(0x0c | 0x0d), _) => coding == 0,
+        (Some(0x0f), "DT2!D" | "DT2!N" | "EJ1!" | "EW1!" | "ID4!" | "MM6!" | "VM1!") => coding == 0,
+        (Some(0..=2), "EJ1!" | "EW1!" | "VM1!") => Coding::Number.accepts(coding),
+        (Some(0), "DT2!N") => Coding::Date.accepts(coding),
+        (Some(0) | None, "ID2!" | "ID8!" | "ID2! / ID8!") => coding == 7 || coding == 12,
+        (None, "ID3!") | (Some(0) | None, "ID10!") => Coding::Byte.accepts(coding),
+        (Some(0), "ID4!") => Coding::NumberOrVariable.accepts(coding),
+        (Some(6), "MM2!" | "MM3!") | (None, "DC1!") => Coding::Integer.accepts(coding),
+        (Some(7), "MM3!") => coding == 0,
+        (Some(0), "MM6!") => coding == 0 || Coding::Integer.accepts(coding),
+        (None, "CT1!") => Coding::IntegerOrVariable.accepts(coding),
+        _ => return finding,
+    };
+    finding.source_url = match (action, tag.0) {
+        (Some(0x0c | 0x0d), _) | (_, "CT1!" | "DC1!") => annex_b!(39),
+        (_, "DT2!D" | "DT2!N" | "EJ1!") | (Some(0 | 1 | 15), "EW1!") => annex_b!(40),
+        (_, "VM1!" | "MM3!" | "MM6!") => annex_b!(42),
+        _ => annex_b!(41),
+    };
+    finding.status = if valid {
+        RuleStatus::Passed
+    } else {
+        RuleStatus::Failed
+    };
+    finding.detail = if valid {
+        "The command's DIF encoding is listed for its action and data point."
+    } else {
+        "The DIF encoding is outside the list for this command."
+    };
+    finding
+}

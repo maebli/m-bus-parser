@@ -1,3 +1,8 @@
+use crate::{
+    layers::LayerFields,
+    readings::{Reading, Readings},
+};
+use alloc::{vec, vec::Vec};
 use m_bus_core::{ConfigurationField, Function, SecurityMode};
 
 use crate::OmsSecurityModeCheck;
@@ -33,6 +38,7 @@ impl RuleStatus {
 pub struct RuleFinding {
     pub rule: &'static str,
     pub reference: &'static str,
+    pub source_url: &'static str,
     pub status: RuleStatus,
     pub detail: &'static str,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
@@ -80,6 +86,7 @@ impl Link {
         RuleFinding {
             rule: "Link control field",
             reference: "§5.2.4, Tables 15–16",
+            source_url: primary!(52, 342),
             status,
             detail,
             record_number: None,
@@ -104,6 +111,7 @@ pub fn check_mode_zero_blocks(configuration: Option<ConfigurationField>) -> Rule
     RuleFinding {
         rule: "Mode 0 block count",
         reference: "§7.2.4.2",
+        source_url: primary!(62, 257),
         status,
         detail,
         record_number: None,
@@ -124,6 +132,7 @@ impl OmsSecurityModeCheck {
         RuleFinding {
             rule: "Security mode",
             reference: "Table 43",
+            source_url: primary!(83, 145),
             status,
             detail,
             record_number: None,
@@ -145,16 +154,29 @@ pub enum RecordAvailability {
     Unavailable,
 }
 
+impl RecordAvailability {
+    fn unchecked_reason(self) -> Option<&'static str> {
+        use RecordAvailability::*;
+        match self {
+            Complete => None,
+            Partial => Some("Only part of the record stream was decoded."),
+            Encrypted => Some("Decrypt the application payload to check its records."),
+            Fragmented => Some("Reassemble the telegram to check its records."),
+            Unavailable => Some("No decoded variable M-Bus records are available."),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub struct OmsReport {
+pub struct OmsReport<F = [RuleFinding; 6]> {
     pub version: &'static str,
     pub specification: &'static str,
     pub passed: usize,
     pub assessed: usize,
     pub unchecked: usize,
     pub security_mode: OmsSecurityModeCheck,
-    pub findings: [RuleFinding; 6],
+    pub findings: F,
 }
 
 pub fn assess_5_0_1<H: AsRef<[u8]>>(
@@ -164,13 +186,7 @@ pub fn assess_5_0_1<H: AsRef<[u8]>>(
     headers: impl IntoIterator<Item = Option<H>>,
 ) -> OmsReport {
     use RecordAvailability::*;
-    let mut unavailable = match availability {
-        Complete => None,
-        Partial => Some("Only part of the record stream was decoded."),
-        Encrypted => Some("Decrypt the application payload to check its records."),
-        Fragmented => Some("Reassemble the telegram to check its records."),
-        Unavailable => Some("No decoded variable M-Bus records are available."),
-    };
+    let mut unavailable = availability.unchecked_reason();
     let mut volumes = VolumeReadings::default();
     if matches!(availability, Complete | Partial) {
         for (index, header) in headers.into_iter().enumerate() {
@@ -194,15 +210,100 @@ pub fn assess_5_0_1<H: AsRef<[u8]>>(
         unique,
         date,
     ];
-    let passed = findings
-        .iter()
-        .filter(|f| matches!(f.status, Passed))
-        .count();
-    let failed = findings
-        .iter()
-        .filter(|f| matches!(f.status, Failed))
-        .count();
-    let unchecked = findings
+    report(security_mode, findings)
+}
+
+pub fn assess_telegram<H: AsRef<[u8]>>(
+    link: Link,
+    configuration: Option<ConfigurationField>,
+    fields: LayerFields,
+    availability: RecordAvailability,
+    records: impl IntoIterator<Item = Option<Reading<H>>>,
+) -> TelegramReport {
+    let security_mode = OmsSecurityModeCheck::assess_5_0_1(
+        link.function(),
+        configuration.map(|cf| cf.security_mode()),
+    );
+    let mut findings = vec![
+        link.check(),
+        check_mode_zero_blocks(configuration),
+        security_mode.finding(),
+    ];
+    fields.check(link, configuration, &mut findings);
+    if matches!(availability, RecordAvailability::Fragmented) {
+        let function = link.function();
+        findings.push(RuleFinding {
+            rule: "Fragment link function",
+            reference: "§6.3, Tables 15–16",
+            source_url: primary!(57, 91),
+            status: match function {
+                Some(Function::SndUd { .. } | Function::RspUd { .. }) => Passed,
+                Some(_) => Failed,
+                None => CouldNotCheck,
+            },
+            detail: "Fragmented application data requires SND-UD or RSP-UD.",
+            record_number: None,
+        });
+    }
+    if fields.readings_possible() {
+        let mut readings = Readings::default();
+        let mut unavailable = availability.unchecked_reason();
+        if matches!(
+            availability,
+            RecordAvailability::Complete | RecordAvailability::Partial
+        ) {
+            for (index, record) in records.into_iter().enumerate() {
+                if let Some(record) = record {
+                    readings.observe(record, fields.device_type, index + 1, &mut findings);
+                } else {
+                    unavailable = Some("A decoded record header is unavailable.");
+                }
+            }
+        }
+        if fields.standard_push(link, configuration) == Some(true) {
+            readings.required_meter_tags(
+                fields.device_type,
+                unavailable.is_none() && readings.fully_mapped(),
+                &mut findings,
+            );
+        }
+        readings.finish(unavailable, &mut findings);
+    } else if matches!(
+        fields.application_ci.or(fields.outer_ci),
+        Some(0x51 | 0x5a | 0x5b)
+    ) {
+        let mut missing = availability.unchecked_reason();
+        for (index, record) in records.into_iter().enumerate() {
+            if let Some(record) = record {
+                findings.push(crate::commands::check(record, index + 1));
+            } else {
+                missing = Some("A command record header is unavailable.");
+            }
+        }
+        if let Some(reason) = missing {
+            findings.push(RuleFinding {
+                rule: "Command records",
+                reference: "Annex B, MB-Command-Tags",
+                source_url: annex_b!(39),
+                status: CouldNotCheck,
+                detail: reason,
+                record_number: None,
+            });
+        }
+    }
+    report(security_mode, findings)
+}
+
+pub type TelegramReport = OmsReport<Vec<RuleFinding>>;
+
+fn report<F: AsRef<[RuleFinding]>>(
+    security_mode: OmsSecurityModeCheck,
+    findings: F,
+) -> OmsReport<F> {
+    let rows = findings.as_ref();
+    let passed = rows.iter().filter(|f| matches!(f.status, Passed)).count();
+    let failed = rows.iter().filter(|f| matches!(f.status, Failed)).count();
+    let unchecked = rows
         .iter()
         .filter(|f| matches!(f.status, CouldNotCheck))
         .count();
@@ -300,14 +401,25 @@ impl VolumeReadings {
             None => unchecked,
         };
         [
-            ("Volume encoding (VM1! / VM1!D)", "Annex B, B.1.6", encoding),
-            ("Unique volume readings (VM1! / VM1!D)", "§8.4.4", unique),
-            ("Due date for VM1!D", "§8.4.5.1", date),
+            (
+                "Volume encoding (VM1! / VM1!D)",
+                "Annex B, MB-Data-Tags",
+                crate::sources::tag_page("VM1!"),
+                encoding,
+            ),
+            (
+                "Unique volume readings (VM1! / VM1!D)",
+                "§8.4.4",
+                primary!(75, 148),
+                unique,
+            ),
+            ("Due date for VM1!D", "§8.4.5.1", primary!(76, 319), date),
         ]
         .map(
-            |(rule, reference, (status, detail, record_number))| RuleFinding {
+            |(rule, reference, source_url, (status, detail, record_number))| RuleFinding {
                 rule,
                 reference,
+                source_url,
                 status,
                 detail,
                 record_number,

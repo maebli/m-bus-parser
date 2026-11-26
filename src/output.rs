@@ -8,8 +8,9 @@ use core::str::FromStr;
 use std::fmt;
 
 use m_bus_core::{ConfigurationField, Function, SecurityMode};
-use m_bus_oms_rules::telegram::{self, Link, OmsReport, RecordAvailability};
+use m_bus_oms_rules::telegram::{self, Link, RecordAvailability, TelegramReport as OmsReport};
 pub use m_bus_oms_rules::OmsSecurityModeCheck;
+use m_bus_oms_rules::{layers::LayerFields, readings::Reading};
 use serde::Serialize;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use wired_mbus_link_layer as wired;
@@ -272,41 +273,79 @@ pub struct DecodedOutput {
 
 impl DecodedOutput {
     pub fn assess_oms_5_0_1(&self) -> OmsReport {
-        assess_oms_5_0_1(
-            &self.frame,
-            &self.transport,
+        let frame = &self.frame;
+        let transport = &self.transport;
+        let control = frame
+            .control_field
+            .as_deref()
+            .and_then(|raw| u8::from_str_radix(raw, 16).ok());
+        let link = match (frame.kind.as_str(), control) {
+            ("wireless", Some(control)) => Link::Wireless(control),
+            ("short" | "control" | "long", Some(control)) => {
+                Function::try_from(control).map_or(Link::Unavailable, Link::Wired)
+            }
+            _ => Link::Unavailable,
+        };
+        let configuration = transport
+            .configuration
+            .as_ref()
+            .and_then(|field| u16::from_str_radix(&field.raw, 16).ok())
+            .map(ConfigurationField::from);
+        let fields = LayerFields {
+            device_type: self
+                .meter
+                .identity
+                .as_ref()
+                .and_then(|id| id.device_type_code),
+            mac_verified: self.security.decryption_state == "decrypted_authenticated",
+            verification_prefix: self.security.decrypted_payload_hex.as_deref().map(|plain| {
+                match self.security.mode_code {
+                    Some(7) => self.security.decryption_state == "decrypted_authenticated",
+                    _ => plain.starts_with("2F2F"),
+                }
+            }),
+            tpl_present: match transport.header_kind.as_deref() {
+                Some("long_tpl" | "short_tpl") => Some(true),
+                Some(_) => Some(false),
+                None if matches!(frame.kind.as_str(), "short" | "single_character") => Some(false),
+                _ => None,
+            },
+            short_tpl: transport.header_kind.as_deref() == Some("short_tpl"),
+            outer_ci: transport.outer_ci,
+            application_ci: transport.application_ci,
+            configuration_extension: transport.configuration_extension,
+            communication_control: transport
+                .ell
+                .as_ref()
+                .and_then(|ell| u8::from_str_radix(&ell.communication_control, 16).ok()),
+            authentication_type: transport.authentication_type,
+            message_length: transport.afl_message_length,
+            layers_decoded: transport.header_kind.is_some() || frame.kind == "short",
+            reassembled: frame.kind == "reassembled",
+        };
+        let readings = self.records.iter().map(|record| {
+            Some(Reading {
+                header: decode_hex_bytes(&record.header_hex).ok()?,
+                data: if record.data_hex.is_empty() {
+                    Vec::new()
+                } else {
+                    decode_hex_bytes(&record.data_hex).ok()?
+                },
+                profile_time: matches!(record.value.kind.as_str(), "time_offset" | "timestamp")
+                    .then_some(record.value.value.is_some()),
+                tariff: record.tariff,
+                storage: record.storage_number,
+                subunit: record.subunit,
+            })
+        });
+        telegram::assess_telegram(
+            link,
+            configuration,
+            fields,
             self.record_availability,
-            &self.records,
+            readings,
         )
     }
-}
-
-fn assess_oms_5_0_1(
-    frame: &FrameOutput,
-    transport: &TransportOutput,
-    availability: RecordAvailability,
-    records: &[RecordOutput],
-) -> OmsReport {
-    let control = frame
-        .control_field
-        .as_deref()
-        .and_then(|raw| u8::from_str_radix(raw, 16).ok());
-    let link = match (frame.kind.as_str(), control) {
-        ("wireless", Some(control)) => Link::Wireless(control),
-        ("short" | "control" | "long", Some(control)) => {
-            Function::try_from(control).map_or(Link::Unavailable, Link::Wired)
-        }
-        _ => Link::Unavailable,
-    };
-    let configuration = transport
-        .configuration
-        .as_ref()
-        .and_then(|field| u16::from_str_radix(&field.raw, 16).ok())
-        .map(ConfigurationField::from);
-    let headers = records
-        .iter()
-        .map(|record| decode_hex_bytes(&record.header_hex).ok());
-    telegram::assess_5_0_1(link, configuration, availability, headers)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -378,6 +417,16 @@ pub struct EllOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TransportOutput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outer_ci: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub application_ci: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configuration_extension: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authentication_type: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub afl_message_length: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1409,7 +1458,27 @@ fn build_output(
         });
     }
 
-    let (meter, transport) = meter_and_transport(user_data, wireless_id);
+    let (meter, mut transport) = meter_and_transport(user_data, wireless_id);
+    if matches!(
+        frame.kind.as_str(),
+        "wireless" | "long" | "control" | "application_layer"
+    ) {
+        transport.outer_ci = payload.and_then(|data| data.first().copied());
+        if let (
+            Some(bytes),
+            Some(user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                variable_data_block,
+                ..
+            }),
+        ) = (payload, user_data)
+        {
+            transport.application_ci = bytes
+                .len()
+                .checked_sub(variable_data_block.len() + 1)
+                .and_then(|offset| bytes.get(offset))
+                .copied();
+        }
+    }
     let (record_outputs, record_error) = match user_data {
         Some(user_data::UserDataBlock::FixedDataStructure {
             device_type_and_unit,
@@ -1544,7 +1613,13 @@ fn meter_and_transport(
     let link_identity = wireless_id.map(identity_from_wireless);
     let mut primary = link_identity.clone();
     let mut alternates = Vec::new();
+    let authentication = user_data.and_then(UserDataBlock::authentication);
     let mut transport = TransportOutput {
+        outer_ci: None,
+        application_ci: None,
+        configuration_extension: None,
+        authentication_type: authentication.map(|a| a.message_control & 15),
+        afl_message_length: authentication.and_then(|a| a.message_length),
         header_kind: None,
         secondary_address_mask: None,
         access_numbers: Vec::new(),
@@ -1694,6 +1769,20 @@ fn meter_and_transport(
         Some(_) => {}
     }
 
+    if let Some((header, body)) = user_data
+        .and_then(UserDataBlock::transport_payload)
+        .filter(|_| transport.configuration.is_some())
+    {
+        transport.application_ci = Some(header.control_information);
+        transport.configuration_extension =
+            match header.configuration_field.security_mode().to_bits() {
+                7 | 13 => body.first().copied().map(u16::from),
+                10 => body.first_chunk::<2>().copied().map(u16::from_le_bytes),
+                _ => None,
+            };
+    } else if let Some(UserDataBlock::ApplicationMessage(message)) = user_data {
+        transport.application_ci = Some(message.control_information);
+    }
     (
         MeterOutput {
             identity: primary,

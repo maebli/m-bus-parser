@@ -255,3 +255,84 @@ fn elster_oms_2_0_0_annex_b() {
         assert_eq!(values, expected);
     }
 }
+
+#[cfg(feature = "oms-gen5")]
+#[test]
+fn annex_b_registrations_keep_their_encoding_and_storage_identity() {
+    use m_bus_parser::output::{render_application_hex, OmsFormat};
+    use m_bus_parser::{OutputFormat, RenderOptions};
+
+    let report = |hex| {
+        let output = render_application_hex(
+            hex,
+            OutputFormat::Oms(OmsFormat::Json),
+            &RenderOptions::default(),
+        )
+        .unwrap();
+        serde_json::from_str::<serde_json::Value>(&output).unwrap()
+    };
+    let examples = [
+        (
+            "78C28200FB007B00CB820006002301",
+            "Unique Annex B readings",
+            "failed",
+            2,
+        ),
+        ("7805130000803F", "VM1!", "failed", 1),
+        ("78036D001010010001", "DT5!", "passed", 1),
+        ("78036D001010010001", "EW1!", "passed", 2),
+        ("5140900C", "Command encoding", "passed", 1),
+        ("5141900C01", "Command encoding", "failed", 1),
+    ];
+    for (hex, rule, status, record) in examples {
+        let output = report(hex);
+        let rows = output["findings"].as_array().unwrap();
+        let finding = rows.iter().find(|f| f["rule"] == rule).unwrap();
+        assert_eq!(finding["status"], status, "{hex}");
+        assert_eq!(finding["record_number"], record);
+    }
+    let result = report("78041301000000");
+    let tag = result["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["rule"] == "VM1!")
+        .unwrap();
+    assert!(tag["source_url"]
+        .as_str()
+        .unwrap()
+        .ends_with("AnnexB_G461.pdf#page=31&view=FitH,525"));
+}
+
+#[cfg(feature = "oms-gen5")]
+#[test]
+fn annex_n_validation_distinguishes_the_breaker_omission_from_missing_context() {
+    for example in examples().iter().filter(|e| {
+        e.expected == "complete" && e.pages.iter().any(|page| page.starts_with("5.0.1/"))
+    }) {
+        let report = example.decode().unwrap().assess_oms_5_0_1();
+        let failures: Vec<_> = report
+            .findings
+            .iter()
+            .filter(|f| f.status.as_str() == "failed")
+            .map(|f| f.rule)
+            .collect();
+        if example.pages.iter().any(|p| p == "5.0.1/83") {
+            assert_eq!(failures, ["Physical state (DC2!)"]);
+        } else {
+            assert!(failures.is_empty(), "{:?}: {failures:?}", example.pages);
+        }
+        assert_eq!(report.assessed, report.passed + failures.len());
+        assert!(report
+            .findings
+            .iter()
+            .all(|f| f.source_url.contains(".pdf#page=")));
+        if example.pages.iter().any(|p| p == "5.0.1/30") {
+            assert!(report
+                .findings
+                .iter()
+                .any(|f| f.rule == "Transport header for link function"
+                    && f.status.as_str() == "could_not_check"));
+        }
+    }
+}
