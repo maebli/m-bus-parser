@@ -289,6 +289,13 @@ impl ImageTransfer {
                 "The preparation result code must be assigned.",
             );
         }
+        if function == 0x80 && self.subfunction.is_some_and(|bits| bits & 2 != 0) {
+            check(
+                "Firmware supported block size",
+                self.block_size.map(|size| size >= 190),
+                "A prepare response that declares the supported block size must allow at least 190 bytes.",
+            );
+        }
         if function == 0x83 {
             check(
                 "Firmware lost block list",
@@ -296,7 +303,7 @@ impl ImageTransfer {
                     self.lost_total
                         .is_some_and(|total| match self.lost_list_count {
                             Some(entries) => entries > 0 && entries <= usize::from(total),
-                            None => total == 0 || self.subfunction.is_some_and(|f| f & 1 != 0),
+                            None => (total == 0) == self.subfunction.is_some_and(|f| f & 1 == 0),
                         }),
                 ),
                 "The completion response requires the total lost count. A reported list must fit the total and omit entries when no blocks were lost.",
@@ -317,13 +324,11 @@ impl ImageTransfer {
                 }),
                 "The protected firmware operation uses ASP10 with PID 06 and application key 23.",
             );
-            if command {
-                check(
-                    "Firmware target time",
-                    wrapper.map(|(_, _, _, timing)| timing),
-                    "Prepare and terminate require immediate action. Activate uses the ITP activation time.",
-                );
-            }
+            check(
+                "Firmware target time",
+                wrapper.map(|(_, _, _, timing)| timing),
+                "The ASP10 target time specifies immediate action for prepare and terminate, and delegates the activation time to ITP for activate.",
+            );
         }
     }
 }

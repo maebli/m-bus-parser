@@ -253,3 +253,22 @@ fn captured_blocks_authenticate_only_an_unambiguous_complete_image() {
         ("conflicting".into(), "could_not_check".into())
     );
 }
+
+#[test]
+fn firmware_receiver_capacity_uses_the_reported_limit() {
+    let response = |size: &str| {
+        check(
+            &format!("C101000000130001800A06A73DFFFF0000FFFF0200{size}00"),
+            None,
+            None,
+        )
+    };
+    assert_eq!(
+        status(&response("BE00"), "Firmware supported block size"),
+        "passed"
+    );
+    assert_eq!(
+        status(&response("BD00"), "Firmware supported block size"),
+        "failed"
+    );
+}
