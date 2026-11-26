@@ -86,11 +86,14 @@ pub struct Reading<H> {
     pub storage: u64,
 }
 
+type TagGroup = (&'static str, &'static [&'static str], bool);
+
 #[derive(Default)]
 pub(super) struct Readings {
     seen: BTreeSet<(&'static str, u64, u64, u64)>,
     due_readings: Vec<(usize, u64)>,
     due_dates: BTreeSet<u64>,
+    sensor_types: BTreeSet<u8>,
     first_duplicate: Option<usize>,
     unknown: Option<usize>,
 }
@@ -224,6 +227,30 @@ impl Readings {
             check_disconnector_subunit(device, reading.subunit, n, results);
         }
         let data = reading.data.as_ref();
+        if tag.0 == "ID11!"
+            && valid
+            && device == Some(0x1f)
+            && reading.subunit == 0
+            && let [length @ 0xe0..=0xef, types @ ..] = data
+            && usize::from(length - 0xe0) == types.len()
+        {
+            self.sensor_types.extend(types.iter().copied());
+            let listed = types
+                .iter()
+                .any(|code| matches!(code, 1..=3 | 5..=15 | 18..=21));
+            results.push(RuleFinding {
+                rule: "OMS sensor designation",
+                reference: "§8.4.5.3 / Table 9",
+                source_url: primary!(77, 89),
+                status: if listed {
+                    RuleStatus::Passed
+                } else {
+                    RuleStatus::Failed
+                },
+                detail: "A device of type 1Fh requires a subdevice type from Table 9.",
+                record_number: Some(n),
+            });
+        }
         if matches!(tag.0, "ID7!" | "ID8!")
             && let [14, serial @ ..] = data
             && let Some(manufacturer) = serial.get(10..13).filter(|_| serial.len() == 14)
@@ -265,7 +292,7 @@ impl Readings {
                 "Subdevice type encoding",
                 "Annex B, note 22",
                 annex_b!(14, 144),
-                matches!(data.first(), Some(0xe0..=0xef)),
+                matches!(data, [length @ 0xe0..=0xef, bytes @ ..] if usize::from(length - 0xe0) == bytes.len()),
                 "The length field must indicate a binary value.",
             )),
             "YD1!" => Some((
@@ -353,14 +380,8 @@ impl Readings {
         complete: bool,
         results: &mut Vec<RuleFinding>,
     ) {
-        type Group = (&'static str, &'static [&'static str], bool);
-        const HEAT: Group = ("One heat register (EJ1! or EW1!)", &["EJ1!", "EW1!"], true);
-        const RUNTIME: Group = (
-            "Operating or on time (DP5! or DP6!)",
-            &["DP5!", "DP6!"],
-            false,
-        );
-        let groups: &[Group] = match device {
+        const HEAT: TagGroup = ("One heat register (EJ1! or EW1!)", &["EJ1!", "EW1!"], true);
+        let groups: &[TagGroup] = match device {
             Some(0x02) => &[(
                 "Electricity register (EW1!, EW2! or EW3!)",
                 &["EW1!", "EW2!", "EW3!"],
@@ -386,32 +407,112 @@ impl Readings {
                 ("Billing allocation (HC1!D)", &["HC1!D"], false),
                 ("Billing date (DT2!D)", &["DT2!D"], false),
             ],
-            Some(0x18) => &[
-                ("Pressure state (MM13!)", &["MM13!"], false),
-                ("Pressure (PR1! or PR2!)", &["PR1!", "PR2!"], false),
-            ],
-            Some(0x1a) => &[RUNTIME, ("Smoke alarm state (MM15!)", &["MM15!"], false)],
-            Some(0x1d) => &[
-                RUNTIME,
-                ("CO alarm state (MM14!)", &["MM14!"], false),
-                ("Carbon monoxide (CC1!)", &["CC1!"], false),
-            ],
-            Some(0x1e) => &[
-                RUNTIME,
-                ("Heat alarm state (MM17!)", &["MM17!"], false),
-                ("Temperature (TC4!)", &["TC4!"], false),
-            ],
-            Some(0x1f) => &[
-                ("Subdevice types (ID11!)", &["ID11!"], false),
-                ("Standard error flags (MM3!)", &["MM3!"], false),
-            ],
+            Some(0x18 | 0x1a | 0x1d..=0x1f) => {
+                self.required_sensor_tags(device, false, complete, results);
+                return;
+            }
             Some(0x20 | 0x21) => &[
                 ("Control state (DC1!)", &["DC1!"], false),
                 ("Physical state (DC2!)", &["DC2!"], false),
             ],
             _ => return,
         };
+        self.check_tag_groups(groups, complete, results);
+    }
+
+    pub(super) fn required_sensor_tags(
+        &self,
+        device: Option<u8>,
+        static_message: bool,
+        complete: bool,
+        results: &mut Vec<RuleFinding>,
+    ) {
+        let direct = match device {
+            Some(0x18) => Some(21),
+            Some(0x1a) => Some(20),
+            Some(0x1d) => Some(18),
+            Some(0x1e) => Some(19),
+            Some(0x1f) => None,
+            _ => return,
+        };
+        if device == Some(0x1f) && !static_message {
+            self.check_tag_groups(
+                &[("Subdevice types (ID11!)", &["ID11!"], false)],
+                complete,
+                results,
+            );
+            if self
+                .sensor_types
+                .iter()
+                .any(|code| matches!(code, 1..=3 | 5..=15))
+            {
+                self.check_tag_groups(
+                    &[("Standard error flags (MM3!)", &["MM3!"], false)],
+                    complete,
+                    results,
+                );
+            } else if self.sensor_types.is_empty() {
+                results.push(RuleFinding {
+                    rule: "Sensor-specific data points", reference: "Annex B, B.2.3", source_url: annex_b!(35),
+                    status: RuleStatus::CouldNotCheck, detail: "A readable ID11! declaration is needed to select the sensor requirements.", record_number: None,
+                });
+            }
+        }
+        const RUNTIME: TagGroup = (
+            "Operating or on time (DP5! or DP6!)",
+            &["DP5!", "DP6!"],
+            false,
+        );
+        for sensor in direct.into_iter().chain(self.sensor_types.iter().copied()) {
+            let groups: &[TagGroup] = match (sensor, static_message) {
+                (21, true) => &[
+                    ("Static upper pressure threshold (PR3!)", &["PR3!"], false),
+                    ("Static lower pressure threshold (PR4!)", &["PR4!"], false),
+                ],
+                (_, true) => &[],
+                (1, _) => &[("Humidity (RH1!)", &["RH1!"], false)],
+                (2, _) => &[("Moisture (MO1!)", &["MO1!"], false)],
+                (3, _) => &[("Temperature (TC4!)", &["TC4!"], false)],
+                (5, _) => &[("Light level (LT1! or LT2!)", &["LT1!", "LT2!"], false)],
+                (6, _) => &[("Rainfall (RF1!)", &["RF1!"], false)],
+                (7, _) => &[("pH (PH1!)", &["PH1!"], false)],
+                (8, _) => &[("Wind speed (WS1!)", &["WS1!"], false)],
+                (9, _) => &[("Glass break (ND1! or TS1!)", &["ND1!", "TS1!"], false)],
+                (10 | 11, _) => &[("Contact state (MM16!)", &["MM16!"], false)],
+                (13, _) => &[("Air quality (VC1! or VC2!)", &["VC1!", "VC2!"], false)],
+                (14, _) => &[("Carbon dioxide (CC2!)", &["CC2!"], false)],
+                (15, _) => &[("Turbidity (TB1!)", &["TB1!"], false)],
+                (18, _) => &[
+                    RUNTIME,
+                    ("CO alarm state (MM14!)", &["MM14!"], false),
+                    ("Carbon monoxide (CC1!)", &["CC1!"], false),
+                ],
+                (19, _) => &[
+                    RUNTIME,
+                    ("Heat alarm state (MM17!)", &["MM17!"], false),
+                    ("Temperature (TC4!)", &["TC4!"], false),
+                ],
+                (20, _) => &[RUNTIME, ("Smoke alarm state (MM15!)", &["MM15!"], false)],
+                (21, _) => &[
+                    ("Pressure state (MM13!)", &["MM13!"], false),
+                    ("Pressure (PR1! or PR2!)", &["PR1!", "PR2!"], false),
+                ],
+                _ => &[],
+            };
+            self.check_tag_groups(groups, complete, results);
+        }
+    }
+
+    fn check_tag_groups(
+        &self,
+        groups: &[TagGroup],
+        complete: bool,
+        results: &mut Vec<RuleFinding>,
+    ) {
         for &(rule, tags, exclusive) in groups {
+            if results.iter().any(|finding| finding.rule == rule) {
+                continue;
+            }
             let count = tags
                 .iter()
                 .filter(|tag| {
@@ -432,7 +533,11 @@ impl Readings {
             results.push(RuleFinding {
                 rule,
                 reference: "§8.4.4, Table 39 / Annex B",
-                source_url: primary!(75, 525),
+                source_url: if rule.starts_with("Static ") {
+                    annex_b!(37)
+                } else {
+                    primary!(75, 525)
+                },
                 status,
                 detail: if exclusive {
                     "This telegram requires exactly one of the listed readings."
@@ -513,9 +618,45 @@ impl Readings {
                 require("Consumer water volume (VM1!)", &["VM1!"]);
                 require("Consumer billing volume (VM1!D)", &["VM1!D"]);
             }
-            Some(0x20 | 0x21) => require("Consumer disconnector state (DC1!)", &["DC1!"]),
+
             _ => {}
         }
+
+        if device == Some(0x02) {
+            let available = self
+                .seen
+                .iter()
+                .any(|(tag, _, subunit, _)| *subunit == 0 && tag.starts_with("EW2!"));
+            let present = self.seen.contains(&("EW2!", 0, 0, 0));
+            results.push(RuleFinding {
+                rule: "Consumer export energy (EW2!)",
+                reference: "Annex M, Table M.27",
+                source_url: annex_m!(41, 79),
+                status: if present {
+                    RuleStatus::Passed
+                } else if complete && available {
+                    RuleStatus::Failed
+                } else {
+                    RuleStatus::CouldNotCheck
+                },
+                detail: if available {
+                    "The meter reports export energy and must provide the current EW2! register."
+                } else {
+                    "Export availability must be established before EW2! is required."
+                },
+                record_number: None,
+            });
+        }
+        let standalone = matches!(device, Some(0x20 | 0x21));
+        let subunit = u64::from(!standalone);
+        let physical = self.seen.contains(&("DC2!", 0, subunit, 0));
+        let control = self.seen.contains(&("DC1!", 0, subunit, 0));
+        results.push(RuleFinding {
+            rule: "Consumer disconnector state (DC1!)", reference: "Annex M, Table M.27 note b", source_url: annex_m!(41, 79),
+            status: if control { RuleStatus::Passed } else if complete && (standalone || physical) { RuleStatus::Failed } else { RuleStatus::CouldNotCheck },
+            detail: if standalone || physical || control { "A device with a breaker or valve must report its current control state." } else { "The availability of a breaker or valve must be established before DC1! is required." },
+            record_number: None,
+        });
     }
 
     pub(super) fn finish(&self, unavailable: Option<&'static str>, results: &mut Vec<RuleFinding>) {

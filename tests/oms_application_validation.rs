@@ -79,3 +79,91 @@ fn consumer_information_uses_content_index_and_accounts_for_incomplete_data() {
     let standard = report(0x07, 0x0702, 0x10, RecordAvailability::Complete, readings());
     assert_eq!(outcome(&standard, "Consumer water volume (VM1!)"), None);
 }
+
+#[test]
+fn sensor_requirements_follow_each_declared_subdevice() {
+    let designation = || record(&[0x0d, 0xfd, 0xfd, 0x01], &[0xe3, 5, 3, 1]);
+    let humidity = || record(&[1, 0xfb, 0x1a], &[50]);
+    let combined = report(
+        0x1f,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![humidity(), designation()],
+    );
+    assert_eq!(outcome(&combined, "OMS sensor designation"), Some("passed"));
+    assert_eq!(outcome(&combined, "Humidity (RH1!)"), Some("passed"));
+    assert_eq!(outcome(&combined, "Temperature (TC4!)"), Some("failed"));
+    assert_eq!(
+        outcome(&combined, "Light level (LT1! or LT2!)"),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(&combined, "Standard error flags (MM3!)"),
+        Some("failed")
+    );
+    let unknown = report(0x1f, 0x0702, 0x10, RecordAvailability::Partial, vec![]);
+    assert_eq!(
+        outcome(&unknown, "Sensor-specific data points"),
+        Some("could_not_check")
+    );
+    let unlisted = report(
+        0x1f,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![record(&[13, 0xfd, 0xfd, 1], &[0xe1, 4])],
+    );
+    assert_eq!(outcome(&unlisted, "OMS sensor designation"), Some("failed"));
+}
+
+#[test]
+fn pressure_thresholds_are_required_in_static_messages() {
+    let static_data = report(0x18, 0x8700, 0x10, RecordAvailability::Complete, vec![]);
+    assert_eq!(
+        outcome(&static_data, "Static upper pressure threshold (PR3!)"),
+        Some("failed")
+    );
+    assert_eq!(outcome(&static_data, "Pressure state (MM13!)"), None);
+    let dynamic = report(
+        0x1f,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![record(&[13, 0xfd, 0xfd, 1], &[0xe1, 21])],
+    );
+    assert_eq!(
+        outcome(&dynamic, "Static upper pressure threshold (PR3!)"),
+        None
+    );
+    assert_eq!(outcome(&dynamic, "Pressure state (MM13!)"), Some("failed"));
+    assert_eq!(outcome(&dynamic, "Standard error flags (MM3!)"), None);
+}
+
+#[test]
+fn consumer_conditional_data_needs_evidence_of_the_device_function() {
+    let unknown = report(2, 0x0703, 0x10, RecordAvailability::Complete, vec![]);
+    for rule in [
+        "Consumer export energy (EW2!)",
+        "Consumer disconnector state (DC1!)",
+    ] {
+        assert_eq!(outcome(&unknown, rule), Some("could_not_check"));
+    }
+    let mut physical = record(&[0x81, 0x40, 0xfd, 0x1a], &[1]).unwrap();
+    physical.subunit = 1;
+    let mut export_due = record(&[0x41, 0x80, 0x3c], &[1]).unwrap();
+    export_due.storage = 1;
+    let known = report(
+        2,
+        0x0703,
+        0x10,
+        RecordAvailability::Complete,
+        vec![Some(physical), Some(export_due)],
+    );
+    for rule in [
+        "Consumer export energy (EW2!)",
+        "Consumer disconnector state (DC1!)",
+    ] {
+        assert_eq!(outcome(&known, rule), Some("failed"));
+    }
+}

@@ -274,6 +274,20 @@ pub fn assess_telegram<H: AsRef<[u8]>>(
                 &mut findings,
             );
         }
+        if matches!(link, Link::Wireless(0x44))
+            && configuration.is_some_and(|cf| match cf.security_mode().to_bits() {
+                5 => cf.mode_specific_lower() & 12 == 8,
+                7 | 10 | 13 => cf.raw() >> 14 == 2,
+                _ => false,
+            })
+        {
+            readings.required_sensor_tags(
+                fields.device_type,
+                true,
+                unavailable.is_none() && readings.fully_mapped(),
+                &mut findings,
+            );
+        }
         if matches!(
             link,
             Link::Wireless(0x44 | 0x08 | 0x18 | 0x28 | 0x38) | Link::Wired(Function::RspUd { .. })
