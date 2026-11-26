@@ -433,6 +433,7 @@ impl DecodedOutput {
             readings,
             options.taf7,
         );
+        oms::check_current_din(self, &mut report);
         if let Some(wired) = oms::wired_observation(self) {
             wired.check(
                 transport.outer_ci.is_some(),

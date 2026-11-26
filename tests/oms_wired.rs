@@ -59,3 +59,27 @@ fn wired_capture_checks_require_an_ordered_exchange() {
         .iter()
         .any(|f| f["rule"] == "Wired response source" && f["status"] == "failed"));
 }
+
+#[test]
+fn only_the_current_din_address_is_compared_with_the_application_address() {
+    let manufacturer: u16 = (17 << 10) | (4 << 5) | 19;
+    for (category, vif, status) in [
+        (b'7', 0x79, Some("passed")),
+        (b'8', 0x79, Some("failed")),
+        (b'8', 0x78, None),
+    ] {
+        let mut data = vec![0x72, 0x44, 0x33, 0x22, 0x11];
+        data.extend(manufacturer.to_le_bytes());
+        data.extend([1, 3, 1, 0, 0, 0, 0x0d, vif, 14]);
+        data.extend(b"4433221110SDQ");
+        data.push(category);
+        let frame = decode_bytes(&long(8, 1, &data), &Default::default()).unwrap();
+        let report = frame.assess_oms_5_0_1();
+        let result = report
+            .findings
+            .iter()
+            .find(|f| f.rule == "Current DIN address conversion")
+            .map(|f| f.status.as_str());
+        assert_eq!(result, status);
+    }
+}

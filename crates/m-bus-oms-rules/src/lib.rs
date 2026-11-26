@@ -5,6 +5,7 @@ extern crate alloc;
 #[macro_use]
 mod sources;
 
+pub mod address;
 mod catalog;
 mod commands;
 pub mod layers;

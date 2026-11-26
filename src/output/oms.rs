@@ -62,6 +62,33 @@ pub(super) fn encrypted_record_prefix(
     }
 }
 
+pub(super) fn check_current_din(frame: &DecodedOutput, report: &mut OmsReport) {
+    let Some(identity) = frame.meter.identity.as_ref() else {
+        return;
+    };
+    let (Some(serial), Some(manufacturer), Some(device)) = (
+        identity.id.as_deref(),
+        identity.manufacturer_code.as_deref(),
+        identity.device_type_code,
+    ) else {
+        return;
+    };
+    let findings: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "ID8!")
+        .filter_map(|f| {
+            let n = f.record_number?;
+            let record = frame.records.get(n.checked_sub(1)?)?;
+            let data = super::decode_hex_bytes(&record.data_hex).ok()?;
+            m_bus_oms_rules::address::current_din_address(&data, manufacturer, serial, device, n)
+        })
+        .collect();
+    for finding in findings {
+        report.push(finding);
+    }
+}
+
 pub(super) fn wired_observation(
     frame: &DecodedOutput,
 ) -> Option<m_bus_oms_rules::wired::WiredObservation> {
