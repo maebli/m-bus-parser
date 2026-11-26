@@ -163,9 +163,8 @@ struct ValidationArgs {
     #[cfg(feature = "oms-gen5")]
     #[arg(
         long,
-        requires = "firmware_image",
         value_name = "KEY",
-        help = "Firmware image key (ID 18)"
+        help = "Firmware image key (ID 18), for a supplied image or captured transfer blocks"
     )]
     firmware_key: Option<String>,
     #[cfg(feature = "oms-gen5")]
@@ -408,7 +407,7 @@ fn render_input(
                         |_frame| {
                             #[cfg(feature = "oms-gen5")]
                             if let Some(evidence) = &image {
-                                _frame.verify_firmware_image(&evidence.image, &evidence.key)?;
+                                evidence.verify(std::slice::from_mut(_frame))?;
                             }
                             #[cfg(feature = "oms-gen5")]
                             if let Some(key) = &validation.wrapping_key {
@@ -485,25 +484,44 @@ fn read_input(
 
 #[cfg(feature = "oms-gen5")]
 struct FirmwareEvidence {
-    image: Vec<u8>,
+    image: Option<Vec<u8>>,
     key: [u8; 16],
+}
+
+#[cfg(feature = "oms-gen5")]
+impl FirmwareEvidence {
+    fn verify(&self, frames: &mut [m_bus_parser::DecodedOutput]) -> Result<(), OutputError> {
+        if let Some(image) = &self.image {
+            for frame in frames {
+                frame.verify_firmware_image(image, &self.key)?;
+            }
+            Ok(())
+        } else {
+            m_bus_parser::output::verify_captured_firmware(frames, &self.key)
+        }
+    }
 }
 
 #[cfg(feature = "decryption-mode-7")]
 impl ValidationArgs {
     #[cfg(feature = "oms-gen5")]
     fn firmware_evidence(&self) -> Result<Option<FirmwareEvidence>, OutputError> {
-        let (Some(file), Some(key)) = (&self.firmware_image, &self.firmware_key) else {
+        let Some(key) = &self.firmware_key else {
             return Ok(None);
         };
         let key = parse_key(key).map_err(|_| OutputError::InvalidOption {
             option: "firmware-key",
             message: "Expected 32 hexadecimal characters.".into(),
         })?;
-        let image = std::fs::read(file).map_err(|e| OutputError::InvalidOption {
-            option: "firmware-image",
-            message: e.to_string(),
-        })?;
+        let image = self
+            .firmware_image
+            .as_ref()
+            .map(std::fs::read)
+            .transpose()
+            .map_err(|e| OutputError::InvalidOption {
+                option: "firmware-image",
+                message: e.to_string(),
+            })?;
         Ok(Some(FirmwareEvidence { image, key }))
     }
 
@@ -542,9 +560,7 @@ fn render_checked_frames(
     }
     #[cfg(feature = "oms-gen5")]
     if let Some(evidence) = validation.firmware_evidence()? {
-        for frame in &mut *frames {
-            frame.verify_firmware_image(&evidence.image, &evidence.key)?;
-        }
+        evidence.verify(frames)?;
     }
     #[cfg(feature = "decryption-mode-10")]
     if let Some(value) = &validation.lpwan_mac_key {

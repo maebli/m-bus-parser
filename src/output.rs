@@ -28,6 +28,8 @@ use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
 mod firmware;
+#[cfg(feature = "decryption-mode-7")]
+pub use firmware::verify_captured_firmware;
 mod fragments;
 mod key_wrap;
 mod lpwan;

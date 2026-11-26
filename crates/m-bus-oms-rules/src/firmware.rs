@@ -22,7 +22,52 @@ pub struct ImageTransfer {
     pub mac_key_version: Option<u8>,
     pub mac: Option<[u8; 16]>,
     pub firmware_cmac_matches: Option<bool>,
+    pub captured_image: Option<CapturedImage>,
     pub structure_complete: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "snake_case")
+)]
+pub enum CapturedImage {
+    Verified,
+    Mismatch,
+    Missing,
+    Conflicting,
+    Dimensions,
+    UnknownMeter,
+}
+
+impl CapturedImage {
+    fn matches(self) -> Option<bool> {
+        match self {
+            Self::Verified => Some(true),
+            Self::Mismatch => Some(false),
+            _ => None,
+        }
+    }
+    fn detail(self) -> &'static str {
+        match self {
+            Self::Verified | Self::Mismatch => {
+                "The CMAC covers the captured image blocks in numeric index order."
+            }
+            Self::Missing => {
+                "The capture lacks at least one block or a complete prepare declaration."
+            }
+            Self::Conflicting => {
+                "Conflicting prepare declarations or duplicate block contents prevent authentication of a unique image."
+            }
+            Self::Dimensions => {
+                "The captured block numbers or lengths disagree with the prepare declaration."
+            }
+            Self::UnknownMeter => {
+                "A meter address is needed to join the prepare and captured transfer blocks."
+            }
+        }
+    }
 }
 
 fn take<'a, const N: usize>(input: &mut &'a [u8]) -> Option<&'a [u8; N]> {
@@ -228,8 +273,13 @@ impl ImageTransfer {
             );
             check(
                 "Firmware image CMAC",
-                self.firmware_cmac_matches,
-                "The declared 16-byte CMAC must authenticate the complete firmware image with its image key.",
+                self.firmware_cmac_matches
+                    .or_else(|| self.captured_image.and_then(CapturedImage::matches)),
+                if self.firmware_cmac_matches.is_some() {
+                    "The declared 16-byte CMAC must authenticate the supplied firmware image."
+                } else {
+                    self.captured_image.map(CapturedImage::detail).unwrap_or("The declared CMAC requires the firmware key and a complete image or a capture containing its blocks.")
+                },
             );
         }
         if function == 0x80 {

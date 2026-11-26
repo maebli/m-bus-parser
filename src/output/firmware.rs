@@ -2,7 +2,12 @@
 use super::OutputError;
 use super::{DecodedOutput, OmsReport};
 use m_bus_oms_rules::firmware::ImageTransfer;
+use serde::Deserialize;
 use serde_json::Value;
+#[cfg(feature = "decryption-mode-7")]
+mod capture;
+#[cfg(feature = "decryption-mode-7")]
+pub use capture::verify_captured_firmware;
 
 pub(super) fn decode(data: &[u8]) -> Value {
     let mut left = data;
@@ -23,7 +28,16 @@ pub(super) fn decode(data: &[u8]) -> Value {
         };
         transfer.segment_id = Some(*id);
         transfer.segment_length = Some(u16::from_le_bytes(*size));
-        segments.push(serde_json::json!(transfer));
+        let mut fields = serde_json::json!(transfer);
+        if let Some(bytes) = transfer
+            .data_length
+            .and_then(|n| body.get(body.len().checked_sub(n)?..))
+        {
+            if let Some(obj) = fields.as_object_mut() {
+                obj.insert("image_block_hex".into(), super::hex_string(bytes).into());
+            }
+        }
+        segments.push(fields);
         left = next;
     }
     let complete = left.is_empty() && !segments.is_empty();
@@ -62,7 +76,7 @@ pub(super) fn assess(frame: &DecodedOutput, report: &mut OmsReport) {
             report,
         );
         for segment in segments(value) {
-            let Ok(firmware) = serde_json::from_value::<ImageTransfer>(segment.clone()) else {
+            let Ok(firmware) = ImageTransfer::deserialize(segment) else {
                 continue;
             };
             let wrapper = (|| {
@@ -134,6 +148,22 @@ enum MeterAddress {
     Wired(u8),
 }
 
+fn meter_address(
+    frame: &DecodedOutput,
+    app: &super::ApplicationOutput,
+    command: bool,
+) -> Option<MeterAddress> {
+    frame
+        .application_meter(app, command)
+        .map(MeterAddress::Secondary)
+        .or_else(|| match super::oms::wired_observation(frame)? {
+            m_bus_oms_rules::wired::WiredObservation::Frame { address, .. } if address <= 250 => {
+                Some(MeterAddress::Wired(address))
+            }
+            _ => None,
+        })
+}
+
 #[derive(PartialEq, Eq)]
 struct PendingSegment {
     id: u8,
@@ -164,17 +194,7 @@ impl History {
         let Some(decoded) = &app.decoded else {
             return;
         };
-        let address = frame
-            .application_meter(app, command)
-            .map(MeterAddress::Secondary)
-            .or_else(|| match super::oms::wired_observation(frame)? {
-                m_bus_oms_rules::wired::WiredObservation::Frame { address, .. }
-                    if address <= 250 =>
-                {
-                    Some(MeterAddress::Wired(address))
-                }
-                _ => None,
-            });
+        let address = meter_address(frame, app, command);
         let previous = address.and_then(|peer| self.last_request.remove(&peer));
         let mut requests = Vec::new();
         let blocks = decoded["blocks"]
@@ -186,7 +206,7 @@ impl History {
                 continue;
             };
             for segment in segments(value) {
-                let Ok(transfer) = serde_json::from_value::<ImageTransfer>(segment.clone()) else {
+                let Ok(transfer) = ImageTransfer::deserialize(segment) else {
                     continue;
                 };
                 if let Some(id) = transfer.segment_id {

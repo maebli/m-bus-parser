@@ -77,10 +77,21 @@ pub fn verify_sitp_cmac(body: &[u8], application_key: &[u8; 16]) -> Result<(), D
 
 #[cfg(feature = "decryption-mode-7")]
 pub fn verify_firmware_cmac(image: &[u8], tag: &[u8; 16], key: &[u8; 16]) -> bool {
+    verify_firmware_blocks(core::iter::once(image), tag, key)
+}
+
+#[cfg(feature = "decryption-mode-7")]
+pub fn verify_firmware_blocks<'a>(
+    blocks: impl IntoIterator<Item = &'a [u8]>,
+    tag: &[u8; 16],
+    key: &[u8; 16],
+) -> bool {
     use aes::cipher::KeyInit;
     use cmac::{Cmac, Mac};
     let mut cmac = Cmac::<aes::Aes128>::new(key.into());
-    cmac.update(image);
+    for bytes in blocks {
+        cmac.update(bytes);
+    }
     cmac.verify_slice(tag).is_ok()
 }
 

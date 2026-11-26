@@ -170,3 +170,86 @@ fn each_segment_has_a_length_id_and_matching_response() {
         "failed"
     );
 }
+
+#[test]
+fn captured_blocks_authenticate_only_an_unambiguous_complete_image() {
+    use m_bus_parser::output::verify_captured_firmware;
+    use m_bus_parser::{decode_hex, DecodeOptions};
+    const HEADER: &str =
+        "3B433A63665544330A31C0785634129315330301000000250001000D0200040000A73DFFFF0000FFFF0418005879D2B0042C5CA3EF0CA5C735DE0CC5";
+    const LAST: &str =
+        "29433A63665544330A31C07856341293153303010000001300010208A73DFFFF0000FFFF010045464748";
+    const FIRST: &str =
+        "29433A63665544330A31C07856341293153303010000001300010208A73DFFFF0000FFFF000041424344";
+    let key = core::array::from_fn(|i| i as u8);
+    let result = |frames: &[&str], key: &[u8; 16]| {
+        let mut captured = frames
+            .iter()
+            .map(|raw| decode_hex(raw, &DecodeOptions::default()).unwrap())
+            .collect::<Vec<_>>();
+        verify_captured_firmware(&mut captured, key).unwrap();
+        let header = captured
+            .iter()
+            .find(|frame| {
+                frame
+                    .application
+                    .as_ref()
+                    .unwrap()
+                    .decoded
+                    .as_ref()
+                    .unwrap()["image_transfer"]["function"]
+                    == 0
+            })
+            .unwrap();
+        let fields = &header
+            .application
+            .as_ref()
+            .unwrap()
+            .decoded
+            .as_ref()
+            .unwrap()["image_transfer"];
+        let report = serde_json::to_value(header.assess_oms_5_0_1()).unwrap();
+        (
+            fields["captured_image"].as_str().unwrap().to_owned(),
+            status(&report, "Firmware image CMAC").to_owned(),
+        )
+    };
+    for frames in [
+        vec![HEADER, LAST, FIRST],
+        vec![LAST, FIRST, HEADER],
+        vec![HEADER, FIRST, FIRST, LAST],
+    ] {
+        assert_eq!(result(&frames, &key), ("verified".into(), "passed".into()));
+    }
+    let wrong = FIRST.replace("41424344", "41424345");
+    assert_eq!(
+        result(&[HEADER, LAST, &wrong], &key),
+        ("mismatch".into(), "failed".into())
+    );
+    assert_eq!(
+        result(&[HEADER, LAST, FIRST], &[1; 16]),
+        ("mismatch".into(), "failed".into())
+    );
+    assert_eq!(
+        result(&[HEADER, FIRST], &key),
+        ("missing".into(), "could_not_check".into())
+    );
+    assert_eq!(
+        result(&[HEADER, LAST, FIRST, &wrong], &key),
+        ("conflicting".into(), "could_not_check".into())
+    );
+    let other_meter = LAST.replace("78563412", "88563412");
+    assert_eq!(
+        result(&[HEADER, FIRST, &other_meter], &key),
+        ("missing".into(), "could_not_check".into())
+    );
+    let other_size = HEADER.replace("0D02000400", "0D02000300");
+    assert_eq!(
+        result(&[&other_size, FIRST, LAST], &key),
+        ("dimensions".into(), "could_not_check".into())
+    );
+    assert_eq!(
+        result(&[HEADER, &other_size, FIRST, LAST], &key),
+        ("conflicting".into(), "could_not_check".into())
+    );
+}
