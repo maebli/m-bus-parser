@@ -8,6 +8,7 @@ mod sources;
 pub mod address;
 mod catalog;
 mod commands;
+pub mod firmware;
 pub mod layers;
 pub mod lpwan;
 pub mod national;

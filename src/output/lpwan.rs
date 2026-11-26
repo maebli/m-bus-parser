@@ -5,7 +5,6 @@ pub(super) fn decode(
     frame: &[u8],
     options: &DecodeOptions,
     session: Option<&TlsSession<'_>>,
-    application_key: Option<&[u8; 16]>,
 ) -> Result<DecodedOutput, OutputError> {
     let (header, remaining) =
         LpwanHeader::parse(frame).map_err(|message| OutputError::InvalidFrame {
@@ -38,8 +37,7 @@ pub(super) fn decode(
         options.key.as_ref(),
         session,
         &mut buffer,
-    )?
-    .verify_application(block.as_ref(), application_key)?;
+    )?;
     let records = if let Some(plain) = security.decrypted_payload.as_deref() {
         decrypted_records(block.as_ref(), plain)
     } else if security.encrypted {

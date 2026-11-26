@@ -396,7 +396,7 @@ pub fn decode_fragment_frames(
     {
         let decoded = packets
             .iter()
-            .map(|packet| decode_bytes_with_keys(packet, options, None, None))
+            .map(|packet| decode_bytes_with_session(packet, options, None))
             .collect::<Result<_, _>>()?;
         return Ok(FragmentOutput::Multiple(decoded));
     }
@@ -464,7 +464,7 @@ fn decode_wired_packets(
     }
     let mut decoded = frames
         .iter()
-        .map(|frame| decode_bytes_with_keys(frame, options, None, None))
+        .map(|frame| decode_bytes_with_session(frame, options, None))
         .collect::<Result<Vec<_>, _>>()?;
     if decoded.len() == 1 {
         let frame = decoded

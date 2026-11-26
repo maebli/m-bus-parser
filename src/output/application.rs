@@ -11,7 +11,15 @@ pub fn render_application_hex(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
-    render_application_with_session(input, format, options, None, Default::default(), None)
+    render_application_with_session(
+        input,
+        format,
+        options,
+        None,
+        Default::default(),
+        None,
+        |_| Ok(()),
+    )
 }
 
 #[cfg(feature = "decryption-mode-13")]
@@ -29,6 +37,7 @@ pub fn render_application_hex_with_tls_session(
         Some(session),
         Default::default(),
         None,
+        |_| Ok(()),
     )
 }
 
@@ -45,6 +54,7 @@ pub fn render_application_oms(
         None,
         capture,
         None,
+        |_| Ok(()),
     )
 }
 
@@ -63,6 +73,7 @@ pub fn render_application_oms_with_tls_session(
         Some(session),
         capture,
         None,
+        |_| Ok(()),
     )
 }
 
@@ -81,6 +92,7 @@ pub fn render_application_oms_with_application_key(
         None,
         capture,
         Some(key),
+        |_| Ok(()),
     )
 }
 
@@ -100,6 +112,28 @@ pub fn render_application_oms_with_keys(
         session,
         capture,
         application_key,
+        |_| Ok(()),
+    )
+}
+
+#[cfg(feature = "decryption-mode-13")]
+pub fn render_application_oms_with_evidence(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    session: Option<&TlsSession<'_>>,
+    application_key: Option<&[u8; 16]>,
+    evidence: impl FnOnce(&mut DecodedOutput) -> Result<(), OutputError>,
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        session,
+        capture,
+        application_key,
+        evidence,
     )
 }
 
@@ -110,6 +144,7 @@ fn render_application_with_session(
     session: Option<&TlsSession<'_>>,
     capture: OmsCaptureOptions,
     application_key: Option<&[u8; 16]>,
+    evidence: impl FnOnce(&mut DecodedOutput) -> Result<(), OutputError>,
 ) -> Result<String, OutputError> {
     let data = decode_hex_bytes(input)?;
     let block = match user_data::parse_application_layer(&data) {
@@ -253,12 +288,11 @@ fn render_application_with_session(
         options.decode.include_enrichment,
     );
     if let OutputFormat::Oms(format) = format {
+        let mut decoded = decoded;
         if let Some(key) = application_key {
             #[cfg(feature = "decryption-mode-7")]
             {
-                let mut decoded = decoded;
                 decoded.authenticate_application(key)?;
-                return render_oms_capture_with_options(&[decoded], format, None, capture);
             }
             #[cfg(not(feature = "decryption-mode-7"))]
             {
@@ -269,6 +303,7 @@ fn render_application_with_session(
                 });
             }
         }
+        evidence(&mut decoded)?;
         return render_oms_capture_with_options(&[decoded], format, None, capture);
     }
     render_decoded(&decoded, format, options)

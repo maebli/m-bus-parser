@@ -9,7 +9,7 @@ pub fn decode_hex_with_tls_session(
     session: &TlsSession<'_>,
 ) -> Result<DecodedOutput, OutputError> {
     let bytes = decode_hex_bytes(input)?;
-    let mut decoded = decode_bytes_with_keys(&bytes, options, Some(session), None)?;
+    let mut decoded = decode_bytes_with_session(&bytes, options, Some(session))?;
     decoded.raw.input = Some(input.to_string());
     Ok(decoded)
 }
@@ -130,7 +130,6 @@ pub(super) fn prepare_mode13(
         key_supplied: session.is_some() || communication_key.is_some(),
         decrypted_payload: None,
         tls: Some(tls),
-        application_mac_verified: false,
     };
     let Some(session) = session else {
         return Ok(context);

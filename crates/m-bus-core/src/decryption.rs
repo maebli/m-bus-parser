@@ -9,6 +9,10 @@ pub mod mode13;
 use crate::{DeviceType, ManufacturerCode, SecurityMode};
 
 #[cfg(feature = "decryption-mode-10")]
+mod asp20;
+#[cfg(feature = "decryption-mode-10")]
+pub use asp20::decrypt_asp20;
+#[cfg(feature = "decryption-mode-10")]
 mod lpwan;
 #[cfg(feature = "decryption-mode-10")]
 pub use lpwan::LpwanMacSecurity;
@@ -69,6 +73,15 @@ pub fn verify_sitp_cmac(body: &[u8], application_key: &[u8; 16]) -> Result<(), D
     mac.update(authenticated_data);
     mac.verify_truncated_left(tag)
         .map_err(|_| DecryptionError::AuthenticationFailed)
+}
+
+#[cfg(feature = "decryption-mode-7")]
+pub fn verify_firmware_cmac(image: &[u8], tag: &[u8; 16], key: &[u8; 16]) -> bool {
+    use aes::cipher::KeyInit;
+    use cmac::{Cmac, Mac};
+    let mut cmac = Cmac::<aes::Aes128>::new(key.into());
+    cmac.update(image);
+    cmac.verify_slice(tag).is_ok()
 }
 
 impl core::fmt::Display for DecryptionError {

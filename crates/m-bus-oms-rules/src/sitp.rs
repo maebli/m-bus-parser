@@ -218,6 +218,21 @@ pub fn assess(blocks: &[Block], command: bool, report: &mut TelegramReport) {
     }
 }
 
+pub fn assess_asp20(verified: Option<bool>, report: &mut TelegramReport) {
+    report.push(RuleFinding {
+        rule: "ASP20 application authentication",
+        reference: "Section 9.4.2.6, Table 47",
+        source_url: "https://oms-group.org/wp-content/uploads/2024/10/OMS-Spec_Vol2_Primary_v501_01.pdf#page=97&view=FitH,89",
+        status: match verified {
+            Some(true) => RuleStatus::Passed,
+            Some(false) => RuleStatus::Failed,
+            None => RuleStatus::CouldNotCheck,
+        },
+        detail: "AES-CCM must authenticate the application payload using the meter address, direction, key counter and application key.",
+        record_number: None,
+    });
+}
+
 #[derive(Default)]
 pub struct History {
     requests: BTreeMap<([u8; 8], [u8; 8]), Vec<Block>>,

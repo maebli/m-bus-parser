@@ -107,6 +107,9 @@ pub(super) fn check_sitp_clocks(frame: &DecodedOutput, report: &mut OmsReport) {
         .and_then(serde_json::Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_else(|| core::slice::from_ref(fields));
+    for block in blocks.iter().filter(|b| b["data_selector"] == 0x36) {
+        m_bus_oms_rules::sitp::assess_asp20(block["application_mac_verified"].as_bool(), report);
+    }
     for clock in blocks.iter().filter_map(clock_fields) {
         clock.assess(report);
     }
@@ -231,7 +234,7 @@ pub(super) fn access_observation(
     })
 }
 
-fn exchange_frame(frame: &DecodedOutput) -> Option<ExchangeFrame> {
+pub(super) fn exchange_frame(frame: &DecodedOutput) -> Option<ExchangeFrame> {
     if frame.frame.kind != "wireless" {
         return None;
     }

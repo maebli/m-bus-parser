@@ -27,6 +27,7 @@ use crate::user_data::data_information::{
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
+mod firmware;
 mod fragments;
 mod lpwan;
 mod messages;
@@ -62,8 +63,8 @@ pub use application::render_application_oms_with_application_key;
 pub use application::{render_application_hex, render_application_oms};
 #[cfg(feature = "decryption-mode-13")]
 pub use application::{
-    render_application_hex_with_tls_session, render_application_oms_with_keys,
-    render_application_oms_with_tls_session,
+    render_application_hex_with_tls_session, render_application_oms_with_evidence,
+    render_application_oms_with_keys, render_application_oms_with_tls_session,
 };
 use messages::application_output;
 
@@ -462,6 +463,7 @@ impl DecodedOutput {
                 manufacturer,
             ));
         }
+        firmware::assess(self, &mut report);
         oms::check_current_din(self, &mut report);
         if let Some(wired) = oms::wired_observation(self) {
             wired.check(
@@ -724,21 +726,9 @@ struct SecurityContext {
     key_supplied: bool,
     decrypted_payload: Option<Vec<u8>>,
     tls: Option<TlsOutput>,
-    application_mac_verified: bool,
 }
 
 impl SecurityContext {
-    fn verify_application(
-        mut self,
-        block: Option<&user_data::UserDataBlock<'_>>,
-        key: Option<&[u8; 16]>,
-    ) -> Result<Self, OutputError> {
-        if let Some(key) = key {
-            self.application_mac_verified = messages::verify_application(block, &self, key)?;
-        }
-        Ok(self)
-    }
-
     fn authenticated(&self) -> bool {
         self.decrypted
             && matches!(
@@ -779,7 +769,7 @@ pub fn decode_capture_bytes(
 ) -> Result<FragmentOutput, OutputError> {
     match fragments::detect_bytes(data, options)? {
         Some(decoded) => Ok(decoded),
-        None => decode_bytes_with_keys(data, options, None, None)
+        None => decode_bytes_with_session(data, options, None)
             .map(|frame| FragmentOutput::Single(Box::new(frame))),
     }
 }
@@ -794,24 +784,31 @@ pub fn decode_bytes_with_application_key(
     options: &DecodeOptions,
     application_key: &[u8; 16],
 ) -> Result<DecodedOutput, OutputError> {
-    decode_bytes_with_keys(data, options, None, Some(application_key))
+    let mut frame = decode_bytes(data, options)?;
+    if frame.verify_application_key(application_key)? {
+        Ok(frame)
+    } else {
+        Err(OutputError::Decryption {
+            code: "security.application_mac_unavailable",
+            message: "No supported application security container is available.".into(),
+        })
+    }
 }
 
-fn decode_bytes_with_keys(
+fn decode_bytes_with_session(
     data: &[u8],
     options: &DecodeOptions,
     session: Option<&TlsSession<'_>>,
-    application_key: Option<&[u8; 16]>,
 ) -> Result<DecodedOutput, OutputError> {
     if data.is_empty() {
         return Err(OutputError::EmptyInput);
     }
 
     if m_bus_oms_rules::lpwan::has_mac_crc(data) {
-        return lpwan::decode(data, options, session, application_key);
+        return lpwan::decode(data, options, session);
     }
     if let Some(frame) = fragments::singleton_payload(data)? {
-        let mut decoded = decode_bytes_with_keys(frame, options, session, application_key)?;
+        let mut decoded = decode_bytes_with_session(frame, options, session)?;
         decoded.raw.fragment_frames_hex.push(hex_string(data));
         return Ok(decoded);
     }
@@ -825,8 +822,7 @@ fn decode_bytes_with_keys(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?
-            .verify_application(parsed.user_data.as_ref(), application_key)?;
+            )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -860,8 +856,7 @@ fn decode_bytes_with_keys(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?
-            .verify_application(parsed.user_data.as_ref(), application_key)?;
+            )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -956,7 +951,7 @@ pub fn render_bytes(
             })
         }
         _ => {
-            let decoded = decode_bytes_with_keys(data, &options.decode, None, None)?;
+            let decoded = decode_bytes_with_session(data, &options.decode, None)?;
             render_decoded(&decoded, format, options)
         }
     }
@@ -1190,7 +1185,6 @@ fn prepare_security(
             key_supplied: key.is_some(),
             decrypted_payload: None,
             tls: None,
-            application_mac_verified: false,
         });
     }
     let Some(key) = key else {
@@ -1202,7 +1196,6 @@ fn prepare_security(
             key_supplied: false,
             decrypted_payload: None,
             tls: None,
-            application_mac_verified: false,
         });
     };
     if ell_encrypted && mode.is_none() {
@@ -1262,7 +1255,6 @@ fn prepare_security(
             key_supplied: true,
             decrypted_payload: Some(decrypted),
             tls: None,
-            application_mac_verified: false,
         })
     }
 
