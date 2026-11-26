@@ -532,7 +532,6 @@ fn decode_afl_fragments(
             address,
             control_field: None,
         },
-        telegram::Link::Unavailable,
         &application,
         &application,
         false,

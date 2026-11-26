@@ -120,6 +120,67 @@ impl OmsSecurityModeCheck {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+pub enum RecordAvailability {
+    Complete,
+    Partial,
+    Encrypted,
+    Fragmented,
+    Unavailable,
+}
+
+pub struct OmsReport {
+    pub security_mode: OmsSecurityModeCheck,
+    pub findings: [RuleFinding; 6],
+}
+
+pub fn assess_5_0_1<H: AsRef<[u8]>>(
+    link: Link,
+    configuration: Option<ConfigurationField>,
+    availability: RecordAvailability,
+    headers: impl IntoIterator<Item = Option<H>>,
+) -> OmsReport {
+    use RecordAvailability::*;
+    let mut unavailable = match availability {
+        Complete => None,
+        Partial => Some("Only part of the record stream was decoded."),
+        Encrypted => Some("Decrypt the application payload to check its records."),
+        Fragmented => Some("Reassemble the telegram to check its records."),
+        Unavailable => Some("No decoded variable M-Bus records are available."),
+    };
+    let mut volumes = VolumeReadings::default();
+    if matches!(availability, Complete | Partial) {
+        for (index, header) in headers.into_iter().enumerate() {
+            if let Some(header) = header {
+                volumes.observe(header.as_ref(), index + 1);
+            } else {
+                unavailable = Some("A decoded record header is unavailable.");
+            }
+        }
+    }
+    let security_mode = OmsSecurityModeCheck::assess_5_0_1(
+        link.function(),
+        configuration.map(|field| field.security_mode()),
+    );
+    let [encoding, unique, date] = volumes.findings(unavailable);
+    OmsReport {
+        findings: [
+            link.check(),
+            check_mode_zero_blocks(configuration),
+            security_mode.finding(),
+            encoding,
+            unique,
+            date,
+        ],
+        security_mode,
+    }
+}
+
 #[derive(Default)]
 pub struct VolumeReadings {
     current: Option<usize>,

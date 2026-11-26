@@ -7,8 +7,8 @@
 use core::str::FromStr;
 use std::fmt;
 
-use m_bus_core::SecurityMode;
-use m_bus_oms_rules::telegram::{self, Link, RuleFinding, VolumeReadings};
+use m_bus_core::{ConfigurationField, Function, SecurityMode};
+use m_bus_oms_rules::telegram::{self, Link, OmsReport, RecordAvailability, RuleFinding};
 pub use m_bus_oms_rules::OmsSecurityModeCheck;
 use serde::Serialize;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -256,11 +256,51 @@ pub struct DecodedOutput {
     pub application: Option<ApplicationOutput>,
     pub security: SecurityOutput,
     pub oms_5_0_1_checks: [RuleFinding; 6],
+    pub record_availability: RecordAvailability,
     pub records: Vec<RecordOutput>,
     pub raw: RawOutput,
     pub diagnostics: Vec<Diagnostic>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enrichment: Option<EnrichmentOutput>,
+}
+
+impl DecodedOutput {
+    pub fn assess_oms_5_0_1(&self) -> OmsReport {
+        assess_oms_5_0_1(
+            &self.frame,
+            &self.transport,
+            self.record_availability,
+            &self.records,
+        )
+    }
+}
+
+fn assess_oms_5_0_1(
+    frame: &FrameOutput,
+    transport: &TransportOutput,
+    availability: RecordAvailability,
+    records: &[RecordOutput],
+) -> OmsReport {
+    let control = frame
+        .control_field
+        .as_deref()
+        .and_then(|raw| u8::from_str_radix(raw, 16).ok());
+    let link = match (frame.kind.as_str(), control) {
+        ("wireless", Some(control)) => Link::Wireless(control),
+        ("short" | "control" | "long", Some(control)) => {
+            Function::try_from(control).map_or(Link::Unavailable, Link::Wired)
+        }
+        _ => Link::Unavailable,
+    };
+    let configuration = transport
+        .configuration
+        .as_ref()
+        .and_then(|field| u16::from_str_radix(&field.raw, 16).ok())
+        .map(ConfigurationField::from);
+    let headers = records
+        .iter()
+        .map(|record| decode_hex_bytes(&record.header_hex).ok());
+    telegram::assess_5_0_1(link, configuration, availability, headers)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -641,7 +681,7 @@ pub fn decode_data_records(data: &[u8]) -> Result<Vec<RecordOutput>, OutputError
         return Err(OutputError::EmptyInput);
     }
     let records = user_data::DataRecords::from(data);
-    let (output, error, _) = collect_records(Some(&records), None);
+    let (output, error) = collect_records(Some(&records), None);
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",
@@ -1184,9 +1224,15 @@ fn build_wired_output(
             kind: kind.to_string(),
             function: function.as_ref().map(frame_function_name),
             address,
-            control_field: None,
+            control_field: match parsed.frame {
+                wired::WiredFrame::LongFrame { .. } | wired::WiredFrame::ControlFrame { .. } => {
+                    original.get(4)
+                }
+                wired::WiredFrame::ShortFrame { .. } => original.get(1),
+                _ => None,
+            }
+            .map(|byte| format!("{byte:02X}")),
         },
-        function.map_or(Link::Unavailable, Link::Wired),
         original,
         original,
         false,
@@ -1255,7 +1301,6 @@ fn build_wireless_output(
             address: None,
             control_field: Some(format!("{:02X}", parsed.frame.control_field)),
         },
-        Link::Wireless(parsed.frame.control_field),
         original,
         normalized,
         format_a_crc_stripped,
@@ -1273,7 +1318,6 @@ fn build_wireless_output(
 fn build_output(
     protocol: &str,
     frame: FrameOutput,
-    link: Link,
     original: &[u8],
     normalized: &[u8],
     format_a_crc_stripped: bool,
@@ -1359,7 +1403,7 @@ fn build_output(
     }
 
     let (meter, transport) = meter_and_transport(user_data, wireless_id);
-    let (record_outputs, record_error, volumes) = match user_data {
+    let (record_outputs, record_error) = match user_data {
         Some(user_data::UserDataBlock::FixedDataStructure {
             device_type_and_unit,
             status,
@@ -1369,7 +1413,6 @@ fn build_output(
         }) => (
             fixed_record_outputs(*device_type_and_unit, *status, counter1, counter2, payload),
             None,
-            VolumeReadings::default(),
         ),
         _ => collect_records(records, meter.identity.as_ref()),
     };
@@ -1433,32 +1476,21 @@ fn build_output(
         || record_error.is_some()
         || (security_context.encrypted && !security_context.decrypted);
 
-    let explicit_mode = mode.filter(|_| transport.configuration.is_some());
-    let oms_mode_check = OmsSecurityModeCheck::assess_5_0_1(link.function(), explicit_mode);
-    let configuration = user_data
-        .and_then(|block| block.transport_payload())
-        .map(|(header, _)| header.configuration_field);
-    let unavailable = if security_context.encrypted && !security_context.decrypted {
-        Some("Decrypt the application payload to check its records.")
-    } else if fragment {
-        Some("Reassemble the telegram to check its records.")
+    let record_availability = if fragment {
+        RecordAvailability::Fragmented
+    } else if security_context.encrypted && !security_context.decrypted {
+        RecordAvailability::Encrypted
     } else if records.is_none() {
-        Some("No decoded variable M-Bus records are available.")
+        RecordAvailability::Unavailable
     } else if record_error.is_some() {
-        Some("Only part of the record stream was decoded.")
+        RecordAvailability::Partial
     } else {
-        None
+        RecordAvailability::Complete
     };
-    let [encoding, unique, date] = volumes.findings(unavailable);
+    let report = assess_oms_5_0_1(&frame, &transport, record_availability, &record_outputs);
     DecodedOutput {
-        oms_5_0_1_checks: [
-            link.check(),
-            telegram::check_mode_zero_blocks(configuration),
-            oms_mode_check.finding(),
-            encoding,
-            unique,
-            date,
-        ],
+        record_availability,
+        oms_5_0_1_checks: report.findings,
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
         protocol: protocol.to_string(),
@@ -1467,7 +1499,7 @@ fn build_output(
         transport,
         application,
         security: SecurityOutput {
-            oms_5_0_1_security_mode_check: oms_mode_check,
+            oms_5_0_1_security_mode_check: report.security_mode,
             payload_protection: payload_protection.to_string(),
             mode: mode.map(|value| value.to_string()),
             mode_code: mode.map(|value| value.to_bits()),
@@ -1791,10 +1823,9 @@ fn fixed_record_outputs(
 fn collect_records(
     records: Option<&user_data::DataRecords<'_>>,
     identity: Option<&MeterIdentity>,
-) -> (Vec<RecordOutput>, Option<(usize, String)>, VolumeReadings) {
-    let mut volumes = VolumeReadings::default();
+) -> (Vec<RecordOutput>, Option<(usize, String)>) {
     let Some(records) = records else {
-        return (Vec::new(), None, volumes);
+        return (Vec::new(), None);
     };
     let mut output = Vec::new();
     let mut offset = 0usize;
@@ -1805,12 +1836,6 @@ fn collect_records(
         match item {
             Ok(record) => {
                 let size = record.raw_bytes().len();
-                if let Some(header) = record
-                    .raw_bytes()
-                    .get(..record.data_record_header.get_size())
-                {
-                    volumes.observe(header, output.len() + 1);
-                }
                 let mut parsed = record_output(output.len(), &record);
                 if let (Some(identity), [0x0f, tail @ ..]) = (identity, record.raw_bytes()) {
                     parsed.manufacturer_fields = manufacturer_fields(identity, tail);
@@ -1851,7 +1876,7 @@ fn collect_records(
             }
         }
     }
-    (output, first_error, volumes)
+    (output, first_error)
 }
 
 fn multical_energy_register(identity: &MeterIdentity, raw: &[u8]) -> Option<(&'static str, u32)> {
@@ -2898,6 +2923,30 @@ fn render_table(
 
     for record in &decoded.records {
         push_record_reading(&mut output, record, width, style);
+    }
+    output.push('\n');
+    push_text(
+        &mut output,
+        "",
+        "OMS 5.0.1 checks",
+        width,
+        style,
+        Cell::Label,
+    );
+    for finding in &decoded.oms_5_0_1_checks {
+        let status = match finding.status {
+            telegram::RuleStatus::Passed => "Passed",
+            telegram::RuleStatus::Failed => "Failed",
+            telegram::RuleStatus::CouldNotCheck => "Could not check",
+            telegram::RuleStatus::NotApplicable => "Not applicable",
+        };
+        let mut heading = format!("{status} · {}", finding.rule);
+        if let Some(number) = finding.record_number {
+            heading.push_str(&format!(" · record {number}"));
+        }
+        push_text(&mut output, "", &heading, width, style, Cell::Label);
+        let detail = format!("{} ({})", finding.detail, finding.reference);
+        push_text(&mut output, "  ", &detail, width, style, Cell::Text);
     }
     if !decoded.diagnostics.is_empty() {
         output.push_str("Diagnostics\n");
