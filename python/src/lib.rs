@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use m_bus_parser::{
-    decode_bytes, decode_data_records, decode_hex_bytes, render_bytes, render_hex, DecodeOptions,
-    OutputError, OutputFormat, RenderOptions,
+    decode_capture_bytes, decode_capture_hex, decode_data_records, decode_hex_bytes, render_bytes,
+    render_hex, DecodeOptions, OutputError, OutputFormat, RenderOptions,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -83,15 +83,19 @@ fn parse(
     key: Option<&Bound<'_, PyAny>>,
     include_enrichment: bool,
 ) -> PyResult<Py<PyAny>> {
-    let data = extract_bytes(data, "data")?;
-    let decoded = decode_bytes(
-        &data,
-        &DecodeOptions {
-            key: extract_key(key)?,
-            include_enrichment,
-        },
-    )
+    let options = DecodeOptions {
+        key: extract_key(key)?,
+        include_enrichment,
+    };
+    let mut decoded = if let Ok(text) = data.extract::<String>() {
+        decode_capture_hex(&text, &options)
+    } else {
+        decode_capture_bytes(&extract_bytes(data, "data")?, &options)
+    }
     .map_err(parser_error)?;
+    if let m_bus_parser::output::FragmentOutput::Single(frame) = &mut decoded {
+        frame.raw.input = None;
+    }
     let json = serde_json::to_string(&decoded)
         .map_err(|error| binding_error("render.serialization", error))?;
     json_to_python(py, &json)
@@ -146,19 +150,19 @@ fn render(
     width: Option<usize>,
     include_enrichment: bool,
 ) -> PyResult<String> {
-    let data = extract_bytes(data, "data")?;
     let format = OutputFormat::from_str(format).map_err(parser_error)?;
-    render_bytes(
-        &data,
-        format,
-        &RenderOptions {
-            decode: DecodeOptions {
-                key: extract_key(key)?,
-                include_enrichment,
-            },
-            table_width: width,
+    let options = RenderOptions {
+        decode: DecodeOptions {
+            key: extract_key(key)?,
+            include_enrichment,
         },
-    )
+        table_width: width,
+    };
+    if let Ok(text) = data.extract::<String>() {
+        render_hex(&text, format, &options)
+    } else {
+        render_bytes(&extract_bytes(data, "data")?, format, &options)
+    }
     .map_err(parser_error)
 }
 

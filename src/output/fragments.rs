@@ -212,6 +212,133 @@ pub enum FragmentOutput {
     Multiple(Vec<DecodedOutput>),
 }
 
+impl FragmentOutput {
+    pub(super) fn single(self) -> Result<DecodedOutput, OutputError> {
+        match self {
+            Self::Single(frame) => Ok(*frame),
+            Self::Multiple(_) => Err(invalid(
+                "multiple decoded frames; use decode_capture_hex or decode_capture_bytes",
+            )),
+        }
+    }
+}
+
+fn afl_frame(frame: &[u8]) -> bool {
+    link_payload(frame, &mut [0; 290]).is_ok_and(|(_, _, data)| is_fragment(data))
+}
+
+pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputError> {
+    let mut lines = input.lines().map(str::trim).filter(|line| !line.is_empty());
+    let (Some(first), Some(second)) = (lines.next(), lines.next()) else {
+        return Ok(None);
+    };
+    let first = decode_hex_bytes(first)?;
+    let numbered = matches!(first.as_slice(), [1, 2..=255, _, ..]);
+    if !numbered && !complete_wired_frame(&first) && !afl_frame(&first) {
+        return Ok(None);
+    }
+    let mut packets = vec![first];
+    for line in std::iter::once(second).chain(lines) {
+        if packets.len() == 255 {
+            return Err(invalid("too many packets"));
+        }
+        packets.push(decode_hex_bytes(line)?);
+    }
+    Ok(Some(packets))
+}
+
+fn wireless_afl_packet(data: &[u8]) -> Option<(&[u8], &[u8])> {
+    let length = usize::from(*data.first()?) + 1;
+    let body = length.checked_sub(10)?;
+    let header = data.get(..10)?;
+    let with_crc = data
+        .get(10..12)
+        .is_some_and(|crc| crc == wireless::crc16_en13757(header).to_be_bytes());
+    let size = if with_crc {
+        length + 2 + 2 * body.div_ceil(16)
+    } else {
+        length
+    };
+    let (packet, rest) = data.split_at_checked(size)?;
+    afl_frame(packet).then_some((packet, rest))
+}
+
+fn joined_wireless_afl(
+    data: &[u8],
+    options: &DecodeOptions,
+) -> Result<Option<FragmentOutput>, OutputError> {
+    let Some((first, mut rest)) = wireless_afl_packet(data) else {
+        return Ok(None);
+    };
+    if rest.is_empty() || wireless_afl_packet(rest).is_none() {
+        return Ok(None);
+    }
+    let mut packets = vec![first];
+    while !rest.is_empty() {
+        if packets.len() == 255 {
+            return Err(invalid("too many AFL fragments"));
+        }
+        let (packet, remaining) = wireless_afl_packet(rest)
+            .ok_or_else(|| invalid("incomplete wireless AFL stream; paste one packet per line"))?;
+        packets.push(packet);
+        rest = remaining;
+    }
+    decode_fragment_frames(&packets, options).map(Some)
+}
+
+pub(super) fn detect_bytes(
+    data: &[u8],
+    options: &DecodeOptions,
+) -> Result<Option<FragmentOutput>, OutputError> {
+    if let [1, 1, payload @ ..] = data {
+        let payload = acrios_meter_data(payload);
+        if wired_frame_size(payload).is_some() {
+            return decode_fragment_frames(&[data], options).map(Some);
+        }
+    }
+    if let [1, count @ 2..=255, ..] = data {
+        let count = usize::from(*count);
+        let min = data.len().div_ceil(count).max(3);
+        let max = (data.len().saturating_sub(3) / (count - 1)).min(255);
+        for width in min..=max {
+            if data.get(width..width + 2) != Some(&[2, count as u8]) {
+                continue;
+            }
+            let chunks: Vec<_> = data.chunks(width).collect();
+            if chunks.len() == count
+                && chunks
+                    .iter()
+                    .enumerate()
+                    .all(|(i, p)| p.len() > 2 && p.starts_with(&[i as u8 + 1, count as u8]))
+            {
+                match decode_fragment_frames(&chunks, options) {
+                    Ok(result) => return Ok(Some(result)),
+                    Err(error) if error.code() != "fragment.invalid" => return Err(error),
+                    Err(_) => continue,
+                }
+            }
+        }
+    }
+    if let Some(size) = wired_frame_size(data) {
+        if data.len() > size
+            && data
+                .get(..size)
+                .is_some_and(|first| wired::WiredFrame::try_from(first).is_ok())
+        {
+            match decode_wired_stream(data, options) {
+                Err(error)
+                    if error.code() == "fragment.invalid"
+                        && wireless::WirelessFrame::try_from(data).is_ok() =>
+                {
+                    return Ok(None)
+                }
+                result => return result.map(Some),
+            }
+        }
+    }
+    joined_wireless_afl(data, options)
+}
+
 pub fn decode_fragment_frames(
     packets: &[&[u8]],
     options: &DecodeOptions,
@@ -220,6 +347,9 @@ pub fn decode_fragment_frames(
         if wired_frame_size(stream).is_some_and(|size| stream.len() > size) {
             return decode_wired_stream(stream, options);
         }
+    }
+    if packets.len() > 1 && packets.iter().all(|packet| complete_wired_frame(packet)) {
+        return decode_wired_packets(packets, options);
     }
     if !matches!(packets.first(), Some([1, ..])) {
         return decode_afl_fragments(packets, options)
@@ -252,11 +382,15 @@ fn wired_frame_size(payload: &[u8]) -> Option<usize> {
     }
 }
 
+fn complete_wired_frame(bytes: &[u8]) -> bool {
+    wired_frame_size(bytes) == Some(bytes.len()) && wired::WiredFrame::try_from(bytes).is_ok()
+}
+
 fn decode_wired_stream(
     mut payload: &[u8],
     options: &DecodeOptions,
 ) -> Result<FragmentOutput, OutputError> {
-    let mut decoded = Vec::new();
+    let mut frames = Vec::new();
     while !payload.is_empty() {
         let size =
             wired_frame_size(payload).ok_or_else(|| invalid("invalid wired frame header"))?;
@@ -265,9 +399,24 @@ fn decode_wired_stream(
             .ok_or_else(|| invalid("truncated wired frame in ACRIOS data"))?;
         wired::WiredFrame::try_from(frame)
             .map_err(|_| invalid("invalid wired frame in ACRIOS data"))?;
-        decoded.push(decode_bytes(frame, options)?);
+        frames.push(frame);
         payload = rest;
     }
+    decode_wired_packets(&frames, options)
+}
+
+fn decode_wired_packets(
+    frames: &[&[u8]],
+    options: &DecodeOptions,
+) -> Result<FragmentOutput, OutputError> {
+    if frames.len() > 1 && frames.iter().any(|frame| afl_frame(frame)) {
+        return decode_afl_fragments(frames, options)
+            .map(|frame| FragmentOutput::Single(Box::new(frame)));
+    }
+    let mut decoded = frames
+        .iter()
+        .map(|frame| decode_bytes_with_keys(frame, options, None, None))
+        .collect::<Result<Vec<_>, _>>()?;
     if decoded.len() == 1 {
         let frame = decoded
             .pop()
@@ -298,7 +447,7 @@ pub(super) fn singleton_payload(packet: &[u8]) -> Result<Option<&[u8]>, OutputEr
     };
     if *count > 1 && length == repeat {
         return Err(invalid(
-            "supply all numbered ACRIOS packets to the fragment decoder",
+            "paste all numbered ACRIOS packets in order, one packet per line",
         ));
     }
     if *count != 1 || length != repeat {

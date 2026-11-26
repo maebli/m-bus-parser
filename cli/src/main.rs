@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use clap::{ColorChoice, Parser, Subcommand};
 use m_bus_parser::{
-    decode_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
+    decode_capture_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
     OutputFormat, RenderOptions,
 };
 use terminal_size::{terminal_size, Width};
@@ -269,7 +269,7 @@ fn render_auto_detected(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
-    match decode_hex(input, &options.decode) {
+    match decode_capture_hex(input, &options.decode) {
         Err(OutputError::InvalidFrame { .. }) => render_application_hex(input, format, options),
         _ => render_hex(input, format, options),
     }

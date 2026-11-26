@@ -25,7 +25,7 @@ def parse(
     *,
     key: Optional[KeyInput] = None,
     include_enrichment: bool = True,
-) -> Dict[str, Any]: ...
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]: ...
 def parse_fragments(
     frames: Sequence[DataInput],
     *,

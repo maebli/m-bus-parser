@@ -8,7 +8,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [features]
-parser = ["dep:m-bus-parser", "dep:serde-wasm-bindgen", "decryption-mode-13"]
+parser = ["dep:m-bus-parser", "m-bus-parser/oms-gen5", "dep:serde-wasm-bindgen", "decryption-mode-13"]
 decryption-mode-13 = ["m-bus-parser/decryption-mode-13"]
 syntax = ["dep:syntect"]
 

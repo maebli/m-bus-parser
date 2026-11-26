@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use js_sys::{Error as JsError, Reflect};
 use m_bus_parser::{
-    decode_hex, decode_hex_bytes, render_hex, DecodeOptions, OutputError, OutputFormat,
+    decode_capture_hex, decode_hex_bytes, render_hex, DecodeOptions, OutputError, OutputFormat,
     RenderOptions,
 };
 use wasm_bindgen::prelude::*;
@@ -69,7 +69,7 @@ pub fn m_bus_decode(
     key_hex: Option<String>,
     include_enrichment: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let decoded = decode_hex(
+    let decoded = decode_capture_hex(
         data,
         &decode_options(key_hex.as_deref(), include_enrichment).map_err(error_to_js)?,
     )

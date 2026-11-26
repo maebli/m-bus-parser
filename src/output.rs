@@ -366,6 +366,7 @@ pub struct TlsOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SecurityOutput {
+    pub oms_5_0_1_security_mode_check: OmsSecurityModeCheck,
     pub payload_protection: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
@@ -383,6 +384,56 @@ pub struct SecurityOutput {
     pub encrypted_payload_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decrypted_payload_hex: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OmsSecurityModeCheck {
+    pub result: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_profile: Option<&'static str>,
+}
+
+impl OmsSecurityModeCheck {
+    fn assess(
+        frame: &FrameOutput,
+        transport: &TransportOutput,
+        mode: Option<SecurityMode>,
+    ) -> Self {
+        let function = frame
+            .function
+            .as_deref()
+            .and_then(|value| value.split_whitespace().next());
+        let requires_zero = matches!(
+            function,
+            Some(
+                "REQ_UD1"
+                    | "REQ_UD2"
+                    | "SND_NKE"
+                    | "ACC_NR"
+                    | "ACC_DMD"
+                    | "ACK"
+                    | "NACK"
+                    | "CNF_IR"
+            )
+        );
+        let explicit_mode = mode
+            .filter(|_| transport.configuration.is_some())
+            .map(|mode| mode.to_bits());
+        let (result, candidate_profile) = match explicit_mode {
+            None => ("undetermined", None),
+            Some(n) if n != 0 && requires_zero => ("requires_mode_0", None),
+            Some(0) => ("listed", None),
+            Some(5) => ("listed", Some("A")),
+            Some(7) => ("listed", Some("B")),
+            Some(13) => ("listed", Some("C")),
+            Some(10) => ("listed", Some("D")),
+            Some(_) => ("not_listed", None),
+        };
+        Self {
+            result,
+            candidate_profile,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -501,15 +552,38 @@ impl SecurityContext {
 
 /// Decode a human-readable hexadecimal frame.
 pub fn decode_hex(input: &str, options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
+    decode_capture_hex(input, options)?.single()
+}
+
+pub fn decode_capture_hex(
+    input: &str,
+    options: &DecodeOptions,
+) -> Result<FragmentOutput, OutputError> {
+    if let Some(packets) = fragments::text_packets(input)? {
+        let frames = packets.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        return decode_fragment_frames(&frames, options);
+    }
     let bytes = decode_hex_bytes(input)?;
-    let mut decoded = decode_bytes(&bytes, options)?;
-    decoded.raw.input = Some(input.to_string());
+    let mut decoded = decode_capture_bytes(&bytes, options)?;
+    if let FragmentOutput::Single(frame) = &mut decoded {
+        frame.raw.input = Some(input.to_string());
+    }
     Ok(decoded)
 }
 
-/// Decode an already materialized frame.
+pub fn decode_capture_bytes(
+    data: &[u8],
+    options: &DecodeOptions,
+) -> Result<FragmentOutput, OutputError> {
+    match fragments::detect_bytes(data, options)? {
+        Some(decoded) => Ok(decoded),
+        None => decode_bytes_with_keys(data, options, None, None)
+            .map(|frame| FragmentOutput::Single(Box::new(frame))),
+    }
+}
+
 pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
-    decode_bytes_with_keys(data, options, None, None)
+    decode_capture_bytes(data, options)?.single()
 }
 
 #[cfg(feature = "decryption-mode-7")]
@@ -636,6 +710,14 @@ pub fn render_hex(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
+    if let Some(packets) = fragments::text_packets(input)? {
+        let frames = packets.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        return render_capture(
+            decode_fragment_frames(&frames, &options.decode)?,
+            format,
+            options,
+        );
+    }
     let bytes = decode_hex_bytes(input)?;
     render_bytes(&bytes, format, options)
 }
@@ -646,6 +728,9 @@ pub fn render_bytes(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
+    if let Some(capture) = fragments::detect_bytes(data, &options.decode)? {
+        return render_capture(capture, format, options);
+    }
     let frame = fragments::singleton_payload(data)?.unwrap_or(data);
     match format {
         OutputFormat::Xml => {
@@ -666,9 +751,87 @@ pub fn render_bytes(
             })
         }
         _ => {
-            let decoded = decode_bytes(data, &options.decode)?;
+            let decoded = decode_bytes_with_keys(data, &options.decode, None, None)?;
             render_decoded(&decoded, format, options)
         }
+    }
+}
+
+fn render_capture(
+    capture: FragmentOutput,
+    format: OutputFormat,
+    options: &RenderOptions,
+) -> Result<String, OutputError> {
+    let frames = match &capture {
+        FragmentOutput::Single(frame) => std::slice::from_ref(frame.as_ref()),
+        FragmentOutput::Multiple(frames) => frames.as_slice(),
+    };
+    match format {
+        OutputFormat::Json => {
+            return serde_json::to_string_pretty(&capture).map_err(|e| OutputError::Serialization {
+                format: "json",
+                message: e.to_string(),
+            })
+        }
+        OutputFormat::Yaml => {
+            return serde_norway::to_string(&capture).map_err(|e| OutputError::Serialization {
+                format: "yaml",
+                message: e.to_string(),
+            })
+        }
+        _ => {}
+    }
+    let mut parts = Vec::new();
+    for frame in frames {
+        let part = match format {
+            OutputFormat::Xml | OutputFormat::Annotated | OutputFormat::AnnotatedText => {
+                if frame.frame.kind == "reassembled" {
+                    return Err(OutputError::Rendering {
+                        code: "render.unsupported",
+                        message: "Select JSON or table for a reassembled AFL message".into(),
+                    });
+                }
+                render_bytes(
+                    &decode_hex_bytes(&frame.raw.original_frame_hex)?,
+                    format,
+                    options,
+                )?
+            }
+            _ => render_decoded(frame, format, options)?,
+        };
+        parts.push(part);
+    }
+    if parts.len() == 1 {
+        return Ok(parts.pop().unwrap_or_default());
+    }
+    match format {
+        OutputFormat::Csv => {
+            for part in parts.iter_mut().skip(1) {
+                if let Some(end) = part.find('\n') {
+                    part.drain(..=end);
+                }
+            }
+            Ok(parts.concat())
+        }
+        OutputFormat::Xml => {
+            let documents = parts
+                .iter()
+                .map(|part| {
+                    part.split_once("?>")
+                        .map_or(part.as_str(), |(_, body)| body.trim_start())
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "<MBusFrames>\n{}\n</MBusFrames>",
+                documents.join("\n")
+            ))
+        }
+        OutputFormat::Annotated => Ok(format!("[{}]", parts.join(",\n"))),
+        OutputFormat::Mermaid => Err(OutputError::Rendering {
+            code: "render.unsupported",
+            message: "Select one frame to render a Mermaid diagram".into(),
+        }),
+        _ => Ok(parts.join("\n")),
     }
 }
 
@@ -1316,6 +1479,7 @@ fn build_output(
         || record_error.is_some()
         || (security_context.encrypted && !security_context.decrypted);
 
+    let oms_mode_check = OmsSecurityModeCheck::assess(&frame, &transport, mode);
     DecodedOutput {
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
@@ -1325,6 +1489,7 @@ fn build_output(
         transport,
         application,
         security: SecurityOutput {
+            oms_5_0_1_security_mode_check: oms_mode_check,
             payload_protection: payload_protection.to_string(),
             mode: mode.map(|value| value.to_string()),
             mode_code: mode.map(|value| value.to_bits()),

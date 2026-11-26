@@ -1400,6 +1400,7 @@
         <textarea rows="2" cols="80"
             id="inputstring" aria-label="M-Bus payload" aria-describedby="input-help">68 3D 3D 68 08 01 72 00 51 20 02 82 4D 02 04 00 88 00 00 04 07 00 00 00 00 0C 15 03 00 00 00 0B 2E 00 00 00 0B 3B 00 00 00 0A 5A 88 12 0A 5E 16 05 0B 61 23 77 00 02 6C 8C 11 02 27 37 0D 0F 60 00 67 16</textarea>
 
+        <label id="capture-picker" hidden>Decoded frame <select id="capture-frame"></select></label>
         <div class="input-tools">
             <div id="meter-key-fields">
                 <label for="aeskey" id="aeskey-label" class="visually-hidden">Meter key <span class="key-help">(optional)</span></label>
@@ -1447,7 +1448,7 @@
             <details class="input-help" name="parser-disclosure">
                 <summary>Help</summary>
                 <div class="disclosure-content">
-                    <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
+                    <p class="key-help" id="input-help"><em>Accepts wired and wireless frames and joined wired streams. Paste ordered OMS or ACRIOS packets one per line. For a single payload, also tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
                     <p class="key-help" id="aeskey-help">Enter the key supplied with the meter. Leave empty to inspect the telegram headers.</p>
                     <p class="key-help">Keys stay in this browser tab and are excluded from share links and reports.</p>
                 </div>
@@ -1918,12 +1919,19 @@
             const security = decoded?.security;
             const mode = security?.mode_code;
             const identity = decoded?.meter?.identity;
-            const profile = mode === 7 ? ' · OMS profile B' : mode === 10 ? ' · OMS profile D' : mode === 13 ? ' · TLS 1.2' : '';
+            const check = security?.oms_5_0_1_security_mode_check;
+            const profile = check?.candidate_profile;
+            const checkLabel = {
+                listed: profile ? `Mode matches profile ${profile}` : 'Mode 0 is listed',
+                not_listed: 'Mode outside the listed profiles',
+                requires_mode_0: 'This link function requires mode 0',
+                undetermined: 'Undetermined · no explicit transport mode',
+            }[check?.result];
             const panel = document.getElementById('security-panel');
             panel.hidden = false;
             panel.dataset.tone = presentation.tone;
             document.getElementById('security-status').textContent = presentation.status;
-            document.getElementById('security-mode').textContent = mode ? `Mode ${mode}${profile}` : '';
+            document.getElementById('security-mode').textContent = [mode !== undefined ? `Mode ${mode}` : '', checkLabel ? `OMS 5.0.1 mode check · ${checkLabel}` : ''].filter(Boolean).join(' · ');
             document.getElementById('security-message').textContent = presentation.message;
             document.getElementById('detected-meter').textContent = identity
                 ? [identity.manufacturer_code, identity.id, identity.device_type].filter(Boolean).join(' · ')
@@ -1932,6 +1940,7 @@
             fields.replaceChildren();
             const details = [
                 ['Mode', mode !== undefined ? `${mode} · ${security.mode}` : 'Not reported'],
+                ['OMS 5.0.1 · Table 43, security mode only', checkLabel],
                 ['Authentication', presentation.status],
                 ['Configuration', decoded?.transport?.configuration?.raw],
             ];
@@ -2097,6 +2106,11 @@
 
             let lastAttempt = null;
             let inspectedTelegram = null;
+            let captureFrames = [];
+            let captureInput;
+            const capturePicker = document.getElementById('capture-picker');
+            const captureFrame = document.getElementById('capture-frame');
+            captureFrame.addEventListener('change', () => parseInput(currentFormat));
             let hasDecoded = false;
             let renderGeneration = 0;
             let inspectionTimer;
@@ -2139,6 +2153,11 @@
             function inspectCurrentTelegram() {
                 clearTimeout(inspectionTimer);
                 inspectedTelegram = null;
+                const selected = captureInput === telegramInput.value ? captureFrame.selectedIndex : 0;
+                captureInput = telegramInput.value;
+                captureFrames = [];
+                capturePicker.hidden = true;
+                captureFrame.replaceChildren();
                 if (!telegramInput.value.trim()) {
                     document.getElementById('security-panel').hidden = true;
                     document.getElementById('security-details').hidden = true;
@@ -2147,7 +2166,19 @@
                     document.getElementById('detected-meter').textContent = 'Meter and security mode are detected automatically';
                 } else {
                     try {
-                        inspectedTelegram = inspectTelegram(parserApi, normalizeInput(telegramInput.value, inputFormat.value));
+                        const decoded = inspectTelegram(parserApi, normalizeInput(telegramInput.value, inputFormat.value));
+                        if (Array.isArray(decoded)) {
+                            captureFrames = decoded;
+                            decoded.forEach((frame, i) => {
+                                const id = frame.meter.identity?.id || frame.frame.kind;
+                                captureFrame.add(new Option(`${i + 1} of ${decoded.length} · ${id}`, String(i)));
+                            });
+                            captureFrame.selectedIndex = selected >= 0 && selected < decoded.length ? selected : 0;
+                            capturePicker.hidden = false;
+                            inspectedTelegram = decoded[captureFrame.selectedIndex];
+                        } else {
+                            inspectedTelegram = decoded;
+                        }
                         showSecurity(inspectedTelegram);
                     } catch (error) {
                         showSecurity(null, error);
@@ -2408,7 +2439,9 @@
                 }
 
                 try {
-                    const normalizedInput = normalizeInput(inputString, inputFormat.value);
+                    const selectedFrame = captureFrames[captureFrame.selectedIndex];
+                    const sourceFrame = selectedFrame || (isTls && inspectedTelegram?.raw.fragment_frames_hex?.length ? inspectedTelegram : null);
+                    const normalizedInput = sourceFrame?.raw.original_frame_hex || normalizeInput(inputString, inputFormat.value);
                     const table = format === 'table' ? prepareTableView(outputContainer) : null;
                     const width = table ? measureTableWidth(table) : undefined;
                     if (table) {
