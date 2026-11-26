@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Monthly inverse compact profiles with signed BCD differences now show the
+  historical readings when the telegram includes the matching base reading.
+  The ZENNER water-meter example contains 14 monthly readings.
 - Mode 5 payloads now decrypt only the number of 16-byte blocks given in bits
   4 to 7 of the configuration field. The rest of the payload is plaintext and
   is passed through unchanged. Before, every full block was decrypted, so a

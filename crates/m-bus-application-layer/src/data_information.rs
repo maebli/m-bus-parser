@@ -274,7 +274,7 @@ impl TryFrom<&DataInformationBlock<'_>> for DataInformation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize), serde(into = "String"))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TextUnit<'a>(&'a [u8]);
+pub struct TextUnit<'a>(pub(crate) &'a [u8]);
 impl<'a> TextUnit<'a> {
     #[must_use]
     pub const fn new(input: &'a [u8]) -> Self {
@@ -372,6 +372,7 @@ pub enum SingleEveryOrInvalid<T> {
 #[non_exhaustive]
 pub enum DataType<'a> {
     Text(TextUnit<'a>),
+    InverseCompactProfile(InverseCompactProfile<'a>),
     Number(f64),
     LossyNumber(f64),
     Date(
@@ -407,6 +408,41 @@ pub enum DataType<'a> {
         &'a [u8],
     ),
 }
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct InverseCompactProfile<'a> {
+    pub bytes: &'a [u8],
+    pub(crate) msb_first: bool,
+}
+
+impl InverseCompactProfile<'_> {
+    pub fn monthly_bcd_differences(&self) -> Option<impl Iterator<Item = Option<i64>> + '_> {
+        let [control, 0xfe, samples @ ..] = self.bytes else {
+            return None;
+        };
+        let width = match control {
+            0xf9..=0xfc => usize::from(*control - 0xf8),
+            0xfe => 6,
+            _ => return None,
+        };
+        if !samples.len().is_multiple_of(width) {
+            return None;
+        }
+        Some(samples.chunks_exact(width).map(|sample| {
+            let (magnitude, negative) = if self.msb_first {
+                bcd_integer_magnitude(sample.iter())
+            } else {
+                bcd_integer_magnitude(sample.iter().rev())
+            }
+            .ok()?;
+            let value = i64::try_from(magnitude).ok()?;
+            Some(if negative { -value } else { value })
+        }))
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(PartialEq, Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -446,6 +482,18 @@ impl std::fmt::Display for Data<'_> {
                 }
                 DataType::Time(seconds, minutes, hours) => {
                     write!(f, "{}:{}:{}", hours, minutes, seconds)
+                }
+                DataType::InverseCompactProfile(profile) => {
+                    if let Some(differences) = profile.monthly_bcd_differences() {
+                        let values: Vec<_> = differences
+                            .map(|value| {
+                                value.map_or_else(|| "invalid".to_string(), |n| n.to_string())
+                            })
+                            .collect();
+                        write!(f, "Monthly differences: {}", values.join(", "))
+                    } else {
+                        write!(f, "Inverse compact profile: {:02X?}", profile.bytes)
+                    }
                 }
                 DataType::Text(text_unit) => {
                     let text: String = (*text_unit).into();
@@ -1116,6 +1164,29 @@ impl std::fmt::Display for DataFieldCoding {
 mod tests {
 
     use super::*;
+    #[test]
+    fn monthly_bcd_profile_respects_sample_width_sign_and_byte_order() {
+        let cases: &[(&[u8], i64, i64)] = &[
+            (&[0xf9, 0xfe, 0xf1], -1, -1),
+            (&[0xfa, 0xfe, 0x12, 0x34], 3412, 1234),
+            (&[0xfb, 0xfe, 0x12, 0x34, 0x56], 563412, 123456),
+            (&[0xfc, 0xfe, 0x12, 0x34, 0x56, 0x78], 78563412, 12345678),
+            (
+                &[0xfe, 0xfe, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12],
+                129078563412,
+                123456789012,
+            ),
+        ];
+        for &(bytes, little, big) in cases {
+            for (msb_first, expected) in [(false, little), (true, big)] {
+                let profile = InverseCompactProfile { bytes, msb_first };
+                let mut samples = profile.monthly_bcd_differences().unwrap();
+                assert_eq!(samples.next(), Some(Some(expected)));
+                assert_eq!(samples.next(), None);
+            }
+        }
+    }
+
     #[test]
     fn storage_number_uses_consecutive_bits_after_the_dif() {
         // DIF bit 6 is bit 0; DIFE nibbles then contribute bits 1..=40.
