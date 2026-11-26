@@ -416,17 +416,36 @@
         #security-fields { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 4px 18px; margin: 8px 0 0; }
         #security-fields dt { color: #59636e; }
         #security-fields dd { margin: 0; }
-        .oms-report { padding: 0 16px 16px; }
-        .oms-report h3 { margin: 8px 0 14px; font-size: 1rem; }
-        .oms-report a { color: #0969da; }
+        .output-modes { display: flex; gap: 12px; padding: 0 12px; border-bottom: 1px solid #d1d9e0; }
+        .output-modes button { padding: 9px 4px; background: transparent; border: 0; border-bottom: 2px solid transparent; font: inherit; font-weight: 600; color: inherit; cursor: pointer; }
+        .output-modes button[aria-pressed="true"] { border-bottom-color: #0969da; }
+        body.dark-mode .output-modes { border-color: #3d444d; }
+        body.dark-mode .output-modes button[aria-pressed="true"] { border-color: #4493f8; }
+
+        .oms-report { --rule-line: #d1d9e0; --rule-muted: #59636e; --rule-header: #f6f8fa; padding: 8px clamp(8px, 2vw, 20px) 18px; }
+        body.dark-mode .oms-report { --rule-line: #3d444d; --rule-muted: #a4aeb9; --rule-header: #212830; }
+        .oms-report h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 14px; font-size: 1rem; }
+        .oms-report h3 small { font-size: 0.8rem; font-weight: 400; color: var(--rule-muted); }
+        .oms-report a { color: #0969da; text-underline-offset: 3px; }
         body.dark-mode .oms-report a { color: #79c0ff; }
-        #oms-view-picker { margin: 4px 16px 8px; }
-        #oms-findings { margin: 0; }
-        #oms-findings dt[data-status="not_applicable"], #oms-findings dt[data-status="not_applicable"] + dd { color: #6e7781; }
-        body.dark-mode #oms-findings dt[data-status="not_applicable"], body.dark-mode #oms-findings dt[data-status="not_applicable"] + dd { color: #929ba5; }
-        #oms-findings dt { font-weight: 600; }
-        #oms-findings dd { margin: 2px 0 10px; }
-        #oms-findings dd:last-child { margin-bottom: 0; }
+        .oms-report table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
+        .oms-report th, .oms-report td { padding: 10px 12px; border-bottom: 1px solid var(--rule-line); vertical-align: top; }
+        .oms-report thead { background: var(--rule-header); color: var(--rule-muted); font-size: 0.78rem; }
+        .oms-report tbody th { font-weight: 600; }
+        .oms-report .rule-detail, .oms-report .rule-reference { color: var(--rule-muted); font-size: 0.8rem; font-weight: 400; }
+        .oms-report .rule-detail { display: block; margin-top: 3px; }
+        .oms-report .inline-reference { display: none; }
+        .oms-report [data-status="not_applicable"] { color: var(--rule-muted); }
+        .oms-status { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; background: var(--rule-header); }
+        [data-status="passed"] .oms-status { color: #116329; background: #dafbe1; }
+        [data-status="failed"] .oms-status { color: #a31721; background: #ffebe9; }
+        body.dark-mode [data-status="passed"] .oms-status { color: #7ee787; background: #123622; }
+        body.dark-mode [data-status="failed"] .oms-status { color: #ffaaa5; background: #482125; }
+        @media (max-width: 600px) {
+            .oms-report th, .oms-report td { padding: 8px 4px; }
+            .oms-report .reference-column { display: none; }
+            .oms-report .inline-reference { display: block; margin-top: 4px; }
+        }
         .output-toolbar { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; }
         .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
         .result-views { min-width: 0; }
@@ -435,7 +454,7 @@
         .result-views input[type="button"]:hover { background: #eff2f5; }
         .result-views input[type="button"][aria-pressed="true"] { background: #ddf4ff; border-color: #0969da; color: #0550ae; box-shadow: none; }
         .result-views input[type="button"]:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
-        #oms-view-picker[hidden],
+        .result-views .parse-actions[hidden],
         #copy_output[hidden],
         #download_output[hidden],
         #security-panel[hidden] { display: none; }
@@ -711,10 +730,6 @@
             font: 0.875rem/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
-        body { --oms-pass: #116329; --oms-fail: #b42318; }
-        body.dark-mode { --oms-pass: #7ee787; --oms-fail: #ff8182; }
-        #oms-findings dt[data-status="passed"] { color: var(--oms-pass); font-weight: 700; }
-        #oms-findings dt[data-status="failed"] { color: var(--oms-fail); font-weight: 700; }
         .text-table .table-label { color: #065e78; }
         .text-table .table-reading { color: #116329; }
         .text-table .table-bytes { color: #6639a6; }
@@ -1764,18 +1779,27 @@
     <link rel="stylesheet" href="./manufacturer-icons.css">
     <link rel="stylesheet" href="./products/view.css">
     <div id="output-container">
+        <div class="output-modes" role="group" aria-label="Operation">
+            <button type="button" id="mode-parse" aria-controls="parse-formats" aria-pressed="true">Parse</button>
+            <button type="button" id="mode-oms" aria-controls="oms-formats" aria-pressed="false">OMS check</button>
+        </div>
         <div class="output-toolbar">
             <div class="result-views">
-                <div class="parse-actions" role="group" aria-label="Output format">
+                <div id="parse-formats" class="parse-actions" role="group" aria-label="Parse format">
                     <input id="parse_table" type="button" value="Table" aria-pressed="true" />
                     <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
                     <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
                     <input id="parse_product" type="button" value="3D" aria-pressed="false" />
-                    <input id="parse_oms" type="button" value="OMS" aria-pressed="false" />
                     <input id="parse_json" type="button" value="JSON" aria-pressed="false" />
                     <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
                     <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
+                </div>
+                <div id="oms-formats" class="parse-actions" role="group" aria-label="OMS check format" hidden>
+                    <input id="parse_oms" type="button" value="Table" aria-pressed="false" />
+                    <input id="parse_oms-json" type="button" value="JSON" aria-pressed="false" />
+                    <input id="parse_oms-csv" type="button" value="CSV" aria-pressed="false" />
+                    <input id="parse_oms-xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
             <div class="output-actions">
@@ -1794,14 +1818,15 @@
                 </a>
             </div>
         </div>
-        <label id="oms-view-picker" hidden>OMS report
-            <select id="oms-format">
-                <option value="oms">Overview</option>
-                <option value="oms-json">JSON</option>
-                <option value="oms-xml">XML</option>
-                <option value="oms-csv">CSV</option>
-            </select>
-        </label>
+        <template id="oms-table-template">
+            <section class="oms-report">
+                <h3 id="oms-report-heading"><a target="_blank" rel="noopener noreferrer"></a><small></small></h3>
+                <table aria-labelledby="oms-report-heading">
+                    <thead><tr><th scope="col">Result</th><th scope="col">Rule</th><th scope="col" class="reference-column">Reference</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+        </template>
         <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
         <template id="parser-note-template">
@@ -1991,30 +2016,38 @@
         }
 
         function renderOmsReport(container, report) {
-            const section = document.createElement('section');
-            section.className = 'oms-report';
-            const heading = document.createElement('h3');
-            const link = document.createElement('a');
+            const view = document.getElementById('oms-table-template').content.cloneNode(true);
+            const link = view.querySelector('h3 a');
             link.href = report.specification;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
             link.textContent = `OMS ${report.version} · ${report.passed}/${report.assessed} passed`;
-            heading.append(link);
-            if (report.unchecked) heading.append(` · ${report.unchecked} could not be checked`);
-            const list = document.createElement('dl');
-            list.id = 'oms-findings';
+            if (report.unchecked) view.querySelector('h3 small').textContent = `${report.unchecked} could not be checked`;
+
             const labels = { passed: 'Passed', failed: 'Failed', could_not_check: 'Could not check', not_applicable: 'Not applicable' };
-            section.append(heading, list);
-            container.replaceChildren(section);
+            const body = view.querySelector('tbody');
             for (const finding of report.findings) {
-                const title = document.createElement('dt');
-                const detail = document.createElement('dd');
-                const record = finding.record_number ? ` · record ${finding.record_number}` : '';
-                title.dataset.status = finding.status;
-                title.textContent = `${finding.rule} · ${labels[finding.status]}`;
-                detail.textContent = `${finding.detail} (${finding.reference}${record})`;
-                list.append(title, detail);
+                const row = body.insertRow();
+                row.dataset.status = finding.status;
+                const status = document.createElement('span');
+                status.className = 'oms-status';
+                status.textContent = labels[finding.status];
+                row.insertCell().append(status);
+
+                const rule = document.createElement('th');
+                rule.scope = 'row';
+                rule.textContent = finding.rule;
+                const detail = document.createElement('span');
+                detail.className = 'rule-detail';
+                detail.textContent = finding.record_number ? `Record ${finding.record_number} · ${finding.detail}` : finding.detail;
+                const reference = document.createElement('span');
+                reference.className = 'rule-reference inline-reference';
+                reference.textContent = finding.reference;
+                rule.append(detail, reference);
+                row.append(rule);
+                const citation = row.insertCell();
+                citation.className = 'rule-reference reference-column';
+                citation.textContent = finding.reference;
             }
+            container.replaceChildren(view);
         }
 
         function showSecurity(decoded, error) {
@@ -2219,19 +2252,28 @@
             const decodeButton = document.getElementById('decode-button');
             const parserApi = { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
             decodeButton.disabled = false;
-            const omsFormat = document.getElementById('oms-format');
             const isOmsView = format => ['oms', 'oms-json', 'oms-xml', 'oms-csv'].includes(format);
-            omsFormat.addEventListener('change', () => selectFormat(omsFormat.value));
+            const lastFormat = { parse: 'table', oms: 'oms' };
+            const formatButtons = document.querySelectorAll('.parse-actions input');
+            for (const button of formatButtons) {
+                button.addEventListener('click', () => selectFormat(button.id.slice('parse_'.length)));
+            }
+            for (const mode of ['parse', 'oms']) {
+                document.getElementById(`mode-${mode}`).addEventListener('click', () => selectFormat(lastFormat[mode]));
+            }
 
             function setOutputView(format) {
                 currentFormat = format;
-                const oms = isOmsView(format);
-                if (oms) omsFormat.value = format;
-                document.getElementById('oms-view-picker').hidden = !oms;
-                const selected = `parse_${oms ? 'oms' : format}`;
-                document.querySelectorAll('.parse-actions input').forEach(button => {
-                    button.setAttribute('aria-pressed', String(button.id === selected));
-                });
+                const selectedMode = isOmsView(format) ? 'oms' : 'parse';
+                lastFormat[selectedMode] = format;
+                for (const mode of ['parse', 'oms']) {
+                    const active = mode === selectedMode;
+                    document.getElementById(`mode-${mode}`).setAttribute('aria-pressed', String(active));
+                    document.getElementById(`${mode}-formats`).hidden = !active;
+                }
+                for (const button of formatButtons) {
+                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
+                }
             }
 
             function updateDecodeButton() {
@@ -2399,38 +2441,6 @@
             } else {
                 inspectCurrentTelegram();
             }
-
-            document.getElementById('parse_json').addEventListener('click', () => {
-                selectFormat("json");
-            });
-
-            document.getElementById('parse_yaml').addEventListener('click', () => {
-                selectFormat("yaml");
-            });
-
-            document.getElementById('parse_table').addEventListener('click', () => {
-                selectFormat("table");
-            });
-
-            document.getElementById('parse_csv').addEventListener('click', () => {
-                selectFormat("csv");
-            });
-
-            document.getElementById('parse_oms').addEventListener('click', () => selectFormat(omsFormat.value));
-
-            document.getElementById('parse_product').addEventListener('click', () => selectFormat('product'));
-
-            document.getElementById('parse_mermaid').addEventListener('click', () => {
-                selectFormat("mermaid");
-            });
-
-            document.getElementById('parse_xml').addEventListener('click', () => {
-                selectFormat("xml");
-            });
-
-            document.getElementById('parse_hexview').addEventListener('click', () => {
-                selectFormat("hexview");
-            });
 
             document.getElementById('copy_output').addEventListener('click', () => {
                 writeClipboard(window._lastRawOutput || '');
