@@ -274,6 +274,32 @@ pub fn assess_telegram<H: AsRef<[u8]>>(
                 &mut findings,
             );
         }
+        if matches!(
+            link,
+            Link::Wireless(0x44 | 0x08 | 0x18 | 0x28 | 0x38) | Link::Wired(Function::RspUd { .. })
+        ) && configuration
+            .is_some_and(|cf| cf.raw() >> 14 == 0 && fields.content_index(cf) == Some(3))
+        {
+            readings.consumer_information(
+                fields.device_type,
+                unavailable.is_none() && readings.fully_mapped(),
+                &mut findings,
+            );
+            if matches!(link, Link::Wireless(0x44)) {
+                findings.push(RuleFinding {
+                    rule: "Consumer information key identifier",
+                    reference: "Annex M, Tables M.25–M.26",
+                    source_url: annex_m!(37, 492),
+                    status: match fields.configuration_extension.map(|ext| ext & 15) {
+                        Some(0 | 8) => Passed,
+                        Some(_) => Failed,
+                        None => CouldNotCheck,
+                    },
+                    detail: "Consumer information pushes require key ID 0 for the gateway or 8 for the display.",
+                    record_number: None,
+                });
+            }
+        }
         readings.finish(unavailable, &mut findings);
     } else if matches!(
         fields.application_ci.or(fields.outer_ci),
