@@ -867,6 +867,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "m-bus-oms-rules"
+version = "0.7.4"
+dependencies = [
+ "m-bus-core",
+ "serde",
+]
+
+[[package]]
 name = "m-bus-parser"
 version = "0.7.4"
 dependencies = [
@@ -879,6 +887,7 @@ dependencies = [
  "m-bus-application-layer",
  "m-bus-core",
  "m-bus-manufacturer",
+ "m-bus-oms-rules",
  "prettytable-rs",
  "serde",
  "serde-xml-rs",

@@ -1,0 +1,14 @@
+[package]
+name = "m-bus-oms-rules"
+version = "0.7.4"
+edition = "2024"
+description = "OMS telegram rule checks for M-Bus"
+license = "MIT"
+repository = "https://github.com/maebli/m-bus-parser"
+
+[features]
+serde = ["dep:serde"]
+
+[dependencies]
+m-bus-core = { version = "0.7.4", path = "../m-bus-core" }
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }

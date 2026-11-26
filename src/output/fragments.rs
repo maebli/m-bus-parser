@@ -532,6 +532,7 @@ fn decode_afl_fragments(
             address,
             control_field: None,
         },
+        None,
         &application,
         &application,
         false,

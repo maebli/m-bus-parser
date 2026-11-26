@@ -161,6 +161,7 @@ fn render_application_with_session(
             address: None,
             control_field: None,
         },
+        None,
         &data,
         &data,
         false,

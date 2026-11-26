@@ -186,6 +186,7 @@ jobs:
           }
 
           publish_crate m-bus-core crates/m-bus-core/Cargo.toml
+          publish_crate m-bus-oms-rules crates/m-bus-oms-rules/Cargo.toml
           publish_crate wired-mbus-link-layer crates/wired-mbus-link-layer/Cargo.toml
           publish_crate wireless-mbus-link-layer crates/wireless-mbus-link-layer/Cargo.toml
           publish_crate m-bus-application-layer crates/m-bus-application-layer/Cargo.toml

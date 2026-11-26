@@ -7,7 +7,8 @@
 use core::str::FromStr;
 use std::fmt;
 
-use m_bus_core::SecurityMode;
+use m_bus_core::{Function, SecurityMode};
+pub use m_bus_oms_rules::OmsSecurityModeCheck;
 use serde::Serialize;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use wired_mbus_link_layer as wired;
@@ -384,56 +385,6 @@ pub struct SecurityOutput {
     pub encrypted_payload_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decrypted_payload_hex: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct OmsSecurityModeCheck {
-    pub result: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub candidate_profile: Option<&'static str>,
-}
-
-impl OmsSecurityModeCheck {
-    fn assess(
-        frame: &FrameOutput,
-        transport: &TransportOutput,
-        mode: Option<SecurityMode>,
-    ) -> Self {
-        let function = frame
-            .function
-            .as_deref()
-            .and_then(|value| value.split_whitespace().next());
-        let requires_zero = matches!(
-            function,
-            Some(
-                "REQ_UD1"
-                    | "REQ_UD2"
-                    | "SND_NKE"
-                    | "ACC_NR"
-                    | "ACC_DMD"
-                    | "ACK"
-                    | "NACK"
-                    | "CNF_IR"
-            )
-        );
-        let explicit_mode = mode
-            .filter(|_| transport.configuration.is_some())
-            .map(|mode| mode.to_bits());
-        let (result, candidate_profile) = match explicit_mode {
-            None => ("undetermined", None),
-            Some(n) if n != 0 && requires_zero => ("requires_mode_0", None),
-            Some(0) => ("listed", None),
-            Some(5) => ("listed", Some("A")),
-            Some(7) => ("listed", Some("B")),
-            Some(13) => ("listed", Some("C")),
-            Some(10) => ("listed", Some("D")),
-            Some(_) => ("not_listed", None),
-        };
-        Self {
-            result,
-            candidate_profile,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1204,7 +1155,7 @@ fn build_wired_output(
             data,
         } => (
             "long",
-            Some(frame_function_name(function)),
+            Some(*function),
             Some(address.to_string()),
             Some(*data),
         ),
@@ -1214,16 +1165,13 @@ fn build_wired_output(
             data,
         } => (
             "control",
-            Some(frame_function_name(function)),
+            Some(*function),
             Some(address.to_string()),
             Some(*data),
         ),
-        wired::WiredFrame::ShortFrame { function, address } => (
-            "short",
-            Some(frame_function_name(function)),
-            Some(address.to_string()),
-            None,
-        ),
+        wired::WiredFrame::ShortFrame { function, address } => {
+            ("short", Some(*function), Some(address.to_string()), None)
+        }
         wired::WiredFrame::SingleCharacter { .. } => ("single_character", None, None, None),
         _ => ("unknown", None, None, None),
     };
@@ -1232,10 +1180,11 @@ fn build_wired_output(
         "wired",
         FrameOutput {
             kind: kind.to_string(),
-            function,
+            function: function.as_ref().map(frame_function_name),
             address,
             control_field: None,
         },
+        function,
         original,
         original,
         false,
@@ -1304,6 +1253,7 @@ fn build_wireless_output(
             address: None,
             control_field: Some(format!("{:02X}", parsed.frame.control_field)),
         },
+        parsed.frame.function,
         original,
         normalized,
         format_a_crc_stripped,
@@ -1321,6 +1271,7 @@ fn build_wireless_output(
 fn build_output(
     protocol: &str,
     frame: FrameOutput,
+    function: Option<Function>,
     original: &[u8],
     normalized: &[u8],
     format_a_crc_stripped: bool,
@@ -1479,7 +1430,8 @@ fn build_output(
         || record_error.is_some()
         || (security_context.encrypted && !security_context.decrypted);
 
-    let oms_mode_check = OmsSecurityModeCheck::assess(&frame, &transport, mode);
+    let explicit_mode = mode.filter(|_| transport.configuration.is_some());
+    let oms_mode_check = OmsSecurityModeCheck::assess_5_0_1(function, explicit_mode);
     DecodedOutput {
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
