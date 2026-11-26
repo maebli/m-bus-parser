@@ -167,3 +167,109 @@ fn consumer_conditional_data_needs_evidence_of_the_device_function() {
         assert_eq!(outcome(&known, rule), Some("failed"));
     }
 }
+
+#[test]
+fn taf7_checks_registers_and_timing_only_for_a_declared_use_case() {
+    use m_bus_oms_rules::readings::Taf7Parameters;
+    let at = |header: &'static [u8], data: &'static [u8], storage| {
+        let mut reading = record(header, data).unwrap();
+        reading.storage = storage;
+        Some(reading)
+    };
+    let records = || {
+        vec![
+            at(&[0xcd, 1, 0x93, 0x13], &[4, 0x41, 6, 1, 2], 3),
+            at(&[0xc4, 1, 0x6d], &[0x80, 0, 0, 0], 3),
+            at(&[0xc1, 1, 0x74], &[2], 3),
+            at(&[0xc1, 1, 0x13], &[8], 3),
+        ]
+    };
+    let parse = |parameters, records, availability| {
+        telegram::assess_telegram_with_taf7(
+            Link::Wireless(0x44),
+            None,
+            LayerFields::default(),
+            availability,
+            records,
+            parameters,
+        )
+    };
+    let parameters = Taf7Parameters {
+        measuring_period_ms: Some(3000),
+        acceptance_window_ms: Some(9000),
+        registration_period_ms: Some(900_000),
+    };
+    let all = parse(Some(parameters), records(), RecordAvailability::Complete);
+    for rule in [
+        "TAF7 profile direction",
+        "TAF7 profile storage number",
+        "TAF7 differential base value",
+        "TAF7 base time",
+        "TAF7 actuality duration",
+        "TAF7 profile interval and measuring period",
+        "TAF7 profile interval and acceptance window",
+        "TAF7 measuring period and acceptance window",
+        "TAF7 acceptance window and registration period",
+    ] {
+        assert_eq!(outcome(&all, rule), Some("passed"), "{rule}");
+    }
+    let mut wrong_register = records();
+    wrong_register[3].as_mut().unwrap().tariff = 1;
+    let wrong = parse(
+        Some(Taf7Parameters {
+            measuring_period_ms: Some(4000),
+            ..parameters
+        }),
+        wrong_register,
+        RecordAvailability::Complete,
+    );
+    assert_eq!(
+        outcome(&wrong, "TAF7 differential base value"),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(&wrong, "TAF7 profile interval and measuring period"),
+        Some("failed")
+    );
+    let no_context = parse(None, records(), RecordAvailability::Complete);
+    assert_eq!(outcome(&no_context, "TAF7 profile direction"), None);
+    let encrypted = parse(
+        Some(Default::default()),
+        vec![],
+        RecordAvailability::Encrypted,
+    );
+    assert_eq!(
+        outcome(&encrypted, "TAF7 inverse compact profile"),
+        Some("could_not_check")
+    );
+}
+
+#[test]
+fn compact_profile_checks_ignore_primary_vif_and_validate_complete_elements() {
+    let collision = report(
+        7,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![
+            record(&[1, 0x13], &[0]),
+            record(&[1, 0xfd, 0xfd, 0x13], &[0]),
+        ],
+    );
+    assert_eq!(outcome(&collision, "Compact profile element length"), None);
+    let bad = report(
+        7,
+        0x0702,
+        0x10,
+        RecordAvailability::Complete,
+        vec![record(&[0xd, 0x93, 0x93, 0x20], &[3, 2, 6, 1])],
+    );
+    assert_eq!(
+        outcome(&bad, "Compact profile modifier position"),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(&bad, "Compact profile element length"),
+        Some("failed")
+    );
+}

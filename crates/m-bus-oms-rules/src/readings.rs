@@ -3,6 +3,16 @@ use alloc::{collections::BTreeSet, vec::Vec};
 use crate::catalog::{identify, meter_tag};
 use crate::telegram::{RuleFinding, RuleStatus};
 
+mod profiles;
+
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+pub struct Taf7Parameters {
+    pub measuring_period_ms: Option<u64>,
+    pub registration_period_ms: Option<u64>,
+    pub acceptance_window_ms: Option<u64>,
+}
+
 pub(super) struct Tag(pub &'static str, pub Coding);
 
 #[derive(Clone, Copy)]
@@ -94,6 +104,8 @@ pub(super) struct Readings {
     due_readings: Vec<(usize, u64)>,
     due_dates: BTreeSet<u64>,
     sensor_types: BTreeSet<u8>,
+    profiles: profiles::Profiles,
+    pub(super) taf7: Option<Taf7Parameters>,
     first_duplicate: Option<usize>,
     unknown: Option<usize>,
 }
@@ -113,14 +125,32 @@ impl Readings {
         };
         let dif = header[0];
         let coding = dif & 15;
+        let vib = &header[end + 1..];
+        if self.profiles.observe(&reading, end, self.taf7, n, results) {
+            return;
+        }
         if let Some(valid) = reading.profile_time {
-            results.push(RuleFinding {rule: "Compact profile base time", reference: "Annex R, R.2.2", source_url: annex_r!(9, 331),
-                status: if valid { RuleStatus::Passed } else { RuleStatus::Failed },
-                detail: "The base time must decode to a timestamp or a transmission-relative offset.",
+            let invalid_sentinel = reading
+                .data
+                .as_ref()
+                .split_last()
+                .and_then(|(flags, bytes)| {
+                    let (_, ticks) = bytes.split_first()?;
+                    let (high, low) = ticks.split_last()?;
+                    let zone = (flags << 3) as i8 >> 3;
+                    Some(
+                        (*high == 0x80 && low.iter().all(|byte| *byte == 0))
+                            && (zone == -16 || (-12..=15).contains(&zone)),
+                    )
+                })
+                == Some(true);
+            results.push(RuleFinding {rule: "Compact profile base time", reference: "Annex G, G.2", source_url: primary!(105, 499),
+                status: if valid || invalid_sentinel { RuleStatus::Passed } else { RuleStatus::Failed },
+                detail: "The base time must use a supported time zone or transmission-relative offset. The invalid time sentinel is accepted.",
                 record_number: Some(n)});
             return;
         }
-        let vib = &header[end + 1..];
+
         if let [0xfd, descriptor @ (0x20..=0x22 | 0x24..=0x29)] = vib {
             let interval = *descriptor >= 0x24;
             let address_valid = reading.tariff == 0
@@ -666,6 +696,10 @@ impl Readings {
                 detail: "The record does not match a supported Annex B reading. Other EN 13757 data points are permitted.",
                 record_number: Some(n),
             });
+        }
+        if let Some(parameters) = self.taf7 {
+            self.profiles
+                .finish(parameters, unavailable.is_none(), results);
         }
         let (status, detail) = if self.first_duplicate.is_some() {
             (

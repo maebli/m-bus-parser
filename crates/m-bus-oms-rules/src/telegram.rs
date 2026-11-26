@@ -220,6 +220,17 @@ pub fn assess_telegram<H: AsRef<[u8]>>(
     availability: RecordAvailability,
     records: impl IntoIterator<Item = Option<Reading<H>>>,
 ) -> TelegramReport {
+    assess_telegram_with_taf7(link, configuration, fields, availability, records, None)
+}
+
+pub fn assess_telegram_with_taf7<H: AsRef<[u8]>>(
+    link: Link,
+    configuration: Option<ConfigurationField>,
+    fields: LayerFields,
+    availability: RecordAvailability,
+    records: impl IntoIterator<Item = Option<Reading<H>>>,
+    taf7: Option<crate::readings::Taf7Parameters>,
+) -> TelegramReport {
     let security_mode = OmsSecurityModeCheck::assess_5_0_1(
         link.function(),
         configuration.map(|cf| cf.security_mode()),
@@ -254,6 +265,7 @@ pub fn assess_telegram<H: AsRef<[u8]>>(
     }
     if fields.readings_possible() {
         let mut readings = Readings::default();
+        readings.taf7 = taf7;
         let mut unavailable = availability.unchecked_reason();
         if matches!(
             availability,
