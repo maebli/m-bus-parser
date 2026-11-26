@@ -1,8 +1,9 @@
 use super::{
     data_information::{
-        Data, DataFieldCoding, DataInformation, DataInformationBlock, DataType, SpecialFunctions,
+        Data, DataFieldCoding, DataInformation, DataInformationBlock, DataType,
+        InverseCompactProfile, SpecialFunctions,
     },
-    value_information::{ValueInformation, ValueInformationBlock},
+    value_information::{ValueInformation, ValueInformationBlock, ValueLabel},
     variable_user_data::DataRecordError,
     LongTplHeader,
 };
@@ -125,7 +126,7 @@ impl<'a> DataRecord<'a> {
                 DataFieldCoding::SpecialFunctions(SpecialFunctions::ManufacturerSpecific),
                 |data_info| data_info.data_field_coding,
             );
-        let data_out = match data_field_coding.parse(rest, fixed_data_header) {
+        let mut data_out = match data_field_coding.parse(rest, fixed_data_header) {
             Ok(data_out) => data_out,
             Err(error) => {
                 // A record whose contents fail to decode must not cost us the
@@ -140,6 +141,18 @@ impl<'a> DataRecord<'a> {
                 return Err(error);
             }
         };
+        if let Some(DataType::Text(text)) = data_out.value {
+            if processed_data_record_header
+                .value_information
+                .as_ref()
+                .is_some_and(|info| info.has_label(ValueLabel::InverseCompactProfile))
+            {
+                data_out.value = Some(DataType::InverseCompactProfile(InverseCompactProfile {
+                    bytes: text.0,
+                    msb_first: fixed_data_header.is_some_and(|header| header.lsb_order),
+                }));
+            }
+        }
         // A data field longer than the input is truncated to the input.
         let raw_bytes = data
             .get(..header_size + data_out.get_size())

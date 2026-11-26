@@ -346,11 +346,7 @@ fn render_wireless_variable(
         ));
     }
     out.push_str("    </SlaveInformation>\n\n");
-    if let Some(records) = records {
-        for (index, record) in records.clone().flatten().enumerate() {
-            out.push_str(&render_variable_record(index, &record));
-        }
-    }
+    append_variable_records(&mut out, records);
     out.push_str("</MBusData>\n");
     out
 }
@@ -386,11 +382,7 @@ pub(crate) fn render_application(
         _ => {
             let mut out = String::from(XML_PROCESSING_INSTRUCTION);
             out.push_str("<MBusData>\n");
-            if let Some(records) = records {
-                for (i, record) in records.clone().flatten().enumerate() {
-                    out.push_str(&render_variable_record(i, &record));
-                }
-            }
+            append_variable_records(&mut out, records);
             out.push_str("</MBusData>\n");
             out
         }
@@ -406,11 +398,7 @@ fn render_variable(
     out.push_str("<MBusData>\n\n");
     out.push_str(&render_variable_header(header));
 
-    if let Some(records) = records {
-        for (i, record) in records.clone().flatten().enumerate() {
-            out.push_str(&render_variable_record(i, &record));
-        }
-    }
+    append_variable_records(&mut out, records);
 
     out.push_str("</MBusData>\n");
     out
@@ -480,9 +468,22 @@ struct NormalizedRecord {
     value: DecodedValue,
 }
 
-fn render_variable_record(index: usize, record: &user_data::data_record::DataRecord) -> String {
+fn append_variable_records(out: &mut String, records: Option<&user_data::DataRecords>) {
+    let Some(records) = records else { return };
+    let mut history = crate::output::profiles::ProfileHistory::default();
+    for (index, record) in records.clone().flatten().enumerate() {
+        let profile = history.observe(&record);
+        out.push_str(&render_variable_record(index, &record, profile));
+    }
+}
+
+fn render_variable_record(
+    index: usize,
+    record: &user_data::data_record::DataRecord,
+    profile: Option<crate::output::ValueOutput>,
+) -> String {
     let mut out = format!("    <DataRecord id=\"{}\">\n", index);
-    if let Some(normalized) = normalize_record(record) {
+    if let Some(normalized) = normalize_record(record, profile) {
         out.push_str(&format!(
             "        <Function>{}</Function>\n",
             xml_encode(&normalized.function)
@@ -516,7 +517,10 @@ fn render_variable_record(index: usize, record: &user_data::data_record::DataRec
     out
 }
 
-fn normalize_record(record: &user_data::data_record::DataRecord) -> Option<NormalizedRecord> {
+fn normalize_record(
+    record: &user_data::data_record::DataRecord,
+    profile: Option<crate::output::ValueOutput>,
+) -> Option<NormalizedRecord> {
     let dib = &record
         .data_record_header
         .raw_data_record_header
@@ -574,7 +578,10 @@ fn normalize_record(record: &user_data::data_record::DataRecord) -> Option<Norma
         .and_then(|chars| chars.as_ascii_str())
         .map(|text| text.chars().rev().collect());
 
-    let value = variable_value_decode(dif, vif, vifes.first().copied(), data).ok()?;
+    let value = match profile.and_then(|profile| profile.value) {
+        Some(value) => DecodedValue::Str(value.to_string()),
+        None => variable_value_decode(dif, vif, vifes.first().copied(), data).ok()?,
+    };
 
     let (unit, quantity, normalized_value) = match value {
         DecodedValue::Real(raw) => {

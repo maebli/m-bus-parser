@@ -159,10 +159,40 @@ fn spacing(unit: u8, value: u8) -> Option<(u8, &'static str)> {
     }
 }
 
-pub(super) fn decode(
-    record: &user_data::DataRecord<'_>,
+fn element_layout(
+    control: u8,
+    interval: u8,
+    data_len: usize,
+) -> Result<(usize, bool, u8, &'static str), &'static str> {
+    let coding = control & 15;
+    let (width, bcd) = match coding {
+        n @ 1..=4 => (usize::from(n), false),
+        5 => (4, false),
+        6 => (6, false),
+        7 => (8, false),
+        n @ 9..=12 => (usize::from(n - 8), true),
+        14 => (6, true),
+        _ => return Err("unsupported compact profile element coding"),
+    };
+    if !data_len.is_multiple_of(width) {
+        return Err("truncated compact profile element");
+    }
+    let (interval, unit) =
+        spacing((control >> 4) & 3, interval).ok_or("invalid compact profile spacing")?;
+    Ok((width, bcd, interval, unit))
+}
+
+pub(super) fn decode<'a>(
+    record: &user_data::DataRecord<'a>,
     bases: &[&[u8]],
+    history: &mut super::profiles::ProfileHistory<'a>,
 ) -> Result<Option<ValueOutput>, &'static str> {
+    let history_value = history.observe(record);
+    if matches!(record.value(), Some(DataType::InverseCompactProfile(profile))
+        if profile.monthly_bcd_differences().is_some())
+    {
+        return Ok(history_value);
+    }
     let Some(info) = record.value_information() else {
         return Ok(None);
     };
@@ -177,26 +207,21 @@ pub(super) fn decode(
         .raw_bytes()
         .get(record.data_record_header.get_size()..)
     else {
-        return Err("missing compact profile fields");
+        return history_value
+            .map(Some)
+            .ok_or("missing compact profile fields");
     };
     if usize::from(*length) != 2 + data.len() || *length > 0xbf {
-        return Err("invalid compact profile length");
+        return history_value
+            .map(Some)
+            .ok_or("invalid compact profile length");
     }
     let coding = control & 15;
-    let (width, bcd) = match coding {
-        n @ 1..=4 => (usize::from(n), false),
-        5 => (4, false),
-        6 => (6, false),
-        7 => (8, false),
-        n @ 9..=12 => (usize::from(n - 8), true),
-        14 => (6, true),
-        _ => return Err("unsupported compact profile element coding"),
+    let (width, bcd, interval, unit) = match element_layout(*control, *interval, data.len()) {
+        Ok(layout) => layout,
+        Err(_) if history_value.is_some() => return Ok(history_value),
+        Err(reason) => return Err(reason),
     };
-    if data.len() % width != 0 {
-        return Err("truncated compact profile element");
-    }
-    let (interval, unit) =
-        spacing((control >> 4) & 3, *interval).ok_or("invalid compact profile spacing")?;
     let inverse = info.has_label(ValueLabel::InverseCompactProfile);
     let mode = control >> 6;
     let mut current = None;

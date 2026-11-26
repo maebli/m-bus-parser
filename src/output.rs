@@ -27,6 +27,7 @@ mod profile;
 #[cfg(feature = "oms-gen3")]
 mod sml;
 pub use fragments::{decode_fragment_frames, decode_fragments, FragmentOutput};
+pub(crate) mod profiles;
 mod table_style;
 use table_style::{Cell, TableStyle};
 #[cfg(feature = "decryption-mode-13")]
@@ -1655,6 +1656,7 @@ fn collect_records(
     let mut offset = 0usize;
     let mut bases = Vec::new();
     let mut first_error = None;
+    let mut profiles = profiles::ProfileHistory::default();
     for item in records.clone() {
         match item {
             Ok(record) => {
@@ -1673,8 +1675,9 @@ fn collect_records(
                         value: Some(value.to_string().into()),
                     };
                 }
-                match profile::decode(&record, &bases) {
+                match profile::decode(&record, &bases, &mut profiles) {
                     Ok(Some(value)) => parsed.value = value,
+                    Ok(None) => {}
                     Err(message) => {
                         first_error.get_or_insert_with(|| (offset, message.into()));
                         parsed.value = ValueOutput {
@@ -1682,7 +1685,6 @@ fn collect_records(
                             value: None,
                         };
                     }
-                    Ok(None) => {}
                 }
                 if matches!(
                     record.value(),
@@ -3254,6 +3256,83 @@ mod tests {
                 .and_then(|value| value.as_str()),
             Some("12.565")
         );
+    }
+
+    #[cfg(feature = "decryption-mode-5")]
+    #[test]
+    fn zenner_monthly_water_profile_uses_the_stored_volume_as_its_base() {
+        let frame = concat!(
+            "6644496A3100015514377203926314496A00075000500598A78E0D71AA6358EEBD",
+            "0B20BFDF99EDA2D22FA25314F3F1B84470898E495303923770BA8DDA97C964F0EA",
+            "6CE24F5650C0A6CDF3DE37DE33FBFBEBACE4009BB0D8EBA2CBE80433FF131328206020B1BF",
+        );
+        let options = DecodeOptions {
+            key: Some(
+                hex::decode("F8B24F12F9D113F680BEE765FDE67EC0")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+            ..DecodeOptions::default()
+        };
+        let decoded = decode_hex(frame, &options).unwrap();
+        let expected = serde_json::json!({
+            "interval": "1 month",
+            "readings": ["60.063", "55.912", "52.342", "48.965", "43.99", "40.374", "34.701",
+                         "29.11", "23.315", "17.584", "13.356", "8.638", "4.677", "0.421"]
+        });
+        assert_eq!(decoded.records.len(), 6);
+        let profile = &decoded.records[4];
+        assert_eq!(profile.unit.as_deref(), Some("m3"));
+        assert_eq!(profile.value.kind, "inverse_compact_profile");
+        assert_eq!(profile.value.value.as_ref(), Some(&expected));
+        assert_eq!(decoded.records[5].quantities, ["Error flags"]);
+        let xml = render_hex(
+            frame,
+            OutputFormat::Xml,
+            &RenderOptions {
+                decode: options,
+                ..RenderOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(xml.contains("60.063"));
+        assert!(xml.contains("0.421"));
+    }
+
+    #[test]
+    fn inverse_profile_keeps_differences_when_the_base_is_for_another_register() {
+        let records =
+            decode_data_records_hex("4C 13 00 01 00 00 8D 04 93 13 04 FA FE 23 F1").unwrap();
+        assert_eq!(
+            records[1].value.value,
+            Some(serde_json::json!({
+                "interval": "1 month", "differences": ["-0.123"]
+            }))
+        );
+    }
+
+    #[test]
+    fn unreadable_inverse_samples_do_not_produce_invented_readings() {
+        let records =
+            decode_data_records_hex("8C 04 13 00 10 00 00 8D 04 93 13 05 F9 FE 03 AA 01").unwrap();
+        assert_eq!(
+            records[1].value.value,
+            Some(serde_json::json!({
+                "interval": "1 month", "readings": ["0.997", null, null]
+            }))
+        );
+        for data in ["FB FE 12 34", "00 01 02", "FA 01 02", "FD FE"] {
+            let size = data.split_whitespace().count();
+            let record =
+                decode_data_records_hex(&format!("8D 04 93 13 {size:02X} {data}")).unwrap();
+            assert_eq!(
+                record[0].value.value,
+                Some(serde_json::json!({
+                    "raw_hex": data.replace(' ', "")
+                }))
+            );
+        }
     }
 
     #[test]

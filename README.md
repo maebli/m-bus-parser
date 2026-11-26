@@ -31,7 +31,7 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 - Responsive, Unicode-aware tables for narrow terminals and browser cards
 - **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
-- Available as a **Rust library**, **CLI**, **WebAssembly (npm)** and **Python bindings**
+- Available as a **Rust library**, **CLI**, and **WebAssembly (npm)**, with bindings for **Python**, **C**, and **Java**
 
 Stack usage, linked footprint, and decode latency are measured by eagerly
 parsing a wired frame and consuming all of its application-layer records with a
@@ -71,6 +71,22 @@ pip install pymbusparser
 ```
 
 Source: [`python/`](./python)
+
+### C bindings
+
+[![C release](https://img.shields.io/github/v/release/maebli/m-bus-parser?filter=c-v%2A&label=C%20release)](https://github.com/maebli/m-bus-parser/releases?q=c-v)
+
+Download the archive for your platform. It includes the libraries and the `mbus_parser.h` header.
+
+[Source](./c) · [C example](./c/examples/parse.c)
+
+### Java bindings
+
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.maebli/m-bus-parser)](https://central.sonatype.com/artifact/io.github.maebli/m-bus-parser)
+
+For Java 25 or later, add the Maven dependency `io.github.maebli:m-bus-parser`.
+
+[Source](./java) · [Java example](./java/examples/Parse.java)
 
 ---
 

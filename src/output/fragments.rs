@@ -216,8 +216,8 @@ pub fn decode_fragment_frames(
     packets: &[&[u8]],
     options: &DecodeOptions,
 ) -> Result<FragmentOutput, OutputError> {
-    if let [stream @ [0x68, length, repeat, 0x68, ..]] = packets {
-        if length == repeat && stream.len() > usize::from(*length) + 6 {
+    if let [stream] = packets {
+        if wired_frame_size(stream).is_some_and(|size| stream.len() > size) {
             return decode_wired_stream(stream, options);
         }
     }
@@ -243,18 +243,23 @@ pub fn decode_fragment_frames(
     Ok(result)
 }
 
+fn wired_frame_size(payload: &[u8]) -> Option<usize> {
+    match payload {
+        [0x68, length, repeat, 0x68, ..] if length == repeat => Some(usize::from(*length) + 6),
+        [0x10, ..] => Some(5),
+        [0xe5, ..] => Some(1),
+        _ => None,
+    }
+}
+
 fn decode_wired_stream(
     mut payload: &[u8],
     options: &DecodeOptions,
 ) -> Result<FragmentOutput, OutputError> {
     let mut decoded = Vec::new();
     while !payload.is_empty() {
-        let size = match payload {
-            [0x68, length, repeat, 0x68, ..] if length == repeat => usize::from(*length) + 6,
-            [0x10, ..] => 5,
-            [0xe5, ..] => 1,
-            _ => return Err(invalid("invalid wired frame header in ACRIOS data")),
-        };
+        let size =
+            wired_frame_size(payload).ok_or_else(|| invalid("invalid wired frame header"))?;
         let (frame, rest) = payload
             .split_at_checked(size)
             .ok_or_else(|| invalid("truncated wired frame in ACRIOS data"))?;
