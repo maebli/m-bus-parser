@@ -11,7 +11,7 @@ pub fn render_application_hex(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
-    render_application_with_session(input, format, options, None, Default::default())
+    render_application_with_session(input, format, options, None, Default::default(), None)
 }
 
 #[cfg(feature = "decryption-mode-13")]
@@ -22,7 +22,14 @@ pub fn render_application_hex_with_tls_session(
     session: &TlsSession<'_>,
 ) -> Result<String, OutputError> {
     tls::require_tls_output_format(format)?;
-    render_application_with_session(input, format, options, Some(session), Default::default())
+    render_application_with_session(
+        input,
+        format,
+        options,
+        Some(session),
+        Default::default(),
+        None,
+    )
 }
 
 pub fn render_application_oms(
@@ -31,7 +38,14 @@ pub fn render_application_oms(
     options: &RenderOptions,
     capture: OmsCaptureOptions,
 ) -> Result<String, OutputError> {
-    render_application_with_session(input, OutputFormat::Oms(format), options, None, capture)
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        None,
+        capture,
+        None,
+    )
 }
 
 #[cfg(feature = "decryption-mode-13")]
@@ -48,6 +62,44 @@ pub fn render_application_oms_with_tls_session(
         options,
         Some(session),
         capture,
+        None,
+    )
+}
+
+#[cfg(feature = "decryption-mode-7")]
+pub fn render_application_oms_with_application_key(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    key: &[u8; 16],
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        None,
+        capture,
+        Some(key),
+    )
+}
+
+#[cfg(feature = "decryption-mode-13")]
+pub fn render_application_oms_with_keys(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    session: Option<&TlsSession<'_>>,
+    application_key: Option<&[u8; 16]>,
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        session,
+        capture,
+        application_key,
     )
 }
 
@@ -57,6 +109,7 @@ fn render_application_with_session(
     options: &RenderOptions,
     session: Option<&TlsSession<'_>>,
     capture: OmsCaptureOptions,
+    application_key: Option<&[u8; 16]>,
 ) -> Result<String, OutputError> {
     let data = decode_hex_bytes(input)?;
     let block = match user_data::parse_application_layer(&data) {
@@ -200,6 +253,22 @@ fn render_application_with_session(
         options.decode.include_enrichment,
     );
     if let OutputFormat::Oms(format) = format {
+        if let Some(key) = application_key {
+            #[cfg(feature = "decryption-mode-7")]
+            {
+                let mut decoded = decoded;
+                decoded.authenticate_application(key)?;
+                return render_oms_capture_with_options(&[decoded], format, None, capture);
+            }
+            #[cfg(not(feature = "decryption-mode-7"))]
+            {
+                let _ = key;
+                return Err(OutputError::Decryption {
+                    code: "security.application_mac_unavailable",
+                    message: "ASP10 support is required to authenticate this command.".into(),
+                });
+            }
+        }
         return render_oms_capture_with_options(&[decoded], format, None, capture);
     }
     render_decoded(&decoded, format, options)

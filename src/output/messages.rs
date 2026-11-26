@@ -1,6 +1,66 @@
 use super::*;
 use user_data::{ApplicationPayload, ApplicationProtocol, UserDataBlock};
 
+#[cfg(feature = "decryption-mode-7")]
+fn verify_sitp(body: &[u8], key: &[u8; 16]) -> Result<(), OutputError> {
+    m_bus_core::decryption::verify_sitp_cmac(body, key).map_err(|error| OutputError::Decryption {
+        code: "security.application_authentication_failed",
+        message: error.to_string(),
+    })
+}
+
+#[cfg(feature = "decryption-mode-7")]
+impl DecodedOutput {
+    pub fn authenticate_application(&mut self, key: &[u8; 16]) -> Result<(), OutputError> {
+        let Some(application) = self.application.as_mut() else {
+            return Ok(());
+        };
+        let Some(fields) = application
+            .decoded
+            .as_mut()
+            .and_then(serde_json::Value::as_object_mut)
+        else {
+            return Ok(());
+        };
+        if application.protocol != "security_information_transfer"
+            || fields
+                .get("data_selector")
+                .and_then(serde_json::Value::as_u64)
+                != Some(0x32)
+        {
+            return Ok(());
+        }
+        let raw = decode_hex_bytes(
+            self.security
+                .decrypted_payload_hex
+                .as_deref()
+                .unwrap_or(&application.payload_hex),
+        )?;
+        let payload = if self.security.mode_code == Some(5)
+            && self.security.decrypted_payload_hex.is_some()
+        {
+            raw.strip_prefix(&[0x2f, 0x2f]).unwrap_or(&raw)
+        } else {
+            &raw
+        };
+        let Ok(ApplicationPayload::SecurityTransfer {
+            data_selector: 0x32,
+            body,
+            ..
+        }) = user_data::application_message::parse_sitp(payload)
+        else {
+            return Err(OutputError::Decryption {
+                code: "security.application_mac_unavailable",
+                message: "The decoded SITP command does not contain a complete ASP10 container."
+                    .into(),
+            });
+        };
+        let result = verify_sitp(body, key);
+        fields.insert("application_mac_verified".into(), result.is_ok().into());
+        result
+    }
+}
+
 pub(super) fn verify_application(
     block: Option<&UserDataBlock<'_>>,
     security: &SecurityContext,
@@ -18,12 +78,7 @@ pub(super) fn verify_application(
             ..
         }) = payload
         {
-            m_bus_core::decryption::verify_sitp_cmac(body, key).map_err(|e| {
-                OutputError::Decryption {
-                    code: "security.application_authentication_failed",
-                    message: e.to_string(),
-                }
-            })?;
+            verify_sitp(body, key)?;
             return Ok(true);
         }
     }

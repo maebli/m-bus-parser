@@ -58,9 +58,11 @@ pub use tls_session::ImportedTlsSession;
 #[cfg(not(feature = "decryption-mode-13"))]
 struct TlsSession<'a>(core::marker::PhantomData<&'a ()>);
 pub use application::{render_application_hex, render_application_oms};
+#[cfg(feature = "decryption-mode-7")]
+pub use application::render_application_oms_with_application_key;
 #[cfg(feature = "decryption-mode-13")]
 pub use application::{
-    render_application_hex_with_tls_session, render_application_oms_with_tls_session,
+    render_application_hex_with_tls_session, render_application_oms_with_keys, render_application_oms_with_tls_session,
 };
 use messages::application_output;
 
@@ -375,6 +377,7 @@ impl DecodedOutput {
                 .as_ref()
                 .and_then(|ell| u8::from_str_radix(&ell.communication_control, 16).ok()),
             radio_mode: options.radio_mode,
+            sitp_clock: oms::clock_fields(self.application.as_ref()),
             ell_encryption_mode: transport
                 .ell
                 .as_ref()

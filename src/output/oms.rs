@@ -33,6 +33,29 @@ impl OmsFormat {
     }
 }
 
+pub(super) fn clock_fields(
+    application: Option<&super::ApplicationOutput>,
+) -> Option<m_bus_oms_rules::layers::ClockFields> {
+    let application = application?;
+    if application.protocol != "security_information_transfer" {
+        return None;
+    }
+    let fields = application.decoded.as_ref()?;
+    if fields.get("protocol_id")?.as_u64()? != 4 {
+        return None;
+    }
+    let data = fields.get("apdu_hex")?.as_str()?;
+    let octet = |field| u8::try_from(fields.get(field)?.as_u64()?).ok();
+    Some(m_bus_oms_rules::layers::ClockFields {
+        control: u8::from_str_radix(data.get(..2)?, 16).ok()?,
+        length: data.len() / 2,
+        key: octet("key_id")?,
+        block_control: octet("block_control")?,
+        immediate: fields.get("target_time_hex")?.as_str()? == "0000000030",
+        verified: fields.get("application_mac_verified")?.as_bool()?,
+    })
+}
+
 pub(super) fn encrypted_record_prefix(
     frame: &super::FrameOutput,
     block: Option<&crate::user_data::UserDataBlock<'_>>,

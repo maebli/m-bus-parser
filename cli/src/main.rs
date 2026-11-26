@@ -363,16 +363,35 @@ fn render_input(
         match decoded {
             Ok(frames) => render_checked_frames(frames, format, &validation),
             Err(OutputError::InvalidFrame { .. }) => {
+                #[cfg(feature = "decryption-mode-7")]
+                let key = validation.sitp_key().map_err(|error| error.to_string())?;
+                #[cfg(not(feature = "decryption-mode-7"))]
+                let key: Option<[u8; 16]> = None;
                 #[cfg(feature = "decryption-mode-13")]
-                if let Some(session) = &session {
-                    m_bus_parser::output::render_application_oms_with_tls_session(
-                        &input, format, &options, capture, session,
+                {
+                    m_bus_parser::output::render_application_oms_with_keys(
+                        &input,
+                        format,
+                        &options,
+                        capture,
+                        session.as_ref(),
+                        key.as_ref(),
                     )
-                } else {
+                }
+                #[cfg(all(not(feature = "decryption-mode-13"), feature = "decryption-mode-7"))]
+                match key {
+                    Some(key) => m_bus_parser::output::render_application_oms_with_application_key(
+                        &input, format, &options, capture, &key,
+                    ),
+                    None => m_bus_parser::output::render_application_oms(
+                        &input, format, &options, capture,
+                    ),
+                }
+                #[cfg(not(any(feature = "decryption-mode-13", feature = "decryption-mode-7")))]
+                {
+                    let _ = key;
                     m_bus_parser::output::render_application_oms(&input, format, &options, capture)
                 }
-                #[cfg(not(feature = "decryption-mode-13"))]
-                m_bus_parser::output::render_application_oms(&input, format, &options, capture)
             }
             Err(error) => Err(error),
         }
@@ -424,6 +443,20 @@ fn read_input(
     normalize_input(&input, input_format)
 }
 
+#[cfg(feature = "decryption-mode-7")]
+impl ValidationArgs {
+    fn sitp_key(&self) -> Result<Option<[u8; 16]>, OutputError> {
+        self.application_key
+            .as_deref()
+            .map(parse_key)
+            .transpose()
+            .map_err(|_| OutputError::InvalidOption {
+                option: "application-key",
+                message: "Expected 32 hexadecimal characters.".into(),
+            })
+    }
+}
+
 fn render_checked_frames(
     mut output: FragmentOutput,
     format: m_bus_parser::output::OmsFormat,
@@ -434,11 +467,7 @@ fn render_checked_frames(
         FragmentOutput::Multiple(frames) => frames.as_mut_slice(),
     };
     #[cfg(feature = "decryption-mode-7")]
-    if let Some(value) = &validation.application_key {
-        let key = parse_key(value).map_err(|_| OutputError::InvalidOption {
-            option: "application-key",
-            message: "Expected 32 hexadecimal characters.".into(),
-        })?;
+    if let Some(key) = validation.sitp_key()? {
         for frame in &mut *frames {
             frame.authenticate_application(&key)?;
         }

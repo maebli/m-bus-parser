@@ -25,6 +25,62 @@ impl LayerFields {
             return;
         };
         let mode = configuration.map(|cf| cf.security_mode().to_bits());
+        if matches!(ci, 0x5f | 0x9e | 0x9f) {
+            findings.push(finding(
+                "Security management transport mode",
+                ("§8.9", primary!(80, 165)),
+                mode.map(|m| m == 13),
+                "The OMS TLS security-management CI requires transport mode 13.",
+            ));
+        }
+        if let Some(clock) = self.sitp_clock {
+            let set = matches!(clock.control, 0 | 5 | 6);
+            let reference = if set {
+                ("Annex M, Table M.15", annex_m!(25, 89))
+            } else {
+                ("Annex M, Table M.14", annex_m!(24, 460))
+            };
+            findings.push(finding(
+                "SITP clock operation",
+                reference,
+                Some(matches!(clock.control, 0..=3 | 5..=6)),
+                "The clock control must select a listed adjust or set operation.",
+            ));
+            findings.push(finding(
+                "SITP clock command key",
+                reference,
+                Some(clock.key == if set { 0x22 } else { 0x21 }),
+                "The adjust and set commands require application key IDs 21 and 22 respectively.",
+            ));
+            findings.push(finding(
+                "SITP clock block control",
+                reference,
+                Some(matches!(clock.block_control, 0x20 | 0xa0)),
+                "The clock command block control must be 20 or A0.",
+            ));
+            findings.push(finding(
+                "SITP clock target time",
+                reference,
+                Some(clock.immediate),
+                "Clock commands require the immediate-action target time 3000000000.",
+            ));
+            findings.push(finding(
+                "SITP clock APDU length",
+                reference,
+                match clock.control {
+                    0 => Some(clock.length == 7),
+                    1..=3 => Some(clock.length == 4),
+                    _ => None,
+                },
+                "The clock APDU must contain only its control and time value.",
+            ));
+            findings.push(finding(
+                "SITP clock application authentication",
+                reference,
+                clock.verified.then_some(true),
+                "The supplied application key must authenticate the ASP10 clock command.",
+            ));
+        }
         let mandatory = matches!(ci, 0x53 | 0x55..=0x57 | 0x5a..=0x5b | 0x62 | 0x67..=0x68 | 0x6c..=0x6d | 0xc0..=0xc7);
         let clear = matches!(ci, 0x50..=0x52 | 0x54 | 0x66 | 0x71 | 0x80 | 0x8a..=0x8b | 0x93 | 0xb8 | 0xbb | 0xbd..=0xbf);
         let application_security_allowed = matches!(ci, 0x60..=0x61 | 0x64..=0x65 | 0x7c..=0x7f);

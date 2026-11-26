@@ -333,30 +333,14 @@ impl<'a> ApplicationMessage<'a> {
                 status: payload.first().copied(),
                 details: payload.get(1..).unwrap_or_default(),
             }),
-            P::SecurityTransfer => {
-                let [low, high, fields @ ..] = payload else {
-                    return Err(ApplicationLayerError::InsufficientData);
-                };
-                require_length(fields, usize::from(u16::from_le_bytes([*low, *high])))?;
-                let [block_id, block_control, recipient, data_selector, key_id, key_version, body @ ..] =
-                    fields
-                else {
-                    return Err(ApplicationLayerError::InsufficientData);
-                };
-                Ok(V::SecurityTransfer {
-                    block_id: *block_id,
-                    block_control: *block_control,
-                    recipient: *recipient,
-                    data_selector: *data_selector,
-                    key_id: *key_id,
-                    key_version: *key_version,
-                    body,
-                })
-            }
+            P::SecurityTransfer => parse_sitp(payload),
             P::ClockSet | P::ClockAdjust => {
                 let payload = payload.strip_prefix(&[0x2F, 0x2F]).unwrap_or(payload);
-                require_length(payload, 14)?;
-                let (operation, value) = parse_clock(self.protocol, payload)?;
+                if !cfg!(feature = "oms-gen5") {
+                    require_length(payload, 14)?;
+                }
+                let (operation, value) =
+                    parse_clock(self.protocol, payload, cfg!(feature = "oms-gen5"))?;
                 Ok(V::Clock { operation, value })
             }
             P::Format => FormatFrame::parse(payload).map(V::Format),
@@ -364,6 +348,27 @@ impl<'a> ApplicationMessage<'a> {
             _ => Ok(V::External(payload)),
         }
     }
+}
+
+pub fn parse_sitp(payload: &[u8]) -> Result<ApplicationPayload<'_>, ApplicationLayerError> {
+    let [low, high, fields @ ..] = payload else {
+        return Err(ApplicationLayerError::InsufficientData);
+    };
+    require_length(fields, usize::from(u16::from_le_bytes([*low, *high])))?;
+    let [block_id, block_control, recipient, data_selector, key_id, key_version, body @ ..] =
+        fields
+    else {
+        return Err(ApplicationLayerError::InsufficientData);
+    };
+    Ok(ApplicationPayload::SecurityTransfer {
+        block_id: *block_id,
+        block_control: *block_control,
+        recipient: *recipient,
+        data_selector: *data_selector,
+        key_id: *key_id,
+        key_version: *key_version,
+        body,
+    })
 }
 
 pub(crate) fn require_length(data: &[u8], expected: usize) -> Result<(), ApplicationLayerError> {
@@ -380,12 +385,13 @@ pub(crate) fn require_length(data: &[u8], expected: usize) -> Result<(), Applica
 pub fn parse_sitp_clock(
     payload: &[u8],
 ) -> Result<(ClockOperation, DataType<'_>), ApplicationLayerError> {
-    parse_clock(ApplicationProtocol::ClockSet, payload)
+    parse_clock(ApplicationProtocol::ClockSet, payload, false)
 }
 
 fn parse_clock(
     protocol: ApplicationProtocol,
     payload: &[u8],
+    optional_gateway_fields: bool,
 ) -> Result<(ClockOperation, DataType<'_>), ApplicationLayerError> {
     let control = *payload
         .first()
@@ -412,7 +418,14 @@ fn parse_clock(
     } else {
         3
     };
-    if payload.len() != 1 + value_size {
+    let required = 1 + value_size;
+    if optional_gateway_fields {
+        if ![required, 10, required + 4, 14].contains(&payload.len()) {
+            return Err(ApplicationLayerError::InvalidPayload {
+                field: "clock optional fields",
+            });
+        }
+    } else if payload.len() != required {
         require_length(payload, 14)?;
         let reserved = payload
             .get(1 + value_size..10)

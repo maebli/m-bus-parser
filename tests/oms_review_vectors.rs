@@ -132,8 +132,34 @@ fn tr06_a6_authenticates_a_mac_only_final_fragment() {
 fn tr06_a7_decodes_the_sitp_clock_command() {
     let [first, last] = TR06_CLOCK.map(|s| hex::decode(s).unwrap());
     let options = DecodeOptions::default();
-    let output = decode_fragments(&[&first, &last], &options).unwrap();
+    let mut output = decode_fragments(&[&first, &last], &options).unwrap();
     assert_eq!(output.decode_state, "complete");
+    let conformance = output.assess_oms_5_0_1();
+    for (name, expected) in [
+        ("SITP clock command key", "passed"),
+        ("SITP clock block control", "passed"),
+        ("SITP clock target time", "passed"),
+        ("SITP clock APDU length", "failed"),
+        ("SITP clock application authentication", "could_not_check"),
+    ] {
+        let finding = conformance
+            .findings
+            .iter()
+            .find(|finding| finding.rule == name)
+            .unwrap();
+        assert_eq!(finding.status.as_str(), expected, "{name}");
+    }
+    let capture_key = [0x08, 0x15, 0x47, 0x11].repeat(4).try_into().unwrap();
+    output.authenticate_application(&capture_key).unwrap();
+    assert!(output
+        .assess_oms_5_0_1()
+        .findings
+        .iter()
+        .any(
+            |finding| finding.rule == "SITP clock application authentication"
+                && finding.status.as_str() == "passed"
+        ));
+    assert!(output.authenticate_application(&[0; 16]).is_err());
     let sitp = output.application.unwrap().decoded.unwrap();
     assert_eq!(sitp["application_mac_verified"], false);
     assert_eq!(sitp["clock"]["operation"], "Add");

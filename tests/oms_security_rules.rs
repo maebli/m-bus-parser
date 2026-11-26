@@ -236,3 +236,56 @@ fn table_42_security_depends_on_protocol_and_link() {
         Some("could_not_check")
     );
 }
+
+#[test]
+fn clock_management_accepts_optional_gateway_fields() {
+    use m_bus_parser::user_data::application_message::parse_sitp_clock;
+    let prefix = "6C785634129315330301000000";
+    for tail in ["", "AABBCCDD", "AABBCCDDEEFF", "AABBCCDDEEFFDEADBEEF"] {
+        let result = frame(0x43, GATEWAY, &format!("{prefix}01320000{tail}"));
+        assert_eq!(result.application.unwrap().protocol, "clock_adjust");
+    }
+    assert!(parse_sitp_clock(&[1, 50, 0, 0]).is_ok());
+    assert!(parse_sitp_clock(&[1, 50, 0]).is_err());
+}
+
+#[test]
+fn fresh_authenticated_counters_use_sender_specific_increments() {
+    use m_bus_oms_rules::sequence::ExchangeFrame;
+    let observation = |function, counter, access| ExchangeFrame {
+        sender: [1; 8],
+        receiver: Some([2; 8]),
+        function,
+        link_access: Some(access),
+        transport_access: Some(access),
+        transport_status: Some(0),
+        fragmented: false,
+        security_mode: Some(10),
+        key_information_present: Some(true),
+        security_counter: Some(counter),
+        key_id: Some(0),
+        key_version: Some(3),
+        verified_encryption: true,
+        tls_hello: None,
+    };
+    for (function, change, consecutive, expected) in [
+        (0x44, 1, true, "passed"),
+        (0x44, 2, true, "failed"),
+        (0x53, 100, true, "passed"),
+        (0x53, 101, true, "failed"),
+        (0x44, 2, false, "could_not_check"),
+    ] {
+        let mut checked = frame(0x44, METER, "7A01000000011301").assess_oms_5_0_1();
+        observation(function, 10, 2).check_reply(
+            observation(function, 10 + change, 3),
+            consecutive,
+            &mut checked,
+        );
+        let found = checked
+            .findings
+            .iter()
+            .find(|f| f.rule == "Authenticated message counter progression")
+            .unwrap();
+        assert_eq!(found.status.as_str(), expected);
+    }
+}

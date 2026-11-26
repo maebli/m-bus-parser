@@ -49,6 +49,17 @@ pub struct LayerFields {
     pub security_counter: Option<u32>,
     pub transport_body_length: Option<usize>,
     pub tls: Option<TlsFields>,
+    pub sitp_clock: Option<ClockFields>,
+}
+
+#[derive(Clone, Copy)]
+pub struct ClockFields {
+    pub control: u8,
+    pub length: usize,
+    pub key: u8,
+    pub block_control: u8,
+    pub immediate: bool,
+    pub verified: bool,
 }
 
 #[derive(Clone, Copy, Default)]
