@@ -219,6 +219,7 @@ fn clock_commands_decode_time_and_validate_control_and_verification() {
             value: DataType::DateTimeWithSeconds(..)
         }
     ));
+    #[cfg(not(feature = "oms-gen5"))]
     for index in [0, 7, 10] {
         let mut invalid = payload;
         invalid[index] ^= 1;

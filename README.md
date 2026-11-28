@@ -29,7 +29,7 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 - A versioned canonical schema with exact decimal values, provenance,
   partial-decode diagnostics, and stable error codes
 - Responsive, Unicode-aware tables for narrow terminals and browser cards
-- **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
+- **AES-128 decryption** for supported wMBus security modes 5, 7, 10, and 13
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
 - Available as a **Rust library**, **CLI**, and **WebAssembly (npm)**, with bindings for **Python**, **C**, and **Java**
 
@@ -156,6 +156,8 @@ The [OMS rules crate](./crates/m-bus-oms-rules) checks decoded link, transport, 
 fields against OMS 5.0.1. Each finding identifies its rule, status, and specification reference.
 The rules also check data-point tags, required readings for the declared device type,
 and the register descriptors and timestamps in compact profiles.
+For ordered captures, the crate can also check access numbers, LPWAN exchanges,
+firmware transfers, and key-management messages across telegrams.
 
 Add to `Cargo.toml`:
 
