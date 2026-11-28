@@ -94,6 +94,35 @@ mod enabled {
     }
 
     #[test]
+    fn selection_checks_use_authenticated_tls_application_bytes() {
+        for (control, ci, direction, expected) in [
+            (0x08, 0x67, TlsDirection::ClientToServer, "passed"),
+            (0x53, 0x56, TlsDirection::ServerToClient, "failed"),
+        ] {
+            let telegram = format!(
+                "2f{control:02x}9315785634123303{ci:02x}0100ff0d01{}",
+                fixtures::OPENSSL_AES128_RECORD
+            );
+            let options = DecodeOptions::default();
+            let locked = decode_hex(&telegram, &options).unwrap();
+            let tls_session = TlsSession {
+                direction,
+                ..session()
+            };
+            let clear = decode_hex_with_tls_session(&telegram, &options, &tls_session).unwrap();
+            for (frame, status) in [(locked, "could_not_check"), (clear, expected)] {
+                let report = frame.assess_oms_5_0_1();
+                let finding = report
+                    .findings
+                    .iter()
+                    .find(|row| row.rule == "Application selection parameters")
+                    .unwrap();
+                assert_eq!(finding.status.as_str(), status);
+            }
+        }
+    }
+
+    #[test]
     fn wired_long_headers_decrypt_the_same_tls_record() {
         let application = hex::decode(format!(
             "7278563412931533030100ff0d01{}",

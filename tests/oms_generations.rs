@@ -530,6 +530,33 @@ fn annex_b_encryption_respects_record_boundaries_including_filler() {
 }
 
 #[test]
+fn wireless_control_messages_check_the_transport_header_and_application_data() {
+    let meter = "9315785634123303";
+    let gateway = "3A63665544330A31";
+    let header_rule = "Transport header for link function";
+    let data_rule = "Control message application data";
+    let check = |control, sender, payload| {
+        capture_report(&[radio_telegram(control, sender, payload)], false)
+    };
+    for sender in [gateway, "3A63665544330A36"] {
+        let ack = check(0x00, sender, "8E00119315785634123303");
+        assert_eq!(status(&ack, header_rule), Some("failed"));
+        let ack = check(0x00, sender, "8E001193157856341233039311000000");
+        assert_eq!(status(&ack, header_rule), Some("passed"));
+    }
+    let meter_ack = check(0x00, meter, "8E00113A63665544330A31");
+    assert_ne!(status(&meter_ack, header_rule), Some("failed"));
+    for control in [0x48, 0x00, 0x10, 0x20, 0x30] {
+        let empty = check(control, meter, "8C00117A11000000");
+        assert_eq!(status(&empty, data_rule), Some("passed"));
+        let with_record = check(control, meter, "8C00117A1100000002FD170000");
+        assert_eq!(status(&with_record, data_rule), Some("failed"));
+    }
+    let reading = check(0x08, meter, "8C00117A1100000002FD170000");
+    assert_eq!(status(&reading, data_rule), None);
+}
+
+#[test]
 fn access_only_frames_and_external_adapters_use_the_expected_headers() {
     let meter = "9344443322115507";
     let adapter = "9344443322115537";

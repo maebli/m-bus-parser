@@ -8,6 +8,14 @@ pub(in crate::output) fn application_protocol(
     let mut evidence = ApplicationProtocolEvidence::default();
     let ci = frame.transport.application_ci.or(frame.transport.outer_ci);
     if let Some(ci @ (0x50 | 0x53..=0x57 | 0x66..=0x68)) = ci {
+        if frame.security.decryption_state == "decrypted_authenticated" {
+            evidence.selection_length = frame
+                .security
+                .decrypted_payload_hex
+                .as_ref()
+                .map(|payload| payload.len() / 2);
+            return evidence;
+        }
         if matches!(
             frame.record_availability,
             RecordAvailability::Encrypted | RecordAvailability::Fragmented

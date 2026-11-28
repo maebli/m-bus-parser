@@ -2,7 +2,7 @@
 mod security;
 
 use alloc::vec::Vec;
-use m_bus_core::{ConfigurationField, Function};
+use m_bus_core::{ConfigurationField, DeviceType, Function};
 
 use crate::telegram::{Link, RuleFinding, RuleStatus};
 
@@ -269,6 +269,16 @@ impl LayerFields {
                 "An ACC-NR signals access and carries no application data.",
             ));
         }
+        if matches!(link, Link::Wireless(_))
+            && matches!(function, Some(Function::AccDmd | Function::Ack))
+        {
+            results.push(finding(
+                "Control message application data",
+                ("§5.2.4, Tables 15–16", primary!(53, 422)),
+                self.has_application_data.map(|present| !present),
+                "ACC-DMD and ACK messages must omit application data.",
+            ));
+        }
         let adapter = match direction {
             Some(true) => self.wireless_sender_type,
             Some(false) => self.wireless_receiver_type,
@@ -315,6 +325,16 @@ impl LayerFields {
             ));
         }
         let required_tpl = match (link, function) {
+            (Link::Wireless(0x00), _)
+                if matches!(
+                    self.wireless_sender_type.map(DeviceType::from),
+                    Some(
+                        DeviceType::CommunicationController | DeviceType::RadioConverterSystemSide
+                    )
+                ) =>
+            {
+                Some(true)
+            }
             (Link::Wireless(_), Some(Function::Nack)) => Some(false),
             (
                 Link::Wired(_),
