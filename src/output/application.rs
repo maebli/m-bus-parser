@@ -82,16 +82,14 @@ fn render_application_with_session(
             message: "no application data records found".to_string(),
         });
     }
-    // Reset messages have exactly a CI and subcode. Do not silently swallow
-    // trailing garbage when using this API for automatic detection.
     if matches!(
         block,
         Some(user_data::UserDataBlock::ResetAtApplicationLevel { .. })
-    ) && data.len() != 2
+    ) && data.len() > 2
     {
         return Err(OutputError::Rendering {
             code: "application.invalid",
-            message: "application reset must contain exactly two bytes".to_string(),
+            message: "application reset contains trailing bytes".to_string(),
         });
     }
     if matches!(

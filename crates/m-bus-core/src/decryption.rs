@@ -44,6 +44,24 @@ pub enum DecryptionError {
     UnknownEncryptionState,
 }
 
+#[cfg(feature = "decryption-mode-7")]
+pub fn verify_sitp_cmac(body: &[u8], application_key: &[u8; 16]) -> Result<(), DecryptionError> {
+    use aes::cipher::KeyInit;
+    use cmac::{Cmac, Mac};
+
+    let (authenticated_data, tag) = body
+        .split_last_chunk::<8>()
+        .ok_or(DecryptionError::InvalidDataLength)?;
+    if authenticated_data.len() < 10 {
+        return Err(DecryptionError::InvalidDataLength);
+    }
+    let mut mac = Cmac::<aes::Aes128>::new_from_slice(application_key)
+        .map_err(|_| DecryptionError::InvalidKeyLength)?;
+    mac.update(authenticated_data);
+    mac.verify_truncated_left(tag)
+        .map_err(|_| DecryptionError::AuthenticationFailed)
+}
+
 impl core::fmt::Display for DecryptionError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {

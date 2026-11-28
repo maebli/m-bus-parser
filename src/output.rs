@@ -21,7 +21,12 @@ use crate::user_data::data_information::{
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
+mod fragments;
 mod messages;
+mod profile;
+#[cfg(feature = "oms-gen3")]
+mod sml;
+pub use fragments::{decode_fragment_frames, decode_fragments, FragmentOutput};
 pub(crate) mod profiles;
 mod table_style;
 use table_style::{Cell, TableStyle};
@@ -361,6 +366,7 @@ pub struct TlsOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SecurityOutput {
+    pub oms_5_0_1_security_mode_check: OmsSecurityModeCheck,
     pub payload_protection: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
@@ -378,6 +384,56 @@ pub struct SecurityOutput {
     pub encrypted_payload_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decrypted_payload_hex: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OmsSecurityModeCheck {
+    pub result: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_profile: Option<&'static str>,
+}
+
+impl OmsSecurityModeCheck {
+    fn assess(
+        frame: &FrameOutput,
+        transport: &TransportOutput,
+        mode: Option<SecurityMode>,
+    ) -> Self {
+        let function = frame
+            .function
+            .as_deref()
+            .and_then(|value| value.split_whitespace().next());
+        let requires_zero = matches!(
+            function,
+            Some(
+                "REQ_UD1"
+                    | "REQ_UD2"
+                    | "SND_NKE"
+                    | "ACC_NR"
+                    | "ACC_DMD"
+                    | "ACK"
+                    | "NACK"
+                    | "CNF_IR"
+            )
+        );
+        let explicit_mode = mode
+            .filter(|_| transport.configuration.is_some())
+            .map(|mode| mode.to_bits());
+        let (result, candidate_profile) = match explicit_mode {
+            None => ("undetermined", None),
+            Some(n) if n != 0 && requires_zero => ("requires_mode_0", None),
+            Some(0) => ("listed", None),
+            Some(5) => ("listed", Some("A")),
+            Some(7) => ("listed", Some("B")),
+            Some(13) => ("listed", Some("C")),
+            Some(10) => ("listed", Some("D")),
+            Some(_) => ("not_listed", None),
+        };
+        Self {
+            result,
+            candidate_profile,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -424,6 +480,8 @@ pub struct ValueOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RawOutput {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub fragment_frames_hex: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input: Option<String>,
     pub original_frame_hex: String,
@@ -464,9 +522,21 @@ struct SecurityContext {
     key_supplied: bool,
     decrypted_payload: Option<Vec<u8>>,
     tls: Option<TlsOutput>,
+    application_mac_verified: bool,
 }
 
 impl SecurityContext {
+    fn verify_application(
+        mut self,
+        block: Option<&user_data::UserDataBlock<'_>>,
+        key: Option<&[u8; 16]>,
+    ) -> Result<Self, OutputError> {
+        if let Some(key) = key {
+            self.application_mac_verified = messages::verify_application(block, &self, key)?;
+        }
+        Ok(self)
+    }
+
     fn authenticated(&self) -> bool {
         self.decrypted
             && matches!(
@@ -482,24 +552,63 @@ impl SecurityContext {
 
 /// Decode a human-readable hexadecimal frame.
 pub fn decode_hex(input: &str, options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
+    decode_capture_hex(input, options)?.single()
+}
+
+pub fn decode_capture_hex(
+    input: &str,
+    options: &DecodeOptions,
+) -> Result<FragmentOutput, OutputError> {
+    if let Some(packets) = fragments::text_packets(input)? {
+        let frames = packets.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        return decode_fragment_frames(&frames, options);
+    }
     let bytes = decode_hex_bytes(input)?;
-    let mut decoded = decode_bytes(&bytes, options)?;
-    decoded.raw.input = Some(input.to_string());
+    let mut decoded = decode_capture_bytes(&bytes, options)?;
+    if let FragmentOutput::Single(frame) = &mut decoded {
+        frame.raw.input = Some(input.to_string());
+    }
     Ok(decoded)
 }
 
-/// Decode an already materialized frame.
-pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
-    decode_bytes_with_session(data, options, None)
+pub fn decode_capture_bytes(
+    data: &[u8],
+    options: &DecodeOptions,
+) -> Result<FragmentOutput, OutputError> {
+    match fragments::detect_bytes(data, options)? {
+        Some(decoded) => Ok(decoded),
+        None => decode_bytes_with_keys(data, options, None, None)
+            .map(|frame| FragmentOutput::Single(Box::new(frame))),
+    }
 }
 
-fn decode_bytes_with_session(
+pub fn decode_bytes(data: &[u8], options: &DecodeOptions) -> Result<DecodedOutput, OutputError> {
+    decode_capture_bytes(data, options)?.single()
+}
+
+#[cfg(feature = "decryption-mode-7")]
+pub fn decode_bytes_with_application_key(
+    data: &[u8],
+    options: &DecodeOptions,
+    application_key: &[u8; 16],
+) -> Result<DecodedOutput, OutputError> {
+    decode_bytes_with_keys(data, options, None, Some(application_key))
+}
+
+fn decode_bytes_with_keys(
     data: &[u8],
     options: &DecodeOptions,
     session: Option<&TlsSession<'_>>,
+    application_key: Option<&[u8; 16]>,
 ) -> Result<DecodedOutput, OutputError> {
     if data.is_empty() {
         return Err(OutputError::EmptyInput);
+    }
+
+    if let Some(frame) = fragments::singleton_payload(data)? {
+        let mut decoded = decode_bytes_with_keys(frame, options, session, application_key)?;
+        decoded.raw.fragment_frames_hex.push(hex_string(data));
+        return Ok(decoded);
     }
 
     let wired_error = match MbusData::<wired::WiredFrame>::try_from(data) {
@@ -511,7 +620,8 @@ fn decode_bytes_with_session(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?;
+            )?
+            .verify_application(parsed.user_data.as_ref(), application_key)?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -545,7 +655,8 @@ fn decode_bytes_with_session(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?;
+            )?
+            .verify_application(parsed.user_data.as_ref(), application_key)?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -599,6 +710,14 @@ pub fn render_hex(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
+    if let Some(packets) = fragments::text_packets(input)? {
+        let frames = packets.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        return render_capture(
+            decode_fragment_frames(&frames, &options.decode)?,
+            format,
+            options,
+        );
+    }
     let bytes = decode_hex_bytes(input)?;
     render_bytes(&bytes, format, options)
 }
@@ -609,9 +728,13 @@ pub fn render_bytes(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
+    if let Some(capture) = fragments::detect_bytes(data, &options.decode)? {
+        return render_capture(capture, format, options);
+    }
+    let frame = fragments::singleton_payload(data)?.unwrap_or(data);
     match format {
         OutputFormat::Xml => {
-            crate::rscada_xml::render_from_bytes(data, options.decode.key.as_ref()).map_err(
+            crate::rscada_xml::render_from_bytes(frame, options.decode.key.as_ref()).map_err(
                 |message| OutputError::Rendering {
                     code: "xml.unsupported",
                     message,
@@ -619,18 +742,96 @@ pub fn render_bytes(
             )
         }
         OutputFormat::Annotated => {
-            crate::mbus_data::render_annotated_bytes(data, options.decode.key.as_ref())
+            crate::mbus_data::render_annotated_bytes(frame, options.decode.key.as_ref())
         }
         OutputFormat::AnnotatedText => {
-            crate::annotate::annotate_and_render(data).map_err(|error| OutputError::Rendering {
+            crate::annotate::annotate_and_render(frame).map_err(|error| OutputError::Rendering {
                 code: "annotation.failed",
                 message: error.to_string(),
             })
         }
         _ => {
-            let decoded = decode_bytes(data, &options.decode)?;
+            let decoded = decode_bytes_with_keys(data, &options.decode, None, None)?;
             render_decoded(&decoded, format, options)
         }
+    }
+}
+
+fn render_capture(
+    capture: FragmentOutput,
+    format: OutputFormat,
+    options: &RenderOptions,
+) -> Result<String, OutputError> {
+    let frames = match &capture {
+        FragmentOutput::Single(frame) => std::slice::from_ref(frame.as_ref()),
+        FragmentOutput::Multiple(frames) => frames.as_slice(),
+    };
+    match format {
+        OutputFormat::Json => {
+            return serde_json::to_string_pretty(&capture).map_err(|e| OutputError::Serialization {
+                format: "json",
+                message: e.to_string(),
+            })
+        }
+        OutputFormat::Yaml => {
+            return serde_norway::to_string(&capture).map_err(|e| OutputError::Serialization {
+                format: "yaml",
+                message: e.to_string(),
+            })
+        }
+        _ => {}
+    }
+    let mut parts = Vec::new();
+    for frame in frames {
+        let part = match format {
+            OutputFormat::Xml | OutputFormat::Annotated | OutputFormat::AnnotatedText => {
+                if frame.frame.kind == "reassembled" {
+                    return Err(OutputError::Rendering {
+                        code: "render.unsupported",
+                        message: "Select JSON or table for a reassembled AFL message".into(),
+                    });
+                }
+                render_bytes(
+                    &decode_hex_bytes(&frame.raw.original_frame_hex)?,
+                    format,
+                    options,
+                )?
+            }
+            _ => render_decoded(frame, format, options)?,
+        };
+        parts.push(part);
+    }
+    if parts.len() == 1 {
+        return Ok(parts.pop().unwrap_or_default());
+    }
+    match format {
+        OutputFormat::Csv => {
+            for part in parts.iter_mut().skip(1) {
+                if let Some(end) = part.find('\n') {
+                    part.drain(..=end);
+                }
+            }
+            Ok(parts.concat())
+        }
+        OutputFormat::Xml => {
+            let documents = parts
+                .iter()
+                .map(|part| {
+                    part.split_once("?>")
+                        .map_or(part.as_str(), |(_, body)| body.trim_start())
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "<MBusFrames>\n{}\n</MBusFrames>",
+                documents.join("\n")
+            ))
+        }
+        OutputFormat::Annotated => Ok(format!("[{}]", parts.join(",\n"))),
+        OutputFormat::Mermaid => Err(OutputError::Rendering {
+            code: "render.unsupported",
+            message: "Select one frame to render a Mermaid diagram".into(),
+        }),
+        _ => Ok(parts.join("\n")),
     }
 }
 
@@ -706,7 +907,7 @@ pub fn decode_hex_bytes(input: &str) -> Result<Vec<u8>, OutputError> {
     let mut token_start = 0usize;
     let mut saw_separator = true;
     for (index, character) in trimmed.char_indices() {
-        if character.is_ascii_whitespace() || matches!(character, ':' | '-') {
+        if character.is_ascii_whitespace() || matches!(character, ':' | '-' | ',') {
             if !token.is_empty() {
                 push_hex_token(&mut bytes, &token, token_start)?;
                 token.clear();
@@ -782,6 +983,7 @@ fn prepare_security(
             key_supplied: key.is_some(),
             decrypted_payload: None,
             tls: None,
+            application_mac_verified: false,
         });
     }
     let Some(key) = key else {
@@ -793,6 +995,7 @@ fn prepare_security(
             key_supplied: false,
             decrypted_payload: None,
             tls: None,
+            application_mac_verified: false,
         });
     };
     if ell_encrypted && mode.is_none() {
@@ -835,6 +1038,15 @@ fn prepare_security(
                 message: "decryption returned an invalid payload length".to_string(),
             })?
             .to_vec();
+        if cfg!(feature = "oms-gen2")
+            && mode == Some(SecurityMode::AesCbc128IvNonZero)
+            && !decrypted.starts_with(&[0x2f, 0x2f])
+        {
+            return Err(OutputError::Decryption {
+                code: "security.decryption_failed",
+                message: "Mode 5 decryption verification bytes do not match".into(),
+            });
+        }
         Ok(SecurityContext {
             encrypted,
             mode,
@@ -843,6 +1055,7 @@ fn prepare_security(
             key_supplied: true,
             decrypted_payload: Some(decrypted),
             tls: None,
+            application_mac_verified: false,
         })
     }
 
@@ -886,7 +1099,7 @@ fn security_fields(
                 .as_ref()
                 .is_some_and(|ell| ell.encryption.is_some());
             let mode = short_tpl_header.configuration_field.security_mode();
-            if ell_encrypted && matches!(mode, SecurityMode::NoEncryption) {
+            if ell_encrypted && !short_tpl_header.is_encrypted() {
                 (true, None, true)
             } else {
                 (short_tpl_header.is_encrypted(), Some(mode), ell_encrypted)
@@ -1119,13 +1332,22 @@ fn build_output(
     security_context: SecurityContext,
     include_enrichment: bool,
 ) -> DecodedOutput {
+    let fragment = application_error.is_some() && payload.is_some_and(fragments::is_fragment);
     let mut diagnostics = Vec::new();
     if let Some(error) = application_error {
+        let (code, message) = if fragment {
+            (
+                "fragment.incomplete",
+                "Supply all fragments in order to decode this message".to_owned(),
+            )
+        } else {
+            ("application.partial", error.to_string())
+        };
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
-            code: "application.partial".to_string(),
+            code: code.into(),
             layer: "application".to_string(),
-            message: error.to_string(),
+            message,
             offset_start: None,
             offset_end: None,
         });
@@ -1154,6 +1376,8 @@ fn build_output(
             layer: "security".to_string(),
             message: if security_context.tls.is_some() {
                 "TLS payload was decrypted and its authentication tags were verified"
+            } else if security_context.mode == Some(SecurityMode::AesCbc128IvZero) {
+                "AES-CBC payload was decrypted and its AES-CMAC was verified"
             } else {
                 "AES-CCM payload was decrypted and its authentication tag was verified"
             }
@@ -1170,7 +1394,7 @@ fn build_output(
             offset_start: None,
             offset_end: None,
         });
-    } else if security_context.key_supplied {
+    } else if security_context.key_supplied && !fragment {
         diagnostics.push(Diagnostic {
             severity: "info".to_string(),
             code: "security.key_unused".to_string(),
@@ -1182,7 +1406,19 @@ fn build_output(
     }
 
     let (meter, transport) = meter_and_transport(user_data, wireless_id);
-    let (record_outputs, record_error) = collect_records(records, meter.identity.as_ref());
+    let (record_outputs, record_error) = match user_data {
+        Some(user_data::UserDataBlock::FixedDataStructure {
+            device_type_and_unit,
+            status,
+            counter1,
+            counter2,
+            ..
+        }) => (
+            fixed_record_outputs(*device_type_and_unit, *status, counter1, counter2, payload),
+            None,
+        ),
+        _ => collect_records(records, meter.identity.as_ref()),
+    };
     if let Some((offset, message)) = record_error.as_ref() {
         diagnostics.push(Diagnostic {
             severity: "warning".to_string(),
@@ -1217,7 +1453,9 @@ fn build_output(
         .decrypted_payload
         .as_deref()
         .map(hex_string);
-    let decryption_state = if !security_context.encrypted {
+    let decryption_state = if fragment {
+        "awaiting_fragments"
+    } else if !security_context.encrypted {
         "not_applicable"
     } else if security_context.authenticated() {
         "decrypted_authenticated"
@@ -1230,7 +1468,7 @@ fn build_output(
     };
     let payload_protection = if security_context.encrypted {
         "encrypted"
-    } else if security_context.ell_encrypted {
+    } else if security_context.ell_encrypted || fragment {
         "unknown"
     } else {
         "cleartext"
@@ -1241,6 +1479,7 @@ fn build_output(
         || record_error.is_some()
         || (security_context.encrypted && !security_context.decrypted);
 
+    let oms_mode_check = OmsSecurityModeCheck::assess(&frame, &transport, mode);
     DecodedOutput {
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
@@ -1250,6 +1489,7 @@ fn build_output(
         transport,
         application,
         security: SecurityOutput {
+            oms_5_0_1_security_mode_check: oms_mode_check,
             payload_protection: payload_protection.to_string(),
             mode: mode.map(|value| value.to_string()),
             mode_code: mode.map(|value| value.to_bits()),
@@ -1269,6 +1509,7 @@ fn build_output(
         },
         records: record_outputs,
         raw: RawOutput {
+            fragment_frames_hex: Vec::new(),
             input: None,
             original_frame_hex: hex_string(original),
             normalized_frame_hex: hex_string(normalized),
@@ -1364,6 +1605,14 @@ fn meter_and_transport(
                 transport.ell = Some(ell_output(ell));
             }
         }
+        Some(UserDataBlock::ExtendedLinkLayerOnly(ell)) => {
+            transport.header_kind = Some("ell".to_string());
+            transport.access_numbers.push(SourcedU8 {
+                source: "ell".to_string(),
+                value: ell.access_number,
+            });
+            transport.ell = Some(ell_output(ell));
+        }
         Some(UserDataBlock::FixedDataStructure {
             identification_number,
             access_number,
@@ -1371,12 +1620,13 @@ fn meter_and_transport(
             device_type_and_unit,
             ..
         }) => {
+            let [a, b] = device_type_and_unit.to_be_bytes();
             primary = Some(MeterIdentity {
                 source: "application.fixed".to_string(),
                 id: Some(identification_number.to_string()),
                 manufacturer_code: None,
                 version: None,
-                device_type: Some(format!("fixed type/unit 0x{device_type_and_unit:04X}")),
+                device_type: Some(crate::fixed::medium(a, b).into()),
                 device_type_code: None,
             });
             transport.header_kind = Some("fixed".to_string());
@@ -1514,6 +1764,52 @@ fn enrichment_for(code: &str) -> Option<EnrichmentOutput> {
     })
 }
 
+fn fixed_record_outputs(
+    types: u16,
+    status: user_data::StatusField,
+    counter1: &user_data::Counter,
+    counter2: &user_data::Counter,
+    payload: Option<&[u8]>,
+) -> Vec<RecordOutput> {
+    let readings = crate::fixed::readings(types, status.bits(), counter1, counter2);
+    let raw = payload.and_then(|bytes| bytes.last_chunk::<8>());
+    let binary = status.contains(user_data::StatusField::COUNTER_BINARY_SIGNED);
+    readings
+        .into_iter()
+        .enumerate()
+        .map(|(index, reading)| RecordOutput {
+            index,
+            function: if reading.stored {
+                "Stored value"
+            } else {
+                "Actual value"
+            }
+            .into(),
+            storage_number: u64::from(reading.stored),
+            tariff: 0,
+            subunit: 0,
+            quantities: vec![format!("Counter {}", index + 1)],
+            value: ValueOutput {
+                kind: "decimal".into(),
+                value: Some(reading.value.to_string().into()),
+            },
+            unit: Some(reading.unit.into()),
+            data_coding: if binary {
+                "32-bit integer"
+            } else {
+                "8-digit BCD"
+            }
+            .into(),
+            header_hex: format!("{:02X}", reading.unit_byte),
+            data_hex: raw
+                .and_then(|bytes| bytes.get(index * 4..index * 4 + 4))
+                .map(hex_string)
+                .unwrap_or_default(),
+            manufacturer_fields: Vec::new(),
+        })
+        .collect()
+}
+
 fn collect_records(
     records: Option<&user_data::DataRecords<'_>>,
     identity: Option<&MeterIdentity>,
@@ -1523,15 +1819,14 @@ fn collect_records(
     };
     let mut output = Vec::new();
     let mut offset = 0usize;
+    let mut bases = Vec::new();
+    let mut first_error = None;
     let mut profiles = profiles::ProfileHistory::default();
     for item in records.clone() {
         match item {
             Ok(record) => {
                 let size = record.raw_bytes().len();
                 let mut parsed = record_output(output.len(), &record);
-                if let Some(value) = profiles.observe(&record) {
-                    parsed.value = value;
-                }
                 if let (Some(identity), [0x0f, tail @ ..]) = (identity, record.raw_bytes()) {
                     parsed.manufacturer_fields = manufacturer_fields(identity, tail);
                 }
@@ -1545,13 +1840,33 @@ fn collect_records(
                         value: Some(value.to_string().into()),
                     };
                 }
+                match profile::decode(&record, &bases, &mut profiles) {
+                    Ok(Some(value)) => parsed.value = value,
+                    Ok(None) => {}
+                    Err(message) => {
+                        first_error.get_or_insert_with(|| (offset, message.into()));
+                        parsed.value = ValueOutput {
+                            kind: "compact_profile".into(),
+                            value: None,
+                        };
+                    }
+                }
+                if matches!(
+                    record.value(),
+                    Some(DataType::Number(_) | DataType::LossyNumber(_))
+                ) {
+                    bases.push(record.raw_bytes);
+                }
                 output.push(parsed);
                 offset += size;
             }
-            Err(error) => return (output, Some((offset, error.to_string()))),
+            Err(error) => {
+                first_error.get_or_insert_with(|| (offset, error.to_string()));
+                break;
+            }
         }
     }
-    (output, None)
+    (output, first_error)
 }
 
 fn multical_energy_register(identity: &MeterIdentity, raw: &[u8]) -> Option<(&'static str, u32)> {
@@ -1811,11 +2126,17 @@ fn standardized_word(word: &str, first: bool) -> String {
 }
 
 fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
+    if let Some(time) = profile::time_point(record) {
+        return time;
+    }
     let information = record.data_information();
     let value_information = record.value_information();
     let scale = value_information.map(|value| value.decimal_scale_exponent);
     let offset = record_offset_power10(record);
 
+    let raw_value = record
+        .raw_bytes()
+        .get(record.data_record_header.get_size()..);
     match record.value() {
         Some(DataType::Number(number)) | Some(DataType::LossyNumber(number)) => {
             if information
@@ -1844,6 +2165,18 @@ fn value_output(record: &user_data::DataRecord<'_>) -> ValueOutput {
             kind: "text".to_string(),
             value: Some(serde_json::Value::String(text.to_string())),
         },
+        Some(DataType::Date(..)) if raw_value == Some(&[0, 0]) => ValueOutput {
+            kind: "date".into(),
+            value: Some(serde_json::Value::Null),
+        },
+        Some(DataType::DateTime(..))
+            if matches!(raw_value, Some([0, 0, 0, 0]) | Some([0x80..=0xff, _, _, _])) =>
+        {
+            ValueOutput {
+                kind: "datetime".into(),
+                value: Some(serde_json::Value::Null),
+            }
+        }
         Some(DataType::Date(day, month, year)) => {
             temporal_value("date", day, month, year, None, None, None)
         }
@@ -2996,7 +3329,7 @@ mod tests {
     #[test]
     fn strict_hex_rejects_odd_and_invalid_input() {
         assert!(decode_hex_bytes("123").is_err());
-        assert!(decode_hex_bytes("68,3D").is_err());
+        assert_eq!(decode_hex_bytes("68,3D").unwrap(), [0x68, 0x3d]);
         assert!(decode_hex_bytes("0x6").is_err());
     }
 

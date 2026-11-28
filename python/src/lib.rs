@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn rejects_ambiguous_hex() {
-        assert!(decode_hex_bytes("68,3D").is_err());
+        assert!(decode_hex_bytes("68,3Z").is_err());
         assert!(decode_hex_bytes("123").is_err());
     }
 

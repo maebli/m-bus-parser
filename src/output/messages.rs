@@ -1,6 +1,40 @@
 use super::*;
 use user_data::{ApplicationPayload, ApplicationProtocol, UserDataBlock};
 
+pub(super) fn verify_application(
+    block: Option<&UserDataBlock<'_>>,
+    security: &SecurityContext,
+    key: &[u8; 16],
+) -> Result<bool, OutputError> {
+    #[cfg(feature = "decryption-mode-7")]
+    if let Some(UserDataBlock::ApplicationMessage(message)) = block {
+        let payload = match security.decrypted_payload.as_deref() {
+            Some(bytes) => message.decode_payload(bytes),
+            None => message.decode(),
+        };
+        if let Ok(ApplicationPayload::SecurityTransfer {
+            data_selector: 0x32,
+            body,
+            ..
+        }) = payload
+        {
+            m_bus_core::decryption::verify_sitp_cmac(body, key).map_err(|e| {
+                OutputError::Decryption {
+                    code: "security.application_authentication_failed",
+                    message: e.to_string(),
+                }
+            })?;
+            return Ok(true);
+        }
+    }
+    #[cfg(not(feature = "decryption-mode-7"))]
+    let _ = (block, security, key);
+    Err(OutputError::Decryption {
+        code: "security.application_mac_unavailable",
+        message: "Application authentication requires a decoded SITP AES-CMAC container".into(),
+    })
+}
+
 pub(super) fn application_output(
     block: Option<&UserDataBlock<'_>>,
     security: &SecurityContext,
@@ -17,6 +51,28 @@ pub(super) fn application_output(
     if security.encrypted && !security.decrypted {
         return (Some(output), None);
     }
+    #[cfg(feature = "oms-gen3")]
+    if message.protocol == ApplicationProtocol::Sml {
+        let payload = security
+            .decrypted_payload
+            .as_deref()
+            .unwrap_or(message.payload);
+        if let Some(0x76) = payload.iter().find(|byte| **byte != 0x2f) {
+            return match super::sml::decode(payload) {
+                Ok(value) => {
+                    output.decoded = Some(value);
+                    (Some(output), None)
+                }
+                Err(reason) => (
+                    Some(output),
+                    Some(application_diagnostic(
+                        "application.payload_invalid",
+                        reason.into(),
+                    )),
+                ),
+            };
+        }
+    }
     let result = if let Some(plaintext) = &security.decrypted_payload {
         message.decode_payload(plaintext)
     } else {
@@ -25,7 +81,42 @@ pub(super) fn application_output(
     let mut diagnostic = None;
     match result {
         Ok(payload) => {
+            if let ApplicationPayload::Clock { operation, .. } = &payload {
+                if !matches!(
+                    operation,
+                    user_data::application_message::ClockOperation::Set
+                ) {
+                    output.protocol = ApplicationProtocol::ClockAdjust.name().into();
+                }
+            }
             output.decoded = match &payload {
+                ApplicationPayload::SecurityTransfer {
+                    block_id,
+                    block_control,
+                    recipient,
+                    data_selector,
+                    key_id,
+                    key_version,
+                    body,
+                } => {
+                    let (mut value, warning) = security_transfer_fields(
+                        *data_selector,
+                        body,
+                        security.application_mac_verified,
+                    );
+                    diagnostic = warning;
+                    for (name, field) in [
+                        ("block_id", *block_id),
+                        ("block_control", *block_control),
+                        ("recipient", *recipient),
+                        ("data_selector", *data_selector),
+                        ("key_id", *key_id),
+                        ("key_version", *key_version),
+                    ] {
+                        value.insert(name.into(), field.into());
+                    }
+                    Some(value.into())
+                }
                 ApplicationPayload::External(_) => None,
                 ApplicationPayload::Error { code, details } => Some(serde_json::json!({
                     "error_code": code,
@@ -59,6 +150,77 @@ pub(super) fn application_output(
         }
     }
     (Some(output), diagnostic)
+}
+
+fn security_transfer_fields(
+    selector: u8,
+    body: &[u8],
+    mac_verified: bool,
+) -> (
+    serde_json::Map<String, serde_json::Value>,
+    Option<Diagnostic>,
+) {
+    let mut fields = serde_json::Map::new();
+    if let (0x22, [status]) = (selector, body) {
+        fields.insert("status_code".into(), (*status).into());
+        return (fields, None);
+    }
+    if let Some((counter, timing, protocol, data, mac)) = (|| {
+        let (counter, rest) = body.split_first_chunk::<4>()?;
+        let (timing, rest) = rest.split_first_chunk::<5>()?;
+        let (protocol, rest) = rest.split_first()?;
+        let (data, mac) = rest.split_last_chunk::<8>()?;
+        (selector == 0x32).then_some((counter, timing, protocol, data, mac))
+    })() {
+        fields.insert("key_counter".into(), u32::from_le_bytes(*counter).into());
+        fields.insert("target_time_hex".into(), hex_string(timing).into());
+        fields.insert("protocol_id".into(), (*protocol).into());
+        fields.insert("apdu_hex".into(), hex_string(data).into());
+        fields.insert("application_mac_hex".into(), hex_string(mac).into());
+        fields.insert("application_mac_verified".into(), mac_verified.into());
+        if *protocol == 1 {
+            let records = user_data::parse_data_records(data);
+            let (records, error) = collect_records(Some(&records), None);
+            fields.insert("records".into(), serde_json::json!(records));
+            return (
+                fields,
+                error.map(|(_, reason)| {
+                    application_diagnostic("application.payload_invalid", reason)
+                }),
+            );
+        }
+        if *protocol == 4 {
+            let diagnostic = match user_data::application_message::parse_sitp_clock(data) {
+                Ok((operation, value)) => {
+                    fields.insert(
+                        "clock".into(),
+                        serde_json::json!({ "operation": operation, "value": value }),
+                    );
+                    None
+                }
+                Err(error) => Some(application_diagnostic(
+                    "application.payload_invalid",
+                    error.to_string(),
+                )),
+            };
+            return (fields, diagnostic);
+        }
+        return (
+            fields,
+            Some(application_diagnostic(
+                "application.sitp_protocol_unsupported",
+                format!("Unsupported SITP protocol ID {protocol:#04x}"),
+            )),
+        );
+    }
+    fields.insert("body_hex".into(), hex_string(body).into());
+    (
+        fields,
+        Some(application_diagnostic(
+            "application.sitp_body_unsupported",
+            "Unsupported SITP data selector or block length".into(),
+        )),
+    )
 }
 
 fn application_diagnostic(code: &str, message: String) -> Diagnostic {

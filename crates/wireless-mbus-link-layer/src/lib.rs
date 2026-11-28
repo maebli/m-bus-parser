@@ -25,7 +25,22 @@ pub fn trailing_frame_crc_start(data: &[u8]) -> Option<usize> {
 fn validate_format_a_header(data: &[u8]) -> Option<()> {
     let header = data.get(..10)?;
     let crc = data.get(10..12)?;
-    (crc16_en13757(header) == u16::from_be_bytes([crc[0], crc[1]])).then_some(())
+    if crc16_en13757(header) != u16::from_be_bytes([crc[0], crc[1]]) {
+        return None;
+    }
+    let declared_size = usize::from(header[0]) + 1;
+    if let Some(payload_size) = declared_size.checked_sub(header.len()) {
+        let wire_size = declared_size + 2 + 2 * payload_size.div_ceil(16);
+        if data.len() == wire_size {
+            for block in data.get(12..)?.chunks(18) {
+                let (payload, crc) = block.split_last_chunk::<2>()?;
+                if crc16_en13757(payload) != u16::from_be_bytes(*crc) {
+                    return None;
+                }
+            }
+        }
+    }
+    Some(())
 }
 
 /// A borrowed view of a Format A frame with its interleaved CRCs omitted.

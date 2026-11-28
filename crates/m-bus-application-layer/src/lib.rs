@@ -263,7 +263,9 @@ impl From<ControlInformation> for Direction {
             ControlInformation::ApplicationLayerFormatFrameShortTransport => Self::MasterToSlave,
             ControlInformation::ApplicationLayerFormatFrameLongTransport => Self::MasterToSlave,
             ControlInformation::ClockSyncAbsolute => Self::MasterToSlave,
-            ControlInformation::ClockSyncRelative => Self::MasterToSlave,
+            ControlInformation::ClockSyncRelative
+            | ControlInformation::SecurityTransferCommandLong => Self::MasterToSlave,
+            ControlInformation::SecurityTransferResponseShort => Self::SlaveToMaster,
             ControlInformation::ApplicationErrorShortTransport => Self::SlaveToMaster,
             ControlInformation::ApplicationErrorLongTransport => Self::SlaveToMaster,
             ControlInformation::AlarmShortTransport => Self::SlaveToMaster,
@@ -355,6 +357,8 @@ pub enum ControlInformation {
     ExtendedLinkLayerII,
     ExtendedLinkLayerIII,
     RequestSelectedApplication,
+    SecurityTransferCommandLong,
+    SecurityTransferResponseShort,
 }
 
 impl ControlInformation {
@@ -376,6 +380,8 @@ impl ControlInformation {
             0x6B => Ok(Self::ApplicationLayerFormatFrameLongTransport),
             0x6C => Ok(Self::ClockSyncAbsolute),
             0x6D => Ok(Self::ClockSyncRelative),
+            0xC3 => Ok(Self::SecurityTransferCommandLong),
+            0xC4 => Ok(Self::SecurityTransferResponseShort),
             0x6E => Ok(Self::ApplicationErrorShortTransport),
             0x6F => Ok(Self::ApplicationErrorLongTransport),
             0x70 => Ok(Self::SendErrorStatus),
@@ -453,12 +459,14 @@ pub enum ApplicationResetSubcode {
     Development(u8),
     Selftest(u8),
     Reserved2(u8),
+    Unspecified,
 }
 
 #[cfg(feature = "std")]
 impl fmt::Display for ApplicationResetSubcode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let subcode = match self {
+            Self::Unspecified => "Unspecified",
             Self::All(_) => "All",
             Self::UserData(_) => "User data",
             Self::SimpleBilling(_) => "Simple billing",
@@ -508,7 +516,7 @@ impl ApplicationResetSubcode {
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Counter {
-    count: u32,
+    count: i32,
 }
 
 #[cfg(feature = "std")]
@@ -519,9 +527,15 @@ impl fmt::Display for Counter {
 }
 
 impl Counter {
+    pub const fn value(&self) -> i32 {
+        self.count
+    }
+
     pub fn from_bcd_hex_digits(digits: [u8; 4]) -> Result<Self, ApplicationLayerError> {
         let count = bcd_hex_digits_to_u32(digits)?;
-        Ok(Self { count })
+        Ok(Self {
+            count: count as i32,
+        })
     }
 }
 
@@ -591,6 +605,7 @@ pub enum UserDataBlock<'a> {
         secondary_address: SecondaryAddressMask,
     },
     ApplicationMessage(ApplicationMessage<'a>),
+    ExtendedLinkLayerOnly(ExtendedLinkLayer),
 }
 
 impl<'a> UserDataBlock<'a> {
@@ -1012,31 +1027,27 @@ impl ShortTplHeader {
             }
             .decrypt_into(provider, output);
         }
-
         #[cfg(feature = "decryption-mode-5")]
         if context.security_mode == m_bus_core::SecurityMode::AesCbc128IvNonZero {
-            use crate::decryption::DecryptionError;
-
-            // Bits 7-4 of the configuration field give the number of encrypted
-            // 16-byte blocks. Anything after them is sent in plaintext. N = 15
-            // means the whole payload is encrypted (OMS Vol. 2, 7.2.4.3).
-            let encrypted_len = match self.configuration_field.mode_specific_lower() >> 4 {
-                15 => data.len(),
-                blocks => usize::from(blocks) * 16,
+            use crate::decryption::DecryptionError::InvalidDataLength;
+            let blocks = self.configuration_field.mode_specific_lower() >> 4;
+            let encrypted_len = if blocks == 15 {
+                data.len()
+            } else {
+                usize::from(blocks) * 16
             };
-            let (encrypted, plaintext) = data
+            if encrypted_len % 16 != 0 {
+                return Err(InvalidDataLength);
+            }
+            let (ciphertext, plaintext) = data
                 .split_at_checked(encrypted_len)
-                .ok_or(DecryptionError::InvalidDataLength)?;
-            let decrypted_len =
-                EncryptedPayload::new(encrypted, context).decrypt_into(provider, output)?;
-            let len = decrypted_len + plaintext.len();
-            output
-                .get_mut(decrypted_len..len)
-                .ok_or(DecryptionError::InvalidDataLength)?
-                .copy_from_slice(plaintext);
-            return Ok(len);
+                .ok_or(InvalidDataLength)?;
+            let target = output.get_mut(..data.len()).ok_or(InvalidDataLength)?;
+            let (encrypted_target, plaintext_target) = target.split_at_mut(encrypted_len);
+            EncryptedPayload::new(ciphertext, context).decrypt_into(provider, encrypted_target)?;
+            plaintext_target.copy_from_slice(plaintext);
+            return Ok(data.len());
         }
-
         EncryptedPayload::new(data, context).decrypt_into(provider, output)
     }
 }
@@ -1058,9 +1069,11 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
 
         match control_information {
             ControlInformation::ResetAtApplicationLevel => {
-                let subcode = ApplicationResetSubcode::from(
-                    *data.get(1).ok_or(ApplicationLayerError::InsufficientData)?,
-                );
+                let subcode = match data.get(1) {
+                    Some(&value) => ApplicationResetSubcode::from(value),
+                    None if cfg!(feature = "oms-gen2") => ApplicationResetSubcode::Unspecified,
+                    None => return Err(ApplicationLayerError::InsufficientData),
+                };
                 Ok(UserDataBlock::ResetAtApplicationLevel { subcode })
             }
             ControlInformation::SelectSlave => {
@@ -1138,35 +1151,42 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
                 })
             }
             ControlInformation::ResponseWithFixedDataStructure => {
-                let mut iter = data.iter().skip(1);
-                let identification_number = IdentificationNumber::from_bcd_hex_digits([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ])?;
-
-                let access_number = *iter.next().ok_or(ApplicationLayerError::InsufficientData)?;
-
-                let status = StatusField::from_bits_truncate(
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                );
-                let device_type_and_unit = u16::from_be_bytes([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ]);
-                let counter1 = Counter::from_bcd_hex_digits([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ])?;
-                let counter2 = Counter::from_bcd_hex_digits([
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                    *iter.next().ok_or(ApplicationLayerError::InsufficientData)?,
-                ])?;
+                let body = data
+                    .get(1..17)
+                    .ok_or(ApplicationLayerError::InsufficientData)?;
+                if data.len() != 17 {
+                    return Err(ApplicationLayerError::InvalidDataLength {
+                        expected: 17,
+                        actual: data.len(),
+                    });
+                }
+                let ([id, [access_number, status, unit1, unit2], first, second], _) =
+                    body.as_chunks::<4>()
+                else {
+                    return Err(ApplicationLayerError::InsufficientData);
+                };
+                let order = |mut bytes: [u8; 4]| {
+                    if control_information_byte == 0x77 {
+                        bytes.reverse();
+                    }
+                    bytes
+                };
+                let identification_number = IdentificationNumber::from_bcd_hex_digits(order(*id))?;
+                let access_number = *access_number;
+                let status = StatusField::from_bits_truncate(*status);
+                let device_type_and_unit = u16::from_be_bytes([*unit1, *unit2]);
+                let counter = |bytes| {
+                    let digits = order(bytes);
+                    if status.contains(StatusField::COUNTER_BINARY_SIGNED) {
+                        Ok(Counter {
+                            count: i32::from_le_bytes(digits),
+                        })
+                    } else {
+                        Counter::from_bcd_hex_digits(digits)
+                    }
+                };
+                let counter1 = counter(*first)?;
+                let counter2 = counter(*second)?;
                 Ok(UserDataBlock::FixedDataStructure {
                     identification_number,
                     access_number,
@@ -1243,6 +1263,8 @@ impl<'a> TryFrom<&'a [u8]> for UserDataBlock<'a> {
             | ControlInformation::ApplicationLayerFormatFrameNoTransport
             | ControlInformation::ApplicationLayerFormatFrameShortTransport
             | ControlInformation::ApplicationLayerFormatFrameLongTransport
+            | ControlInformation::SecurityTransferCommandLong
+            | ControlInformation::SecurityTransferResponseShort
             | ControlInformation::ClockSyncAbsolute
             | ControlInformation::ClockSyncRelative
             | ControlInformation::ApplicationErrorShortTransport
