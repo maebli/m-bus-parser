@@ -41,7 +41,7 @@ jobs:
       - name: Test native mutations on changed lines
         run: >-
           cargo mutants --workspace --exclude 'wasm/**' --cargo-arg=--workspace --cargo-arg=--locked
-          --features m-bus-parser/std,m-bus-parser/decryption
+          --features m-bus-parser/std,m-bus-parser/decryption,m-bus-parser/oms-gen5
           --in-diff "$RUNNER_TEMP/changes.diff" --output "$RUNNER_TEMP/mutation-results/native"
 
       - name: Install WebAssembly test runner
