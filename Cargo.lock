@@ -603,6 +603,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dlms-cosem-kit"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2446b60ddbfea53c2ebf9ba734731c0de2c4d7c4e609a1e5229cb9301819ac70"
+dependencies = [
+ "bitflags 2.13.2",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -864,6 +873,15 @@ version = "0.7.4"
 dependencies = [
  "m-bus-application-layer",
  "m-bus-core",
+]
+
+[[package]]
+name = "m-bus-oms-rules"
+version = "0.7.4"
+dependencies = [
+ "dlms-cosem-kit",
+ "m-bus-core",
+ "serde",
 ]
 
 [[package]]
