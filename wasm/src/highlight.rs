@@ -9,7 +9,7 @@ use syntect::util::LinesWithEndings;
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 
 fn syntax_set() -> &'static SyntaxSet {
-    SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
+    SYNTAX_SET.get_or_init(crate::load_syntaxes)
 }
 
 fn syntax_for<'a>(syntax_set: &'a SyntaxSet, language: &str) -> &'a SyntaxReference {

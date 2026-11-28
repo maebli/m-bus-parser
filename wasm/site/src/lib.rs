@@ -6,6 +6,12 @@ pub mod parser;
 #[path = "../../src/highlight.rs"]
 pub mod highlight;
 
+#[cfg(feature = "syntax")]
+fn load_syntaxes() -> syntect::parsing::SyntaxSet {
+    syntect::dumps::from_uncompressed_data(include_bytes!("../grammars/syntax.packdump"))
+        .expect("bundled web grammars")
+}
+
 #[cfg(feature = "parser")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn version() -> String {

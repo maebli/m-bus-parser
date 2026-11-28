@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=fc7f6f523fd94baa">
-    <link rel="modulepreload" href="./parser.js?v=8d2bb41cb43d20b7">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=3d70e4f05c002b30">
+    <link rel="modulepreload" href="./parser.js?v=ea35fbf04cf5eb6e">
     <link rel="modulepreload" href="./input-format.js">
     <link rel="modulepreload" href="./tls-session.js">
     <link rel="modulepreload" href="./error-report.js">
@@ -295,8 +295,55 @@
         }
 
         .input-heading { justify-content: space-between; gap: 8px 16px; margin: 2px 0 8px; }
-        .telegram-heading { display: grid; }
+        .telegram-heading { display: grid; min-width: 0; max-width: 100%; }
         .telegram-heading label { margin: 0; }
+        #capture-picker:not([hidden]) {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-self: start;
+            gap: 0.3em;
+            max-width: 100%;
+            min-height: 24px;
+            border-radius: 4px;
+            color: #59636e;
+            font-size: 0.75rem;
+        }
+        #capture-picker::after {
+            content: "";
+            width: 0.4em;
+            height: 0.4em;
+            margin-inline: 0.2em;
+            border: solid currentColor;
+            border-width: 0 1px 1px 0;
+            transform: translateY(-1px) rotate(45deg);
+            flex: none;
+        }
+        #capture-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #capture-position {
+            color: #6e7781;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        #capture-frame {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 1;
+        }
+        #capture-picker:hover #capture-label { text-decoration: underline; }
+        #capture-picker:has(:focus-visible) { outline: 2px solid #0969da; outline-offset: 2px; }
+        #capture-picker:not([hidden]) + #detected-meter { display: none; }
+        body.dark-mode #capture-picker:not([hidden]) { color: #b1bac4; color-scheme: dark; }
+        body.dark-mode #capture-position { color: #929ba5; }
+        body.dark-mode #capture-picker:has(:focus-visible) { outline-color: #4493f8; }
         .encoding-picker {
             display: flex;
             flex-wrap: wrap;
@@ -369,7 +416,118 @@
         #security-fields { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 4px 18px; margin: 8px 0 0; }
         #security-fields dt { color: #59636e; }
         #security-fields dd { margin: 0; }
+        .output-modes {
+            position: relative;
+            display: inline-grid;
+            grid-template-columns: repeat(2, 1fr);
+            align-self: flex-start;
+            width: max-content;
+            margin: 8px 12px 4px;
+            padding: 2px;
+            border-radius: 8px;
+            background: #eff2f5;
+            color: #52606d;
+        }
+        .output-modes::before {
+            content: "";
+            position: absolute;
+            inset: 2px auto 2px 2px;
+            width: calc(50% - 2px);
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px #18233124;
+            transition: transform 160ms ease-out;
+        }
+        .output-modes:has(#mode-oms[aria-pressed="true"])::before { transform: translateX(100%); }
+        .output-modes button {
+            position: relative;
+            min-height: 26px;
+            padding: 2px 9px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: inherit;
+            font-weight: 500;
+            line-height: 1.3;
+            font-family: inherit;
+            font-size: 0.78rem;
+            cursor: pointer;
+        }
+        .output-modes button[aria-pressed="true"] { color: #202a35; }
+        .output-modes button:focus-visible { outline: 2px solid #3973bd; outline-offset: 1px; }
+        body.dark-mode .output-modes { background: #242b33; color: #b1bbc5; }
+        body.dark-mode .output-modes::before { background: #3a434e; }
+        body.dark-mode .output-modes button[aria-pressed="true"] { color: #f0f3f6; }
+        @media (prefers-reduced-motion: reduce) {
+            .output-modes::before { transition: none; }
+        }
+
+        .oms-scope { margin: 0 0 10px; font-size: 0.78rem; }
+        .oms-report .rule-reference a { color: inherit; text-underline-offset: 2px; }
+        .oms-report { --rule-line: #d1d9e0; --rule-muted: #59636e; --rule-header: #f6f8fa; padding: 8px clamp(8px, 2vw, 20px) 18px; }
+        body.dark-mode .oms-report { --rule-line: #3d444d; --rule-muted: #a4aeb9; --rule-header: #212830; }
+        .oms-report h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 14px; font-size: 1rem; }
+        .oms-report h3 small { font-size: 0.8rem; font-weight: 400; color: var(--rule-muted); }
+        .oms-report a { color: #0969da; text-underline-offset: 3px; }
+        body.dark-mode .oms-report a { color: #79c0ff; }
+        .oms-report table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
+        .oms-report th, .oms-report td { padding: 10px 12px; border-bottom: 1px solid var(--rule-line); vertical-align: top; }
+        .oms-report thead { background: var(--rule-header); color: var(--rule-muted); font-size: 0.78rem; }
+        .oms-report .validation-group { color: var(--rule-muted); background: var(--rule-header); font-size: .78rem; }
+        .oms-report tbody th { font-weight: 600; }
+        .oms-report .rule-detail, .oms-report .rule-reference { color: var(--rule-muted); font-size: 0.8rem; font-weight: 400; }
+        .oms-report .rule-detail { display: block; margin-top: 3px; }
+        .oms-report .inline-reference { display: none; }
+        .oms-report [data-status="not_applicable"] { color: var(--rule-muted); }
+        .oms-status { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; background: var(--rule-header); }
+        [data-status="passed"] .oms-status { color: #116329; background: #dafbe1; }
+        [data-status="failed"] .oms-status { color: #a31721; background: #ffebe9; }
+        body.dark-mode [data-status="passed"] .oms-status { color: #7ee787; background: #123622; }
+        body.dark-mode [data-status="failed"] .oms-status { color: #ffaaa5; background: #482125; }
+        @media (max-width: 600px) {
+            .oms-report th, .oms-report td { padding: 8px 4px; }
+            .oms-report .reference-column { display: none; }
+            .oms-report .inline-reference { display: block; margin-top: 4px; }
+        }
         .output-toolbar { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; }
+        #oms-context {
+            --option-line: #d1d9e0;
+            --option-muted: #59636e;
+            --option-field: #f6f8fa;
+            margin: 0 clamp(8px, 2vw, 20px) 12px;
+            border-bottom: 1px solid var(--option-line);
+            font-size: .875rem;
+        }
+        body.dark-mode #oms-context {
+            --option-line: #3d444d;
+            --option-muted: #b1bac4;
+            --option-field: #161b22;
+            color-scheme: dark;
+        }
+        #oms-context summary {
+            width: fit-content;
+            padding: 6px 2px;
+            color: var(--option-muted);
+            font-size: .8rem;
+            cursor: pointer;
+        }
+        #oms-context summary:hover { color: inherit; }
+        #oms-context summary:focus-visible { outline: 2px solid #3973bd; outline-offset: 2px; }
+        #oms-context p, #oms-context small { color: var(--option-muted); font-size: .78rem; line-height: 1.45; }
+        #oms-context p { margin: 2px 0 12px; }
+        .oms-settings, .oms-setting-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 12px 18px; }
+        .oms-settings { max-width: 48rem; padding-bottom: 14px; }
+        .oms-setting-group { grid-column: 1 / -1; }
+        .oms-settings label { display: grid; align-content: start; gap: 4px; min-width: 0; }
+        .oms-settings select, .oms-settings input:not([type="checkbox"]) {
+            width: 100%; min-width: 0; box-sizing: border-box; margin: 0; padding: 6px 8px;
+            border: 1px solid var(--option-line); border-radius: 6px;
+            background: var(--option-field); color: inherit; font: inherit;
+        }
+        .oms-settings .oms-toggle { display: flex; align-items: baseline; gap: 8px; }
+        .oms-toggle input { margin: 0; }
+        .oms-toggle small { display: block; margin-top: 2px; }
+        #oms-context [hidden] { display: none; }
         .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
         .result-views { min-width: 0; }
         .result-views .parse-actions { margin: 0; gap: 4px; }
@@ -377,6 +535,7 @@
         .result-views input[type="button"]:hover { background: #eff2f5; }
         .result-views input[type="button"][aria-pressed="true"] { background: #ddf4ff; border-color: #0969da; color: #0550ae; box-shadow: none; }
         .result-views input[type="button"]:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
+        .result-views .parse-actions[hidden],
         #copy_output[hidden],
         #download_output[hidden],
         #security-panel[hidden] { display: none; }
@@ -1386,6 +1545,11 @@
         <div class="input-heading">
             <div class="telegram-heading">
                 <label for="inputstring">Telegram</label>
+                <span id="capture-picker" hidden>
+                    <select id="capture-frame" aria-label="Select telegram from capture" aria-describedby="capture-position"></select>
+                    <span id="capture-label" aria-hidden="true"></span>
+                    <span id="capture-position"></span>
+                </span>
                 <span id="detected-meter" aria-live="polite">Meter and security mode are detected automatically</span>
             </div>
             <div class="encoding-picker" role="radiogroup" aria-labelledby="encoding-label">
@@ -1447,7 +1611,7 @@
             <details class="input-help" name="parser-disclosure">
                 <summary>Help</summary>
                 <div class="disclosure-content">
-                    <p class="key-help" id="input-help"><em>Accepts wired and wireless frames. If neither matches, tries application-layer data (starting with CI) or bare DIF/VIF records.</em></p>
+                    <p class="key-help" id="input-help"><em>Paste a telegram or a wired stream. For a wireless capture or a split message, paste one packet per line in transmission order. You can also paste application-layer data or DIF/VIF records.</em></p>
                     <p class="key-help" id="aeskey-help">Enter the key supplied with the meter. Leave empty to inspect the telegram headers.</p>
                     <p class="key-help">Keys stay in this browser tab and are excluded from share links and reports.</p>
                 </div>
@@ -1696,9 +1860,13 @@
     <link rel="stylesheet" href="./manufacturer-icons.css">
     <link rel="stylesheet" href="./products/view.css">
     <div id="output-container">
+        <div class="output-modes" role="group" aria-label="Operation">
+            <button type="button" id="mode-parse" aria-controls="parse-formats" aria-pressed="true">Parse</button>
+            <button type="button" id="mode-oms" aria-controls="oms-formats" aria-pressed="false">Validate</button>
+        </div>
         <div class="output-toolbar">
             <div class="result-views">
-                <div class="parse-actions" role="group" aria-label="Output format">
+                <div id="parse-formats" class="parse-actions" role="group" aria-label="Parse format">
                     <input id="parse_table" type="button" value="Table" aria-pressed="true" />
                     <input id="parse_hexview" type="button" value="Hex View" aria-pressed="false" />
                     <input id="parse_mermaid" type="button" value="Diagram" aria-pressed="false" />
@@ -1707,6 +1875,12 @@
                     <input id="parse_yaml" type="button" value="YAML" aria-pressed="false" />
                     <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
+                </div>
+                <div id="oms-formats" class="parse-actions" role="group" aria-label="Validation format" hidden>
+                    <input id="parse_oms" type="button" value="Table" aria-pressed="false" />
+                    <input id="parse_oms-json" type="button" value="JSON" aria-pressed="false" />
+                    <input id="parse_oms-csv" type="button" value="CSV" aria-pressed="false" />
+                    <input id="parse_oms-xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
             <div class="output-actions">
@@ -1725,6 +1899,65 @@
                 </a>
             </div>
         </div>
+        <details id="oms-context" hidden>
+            <summary>Validation options</summary>
+            <p>These optional details come from the meter configuration or capture notes. Leave any you do not know unset.</p>
+            <div class="oms-settings">
+                <label>Meter interface profile
+                    <select id="oms-national-profile" aria-describedby="profile-hint">
+                        <option value="">Unspecified</option>
+                        <option value="bsi-unidirectional">BSI · one-way</option>
+                        <option value="bsi-bidirectional">BSI · two-way</option>
+                        <option value="idis">IDIS</option>
+                    </select>
+                    <small id="profile-hint">Applies the OMS Annex E rules for the interface listed in the meter specification.</small>
+                </label>
+                <label id="radio-mode-option" hidden>Wireless M-Bus mode
+                    <select id="oms-radio-mode" aria-describedby="radio-hint">
+                        <option value="">Unspecified</option>
+                        <option value="c">C · variant unknown</option>
+                        <option value="c1">C1 · one-way</option>
+                        <option value="c2">C2 · two-way</option>
+                        <option value="other">Other radio mode</option>
+                    </select>
+                    <small id="radio-hint">Uses the configured radio mode to check the wireless headers and access flags.</small>
+                </label>
+                <label id="consecutive-option" class="oms-toggle" hidden>
+                    <input id="consecutive-capture" type="checkbox">
+                    <span>Complete capture<small>Enable if every transmission was recorded in order and the meter did not restart. This lets OMS check counters and replies.</small></span>
+                </label>
+                <label class="oms-toggle">
+                    <input id="taf7" type="checkbox">
+                    <span>Meter reading profile (TAF7)<small>Enable if the meter uses the German TAF7 tariff use case. Checks the recorded readings and their timing.</small></span>
+                </label>
+                <div id="taf7-periods" class="oms-setting-group" hidden>
+                    <label>Time between measurements (ms)<input name="measuring_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                    <label>Time between stored readings (ms)<input name="registration_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                    <label>Expected time between transmissions (ms)<input name="nominal_transmission_interval_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                    <label>Acceptance window (ms)<input name="acceptance_window_ms" type="number" min="1" step="1" placeholder="Unknown"><small>Permitted time window for accepting a reading.</small></label>
+                </div>
+                <label id="tls-key-option" hidden>OMS communication key<input id="oms-tls-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the authentication tag on the OMS message carrying TLS.</small></label>
+                <label id="application-key-option" hidden>Application key<input id="oms-application-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the protected application data inside the security transfer.</small></label>
+                <label id="wrapping-key-option" hidden>Wrapping key<input id="oms-wrapping-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Checks the integrity of a wrapped key in this transfer.</small></label>
+                <div id="firmware-settings" class="oms-setting-group" hidden>
+                    <label>Firmware image<input id="oms-firmware" type="file"><small>Supply the image file when the capture does not contain the complete image.</small></label>
+                    <label>Firmware image key<input id="oms-image-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the image authentication tag.</small></label>
+                </div>
+                <div id="lpwan-mac-settings" class="oms-setting-group" hidden>
+                    <label>LPWAN MAC key<input id="lpwan-mac-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the link-layer authentication tag.</small></label>
+                    <label>Key derivation counter<input id="lpwan-counter" type="number" min="0" max="255" step="1" placeholder="From telegram"><small>Supply the counter only if the telegram omits it.</small></label>
+                </div>
+            </div>
+        </details>
+        <template id="oms-table-template">
+            <section class="oms-report">
+                <h3 id="oms-report-heading"><span></span><small></small></h3>
+                <p class="oms-scope">Checks use the selected telegram and any preceding telegrams in the capture.</p>
+                <table aria-labelledby="oms-report-heading">
+                    <thead><tr><th scope="col">Result</th><th scope="col">Rule</th><th scope="col" class="reference-column">Reference</th></tr></thead>
+                </table>
+            </section>
+        </template>
         <p class="output-summary visually-hidden" id="output-summary" aria-live="polite"></p>
         <div id="output" aria-live="polite"><p class="output-placeholder">Paste a telegram, then select Decode telegram.</p></div>
         <template id="parser-note-template">
@@ -1742,8 +1975,9 @@
         <p id="result-report" hidden><button class="utility-control" type="button">Report an error</button></p>
     </div>
     <script type="module">
-        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, version } from "./parser.js?v=8d2bb41cb43d20b7";
+        import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, m_bus_render_oms_capture, m_bus_check_firmware, version } from "./parser.js?v=ea35fbf04cf5eb6e";
 
+        import { exportValidation, validationError } from "./validation.js";
         import { normalizeInput } from "./input-format.js";
 
         import { createTlsSessionPanel } from "./tls-session.js";
@@ -1803,7 +2037,12 @@
             } catch (error) {
                 if (error.code !== 'frame.invalid') throw error;
                 try {
-                    return JSON.parse(api.application(input, 'json', undefined, width, true));
+                    const decoded = JSON.parse(api.application(input, 'json', undefined, width, true));
+                    const hex = decoded.raw.original_frame_hex;
+                    if (/^10[0-9a-f]{6}16$/i.test(hex) || /^68[0-9a-f]{4}68[0-9a-f]*16$/i.test(hex)) {
+                        decoded.rejectedWiredFrame = errorDetails(error);
+                    }
+                    return decoded;
                 } catch (applicationError) {
                     if (applicationError.code === 'security.key_missing') {
                         const failure = new Error('Paste the complete telegram to detect its security mode and verify decryption.');
@@ -1913,17 +2152,75 @@
             return { status: 'Security status unavailable', tone: 'neutral', message: 'The parser did not return a security status for this input.' };
         }
 
+        function renderValidationReport(container, report) {
+            const view = document.getElementById('oms-table-template').content.cloneNode(true);
+            view.querySelector('h3 span').textContent = `Validation · ${report.passed}/${report.assessed} passed`;
+            if (report.unchecked) view.querySelector('h3 small').textContent = `${report.unchecked} could not be checked`;
+
+            const labels = { passed: 'Passed', failed: 'Failed', could_not_check: 'Could not check', not_applicable: 'Not applicable' };
+            const reportTable = view.querySelector('table');
+            for (const group of new Set(report.findings.map(finding => finding.group))) {
+                const body = reportTable.createTBody();
+                const groupRow = body.insertRow();
+                const heading = document.createElement('th');
+                heading.scope = 'rowgroup';
+                heading.colSpan = 3;
+                heading.className = 'validation-group';
+                heading.textContent = group;
+                if (group === 'OMS') {
+                    const specification = document.createElement('a');
+                    specification.href = report.specification + '#page=23&view=FitH,842';
+                    specification.textContent = `OMS ${report.version}`;
+                    specification.target = '_blank';
+                    specification.rel = 'noopener noreferrer';
+                    heading.replaceChildren(specification);
+                }
+                groupRow.append(heading);
+                for (const finding of report.findings.filter(entry => entry.group === group)) {
+                    const row = body.insertRow();
+                    row.dataset.status = finding.status;
+                    const status = document.createElement('span');
+                    status.className = 'oms-status';
+                    status.textContent = labels[finding.status];
+                    row.insertCell().append(status);
+
+                    const rule = document.createElement('th');
+                    rule.scope = 'row';
+                    rule.textContent = finding.rule;
+                    const detail = document.createElement('span');
+                    detail.className = 'rule-detail';
+                    detail.textContent = finding.record_number ? `Record ${finding.record_number} · ${finding.detail}` : finding.detail;
+                    if (finding.offset_start != null) detail.textContent += ` (byte offset ${finding.offset_start})`;
+                    rule.append(detail);
+                    row.append(rule);
+                    const citation = row.insertCell();
+                    citation.className = 'rule-reference reference-column';
+                    if (!finding.source_url) continue;
+                    const reference = document.createElement('span');
+                    reference.className = 'rule-reference inline-reference';
+                    const source = document.createElement('a');
+                    source.href = finding.source_url;
+                    source.textContent = finding.reference;
+                    source.target = '_blank';
+                    source.rel = 'noopener noreferrer';
+                    reference.append(source);
+                    rule.append(reference);
+                    citation.append(source.cloneNode(true));
+                }
+            }
+            container.replaceChildren(view);
+        }
+
         function showSecurity(decoded, error) {
             const presentation = securityPresentation(decoded, error, document.getElementById('tls-enabled').checked);
             const security = decoded?.security;
             const mode = security?.mode_code;
             const identity = decoded?.meter?.identity;
-            const profile = mode === 7 ? ' · OMS profile B' : mode === 10 ? ' · OMS profile D' : mode === 13 ? ' · TLS 1.2' : '';
             const panel = document.getElementById('security-panel');
             panel.hidden = false;
             panel.dataset.tone = presentation.tone;
             document.getElementById('security-status').textContent = presentation.status;
-            document.getElementById('security-mode').textContent = mode ? `Mode ${mode}${profile}` : '';
+            document.getElementById('security-mode').textContent = mode === undefined ? '' : `Mode ${mode}`;
             document.getElementById('security-message').textContent = presentation.message;
             document.getElementById('detected-meter').textContent = identity
                 ? [identity.manufacturer_code, identity.id, identity.device_type].filter(Boolean).join(' · ')
@@ -1978,7 +2275,7 @@
         async function loadSyntax() {
             const [module, wasm] = await Promise.all([
                 import("./syntax.js?v=428d019268ec04a2"),
-                fetch(new URL("./syntax_bg.wasm?v=31aa000a35391209", import.meta.url)),
+                fetch(new URL("./syntax_bg.wasm?v=28e594b23efee3d2", import.meta.url)),
             ]);
             await module.default({ module_or_path: wasm });
             return module;
@@ -2092,11 +2389,40 @@
                 }
             });
 
-            await init({ module_or_path: new URL("./parser_bg.wasm?v=fc7f6f523fd94baa", import.meta.url) });
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=3d70e4f05c002b30", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
             let inspectedTelegram = null;
+            let captureFrames = [];
+            let captureInput;
+            const capturePicker = document.getElementById('capture-picker');
+            const captureLabel = document.getElementById('capture-label');
+            const capturePosition = document.getElementById('capture-position');
+            const captureFrame = document.getElementById('capture-frame');
+            const consecutive = document.getElementById('consecutive-capture');
+            const radioMode = document.getElementById('oms-radio-mode');
+            const nationalProfile = document.getElementById('oms-national-profile');
+            const tlsKeyOption = document.getElementById('tls-key-option');
+            const tlsKey = document.getElementById('oms-tls-key');
+            const wrappingKey = document.getElementById('oms-wrapping-key');
+            const wrappingKeyOption = document.getElementById('wrapping-key-option');
+            const firmwareSettings = document.getElementById('firmware-settings');
+            const firmwareFile = document.getElementById('oms-firmware');
+            const imageKey = document.getElementById('oms-image-key');
+            const applicationKey = document.getElementById('oms-application-key');
+            const applicationKeyOption = document.getElementById('application-key-option');
+            const macSettings = document.getElementById('lpwan-mac-settings');
+            const macKey = document.getElementById('lpwan-mac-key');
+            const macCounter = document.getElementById('lpwan-counter');
+            const taf7 = document.getElementById('taf7');
+            const periods = document.getElementById('taf7-periods');
+            const periodInputs = [...periods.querySelectorAll('input')];
+            document.getElementById('oms-context').addEventListener('change', () => {
+                periods.hidden = !taf7.checked;
+                parseInput(currentFormat);
+            });
+            captureFrame.addEventListener('change', () => parseInput(currentFormat));
             let hasDecoded = false;
             let renderGeneration = 0;
             let inspectionTimer;
@@ -2109,6 +2435,57 @@
             const decodeButton = document.getElementById('decode-button');
             const parserApi = { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application };
             decodeButton.disabled = false;
+            const isOmsView = format => ['oms', 'oms-json', 'oms-xml', 'oms-csv'].includes(format);
+            const lastFormat = { parse: 'table', oms: 'oms' };
+            const formatButtons = document.querySelectorAll('.parse-actions input');
+            for (const button of formatButtons) {
+                button.addEventListener('click', () => selectFormat(button.id.slice('parse_'.length)));
+            }
+            for (const mode of ['parse', 'oms']) {
+                document.getElementById(`mode-${mode}`).addEventListener('click', () => selectFormat(lastFormat[mode]));
+            }
+
+            function updateApplicationEvidence(telegram) {
+                tlsKeyOption.hidden = telegram?.security?.mode_code !== 13 || telegram?.transport?.authentication_type == null;
+                const field = (object, name) => object instanceof Map ? object.get(name) : object?.[name];
+                const application = telegram?.application;
+                const payload = application?.decoded;
+                const blocks = [payload, ...(field(payload, 'blocks') || [])];
+                applicationKeyOption.hidden = application?.protocol !== 'security_information_transfer' || !blocks.some(block => [0x32, 0x36].includes(field(block, 'data_selector')));
+                wrappingKeyOption.hidden = application?.protocol !== 'security_information_transfer' || !blocks.some(block => {
+                    const keyId = field(block, 'key_id');
+                    return keyId != null && keyId !== 255 && [1, 2, 3, 32, 48].includes(field(block, 'data_selector'));
+                });
+                firmwareSettings.hidden = !blocks.some(block => {
+                    const image = field(block, 'image_transfer');
+                    const segments = field(image, 'segments') || [image];
+                    return segments.some(segment => field(segment, 'function') === 0 && field(segment, 'mac_algorithm') === 4
+                        && field(segment, 'mac_key_id') === 24 && field(segment, 'mac')?.length === 16);
+                });
+            }
+
+            function updateOmsOptions() {
+                updateApplicationEvidence(inspectedTelegram);
+                macSettings.hidden = !inspectedTelegram?.lpwan?.body?.authentication_code;
+                document.getElementById('oms-context').hidden = !isOmsView(currentFormat) || !inspectedTelegram;
+                document.getElementById('radio-mode-option').hidden = !isOmsView(currentFormat) || inspectedTelegram?.frame?.kind !== 'wireless';
+                document.getElementById('consecutive-option').hidden = captureFrames.length < 2;
+            }
+
+            function setOutputView(format) {
+                currentFormat = format;
+                const selectedMode = isOmsView(format) ? 'oms' : 'parse';
+                lastFormat[selectedMode] = format;
+                updateOmsOptions();
+                for (const mode of ['parse', 'oms']) {
+                    const active = mode === selectedMode;
+                    document.getElementById(`mode-${mode}`).setAttribute('aria-pressed', String(active));
+                    document.getElementById(`${mode}-formats`).hidden = !active;
+                }
+                for (const button of formatButtons) {
+                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
+                }
+            }
 
             function updateDecodeButton() {
                 const security = inspectedTelegram?.security;
@@ -2128,17 +2505,35 @@
                 document.getElementById('tls-summary').textContent = isTls
                     ? tlsEnabled ? 'TLS session · enabled' : 'TLS session · required for decryption'
                     : 'TLS session · mode 13';
-                if (isTls && currentFormat === 'xml') currentFormat = 'json';
+                if (isTls && currentFormat === 'xml') setOutputView('json');
                 document.querySelectorAll('.parse-actions input').forEach(button => {
                     button.disabled = isTls && button.id === 'parse_xml';
                     button.title = button.disabled ? 'TLS output supports JSON, YAML, Table, CSV, and Diagram.' : '';
-                    button.setAttribute('aria-pressed', String(button.id === `parse_${currentFormat}`));
                 });
             }
 
             function inspectCurrentTelegram() {
                 clearTimeout(inspectionTimer);
                 inspectedTelegram = null;
+                const refreshChoices = capturePicker.hidden || captureInput !== telegramInput.value;
+                if (captureInput !== telegramInput.value) {
+                    consecutive.checked = false;
+                    radioMode.value = '';
+                    nationalProfile.value = '';
+                    applicationKey.value = '';
+                    tlsKey.value = '';
+                    wrappingKey.value = '';
+                    imageKey.value = '';
+                    firmwareFile.value = '';
+                    macKey.value = '';
+                    macCounter.value = '';
+                    taf7.checked = false;
+                    periods.hidden = true;
+                    periodInputs.forEach(input => { input.value = ''; });
+                }
+                captureInput = telegramInput.value;
+                captureFrames = [];
+
                 if (!telegramInput.value.trim()) {
                     document.getElementById('security-panel').hidden = true;
                     document.getElementById('security-details').hidden = true;
@@ -2147,12 +2542,29 @@
                     document.getElementById('detected-meter').textContent = 'Meter and security mode are detected automatically';
                 } else {
                     try {
-                        inspectedTelegram = inspectTelegram(parserApi, normalizeInput(telegramInput.value, inputFormat.value));
+                        const decoded = inspectTelegram(parserApi, normalizeInput(telegramInput.value, inputFormat.value));
+                        if (Array.isArray(decoded)) {
+                            captureFrames = decoded;
+                            if (refreshChoices) {
+                                captureFrame.replaceChildren(...decoded.map((frame, i) => {
+                                    const identity = frame.meter.identity;
+                                    const label = [identity?.manufacturer_code, identity?.id, identity?.device_type].filter(Boolean).join(' · ') || frame.frame.kind;
+                                    return new Option(label, String(i));
+                                }));
+                            }
+                            inspectedTelegram = decoded[captureFrame.selectedIndex];
+                            captureLabel.textContent = captureFrame.selectedOptions[0]?.text ?? '';
+                            capturePosition.textContent = `· ${captureFrame.selectedIndex + 1} of ${decoded.length}`;
+                        } else {
+                            inspectedTelegram = decoded;
+                        }
                         showSecurity(inspectedTelegram);
                     } catch (error) {
                         showSecurity(null, error);
                     }
                 }
+                capturePicker.hidden = captureFrames.length < 2;
+                updateOmsOptions();
                 updateDecodeButton();
             }
 
@@ -2173,6 +2585,7 @@
 
             telegramInput.addEventListener('input', () => {
                 clearResult();
+                capturePicker.hidden = true;
                 inspectedTelegram = null;
                 document.getElementById('security-panel').hidden = true;
                 document.getElementById('security-details').hidden = true;
@@ -2197,11 +2610,8 @@
             });
 
             function selectFormat(format) {
-                currentFormat = format;
-                document.querySelectorAll('.parse-actions input').forEach(button => {
-                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
-                });
-                if (hasDecoded) parseInput(format);
+                setOutputView(format);
+                if (hasDecoded || lastAttempt?.error) parseInput(format);
             }
 
             const tlsPanel = createTlsSessionPanel(document, () => {
@@ -2233,7 +2643,7 @@
                         if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                         event.preventDefault();
                         const params = new URL(sample.href).searchParams;
-                        loadSample(params.get('data'), '', null, currentFormat === 'product' ? currentFormat : params.get('format'));
+                        loadSample(params.get('data'), '', null, currentFormat === 'product' || isOmsView(currentFormat) ? currentFormat : params.get('format'));
                     }
                     meterCatalog.querySelector('summary').focus();
                 });
@@ -2250,7 +2660,14 @@
             const urlEncoding = urlParams.get('encoding');
             inputFormat.value = ['hex', 'base64'].includes(urlEncoding) ? urlEncoding : 'auto';
             if (urlData) {
-                document.getElementById('inputstring').value = urlData;
+                telegramInput.value = urlData;
+                inspectCurrentTelegram();
+                radioMode.value = ['c', 'c1', 'c2', 'other'].includes(urlParams.get('radioMode')) ? urlParams.get('radioMode') : '';
+                nationalProfile.value = urlParams.get('nationalProfile') || '';
+                consecutive.checked = urlParams.get('consecutive') === '1';
+                taf7.checked = urlParams.get('taf7') === '1';
+                periods.hidden = !taf7.checked;
+                if (taf7.checked) periodInputs.forEach(input => { input.value = urlParams.get(input.name) || ''; });
                 parseInput(urlFormat || currentFormat);
             } else if (bundledExample) {
                 const protocol = urlParams.get('protocol') === 'wireless' ? 'wireless' : 'wired';
@@ -2259,43 +2676,27 @@
                 inspectCurrentTelegram();
             }
 
-            document.getElementById('parse_json').addEventListener('click', () => {
-                selectFormat("json");
-            });
-
-            document.getElementById('parse_yaml').addEventListener('click', () => {
-                selectFormat("yaml");
-            });
-
-            document.getElementById('parse_table').addEventListener('click', () => {
-                selectFormat("table");
-            });
-
-            document.getElementById('parse_csv').addEventListener('click', () => {
-                selectFormat("csv");
-            });
-
-            document.getElementById('parse_product').addEventListener('click', () => selectFormat('product'));
-
-            document.getElementById('parse_mermaid').addEventListener('click', () => {
-                selectFormat("mermaid");
-            });
-
-            document.getElementById('parse_xml').addEventListener('click', () => {
-                selectFormat("xml");
-            });
-
-            document.getElementById('parse_hexview').addEventListener('click', () => {
-                selectFormat("hexview");
-            });
-
             document.getElementById('copy_output').addEventListener('click', () => {
                 writeClipboard(window._lastRawOutput || '');
             });
 
+            function reportParams(inputString, format) {
+                const params = new URLSearchParams({ data: inputString, format, encoding: inputFormat.value });
+                if (isOmsView(format)) {
+                    if (nationalProfile.value) params.set('nationalProfile', nationalProfile.value);
+                    if (taf7.checked) {
+                        params.set('taf7', '1');
+                        for (const input of periodInputs) if (input.value) params.set(input.name, input.value);
+                    }
+                    if (radioMode.value && !document.getElementById('radio-mode-option').hidden) params.set('radioMode', radioMode.value);
+                    if (consecutive.checked && !document.getElementById('consecutive-option').hidden) params.set('consecutive', '1');
+                }
+                return params;
+            }
+
             document.getElementById('share_button').addEventListener('click', () => {
                 const inputString = document.getElementById('inputstring').value;
-                const params = new URLSearchParams({ data: inputString, format: currentFormat, encoding: inputFormat.value });
+                const params = reportParams(inputString, currentFormat);
                 const shareUrl = `${location.origin}${location.pathname}?${params}`;
                 navigator.clipboard.writeText(shareUrl);
                 const btn = document.getElementById('share_button');
@@ -2346,12 +2747,10 @@
                 inspectCurrentTelegram();
                 const isTls = inspectedTelegram?.security?.mode_code === 13;
                 format = format === 'table_format' ? 'table' : format;
-                if (!['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview', 'product'].includes(format)) format = 'table';
+                const oms = isOmsView(format);
+                if (!oms && !['json', 'yaml', 'table', 'csv', 'mermaid', 'xml', 'hexview', 'product'].includes(format)) format = 'table';
                 if (isTls && format === 'xml') format = 'json';
-                currentFormat = format;
-                document.querySelectorAll('.parse-actions input').forEach(button => {
-                    button.setAttribute('aria-pressed', String(button.id === `parse_${format}`));
-                });
+                setOutputView(format);
                 const inputString = document.getElementById('inputstring').value;
                 const aesKey = document.getElementById('aeskey').value.trim();
                 const outputContainer = document.getElementById('output');
@@ -2373,7 +2772,7 @@
                 };
 
                 if (updateHistory) {
-                    const params = new URLSearchParams({ data: inputString, format, encoding: inputFormat.value });
+                    const params = reportParams(inputString, format);
                     history.replaceState(null, '', `?${params}`);
                 }
 
@@ -2393,22 +2792,24 @@
                 let language = 'plaintext';
                 let extension = 'txt';
                 let mimeType = 'text/plain';
-                if (format === 'json' || format === 'product') {
+                if (format === 'json' || format === 'product' || format === 'oms' || format === 'oms-json') {
                     language = 'json'; extension = 'json'; mimeType = 'application/json';
                 } else if (format === 'yaml') {
                     language = 'yaml'; extension = 'yaml'; mimeType = 'application/yaml';
-                } else if (format === 'csv') {
+                } else if (format === 'csv' || format === 'oms-csv') {
                     language = 'csv'; extension = 'csv'; mimeType = 'text/csv';
                 } else if (format === 'mermaid') {
                     extension = 'mmd';
-                } else if (format === 'xml') {
+                } else if (format === 'xml' || format === 'oms-xml') {
                     language = 'xml'; extension = 'xml'; mimeType = 'application/xml';
                 } else if (format === 'hexview') {
                     extension = 'json'; mimeType = 'application/json';
                 }
 
                 try {
-                    const normalizedInput = normalizeInput(inputString, inputFormat.value);
+                    const selectedFrame = captureFrames[captureFrame.selectedIndex];
+                    const sourceFrame = selectedFrame || (isTls && inspectedTelegram?.raw.fragment_frames_hex?.length ? inspectedTelegram : null);
+                    const normalizedInput = sourceFrame?.raw.original_frame_hex || normalizeInput(inputString, inputFormat.value);
                     const table = format === 'table' ? prepareTableView(outputContainer) : null;
                     const width = table ? measureTableWidth(table) : undefined;
                     if (table) {
@@ -2416,12 +2817,58 @@
                         attempt.tableWidth = width;
                     }
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
-                    const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : format;
-                    const result = sessionJson
+                    const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : oms ? 'validation-json' : format;
+                    const result = sessionJson && !(oms && selectedFrame)
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
                         : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
                     attempt.decoded = result.decoded;
+                    const context = {};
+                    if (oms && nationalProfile.value) context.national_profile = nationalProfile.value;
+                    if (oms && !document.getElementById('radio-mode-option').hidden && radioMode.value) context.radio_mode = radioMode.value;
+                    if (oms && taf7.checked) {
+                        context.taf7 = {};
+                        for (const input of periodInputs) {
+                            if (!input.value && !input.validity.badInput) continue;
+                            if (!input.reportValidity() || !Number.isSafeInteger(input.valueAsNumber)) {
+                                throw new Error('Enter a positive whole number of milliseconds.');
+                            }
+                            context.taf7[input.name] = input.valueAsNumber;
+                        }
+                    }
+                    const settings = { capture: context };
+                    updateApplicationEvidence(result.decoded);
+                    if (oms && !wrappingKeyOption.hidden && wrappingKey.value.trim()) settings.wrapping_key = wrappingKey.value.trim();
+                    if (oms && !applicationKeyOption.hidden && applicationKey.value.trim()) settings.application_key = applicationKey.value.trim();
+                    if (oms && !macSettings.hidden && macKey.value.trim()) {
+                        settings.lpwan_mac_key = macKey.value.trim();
+                        if (!macCounter.reportValidity()) throw new Error('Enter a derivation counter from 0 to 255.');
+                        if (macCounter.value) settings.lpwan_derivation_counter = macCounter.valueAsNumber;
+                    }
                     let formattedResult = result.output;
+                    const firmware = !firmwareSettings.hidden && imageKey.value.trim() && firmwareFile.files[0];
+                    const communicationKey = !tlsKeyOption.hidden && tlsKey.value.trim();
+                    if (oms && !firmware && !firmwareSettings.hidden && imageKey.value.trim()) settings.capture_image_key = imageKey.value.trim();
+                    if (oms && (selectedFrame || communicationKey || Object.keys(context).length || Object.keys(settings).length > 1 || firmware)) {
+                        const fullInput = normalizeInput(inputString, inputFormat.value);
+                        const selected = selectedFrame ? captureFrame.selectedIndex : 0;
+                        const transportKey = (isTls ? communicationKey : aesKey) || undefined;
+                        if (firmware) {
+                            settings.firmware_key = imageKey.value.trim();
+                            context.consecutive = consecutive.checked;
+                            const bytes = new Uint8Array(await firmware.arrayBuffer());
+                            if (generation !== renderGeneration) return;
+                            formattedResult = m_bus_check_firmware(fullInput, selected, renderFormat, transportKey, sessionJson, JSON.stringify(settings), bytes);
+                        } else {
+                            formattedResult = m_bus_render_oms_capture(fullInput, selected, renderFormat, consecutive.checked, transportKey, sessionJson, JSON.stringify(settings));
+                        }
+                    }
+                    let report;
+                    if (oms) {
+                        report = result.decoded.rejectedWiredFrame
+                            ? validationError({ ...result.decoded.rejectedWiredFrame, mode: 'Wired frame structure' }, 1)
+                            : JSON.parse(formattedResult);
+                        formattedResult = exportValidation(report, format);
+                    }
                     hasDecoded = true;
 
                     if (table) {
@@ -2436,6 +2883,8 @@
                         if (result.plaintext) {
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
+                    } else if (format === 'oms') {
+                        renderValidationReport(outputContainer, report);
                     } else if (format === 'product') {
                         const { renderProduct } = await loadProductView();
                         if (generation !== renderGeneration) return;
@@ -2457,7 +2906,7 @@
                     const unparsedRecord = result.decoded.records.find(record =>
                         record.value.kind === 'manufacturer_specific' && record.data_hex && !record.manufacturer_fields?.length
                     );
-                    if (unparsedRecord) {
+                    if (!oms && unparsedRecord) {
                         const note = document.getElementById('parser-note-template').content.cloneNode(true);
                         note.querySelector('.parser-note-record').textContent = '#' + unparsedRecord.index;
                         outputContainer.append(note);
@@ -2465,7 +2914,9 @@
                     showSecurity(result.decoded);
                     hasDecoded = true;
                     window._lastRawOutput = formattedResult;
-                    if (['key_missing', 'session_required'].includes(result.security?.decryption_state)) {
+                    if (oms) {
+                        outputSummary.textContent = 'Validation results';
+                    } else if (['key_missing', 'session_required'].includes(result.security?.decryption_state)) {
                         outputSummary.textContent = 'Header information only. The payload remains encrypted.';
                     } else if (result.mode === 'application') {
                         outputSummary.textContent = 'Parsed as application-layer data without a link-layer frame.';
@@ -2473,7 +2924,7 @@
                         outputSummary.textContent = `${result.mode === 'wireless' ? 'Wireless' : 'Wired'} telegram · ${document.getElementById('parse_' + format).value}`;
                     }
                     if (result.diagnostics.length) {
-                        if (format !== 'mermaid') {
+                        if (!oms && format !== 'mermaid') {
                             const warning = document.createElement('pre');
                             warning.className = 'output-error';
                             warning.textContent = result.diagnostics.map(item => `[${item.code}] ${item.message}`).join('\n');
@@ -2487,7 +2938,18 @@
                     if (generation !== renderGeneration) return;
                     window._lastRawOutput = '';
                     fail(error);
-                    updateDownload('', extension, mimeType);
+                    if (oms && inputString.trim() && ['link', 'application', 'security'].includes(error.layer)) {
+                        const report = validationError(error, Math.max(0, captureFrame.selectedIndex) + 1);
+                        hasDecoded = true;
+                        const content = exportValidation(report, format);
+                        if (format === 'oms') renderValidationReport(outputContainer, report);
+                        else renderCodeViewer(outputContainer, content, language, 'Validation results');
+                        outputSummary.textContent = 'Validation results';
+                        window._lastRawOutput = content;
+                        updateDownload(content, extension, mimeType);
+                    } else {
+                        updateDownload('', extension, mimeType);
+                    }
                 }
             }
         }
@@ -2544,7 +3006,7 @@
             const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
             const downloadLink = document.getElementById('download_output');
             downloadLink.href = url;
-            downloadLink.download = `m-bus-output.${extension}`;
+            downloadLink.download = `${currentFormat.startsWith('oms') ? 'validation-report' : 'm-bus-output'}.${extension}`;
             window._lastDownloadUrl = url;
         }
 

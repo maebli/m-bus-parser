@@ -963,7 +963,9 @@ version = "0.0.0"
 dependencies = [
  "js-sys",
  "m-bus-parser",
+ "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "syntect",
  "wasm-bindgen",
  "wasm-bindgen-test",

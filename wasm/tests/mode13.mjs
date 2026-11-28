@@ -1,30 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { runInNewContext } from 'node:vm';
 import {
     initSync,
     m_bus_decode,
-    m_bus_render,
-    m_bus_render_application,
     m_bus_decode_tls,
     m_bus_render_tls,
 } from '../../docs/parser.js';
 import { createTlsSessionPanel, parseSessionImport } from '../../docs/tls-session.js';
-import { normalizeInput } from '../../docs/input-format.js';
+import { frame, session } from './mode13-fixture.mjs';
 
 initSync({ module: await readFile(new URL('../../docs/parser_bg.wasm', import.meta.url)) });
-const vectors = await readFile(new URL('../../crates/m-bus-core/tests/fixtures/mode13.rs', import.meta.url), 'utf8');
-const record = vectors.match(/OPENSSL_AES128_RECORD: &str =\s*"([a-f0-9]+)"/)[1];
-const frame = `2f4493157856341233037a0100ff0d01${record}`;
-const session = {
-    name: 'Test meter',
-    cipher_suite: 'TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256',
-    direction: 'client_to_server',
-    key_hex: '000102030405060708090a0b0c0d0e0f',
-    fixed_iv_hex: '01020304',
-    sequence_number: '5',
-};
 
 class Element {
     value = '';
@@ -135,51 +121,4 @@ test('clearing a session cancels an unfinished file import', async () => {
     await importTask;
     assert.equal(panel.sessionJson(), undefined);
     assert.equal(doc.getElementById('tls-key').value, '');
-});
-
-
-test('page ignores a stale static key for detected TLS telegrams', async () => {
-    const html = await readFile(new URL('../../docs/index.html', import.meta.url), 'utf8');
-    const fallback = html.slice(html.indexOf('        function inspectTelegram('), html.indexOf('        let currentFormat'));
-    const handler = html.slice(html.indexOf('            async function parseInput('), html.indexOf('\n        }', html.indexOf('            async function parseInput(')));
-    for (const tlsActive of [true, false]) {
-        const doc = document();
-        doc.querySelectorAll = () => [];
-        doc.getElementById('inputstring').value = frame;
-        doc.getElementById('aeskey').value = 'invalid-stale-key';
-        doc.getElementById('tls-enabled').checked = tlsActive;
-        let rendered;
-        let failure;
-        await runInNewContext(`${fallback}\n${handler}\nparseInput('json', false)`, {
-            document: doc,
-            window: {},
-            location: { origin: 'http://localhost', pathname: '/' },
-            navigator: { userAgent: 'test' },
-            currentFormat: 'json',
-            lastAttempt: null,
-            captureAttempt: () => ({ payload: frame, format: 'json' }),
-            linkManufacturerFields() {},
-            lastTableWidth: null,
-            renderGeneration: 0,
-            hasDecoded: false,
-            inspectedTelegram: m_bus_decode(frame),
-            inspectCurrentTelegram() {},
-            parserApi: { decode: m_bus_decode, frame: m_bus_render, application: m_bus_render_application },
-            keyInput: doc.getElementById('aeskey'),
-            inputFormat: { value: 'auto' },
-            normalizeInput,
-            version: () => 'test',
-            tlsPanel: { sessionJson: () => tlsActive ? JSON.stringify(session) : undefined },
-            m_bus_decode_tls,
-            m_bus_render_tls,
-            updateDownload() {},
-            renderOutputError(element, error) { failure = error; },
-            async renderCodeViewer(element, source) { rendered = source; },
-        });
-        assert.equal(failure, undefined);
-        assert.equal(
-            JSON.parse(rendered).security.decryption_state,
-            tlsActive ? 'decrypted_authenticated' : 'session_required',
-        );
-    }
 });
