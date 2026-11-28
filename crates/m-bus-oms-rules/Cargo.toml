@@ -7,10 +7,10 @@ license = "MIT"
 repository = "https://github.com/maebli/m-bus-parser"
 
 [features]
-dlms = ["dep:dlms-cosem-kit"]
+dlms = ["dep:m-bus-application-layer"]
 serde = ["dep:serde"]
 
 [dependencies]
-dlms-cosem-kit = { version = "0.3", default-features = false, features = ["sn"], optional = true }
+m-bus-application-layer = { version = "0.7.4", path = "../m-bus-application-layer", optional = true, features = ["dlms-cosem"] }
 m-bus-core = { version = "0.7.4", path = "../m-bus-core" }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }

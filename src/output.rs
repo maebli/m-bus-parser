@@ -27,6 +27,8 @@ use crate::user_data::data_information::{
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
+#[cfg(feature = "dlms-cosem")]
+mod dlms;
 mod firmware;
 #[cfg(feature = "decryption-mode-7")]
 pub use firmware::verify_captured_firmware;
@@ -41,7 +43,7 @@ pub use oms::{
     OmsFormat, OmsNationalProfile, OmsRadioMode, Taf7Parameters,
 };
 mod profile;
-#[cfg(feature = "oms-gen3")]
+#[cfg(feature = "sml")]
 mod sml;
 pub use fragments::{decode_fragment_frames, decode_fragments, FragmentOutput};
 pub(crate) mod profiles;
@@ -275,6 +277,8 @@ impl std::error::Error for OutputError {}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DecodedOutput {
+    #[serde(skip)]
+    pub protocol_data: Option<Box<ProtocolData>>,
     pub schema_version: u8,
     pub decode_state: String,
     pub protocol: String,
@@ -612,6 +616,13 @@ pub struct ApplicationOutput {
     pub payload_hex: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decoded: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ProtocolData {
+    pub evidence: m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
+    #[cfg(feature = "sml")]
+    block_data: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1671,7 +1682,9 @@ fn build_output(
         });
     }
 
-    let (application, application_diagnostic) = application_output(user_data, &security_context);
+    let mut protocol_data = None;
+    let (application, application_diagnostic) =
+        application_output(user_data, &security_context, &mut protocol_data);
     let application_partial = application_diagnostic.is_some();
     if let Some(diagnostic) = application_diagnostic {
         diagnostics.push(diagnostic);
@@ -1762,6 +1775,7 @@ fn build_output(
         RecordAvailability::Complete
     };
     DecodedOutput {
+        protocol_data,
         lpwan: None,
         record_availability,
         schema_version: SCHEMA_VERSION,

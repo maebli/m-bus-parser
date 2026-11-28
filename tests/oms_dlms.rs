@@ -1,4 +1,4 @@
-#![cfg(all(feature = "std", feature = "oms-gen5"))]
+#![cfg(all(feature = "std", feature = "dlms-cosem"))]
 #![allow(clippy::unwrap_used)]
 
 use m_bus_parser::{decode_hex, DecodeOptions};
@@ -8,13 +8,16 @@ const DATA: &str = "C401C100060000001C";
 const RELEASE: &str = "6203800100";
 const RELEASE_REPLY: &str = "6315800100BE10040E0800065F1F0400001010010D0007";
 
-fn result(ci: u8, apdu: &str, rule: &str) -> &'static str {
+fn decode(ci: u8, apdu: &str) -> m_bus_parser::DecodedOutput {
     let frame = format!(
         "{:02X}449344785634120A07{ci:02X}010000001001{apdu}",
         16 + apdu.len() / 2
     );
-    decode_hex(&frame, &DecodeOptions::default())
-        .unwrap()
+    decode_hex(&frame, &DecodeOptions::default()).unwrap()
+}
+
+fn result(ci: u8, apdu: &str, rule: &str) -> &'static str {
+    decode(ci, apdu)
         .assess_oms_5_0_1()
         .findings
         .into_iter()
@@ -26,6 +29,20 @@ fn result(ci: u8, apdu: &str, rule: &str) -> &'static str {
 
 #[test]
 fn gurux_client_get_and_release_exchanges_have_exact_service_boundaries() {
+    let request = decode(0x61, GET).application.unwrap().decoded.unwrap();
+    assert_eq!(
+        request.get("service"),
+        Some(&serde_json::json!("GetRequest"))
+    );
+    assert_eq!(request.get("invoke_id"), Some(&serde_json::json!(1)));
+    assert_eq!(
+        request.get("attribute"),
+        Some(&serde_json::json!({
+            "class_id": 1, "object_name_hex":"00002B0100FF", "attribute_id":2
+        }))
+    );
+    let response = decode(0x7d, DATA).application.unwrap().decoded.unwrap();
+    assert_eq!(response.get("value"), Some(&serde_json::json!(28)));
     for (ci, apdu) in [
         (0x61, GET),
         (0x7d, DATA),
