@@ -14,7 +14,75 @@ macro_rules! annex_f {
 }
 
 impl LayerFields {
-    pub(super) fn check_application_security(
+    pub(super) fn afl_present(self) -> Option<bool> {
+        if self.authentication_type.is_some() || self.outer_ci == Some(0x90) || self.reassembled {
+            Some(true)
+        } else if self.layers_decoded
+            || self
+                .outer_ci
+                .is_some_and(|ci| !matches!(ci, 0x8c..=0x90 | 0xcf))
+        {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn check_authentication(
+        self,
+        link: Link,
+        configuration: Option<ConfigurationField>,
+        has_afl: Option<bool>,
+        results: &mut Vec<RuleFinding>,
+    ) {
+        if matches!(self.application_ci.or(self.outer_ci), Some(0x6e..=0x70))
+            && configuration.is_none_or(|cf| cf.security_mode().to_bits() != 13)
+        {
+            results.push(finding("Application error protection", ("§8.8, Table 42", primary!(79, 600)),
+                match (configuration, has_afl) {
+                    (Some(cf), _) if cf.security_mode().to_bits() != 0 => Some(false),
+                    (_, Some(true)) if self.authentication_type.is_some_and(|at| at != 0) => Some(false),
+                    (_, Some(false)) if configuration.is_some() || self.application_ci.or(self.outer_ci) == Some(0x70) => Some(true),
+                    _ => None,
+                },
+                "An unwrapped application error is sent in cleartext without authentication. Profile C has a separate exception."));
+        }
+        if link.function().is_some_and(crate::requires_mode_zero) {
+            results.push(finding(
+                "AFL on control messages",
+                ("Table 43 note d", primary!(83, 145)),
+                has_afl.map(|present| !present),
+                "This link function requires a telegram without an AFL.",
+            ));
+        }
+        if let Some(at) = self.authentication_type {
+            results.push(finding(
+                "AFL authentication type",
+                ("§6.2.1", primary!(56, 321)),
+                Some(at == 5),
+                "Authenticated transmissions require AT 5 (eight-byte AES-CMAC).",
+            ));
+            if !self.reassembled {
+                results.push(finding(
+                    "Unfragmented AFL length field",
+                    ("§6.2.5", primary!(56, 855)),
+                    Some(self.message_length.is_none()),
+                    "An unfragmented message must omit AFL.ML.",
+                ));
+            }
+        }
+        if let Some(length) = self.message_length {
+            results.push(finding(
+                "AFL message length",
+                ("§6.2.5", primary!(56, 855)),
+                Some(length <= 16384),
+                "The message length may be at most 16 KiB.",
+            ));
+        }
+        self.check_application_security(link, configuration, has_afl, results);
+    }
+
+    fn check_application_security(
         self,
         link: Link,
         configuration: Option<ConfigurationField>,
