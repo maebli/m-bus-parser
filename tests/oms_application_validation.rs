@@ -516,6 +516,57 @@ fn application_selection_must_precede_list_edits_and_descriptors_stay_in_blocks_
 }
 
 #[test]
+fn protocol_envelopes_check_transmitted_lengths_directions_and_checksums() {
+    use m_bus_parser::{decode_hex, DecodeOptions};
+    let run = |ci: u8, payload: &[u8]| {
+        let body = payload
+            .iter()
+            .map(|b| format!("{b:02X}"))
+            .collect::<String>();
+        let packet = format!(
+            "{:02X}449315785634123307{ci:02X}01000000{body}",
+            14 + payload.len()
+        );
+        decode_hex(&packet, &DecodeOptions::default())
+            .unwrap()
+            .assess_oms_5_0_1()
+    };
+    let mut sml = vec![0x76, 2, 1, 0x62, 1, 0x62, 0, 0x72, 0x63, 1, 1, 0x70];
+    let crc = crc16::State::<crc16::X_25>::calculate(&sml);
+    sml.push(0x63);
+    sml.extend(crc.to_le_bytes());
+    sml.push(0);
+    assert_eq!(
+        outcome(&run(0x7f, &sml), "SML message structure and checksum"),
+        Some("passed")
+    );
+    sml[2] ^= 1;
+    assert_eq!(
+        outcome(&run(0x7f, &sml), "SML message structure and checksum"),
+        Some("failed")
+    );
+    let mut aare = vec![
+        0x10, 1, 0x61, 15, 0xa1, 3, 6, 1, 42, 0xa2, 3, 2, 1, 0, 0xa3, 3, 2, 1, 0,
+    ];
+    let good = run(0x7d, &aare);
+    assert_eq!(
+        outcome(&good, "DLMS association BER length"),
+        Some("passed")
+    );
+    assert_eq!(outcome(&good, "DLMS association fields"), Some("passed"));
+    aare[2] = 0x60;
+    assert_eq!(
+        outcome(&run(0x7d, &aare), "DLMS association direction"),
+        Some("failed")
+    );
+    aare[3] = 30;
+    assert_eq!(
+        outcome(&run(0x7d, &aare), "DLMS association BER length"),
+        Some("failed")
+    );
+}
+
+#[test]
 fn dated_history_checks_cyclic_endpoints_and_storage_counts() {
     let at = |header: &'static [u8], data: &'static [u8], storage| {
         let mut value = record(header, data).unwrap();

@@ -373,6 +373,7 @@ pub fn render_oms_capture_with_options(
     let mut sitp_history = m_bus_oms_rules::sitp::History::default();
     let mut reading_history = readings::CaptureReadings::default();
     let mut firmware_history = super::firmware::History::default();
+    let mut sml_history = protocols::SmlTransfers::default();
     for (index, frame) in frames.iter().enumerate() {
         let mut report = frame.assess_oms_with_history(&mut history, options);
         if let Some(mac) = &frame.lpwan {
@@ -418,6 +419,9 @@ pub fn render_oms_capture_with_options(
                 key_information.check_mode_c_ell(frame, &mut report);
             }
             key_information.observe(frame, consecutive, &mut report);
+        }
+        if consecutive {
+            sml_history.observe(frame, current, wired, &mut report);
         }
         reading_history.observe(frame, &mut report, consecutive);
         previous = current;
