@@ -29,7 +29,7 @@ An open-source parser (decoder/deserializer) for the **wired** and **wireless** 
 - A versioned canonical schema with exact decimal values, provenance,
   partial-decode diagnostics, and stable error codes
 - Responsive, Unicode-aware tables for narrow terminals and browser cards
-- **AES-128 decryption** for encrypted wMBus frames (mode 5 / mode 7)
+- **AES-128 decryption** for supported wMBus security modes 5, 7, 10, and 13
 - **`no_std` compatible** — runs on embedded targets (manufacturer lookup and output formats require `std`)
 - Available as a **Rust library**, **CLI**, and **WebAssembly (npm)**, with bindings for **Python**, **C**, and **Java**
 
@@ -49,7 +49,7 @@ measurement method and local command are documented in
 [![npm](https://img.shields.io/npm/dm/m-bus-parser-wasm-pack.svg)](https://www.npmjs.com/package/m-bus-parser-wasm-pack)
 [![npm](https://img.shields.io/npm/v/m-bus-parser-wasm-pack.svg)](https://www.npmjs.com/package/m-bus-parser-wasm-pack)
 
-Paste a hex frame at **[maebli.github.io/m-bus-parser](https://maebli.github.io/m-bus-parser/)** and get instant output in any format, including a rendered Mermaid diagram. Frames can be shared via URL.
+Paste a hex frame at **[maebli.github.io/m-bus-parser](https://maebli.github.io/m-bus-parser/)** and get instant output in any format, including a rendered Mermaid diagram. Frames can be shared via URL. Use **Validate** to review findings for the selected telegram or export them as JSON, CSV, or XML.
 
 Source: [`wasm/`](./wasm)
 
@@ -70,13 +70,15 @@ Source: [`cli/`](./cli)
 pip install pymbusparser
 ```
 
+Use `parse_fragments(frames, key=...)` to decode a sequence of fragment frames.
+
 Source: [`python/`](./python)
 
 ### C bindings
 
 [![C release](https://img.shields.io/github/v/release/maebli/m-bus-parser?filter=c-v%2A&label=C%20release)](https://github.com/maebli/m-bus-parser/releases?q=c-v)
 
-Download the archive for your platform. It includes the libraries and the `mbus_parser.h` header.
+Download the archive for your platform. It includes the libraries and the `mbus_parser.h` header. Pass an array of frames to `mbus_parse_fragments` to decode a fragmented telegram.
 
 [Source](./c) · [C example](./c/examples/parse.c)
 
@@ -112,6 +114,14 @@ by whitespace, colons, or hyphens.
 68040468530100005416                (plain hex)
 0x68:0x04:0x04:0x68:0x53:0x01:0x00:0x00:0x54:0x16  (prefixed byte tokens)
 ```
+
+### Check an OMS telegram
+
+```bash
+cargo run -p m-bus-parser-cli --features oms-gen5 -- check-oms -f frame.hex -t json
+```
+
+Use `-t csv` or `-t xml` to change the report format.
 
 ### Table output (default)
 
@@ -151,6 +161,13 @@ m-bus-parser-cli parse -d "$ENCRYPTED_FRAME" -k "0102030405060708090A0B0C0D0E0F1
 ---
 
 ## Library Usage
+
+The [OMS rules crate](./crates/m-bus-oms-rules) checks decoded link, transport, and security
+fields against OMS 5.0.1. Each finding identifies its rule, status, and specification reference.
+The rules also check data-point tags, required readings for the declared device type,
+and the register descriptors and timestamps in compact profiles.
+For ordered captures, the crate can also check access numbers, LPWAN exchanges,
+firmware transfers, and key-management messages across telegrams.
 
 Add to `Cargo.toml`:
 
@@ -214,6 +231,10 @@ fn main() -> Result<(), DataRecordError> {
 ```
 
 ### Decode and render with typed APIs
+
+With `std` enabled, call `assess_oms_5_0_1()` on a decoded telegram for its findings.
+An encrypted or incomplete payload can leave individual rules unchecked.
+[Rule coverage and required evidence](./crates/m-bus-oms-rules/coverage.tsv)
 
 ```rust
 use m_bus_parser::{
@@ -279,6 +300,9 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 ---
 
 ## Testing
+
+Pull requests targeting `main` run the Gen 5 Rust tests, embedded build checks, and browser validation tests.
+To run the Gen 5 suite locally, use `cargo test --locked --workspace --features decryption,oms-gen5`.
 
 Run these commands from the repository root:
 
@@ -387,30 +411,24 @@ contracts.
 | Clock set / adjustment | 0x6C, 0x6D | Time values, operation and command verification |
 | Format / compact frames | 0x69–0x6B, 0x79, 0x7B | Format descriptors and CRC-checked reconstruction with `CompactFrame::expand` |
 | Extended link layer I / II / III | 0x8C, 0x8D, 0x8E | Headers parsed; I/III decode the following CI; encrypted ELL payloads remain undecoded |
-| DLMS/COSEM / SML wrappers | 0x60, 0x61, 0x64, 0x65, 0x7C–0x7F | M-Bus transport headers and raw external payloads |
+| DLMS/COSEM / SML wrappers | 0x60, 0x61, 0x64, 0x65, 0x7C–0x7F | M-Bus transport headers and external payloads with checks for supported DLMS and SML structures |
 | Transport-only / frame-format requests | 0x80, 0x84, 0x85, 0x8A, 0x8B | Headers and command identity |
 | Network / manufacturer / legacy hash commands | 0x81–0x83, 0x89, 0xB1–0xB4, 0xB6, 0x90–0x97 | Protocol identity and raw payloads |
 
 ### Remaining coverage limits
 
-- DLMS/COSEM, SML, network and manufacturer-specific command bodies remain raw.
-  Nonempty external payloads are marked as partially decoded in canonical output.
+- Network and manufacturer-specific command bodies can remain raw. OMS checks cover
+  supported DLMS/COSEM and SML structures when the required fields are present.
 - Compact frames require the caller to supply a matching format frame to
   `CompactFrame::expand`; the CLI and rendering APIs do not cache or match formats.
-- Decryption supports AES-CBC modes 5 and 7. Encrypted ELL payloads, other security
-  modes, message authentication and fragment reassembly are not implemented.
-- Modern CI coverage is incomplete. For example, application selection variants
-  (0x53, 0x55–0x57, 0x66–0x68), short-header clock synchronization (0x62),
-  network management responses (0x87, 0x88) and TLS messages (0x5F, 0x9E, 0x9F)
-  are not recognized. See the CI table in the
-  [OMS specification](https://oms-group.org/wp-content/uploads/2024/10/OMS-Spec_Vol2_Primary_v501_01.pdf).
-- CI 0x73 retains its legacy fixed-data meaning rather than the modern long-header
-  compact format. CI 0x90–0x97 retain legacy hash-command meanings, including bytes
-  assigned to authentication/fragmentation and other services in newer protocols.
+- With the matching OMS generation feature enabled, pass telegrams in capture order to
+  `decode_capture_hex` to reassemble supported fragments. Encrypted telegrams require the matching key.
+- Some CI values have different meanings across OMS editions. Enable the matching Cargo
+  feature, such as `oms-gen3`, `oms-gen4-5`, or `oms-gen5`, when decoding a known edition.
 - Primary VIF 0x6F/0xEF and reserved variable-length encodings still return
   `DataInformationError::Unimplemented`. Command-specific VIFE object actions are
-  labeled without decoding their individual operation semantics. Compact-profile
-  VIFEs are labeled but their payloads are not expanded into individual samples.
+  labeled without decoding their individual operation semantics. The Gen 5 decoder
+  expands supported compact profiles into individual samples.
 
 ---
 
