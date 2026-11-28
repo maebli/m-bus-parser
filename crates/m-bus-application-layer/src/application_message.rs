@@ -58,6 +58,7 @@ pub enum ApplicationProtocol {
     LegacyHashProcedure(u8),
     ApplicationError,
     Alarm,
+    SecurityTransfer,
     ClockSet,
     ClockAdjust,
     Format,
@@ -85,6 +86,7 @@ impl ApplicationProtocol {
             Self::LegacyHashProcedure(_) => "legacy_hash_procedure",
             Self::ApplicationError => "application_error",
             Self::Alarm => "alarm",
+            Self::SecurityTransfer => "security_information_transfer",
             Self::ClockSet => "clock_set",
             Self::ClockAdjust => "clock_adjust",
             Self::Format => "format",
@@ -147,6 +149,15 @@ pub enum ApplicationPayload<'a> {
         operation: ClockOperation,
         value: DataType<'a>,
     },
+    SecurityTransfer {
+        block_id: u8,
+        block_control: u8,
+        recipient: u8,
+        data_selector: u8,
+        key_id: u8,
+        key_version: u8,
+        body: &'a [u8],
+    },
     Format(FormatFrame<'a>),
     Compact(CompactFrame<'a>),
     External(&'a [u8]),
@@ -159,6 +170,7 @@ pub enum ClockOperation {
     Set,
     Add,
     Subtract,
+    Correct,
 }
 
 impl<'a> ApplicationMessage<'a> {
@@ -191,6 +203,8 @@ impl<'a> ApplicationMessage<'a> {
             C::SendAlarmStatus => (P::Alarm, 0),
             C::AlarmShortTransport => (P::Alarm, 4),
             C::AlarmLongTransport => (P::Alarm, 12),
+            C::SecurityTransferCommandLong => (P::SecurityTransfer, 12),
+            C::SecurityTransferResponseShort => (P::SecurityTransfer, 4),
             C::ClockSyncAbsolute => (P::ClockSet, 12),
             C::ClockSyncRelative => (P::ClockAdjust, 12),
             C::ApplicationLayerFormatFrameNoTransport => (P::Format, 0),
@@ -271,9 +285,9 @@ impl<'a> ApplicationMessage<'a> {
         use ApplicationProtocol as P;
         let requires_verification = self.transport_header.short_header().is_some_and(|header| {
             header.is_encrypted()
-                && !matches!(
+                && matches!(
                     header.configuration_field.security_mode(),
-                    m_bus_core::SecurityMode::AesCcm128
+                    m_bus_core::SecurityMode::AesCbc128IvNonZero
                 )
         });
         let payload = if requires_verification {
@@ -306,7 +320,32 @@ impl<'a> ApplicationMessage<'a> {
                 status: payload.first().copied(),
                 details: payload.get(1..).unwrap_or_default(),
             }),
-            P::ClockSet | P::ClockAdjust => parse_clock(self.protocol, payload),
+            P::SecurityTransfer => {
+                let [low, high, fields @ ..] = payload else {
+                    return Err(ApplicationLayerError::InsufficientData);
+                };
+                require_length(fields, usize::from(u16::from_le_bytes([*low, *high])))?;
+                let [block_id, block_control, recipient, data_selector, key_id, key_version, body @ ..] =
+                    fields
+                else {
+                    return Err(ApplicationLayerError::InsufficientData);
+                };
+                Ok(V::SecurityTransfer {
+                    block_id: *block_id,
+                    block_control: *block_control,
+                    recipient: *recipient,
+                    data_selector: *data_selector,
+                    key_id: *key_id,
+                    key_version: *key_version,
+                    body,
+                })
+            }
+            P::ClockSet | P::ClockAdjust => {
+                let payload = payload.strip_prefix(&[0x2F, 0x2F]).unwrap_or(payload);
+                require_length(payload, 14)?;
+                let (operation, value) = parse_clock(self.protocol, payload)?;
+                Ok(V::Clock { operation, value })
+            }
             P::Format => FormatFrame::parse(payload).map(V::Format),
             P::Compact => CompactFrame::parse(payload).map(V::Compact),
             _ => Ok(V::External(payload)),
@@ -325,19 +364,30 @@ pub(crate) fn require_length(data: &[u8], expected: usize) -> Result<(), Applica
     }
 }
 
+pub fn parse_sitp_clock(
+    payload: &[u8],
+) -> Result<(ClockOperation, DataType<'_>), ApplicationLayerError> {
+    parse_clock(ApplicationProtocol::ClockSet, payload)
+}
+
 fn parse_clock(
     protocol: ApplicationProtocol,
     payload: &[u8],
-) -> Result<ApplicationPayload<'_>, ApplicationLayerError> {
-    let payload = payload.strip_prefix(&[0x2F, 0x2F]).unwrap_or(payload);
-    require_length(payload, 14)?;
+) -> Result<(ClockOperation, DataType<'_>), ApplicationLayerError> {
     let control = *payload
         .first()
         .ok_or(ApplicationLayerError::InsufficientData)?;
     let operation = match (protocol, control) {
         (ApplicationProtocol::ClockSet, 0) => ClockOperation::Set,
-        (ApplicationProtocol::ClockAdjust, 1) => ClockOperation::Add,
-        (ApplicationProtocol::ClockAdjust, 2) => ClockOperation::Subtract,
+        (ApplicationProtocol::ClockSet | ApplicationProtocol::ClockAdjust, 1) => {
+            ClockOperation::Add
+        }
+        (ApplicationProtocol::ClockSet | ApplicationProtocol::ClockAdjust, 2) => {
+            ClockOperation::Subtract
+        }
+        (ApplicationProtocol::ClockSet | ApplicationProtocol::ClockAdjust, 3) => {
+            ClockOperation::Correct
+        }
         _ => {
             return Err(ApplicationLayerError::InvalidPayload {
                 field: "clock control",
@@ -349,13 +399,16 @@ fn parse_clock(
     } else {
         3
     };
-    let reserved = payload
-        .get(1 + value_size..10)
-        .ok_or(ApplicationLayerError::InsufficientData)?;
-    if reserved.iter().any(|byte| *byte != 0) || payload.get(10..) != Some(&[0x2F; 4]) {
-        return Err(ApplicationLayerError::InvalidPayload {
-            field: "clock verification",
-        });
+    if payload.len() != 1 + value_size {
+        require_length(payload, 14)?;
+        let reserved = payload
+            .get(1 + value_size..10)
+            .ok_or(ApplicationLayerError::InsufficientData)?;
+        if reserved.iter().any(|byte| *byte != 0) || payload.get(10..) != Some(&[0x2F; 4]) {
+            return Err(ApplicationLayerError::InvalidPayload {
+                field: "clock verification",
+            });
+        }
     }
     let coding = if operation == ClockOperation::Set {
         DataFieldCoding::DateTimeTypeI
@@ -376,5 +429,5 @@ fn parse_clock(
         .ok_or(ApplicationLayerError::InvalidPayload {
             field: "clock time",
         })?;
-    Ok(ApplicationPayload::Clock { operation, value })
+    Ok((operation, value))
 }

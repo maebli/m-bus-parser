@@ -76,10 +76,18 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, WirelessFrame<'a>> {
         let mut user_data = None;
         let mut data_records = None;
         let mut application_error = None;
-        // Extract application layer data from wireless frame
-        let wireless_mbus_link_layer::WirelessFrame { data, .. } = &frame;
+        use user_data::extended_link_layer::{EllFormat, ExtendedLinkLayer};
+        let block = match (frame.function, frame.data) {
+            (Some(m_bus_core::Function::ReqUd2 { .. }), [0x8E, header @ ..])
+                if header.len() == 10 =>
+            {
+                ExtendedLinkLayer::parse(header, EllFormat::FormatIII)
+                    .map(|(ell, _)| user_data::UserDataBlock::ExtendedLinkLayerOnly(ell))
+            }
+            _ => user_data::UserDataBlock::try_from(frame.data),
+        };
 
-        match user_data::UserDataBlock::try_from(*data) {
+        match block {
             Ok(user_data_block) => {
                 match &user_data_block {
                     user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {

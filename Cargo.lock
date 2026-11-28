@@ -872,6 +872,7 @@ version = "0.7.4"
 dependencies = [
  "bindgen",
  "bitflags 2.13.2",
+ "crc16",
  "criterion",
  "defmt",
  "hex",

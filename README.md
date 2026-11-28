@@ -397,20 +397,14 @@ contracts.
   Nonempty external payloads are marked as partially decoded in canonical output.
 - Compact frames require the caller to supply a matching format frame to
   `CompactFrame::expand`; the CLI and rendering APIs do not cache or match formats.
-- Decryption supports AES-CBC modes 5 and 7. Encrypted ELL payloads, other security
-  modes, message authentication and fragment reassembly are not implemented.
-- Modern CI coverage is incomplete. For example, application selection variants
-  (0x53, 0x55–0x57, 0x66–0x68), short-header clock synchronization (0x62),
-  network management responses (0x87, 0x88) and TLS messages (0x5F, 0x9E, 0x9F)
-  are not recognized. See the CI table in the
-  [OMS specification](https://oms-group.org/wp-content/uploads/2024/10/OMS-Spec_Vol2_Primary_v501_01.pdf).
-- CI 0x73 retains its legacy fixed-data meaning rather than the modern long-header
-  compact format. CI 0x90–0x97 retain legacy hash-command meanings, including bytes
-  assigned to authentication/fragmentation and other services in newer protocols.
+- With the matching OMS generation feature enabled, pass telegrams in capture order to
+  `decode_capture_hex` to reassemble supported fragments. Encrypted telegrams require the matching key.
+- Some CI values have different meanings across OMS editions. Enable the matching Cargo
+  feature, such as `oms-gen3`, `oms-gen4-5`, or `oms-gen5`, when decoding a known edition.
 - Primary VIF 0x6F/0xEF and reserved variable-length encodings still return
   `DataInformationError::Unimplemented`. Command-specific VIFE object actions are
-  labeled without decoding their individual operation semantics. Compact-profile
-  VIFEs are labeled but their payloads are not expanded into individual samples.
+  labeled without decoding their individual operation semantics. The Gen 5 decoder
+  expands supported compact profiles into individual samples.
 
 ---
 
