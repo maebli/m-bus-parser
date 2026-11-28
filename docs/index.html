@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=3d70e4f05c002b30">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=6afc372d33433e0c">
     <link rel="modulepreload" href="./parser.js?v=ea35fbf04cf5eb6e">
     <link rel="modulepreload" href="./input-format.js">
     <link rel="modulepreload" href="./tls-session.js">
@@ -2389,7 +2389,7 @@
                 }
             });
 
-            await init({ module_or_path: new URL("./parser_bg.wasm?v=3d70e4f05c002b30", import.meta.url) });
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=6afc372d33433e0c", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;

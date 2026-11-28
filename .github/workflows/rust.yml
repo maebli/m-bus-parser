@@ -48,6 +48,10 @@ jobs:
         run: |
           cargo check --locked -p m-bus-oms-rules --no-default-features --target thumbv7em-none-eabi
           cargo check --locked -p m-bus-parser --no-default-features --features oms-gen5 --target thumbv7em-none-eabi
+      - name: Test standalone application protocol decoders
+        run: |
+          cargo test --locked --no-default-features --features std,sml --test oms_sml
+          cargo test --locked --no-default-features --features std,dlms-cosem --test oms_dlms
       - name: Test individual decryption modes
         run: |
           for mode in 5 7 10 13; do
