@@ -307,6 +307,9 @@ An embedded example (Cortex-M) is in [`examples/cortex-m/`](./examples/cortex-m)
 
 ## Testing
 
+Pull requests targeting `main` run the Gen 5 Rust tests, embedded build checks, and browser validation tests.
+To run the Gen 5 suite locally, use `cargo test --locked --workspace --features decryption,oms-gen5`.
+
 Run these commands from the repository root:
 
 ```bash

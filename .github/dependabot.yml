@@ -16,3 +16,7 @@ updates:
     ignore:
       - dependency-name: "bincode"
         update-types: ["version-update:semver-major"]
+  - package-ecosystem: "npm"
+    directory: "/wasm/tests"
+    schedule:
+      interval: "weekly"

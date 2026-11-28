@@ -1,0 +1,41 @@
+name: Browser regressions
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-regressions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f
+        with:
+          tool: wasm-pack
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Build the site from this revision
+        run: tools/build-site-wasm.sh
+      - name: Test the browser interface
+        working-directory: wasm/tests
+        run: |
+          npm ci
+          npx playwright install --with-deps --only-shell chromium
+          npm test

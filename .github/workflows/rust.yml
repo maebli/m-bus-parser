@@ -22,7 +22,7 @@ jobs:
         with:
           components: clippy, rustfmt
       - name: Check Formatting
-        run: cargo fmt -- --check
+        run: cargo fmt --all --check
       - name: Security audit
         run: |
           cargo install cargo-audit
@@ -37,13 +37,21 @@ jobs:
         run: cargo test --verbose -F plaintext-before-extension
       - name: Run workspace and decryption regression tests
         run: |
-          cargo test --workspace --verbose --features decryption
-          cargo test --workspace --verbose --features decryption,plaintext-before-extension
+          cargo test --locked --workspace --features decryption,oms-gen5
+          cargo test --locked --workspace --features decryption,plaintext-before-extension
       - name: Check manufacturer decoder crate
         run: |
           cargo test -p m-bus-manufacturer --all-targets
           rustup target add thumbv7em-none-eabi
           cargo build -p m-bus-manufacturer --target thumbv7em-none-eabi
+      - name: Check embedded OMS builds
+        run: |
+          cargo check --locked -p m-bus-oms-rules --no-default-features --target thumbv7em-none-eabi
+          cargo check --locked -p m-bus-parser --no-default-features --features oms-gen5 --target thumbv7em-none-eabi
+      - name: Test standalone application protocol decoders
+        run: |
+          cargo test --locked --no-default-features --features std,sml --test oms_sml
+          cargo test --locked --no-default-features --features std,dlms-cosem --test oms_dlms
       - name: Test individual decryption modes
         run: |
           for mode in 5 7 10 13; do
@@ -55,7 +63,7 @@ jobs:
       - name: Lint with Clippy
         run: |
           rustup component add clippy
-          cargo clippy -- -D warnings
+          cargo clippy --locked -p m-bus-parser -p m-bus-oms-rules --features m-bus-parser/std,m-bus-parser/oms-gen5 -- -D warnings
 
   build-cli:
     runs-on: ubuntu-24.04
@@ -186,6 +194,7 @@ jobs:
           }
 
           publish_crate m-bus-core crates/m-bus-core/Cargo.toml
+          publish_crate m-bus-oms-rules crates/m-bus-oms-rules/Cargo.toml
           publish_crate wired-mbus-link-layer crates/wired-mbus-link-layer/Cargo.toml
           publish_crate wireless-mbus-link-layer crates/wireless-mbus-link-layer/Cargo.toml
           publish_crate m-bus-application-layer crates/m-bus-application-layer/Cargo.toml
