@@ -8,6 +8,8 @@ description = "A Python binding for the M-Bus parser"
 license = "MIT"
 
 [features]
+sml = ["m-bus-parser/sml"]
+dlms-cosem = ["m-bus-parser/dlms-cosem"]
 oms-gen2 = ["decryption-mode-5", "m-bus-parser/oms-gen2"]
 oms-gen3 = ["oms-gen2", "m-bus-parser/oms-gen3"]
 oms-gen4-0 = ["oms-gen3", "decryption-mode-7", "decryption-mode-13", "m-bus-parser/oms-gen4-0"]

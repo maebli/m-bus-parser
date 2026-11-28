@@ -220,32 +220,60 @@ pub(super) fn version_two_block(
     ))
 }
 
-pub(super) fn inspect(
+pub(super) fn decode(
     data: &[u8],
-    evidence: &mut m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
-) {
-    let mut data = data;
-    while let Some(rest) = data.strip_prefix(&[0x2f]) {
-        data = rest;
-    }
-    let mut complete_file = false;
-    let file;
+    parsed: &mut ProtocolData,
+) -> Option<Result<Value, &'static str>> {
+    let data = data.get(data.iter().position(|b| *b != 0x2f)?..)?;
     if data.starts_with(&[0x1b, 0x1b, 0x1b, 0x1b, 2]) {
-        evidence.sml_v2 = Some(version_two_block(data).map(|(block, _)| block).ok_or(()));
-        return;
+        let block = version_two_block(data);
+        parsed.evidence.sml_v2 = Some(block.as_ref().map(|(header, _)| *header).ok_or(()));
+        return Some(
+            block
+                .map(|(header, bytes)| {
+                    parsed.block_data = bytes;
+                    json!({"transport_version":2, "control":header.control, "file":header.file,
+                "negotiation":header.negotiation,"payload_hex":hex_string(&parsed.block_data)})
+                })
+                .ok_or("invalid SML version 2 block"),
+        );
     }
-    if let Some(stream) = data.strip_prefix(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1]) {
+    let file;
+    let stream = data.strip_prefix(&[0x1b, 0x1b, 0x1b, 0x1b, 1, 1, 1, 1]);
+    let complete_file = stream.is_some();
+    let data = if let Some(stream) = stream {
         file = transport_payload(data, stream);
-        evidence.sml_transport = Some(file.is_some());
+        parsed.evidence.sml_transport = Some(file.is_some());
         let Some(bytes) = file.as_deref() else {
-            return;
+            return Some(Err("invalid SML transport frame"));
         };
-        data = bytes;
-        complete_file = true;
-    } else if data.first() != Some(&0x76) {
-        return;
-    }
-    inspect_messages(data, complete_file, evidence);
+        bytes
+    } else if data.first() == Some(&0x76) {
+        data
+    } else {
+        return None;
+    };
+    let mut output = Vec::new();
+    let mut render_error = None;
+    let result = read_messages(
+        data,
+        complete_file,
+        &mut parsed.evidence,
+        |transaction, group, abort, tag, fields| match message_output(
+            transaction,
+            group,
+            abort,
+            tag,
+            fields,
+        ) {
+            Ok(message) => output.push(message),
+            Err(error) => render_error = Some(error),
+        },
+    );
+    Some(result.and_then(|()| match render_error {
+        Some(error) => Err(error),
+        None => Ok(json!({"messages":output})),
+    }))
 }
 
 pub(super) fn inspect_messages(
@@ -253,10 +281,20 @@ pub(super) fn inspect_messages(
     complete_file: bool,
     evidence: &mut m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
 ) {
+    let _ = read_messages(data, complete_file, evidence, |_, _, _, _, _| {});
+}
+
+fn read_messages(
+    data: &[u8],
+    complete_file: bool,
+    evidence: &mut m_bus_oms_rules::telegram::ApplicationProtocolEvidence,
+    mut visit: impl FnMut(&[u8], u64, u64, u64, &[Field<'_>]),
+) -> Result<(), &'static str> {
     let mut file_messages = complete_file.then(Vec::new);
     let mut shapes = Some(true);
     let mut message_fields = true;
-    let result = messages(data, |_, group, abort, tag, fields| {
+    let result = messages(data, |transaction, group, abort, tag, fields| {
+        visit(transaction, group, abort, tag, fields);
         if let Some(messages) = &mut file_messages {
             messages.push(file::Message::new(tag, group, fields));
         }
@@ -281,28 +319,31 @@ pub(super) fn inspect_messages(
         }
         evidence.sml_body = shapes;
     }
+    result
 }
 
-pub(super) fn decode(data: &[u8]) -> Result<Value, &'static str> {
-    let mut messages_out = Vec::new();
-    messages(data, |transaction, group, abort, tag, fields| {
-        let content = match (tag, fields) {
-            (
-                0x0701,
-                [client, server, name, time, Field::List(entries), signature, gateway_time],
-            ) => {
-                let values = entries
-                    .iter()
-                    .map(list_entry)
-                    .collect::<Option<Vec<_>>>()
-                    .ok_or("invalid SML list entry")?;
-                json!({"type":"get_list_response","server_id":server.json(),"client_id":client.json(),"list_name":name.json(),
+fn message_output(
+    transaction: &[u8],
+    group: u64,
+    abort: u64,
+    tag: u64,
+    fields: &[Field<'_>],
+) -> Result<Value, &'static str> {
+    let content = match (tag, fields) {
+        (0x0701, [client, server, name, time, Field::List(entries), signature, gateway_time]) => {
+            let values = entries
+                .iter()
+                .map(list_entry)
+                .collect::<Option<Vec<_>>>()
+                .ok_or("invalid SML list entry")?;
+            json!({"type":"get_list_response","server_id":server.json(),"client_id":client.json(),"list_name":name.json(),
                     "sensor_time":time.json(),"gateway_time":gateway_time.json(),"signature":signature.json(),"entries":values})
-            }
-            _ => return Err("unsupported SML message type"),
-        };
-        messages_out.push(json!({"transaction_id":hex_string(transaction),"group":group,"abort_on_error":abort,"body":content}));
-        Ok(())
-    })?;
-    Ok(json!({"messages":messages_out}))
+        }
+        _ => {
+            json!({"message_type":tag,"fields":fields.iter().map(Field::json).collect::<Vec<_>>()})
+        }
+    };
+    Ok(
+        json!({"transaction_id":hex_string(transaction),"group":group,"abort_on_error":abort,"body":content}),
+    )
 }
