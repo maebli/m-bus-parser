@@ -7,7 +7,13 @@
 use core::str::FromStr;
 use std::fmt;
 
-use m_bus_core::SecurityMode;
+use m_bus_core::{ConfigurationField, Function, SecurityMode};
+use m_bus_oms_rules::telegram::{self, Link, RecordAvailability, TelegramReport as OmsReport};
+pub use m_bus_oms_rules::OmsSecurityModeCheck;
+use m_bus_oms_rules::{
+    layers::LayerFields,
+    readings::{Reading, RecordProtection},
+};
 use serde::Serialize;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use wired_mbus_link_layer as wired;
@@ -21,8 +27,19 @@ use crate::user_data::data_information::{
 use crate::user_data::value_information::{Unit, UnitName, ValueLabel};
 
 mod application;
+mod firmware;
+#[cfg(feature = "decryption-mode-7")]
+pub use firmware::verify_captured_firmware;
 mod fragments;
+mod key_wrap;
+mod lpwan;
 mod messages;
+mod oms;
+mod validation;
+pub use oms::{
+    render_oms_capture, render_oms_capture_with_options, render_oms_reports, OmsCaptureOptions,
+    OmsFormat, OmsNationalProfile, OmsRadioMode, Taf7Parameters,
+};
 mod profile;
 #[cfg(feature = "oms-gen3")]
 mod sml;
@@ -37,14 +54,22 @@ mod tls_session;
 #[cfg(feature = "decryption-mode-13")]
 use m_bus_core::decryption::mode13::TlsSession;
 #[cfg(feature = "decryption-mode-13")]
-pub use tls::{decode_hex_with_tls_session, render_hex_with_tls_session};
+pub use tls::{
+    decode_capture_hex_with_tls_session, decode_hex_with_tls_session,
+    render_capture_hex_with_tls_session, render_hex_with_tls_session,
+};
 #[cfg(feature = "decryption-mode-13")]
 pub use tls_session::ImportedTlsSession;
 #[cfg(not(feature = "decryption-mode-13"))]
 struct TlsSession<'a>(core::marker::PhantomData<&'a ()>);
-pub use application::render_application_hex;
+#[cfg(feature = "decryption-mode-7")]
+pub use application::render_application_oms_with_application_key;
+pub use application::{render_application_hex, render_application_oms};
 #[cfg(feature = "decryption-mode-13")]
-pub use application::render_application_hex_with_tls_session;
+pub use application::{
+    render_application_hex_with_tls_session, render_application_oms_with_evidence,
+    render_application_oms_with_keys, render_application_oms_with_tls_session,
+};
 use messages::application_output;
 
 const SCHEMA_VERSION: u8 = 3;
@@ -56,6 +81,7 @@ const MINIMUM_TABLE_WIDTH: usize = 32;
 #[non_exhaustive]
 pub enum OutputFormat {
     Table,
+    Oms(OmsFormat),
     TableAnsi,
     TableHtml,
     Json,
@@ -74,6 +100,7 @@ impl OutputFormat {
             Self::Table => "table",
             Self::TableAnsi => "table-ansi",
             Self::TableHtml => "table-html",
+            Self::Oms(format) => format.as_str(),
             Self::Json => "json",
             Self::Yaml => "yaml",
             Self::Csv => "csv",
@@ -99,6 +126,10 @@ impl FromStr for OutputFormat {
             "table" | "table_format" => Ok(Self::Table),
             "table-ansi" => Ok(Self::TableAnsi),
             "table-html" => Ok(Self::TableHtml),
+            "validation-json" => Ok(Self::Oms(OmsFormat::ValidationJson)),
+            "oms-json" => Ok(Self::Oms(OmsFormat::Json)),
+            "oms-xml" => Ok(Self::Oms(OmsFormat::Xml)),
+            "oms-csv" => Ok(Self::Oms(OmsFormat::Csv)),
             "json" => Ok(Self::Json),
             "yaml" | "yml" => Ok(Self::Yaml),
             "csv" => Ok(Self::Csv),
@@ -248,16 +279,233 @@ pub struct DecodedOutput {
     pub decode_state: String,
     pub protocol: String,
     pub frame: FrameOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lpwan: Option<m_bus_oms_rules::lpwan::LpwanHeader>,
     pub meter: MeterOutput,
     pub transport: TransportOutput,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub application: Option<ApplicationOutput>,
     pub security: SecurityOutput,
+    pub record_availability: RecordAvailability,
     pub records: Vec<RecordOutput>,
     pub raw: RawOutput,
     pub diagnostics: Vec<Diagnostic>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enrichment: Option<EnrichmentOutput>,
+}
+
+impl DecodedOutput {
+    pub fn assess_oms_5_0_1(&self) -> OmsReport {
+        self.assess_oms_with_options(OmsCaptureOptions::default())
+    }
+
+    pub fn assess_oms_with_options(&self, options: OmsCaptureOptions) -> OmsReport {
+        self.assess_oms_with_history(&mut Default::default(), options)
+    }
+
+    fn assess_oms_with_history(
+        &self,
+        history: &mut m_bus_oms_rules::sequence::AccessHistory,
+        options: OmsCaptureOptions,
+    ) -> OmsReport {
+        let frame = &self.frame;
+        let transport = &self.transport;
+        let control = frame
+            .control_field
+            .as_deref()
+            .and_then(|raw| u8::from_str_radix(raw, 16).ok());
+        let link = match (frame.kind.as_str(), control) {
+            ("wireless" | "lpwan", Some(control)) => Link::Wireless(control),
+            ("short" | "control" | "long", Some(control)) => {
+                Function::try_from(control).map_or(Link::Unavailable, Link::Wired)
+            }
+            _ => Link::Unavailable,
+        };
+        let configuration = transport
+            .configuration
+            .as_ref()
+            .and_then(|field| u16::from_str_radix(&field.raw, 16).ok())
+            .map(ConfigurationField::from);
+        let fields = LayerFields {
+            application_protocol: oms::application_protocol(self),
+            device_type: self
+                .meter
+                .identity
+                .as_ref()
+                .and_then(|id| id.device_type_code),
+            wireless_sender_type: self
+                .meter
+                .identity
+                .iter()
+                .chain(&self.meter.alternate_identities)
+                .find(|id| id.source == "link.wireless")
+                .and_then(|id| id.device_type_code),
+            wireless_receiver_type: transport
+                .ell
+                .as_ref()
+                .and_then(|header| header.receiver_address.as_deref())
+                .and_then(|address| address.get(10..12))
+                .and_then(|code| u8::from_str_radix(code, 16).ok()),
+            has_application_data: if !self.records.is_empty() {
+                Some(true)
+            } else if let Some(application) = &self.application {
+                Some(!application.payload_hex.is_empty())
+            } else if matches!(self.record_availability, RecordAvailability::Complete)
+                || (transport.header_kind.as_deref() == Some("ell")
+                    && transport.application_ci.is_none()
+                    && self.decode_state == "complete")
+            {
+                Some(false)
+            } else {
+                None
+            },
+            command_target_type: self
+                .meter
+                .identity
+                .as_ref()
+                .filter(|id| id.source == "tpl.long")
+                .and_then(|id| id.device_type_code),
+            mac_verified: self.security.decryption_state == "decrypted_authenticated",
+            verification_prefix: self.security.decrypted_payload_hex.as_deref().map(|plain| {
+                match self.security.mode_code {
+                    Some(7)
+                        if configuration.is_some_and(|cf| cf.mode_specific_lower() >> 4 != 0) =>
+                    {
+                        self.security.decryption_state == "decrypted_authenticated"
+                    }
+                    _ => plain.starts_with("2F2F"),
+                }
+            }),
+            tpl_present: match transport.header_kind.as_deref() {
+                Some("long_tpl" | "short_tpl") => Some(true),
+                Some(_) => Some(false),
+                None if matches!(frame.kind.as_str(), "short" | "single_character") => Some(false),
+                _ => None,
+            },
+            short_tpl: transport.header_kind.as_deref() == Some("short_tpl"),
+            outer_ci: transport.outer_ci,
+            application_ci: transport.application_ci,
+            configuration_extension: transport.configuration_extension,
+            communication_control: transport
+                .ell
+                .as_ref()
+                .and_then(|ell| u8::from_str_radix(&ell.communication_control, 16).ok()),
+            radio_mode: options.radio_mode,
+            ell_encryption_mode: transport
+                .ell
+                .as_ref()
+                .and_then(|ell| ell.session_number.as_ref()?.get(6..8))
+                .and_then(|byte| u8::from_str_radix(byte, 16).ok())
+                .map(|byte| byte >> 5),
+            security_counter: self.security.message_counter,
+            lpwan_sync: self.lpwan.as_ref().and_then(|mac| {
+                mac.llc
+                    .as_ref()
+                    .map(|llc| !mac.downlink() && llc.flags & 0x40 != 0)
+            }),
+            transport_body_length: transport.body_length,
+            tls: self.security.tls.as_ref().map(|tls| {
+                let has = |name| tls.records.iter().any(|r| r.content_type == name);
+                m_bus_oms_rules::layers::TlsFields {
+                    cmac_verified: tls.cmac_verified,
+                    channel_request: tls.protocol == "channel_request",
+                    handshake_or_alert: has("handshake")
+                        || has("change_cipher_spec")
+                        || has("alert"),
+                    application: has("application_data"),
+                    alert: has("alert"),
+                    clear_alert: tls
+                        .records
+                        .iter()
+                        .any(|r| r.content_type == "alert" && r.length == 2),
+                    hello: tls.records.iter().find_map(|r| r.hello),
+                }
+            }),
+            authentication_type: transport.authentication_type,
+            message_length: transport.afl_message_length,
+            layers_decoded: transport.header_kind.is_some() || frame.kind == "short",
+            reassembled: frame.kind == "reassembled",
+        };
+        let readings = self.records.iter().map(|record| {
+            Some(Reading {
+                protection: record.transport_protection,
+                header: decode_hex_bytes(&record.header_hex).ok()?,
+                data: if record.data_hex.is_empty() {
+                    Vec::new()
+                } else {
+                    decode_hex_bytes(&record.data_hex).ok()?
+                },
+                profile_time: matches!(record.value.kind.as_str(), "time_offset" | "timestamp")
+                    .then_some(record.value.value.is_some()),
+                tariff: record.tariff,
+                storage: record.storage_number,
+                subunit: record.subunit,
+            })
+        });
+        let mut report = telegram::assess_telegram_with_taf7(
+            link,
+            configuration,
+            fields,
+            self.record_availability,
+            readings,
+            options.taf7,
+        );
+        if let Some(profile) = options.national_profile {
+            let clock = self
+                .application
+                .as_ref()
+                .is_some_and(|a| matches!(a.protocol.as_str(), "clock_set" | "clock_adjust"));
+            profile.check(
+                link,
+                self.lpwan.is_some(),
+                fields,
+                configuration,
+                clock,
+                &mut report,
+            );
+        }
+        if let Some(manufacturer) = self
+            .meter
+            .identity
+            .as_ref()
+            .and_then(|id| id.manufacturer_code.as_deref())
+        {
+            report.push(m_bus_oms_rules::address::manufacturer_allocation(
+                manufacturer,
+            ));
+        }
+        if let Some(addressed) = fragments::wireless_destination(&self.raw.fragment_frames_hex) {
+            report.push(m_bus_oms_rules::telegram::fragment_destination(addressed));
+        }
+        firmware::assess(self, &mut report);
+        oms::check_current_din(self, &mut report);
+        if let Some(wired) = oms::wired_observation(self) {
+            wired.check(
+                transport.outer_ci.is_some(),
+                transport.header_kind.as_deref() == Some("long_tpl"),
+                self.security.mode_code.is_some_and(|mode| mode != 0),
+                &mut report,
+            );
+        }
+        if let Some((command, blocks)) = oms::sitp_blocks(self) {
+            m_bus_oms_rules::sitp::assess(&blocks, command, &mut report);
+            oms::check_sitp_clocks(self, &mut report);
+        }
+        if let Some(mac) = &self.lpwan {
+            mac.check(
+                mac.upper_layer_octets != 0,
+                transport.header_kind.as_deref() == Some("short_tpl"),
+                transport.header_kind.as_deref() == Some("long_tpl"),
+                &mut report,
+            );
+        }
+        if let Some(access) = oms::access_observation(self, link, configuration) {
+            if let Some(finding) = history.observe(access, options.consecutive) {
+                report.push(finding);
+            }
+        }
+        report
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -330,6 +578,20 @@ pub struct EllOutput {
 #[derive(Debug, Clone, Serialize)]
 pub struct TransportOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub outer_ci: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub application_ci: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configuration_extension: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_length: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub afl_key_information: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authentication_type: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub afl_message_length: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub header_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary_address_mask: Option<String>,
@@ -354,19 +616,21 @@ pub struct ApplicationOutput {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TlsRecordOutput {
+    #[serde(skip)]
+    pub hello: Option<m_bus_oms_rules::tls_hello::TlsHello>,
     pub content_type: String,
     pub length: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TlsOutput {
+    pub cmac_verified: bool,
     pub protocol: String,
     pub records: Vec<TlsRecordOutput>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SecurityOutput {
-    pub oms_5_0_1_security_mode_check: OmsSecurityModeCheck,
     pub payload_protection: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
@@ -376,6 +640,8 @@ pub struct SecurityOutput {
     pub key_supplied: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_id: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_version: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message_counter: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -387,57 +653,9 @@ pub struct SecurityOutput {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct OmsSecurityModeCheck {
-    pub result: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub candidate_profile: Option<&'static str>,
-}
-
-impl OmsSecurityModeCheck {
-    fn assess(
-        frame: &FrameOutput,
-        transport: &TransportOutput,
-        mode: Option<SecurityMode>,
-    ) -> Self {
-        let function = frame
-            .function
-            .as_deref()
-            .and_then(|value| value.split_whitespace().next());
-        let requires_zero = matches!(
-            function,
-            Some(
-                "REQ_UD1"
-                    | "REQ_UD2"
-                    | "SND_NKE"
-                    | "ACC_NR"
-                    | "ACC_DMD"
-                    | "ACK"
-                    | "NACK"
-                    | "CNF_IR"
-            )
-        );
-        let explicit_mode = mode
-            .filter(|_| transport.configuration.is_some())
-            .map(|mode| mode.to_bits());
-        let (result, candidate_profile) = match explicit_mode {
-            None => ("undetermined", None),
-            Some(n) if n != 0 && requires_zero => ("requires_mode_0", None),
-            Some(0) => ("listed", None),
-            Some(5) => ("listed", Some("A")),
-            Some(7) => ("listed", Some("B")),
-            Some(13) => ("listed", Some("C")),
-            Some(10) => ("listed", Some("D")),
-            Some(_) => ("not_listed", None),
-        };
-        Self {
-            result,
-            candidate_profile,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct RecordOutput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport_protection: Option<RecordProtection>,
     pub index: usize,
     pub function: String,
     pub storage_number: u64,
@@ -522,21 +740,9 @@ struct SecurityContext {
     key_supplied: bool,
     decrypted_payload: Option<Vec<u8>>,
     tls: Option<TlsOutput>,
-    application_mac_verified: bool,
 }
 
 impl SecurityContext {
-    fn verify_application(
-        mut self,
-        block: Option<&user_data::UserDataBlock<'_>>,
-        key: Option<&[u8; 16]>,
-    ) -> Result<Self, OutputError> {
-        if let Some(key) = key {
-            self.application_mac_verified = messages::verify_application(block, &self, key)?;
-        }
-        Ok(self)
-    }
-
     fn authenticated(&self) -> bool {
         self.decrypted
             && matches!(
@@ -577,7 +783,7 @@ pub fn decode_capture_bytes(
 ) -> Result<FragmentOutput, OutputError> {
     match fragments::detect_bytes(data, options)? {
         Some(decoded) => Ok(decoded),
-        None => decode_bytes_with_keys(data, options, None, None)
+        None => decode_bytes_with_session(data, options, None)
             .map(|frame| FragmentOutput::Single(Box::new(frame))),
     }
 }
@@ -592,21 +798,31 @@ pub fn decode_bytes_with_application_key(
     options: &DecodeOptions,
     application_key: &[u8; 16],
 ) -> Result<DecodedOutput, OutputError> {
-    decode_bytes_with_keys(data, options, None, Some(application_key))
+    let mut frame = decode_bytes(data, options)?;
+    if frame.verify_application_key(application_key)? {
+        Ok(frame)
+    } else {
+        Err(OutputError::Decryption {
+            code: "security.application_mac_unavailable",
+            message: "No supported application security container is available.".into(),
+        })
+    }
 }
 
-fn decode_bytes_with_keys(
+fn decode_bytes_with_session(
     data: &[u8],
     options: &DecodeOptions,
     session: Option<&TlsSession<'_>>,
-    application_key: Option<&[u8; 16]>,
 ) -> Result<DecodedOutput, OutputError> {
     if data.is_empty() {
         return Err(OutputError::EmptyInput);
     }
 
+    if m_bus_oms_rules::lpwan::has_mac_crc(data) {
+        return lpwan::decode(data, options, session);
+    }
     if let Some(frame) = fragments::singleton_payload(data)? {
-        let mut decoded = decode_bytes_with_keys(frame, options, session, application_key)?;
+        let mut decoded = decode_bytes_with_session(frame, options, session)?;
         decoded.raw.fragment_frames_hex.push(hex_string(data));
         return Ok(decoded);
     }
@@ -620,8 +836,7 @@ fn decode_bytes_with_keys(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?
-            .verify_application(parsed.user_data.as_ref(), application_key)?;
+            )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -655,8 +870,7 @@ fn decode_bytes_with_keys(
                 options.key.as_ref(),
                 session,
                 &mut decrypted_buffer,
-            )?
-            .verify_application(parsed.user_data.as_ref(), application_key)?;
+            )?;
             if let Some(decrypted) = security.decrypted_payload.as_deref() {
                 parsed.data_records = decrypted_records(parsed.user_data.as_ref(), decrypted);
             } else if security.encrypted {
@@ -688,7 +902,7 @@ pub fn decode_data_records(data: &[u8]) -> Result<Vec<RecordOutput>, OutputError
         return Err(OutputError::EmptyInput);
     }
     let records = user_data::DataRecords::from(data);
-    let (output, error) = collect_records(Some(&records), None);
+    let (output, error) = collect_records(Some(&records), None, None);
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",
@@ -751,7 +965,7 @@ pub fn render_bytes(
             })
         }
         _ => {
-            let decoded = decode_bytes_with_keys(data, &options.decode, None, None)?;
+            let decoded = decode_bytes_with_session(data, &options.decode, None)?;
             render_decoded(&decoded, format, options)
         }
     }
@@ -767,6 +981,7 @@ fn render_capture(
         FragmentOutput::Multiple(frames) => frames.as_slice(),
     };
     match format {
+        OutputFormat::Oms(format) => return render_oms_reports(frames, format),
         OutputFormat::Json => {
             return serde_json::to_string_pretty(&capture).map_err(|e| OutputError::Serialization {
                 format: "json",
@@ -841,6 +1056,7 @@ fn render_decoded(
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
     match format {
+        OutputFormat::Oms(format) => render_oms_reports(std::slice::from_ref(decoded), format),
         OutputFormat::Json => {
             serde_json::to_string_pretty(decoded).map_err(|error| OutputError::Serialization {
                 format: "json",
@@ -965,7 +1181,7 @@ fn prepare_security(
     let _ = session;
     #[cfg(feature = "decryption-mode-13")]
     if mode == Some(SecurityMode::SpecificUsage13) {
-        return tls::prepare_mode13(user_data, session);
+        return tls::prepare_mode13(user_data, wireless_id, key, session);
     }
     #[cfg(feature = "decryption-mode-13")]
     if session.is_some() {
@@ -983,7 +1199,6 @@ fn prepare_security(
             key_supplied: key.is_some(),
             decrypted_payload: None,
             tls: None,
-            application_mac_verified: false,
         });
     }
     let Some(key) = key else {
@@ -995,7 +1210,6 @@ fn prepare_security(
             key_supplied: false,
             decrypted_payload: None,
             tls: None,
-            application_mac_verified: false,
         });
     };
     if ell_encrypted && mode.is_none() {
@@ -1055,7 +1269,6 @@ fn prepare_security(
             key_supplied: true,
             decrypted_payload: Some(decrypted),
             tls: None,
-            application_mac_verified: false,
         })
     }
 
@@ -1204,7 +1417,7 @@ fn build_wired_output(
             data,
         } => (
             "long",
-            Some(frame_function_name(function)),
+            Some(*function),
             Some(address.to_string()),
             Some(*data),
         ),
@@ -1214,16 +1427,13 @@ fn build_wired_output(
             data,
         } => (
             "control",
-            Some(frame_function_name(function)),
+            Some(*function),
             Some(address.to_string()),
             Some(*data),
         ),
-        wired::WiredFrame::ShortFrame { function, address } => (
-            "short",
-            Some(frame_function_name(function)),
-            Some(address.to_string()),
-            None,
-        ),
+        wired::WiredFrame::ShortFrame { function, address } => {
+            ("short", Some(*function), Some(address.to_string()), None)
+        }
         wired::WiredFrame::SingleCharacter { .. } => ("single_character", None, None, None),
         _ => ("unknown", None, None, None),
     };
@@ -1232,9 +1442,16 @@ fn build_wired_output(
         "wired",
         FrameOutput {
             kind: kind.to_string(),
-            function,
+            function: function.as_ref().map(frame_function_name),
             address,
-            control_field: None,
+            control_field: match parsed.frame {
+                wired::WiredFrame::LongFrame { .. } | wired::WiredFrame::ControlFrame { .. } => {
+                    original.get(4)
+                }
+                wired::WiredFrame::ShortFrame { .. } => original.get(1),
+                _ => None,
+            }
+            .map(|byte| format!("{byte:02X}")),
         },
         original,
         original,
@@ -1405,7 +1622,27 @@ fn build_output(
         });
     }
 
-    let (meter, transport) = meter_and_transport(user_data, wireless_id);
+    let (meter, mut transport) = meter_and_transport(user_data, wireless_id);
+    if matches!(
+        frame.kind.as_str(),
+        "wireless" | "long" | "control" | "application_layer"
+    ) {
+        transport.outer_ci = payload.and_then(|data| data.first().copied());
+        if let (
+            Some(bytes),
+            Some(user_data::UserDataBlock::VariableDataStructureWithoutTplHeader {
+                variable_data_block,
+                ..
+            }),
+        ) = (payload, user_data)
+        {
+            transport.application_ci = bytes
+                .len()
+                .checked_sub(variable_data_block.len() + 1)
+                .and_then(|offset| bytes.get(offset))
+                .copied();
+        }
+    }
     let (record_outputs, record_error) = match user_data {
         Some(user_data::UserDataBlock::FixedDataStructure {
             device_type_and_unit,
@@ -1417,7 +1654,11 @@ fn build_output(
             fixed_record_outputs(*device_type_and_unit, *status, counter1, counter2, payload),
             None,
         ),
-        _ => collect_records(records, meter.identity.as_ref()),
+        _ => collect_records(
+            records,
+            meter.identity.as_ref(),
+            oms::encrypted_record_prefix(&frame, user_data, &security_context),
+        ),
     };
     if let Some((offset, message)) = record_error.as_ref() {
         diagnostics.push(Diagnostic {
@@ -1474,13 +1715,55 @@ fn build_output(
         "cleartext"
     };
     let mode = security_context.mode;
+    let authentication = user_data.and_then(user_data::UserDataBlock::authentication);
+    let (key_id, key_version, message_counter) = match mode.map(|m| m.to_bits()) {
+        Some(10) => {
+            let body = user_data
+                .and_then(user_data::UserDataBlock::transport_payload)
+                .map(|(_, body)| body);
+            let extension = transport.configuration_extension;
+            let version_present = extension.is_some_and(|value| value & 0x40 != 0);
+            let offset = 2 + usize::from(version_present);
+            let counter = body
+                .and_then(|bytes| bytes.get(offset..)?.first_chunk::<4>())
+                .copied()
+                .map(u32::from_le_bytes);
+            (
+                extension.map(|v| (v & 15) as u8),
+                body.filter(|_| version_present)
+                    .and_then(|v| v.get(2))
+                    .copied(),
+                counter,
+            )
+        }
+        _ => (
+            transport
+                .configuration_extension
+                .filter(|_| mode.is_some_and(|m| m.to_bits() == 7))
+                .map(|v| (v & 15) as u8),
+            transport.afl_key_information.map(|v| (v >> 8) as u8),
+            authentication.map(|a| a.message_counter),
+        ),
+    };
     let partial = application_error.is_some()
         || application_partial
         || record_error.is_some()
         || (security_context.encrypted && !security_context.decrypted);
 
-    let oms_mode_check = OmsSecurityModeCheck::assess(&frame, &transport, mode);
+    let record_availability = if fragment {
+        RecordAvailability::Fragmented
+    } else if security_context.encrypted && !security_context.decrypted {
+        RecordAvailability::Encrypted
+    } else if records.is_none() {
+        RecordAvailability::Unavailable
+    } else if record_error.is_some() {
+        RecordAvailability::Partial
+    } else {
+        RecordAvailability::Complete
+    };
     DecodedOutput {
+        lpwan: None,
+        record_availability,
         schema_version: SCHEMA_VERSION,
         decode_state: if partial { "partial" } else { "complete" }.to_string(),
         protocol: protocol.to_string(),
@@ -1489,20 +1772,14 @@ fn build_output(
         transport,
         application,
         security: SecurityOutput {
-            oms_5_0_1_security_mode_check: oms_mode_check,
             payload_protection: payload_protection.to_string(),
             mode: mode.map(|value| value.to_string()),
             mode_code: mode.map(|value| value.to_bits()),
             decryption_state: decryption_state.to_string(),
             key_supplied: security_context.key_supplied,
-            key_id: user_data
-                .filter(|block| block.authentication().is_some())
-                .and_then(|block| block.transport_payload())
-                .and_then(|(_, data)| data.first())
-                .map(|extension| extension & 0x0f),
-            message_counter: user_data
-                .and_then(|block| block.authentication())
-                .map(|header| header.message_counter),
+            key_id,
+            key_version,
+            message_counter,
             tls: security_context.tls,
             encrypted_payload_hex,
             decrypted_payload_hex,
@@ -1530,7 +1807,15 @@ fn meter_and_transport(
     let link_identity = wireless_id.map(identity_from_wireless);
     let mut primary = link_identity.clone();
     let mut alternates = Vec::new();
+    let authentication = user_data.and_then(UserDataBlock::authentication);
     let mut transport = TransportOutput {
+        outer_ci: None,
+        application_ci: None,
+        configuration_extension: None,
+        body_length: None,
+        afl_key_information: authentication.and_then(|a| a.key_information),
+        authentication_type: authentication.map(|a| a.message_control & 15),
+        afl_message_length: authentication.and_then(|a| a.message_length),
         header_kind: None,
         secondary_address_mask: None,
         access_numbers: Vec::new(),
@@ -1680,6 +1965,21 @@ fn meter_and_transport(
         Some(_) => {}
     }
 
+    if let Some((header, body)) = user_data
+        .and_then(UserDataBlock::transport_payload)
+        .filter(|_| transport.configuration.is_some())
+    {
+        transport.application_ci = Some(header.control_information);
+        transport.body_length = Some(body.len());
+        transport.configuration_extension =
+            match header.configuration_field.security_mode().to_bits() {
+                7 | 13 => body.first().copied().map(u16::from),
+                10 => body.first_chunk::<2>().copied().map(u16::from_le_bytes),
+                _ => None,
+            };
+    } else if let Some(UserDataBlock::ApplicationMessage(message)) = user_data {
+        transport.application_ci = Some(message.control_information);
+    }
     (
         MeterOutput {
             identity: primary,
@@ -1778,6 +2078,7 @@ fn fixed_record_outputs(
         .into_iter()
         .enumerate()
         .map(|(index, reading)| RecordOutput {
+            transport_protection: None,
             index,
             function: if reading.stored {
                 "Stored value"
@@ -1813,6 +2114,7 @@ fn fixed_record_outputs(
 fn collect_records(
     records: Option<&user_data::DataRecords<'_>>,
     identity: Option<&MeterIdentity>,
+    encrypted_prefix: Option<usize>,
 ) -> (Vec<RecordOutput>, Option<(usize, String)>) {
     let Some(records) = records else {
         return (Vec::new(), None);
@@ -1822,11 +2124,22 @@ fn collect_records(
     let mut bases = Vec::new();
     let mut first_error = None;
     let mut profiles = profiles::ProfileHistory::default();
-    for item in records.clone() {
+    let mut records = records.clone();
+    while let Some(item) = records.next() {
         match item {
             Ok(record) => {
                 let size = record.raw_bytes().len();
                 let mut parsed = record_output(output.len(), &record);
+                let end = records.consumed_bytes();
+                parsed.transport_protection = encrypted_prefix.map(|boundary| {
+                    if end <= boundary {
+                        RecordProtection::Encrypted
+                    } else if end - size >= boundary {
+                        RecordProtection::Clear
+                    } else {
+                        RecordProtection::Mixed
+                    }
+                });
                 if let (Some(identity), [0x0f, tail @ ..]) = (identity, record.raw_bytes()) {
                     parsed.manufacturer_fields = manufacturer_fields(identity, tail);
                 }
@@ -1966,6 +2279,7 @@ fn record_output(index: usize, record: &user_data::DataRecord<'_>) -> RecordOutp
         .filter(|unit| !unit.is_empty());
 
     RecordOutput {
+        transport_protection: None,
         index,
         function,
         storage_number,

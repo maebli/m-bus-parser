@@ -410,6 +410,60 @@ fn ambiguous_protection_reports_missing_context() {
 }
 
 #[test]
+fn capture_keeps_immutable_identifiers_and_static_billing_dates_per_device() {
+    use m_bus_parser::{
+        decode_hex,
+        output::{render_oms_capture, OmsFormat},
+        DecodeOptions,
+    };
+    let frame = |sender, body: &str| {
+        let packet = format!("{:02X}44{sender}{body}", 9 + body.len() / 2);
+        decode_hex(&packet, &DecodeOptions::default()).unwrap()
+    };
+    let sensor = "9315785634123307";
+    let other = "9315785634133307";
+    let first = "7A010000000D780E3434333332323131313053445137";
+    let second = "7A020000000D780E3534333332323131313053445137";
+    let frames = [
+        frame(sensor, first),
+        frame(other, second),
+        frame(sensor, second),
+    ];
+    let report: serde_json::Value =
+        serde_json::from_str(&render_oms_capture(&frames, OmsFormat::Json, None, true).unwrap())
+            .unwrap();
+    let status = |report: &serde_json::Value, name| {
+        report["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["rule"] == name)
+            .map(|f| f["status"].clone())
+    };
+    assert!(status(&report[1], "Initial DIN address across capture").is_none());
+    assert_eq!(
+        status(&report[2], "Initial DIN address across capture"),
+        Some("failed".into())
+    );
+    let due = [
+        frame(sensor, "7A01000805426C1F11"),
+        frame(other, "7A02000000411301"),
+        frame(sensor, "7A02000000411301"),
+    ];
+    let report: serde_json::Value =
+        serde_json::from_str(&render_oms_capture(&due, OmsFormat::Json, None, true).unwrap())
+            .unwrap();
+    assert_eq!(
+        status(&report[1], "Due date for billing value"),
+        Some("could_not_check".into())
+    );
+    assert_eq!(
+        status(&report[2], "Due date for billing value"),
+        Some("passed".into())
+    );
+}
+
+#[test]
 fn application_selection_must_precede_list_edits_and_descriptors_stay_in_blocks_zero_or_one() {
     let select = || record(&[1, 0xfd, 0xfd, 0x80, 0], &[0x70]);
     let add = || record(&[0, 0xfd, 0xbc, 0x0c], &[]);
@@ -533,5 +587,78 @@ fn symbolic_profile_times_detect_conflicting_storage_allocations() {
     assert_eq!(
         outcome(&report, "Compact profile reference times"),
         Some("failed")
+    );
+}
+
+#[test]
+fn application_selection_checks_its_extended_parameter_and_reported_content() {
+    use m_bus_parser::{decode_bytes, DecodeOptions};
+
+    let wired = |ci, parameters: &[u8]| {
+        let mut body = vec![if ci == 0x66 { 8 } else { 0x53 }, 4, ci];
+        body.extend(parameters);
+        let length = body.len() as u8;
+        let check = body.iter().fold(0u8, |acc, b| acc.wrapping_add(*b));
+        let mut frame = vec![0x68, length, length, 0x68];
+        frame.extend(body);
+        frame.extend([check, 0x16]);
+        decode_bytes(&frame, &DecodeOptions::default())
+            .unwrap()
+            .assess_oms_5_0_1()
+    };
+    for (ci, data, expected) in [
+        (0x50, &[][..], "passed"),
+        (0x50, &[0; 10], "passed"),
+        (0x50, &[0; 11], "failed"),
+        (0x54, &[], "passed"),
+        (0x54, &[1], "failed"),
+        (0x66, &[0xf0, 0x10], "passed"),
+        (0x66, &[], "failed"),
+    ] {
+        assert_eq!(
+            outcome(&wired(ci, data), "Application selection parameters"),
+            Some(expected),
+            "{ci:02x} {data:?}"
+        );
+    }
+    let selected = |cf, data: &'static [u8]| {
+        report(
+            7,
+            cf,
+            0x10,
+            RecordAvailability::Complete,
+            vec![
+                record(&[2, 0xfd, 0xfd, 0], data),
+                record(&[1, 0xfd, 0x23], &[0]),
+            ],
+        )
+    };
+    assert_eq!(
+        outcome(
+            &selected(0x8700, &[0x70, 1]),
+            "Static application descriptor block"
+        ),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(
+            &selected(0x0701, &[0xf0, 0x10]),
+            "Selected application message content"
+        ),
+        Some("passed")
+    );
+    assert_eq!(
+        outcome(
+            &selected(0x0702, &[0xf0, 0x10]),
+            "Selected application message content"
+        ),
+        Some("failed")
+    );
+    assert_eq!(
+        outcome(
+            &selected(0x0700, &[0xf0, 0x10]),
+            "Selected application message content"
+        ),
+        Some("could_not_check")
     );
 }

@@ -12,7 +12,6 @@ keywords = ["m-bus", "parser", "parse"]
 exclude = ["/resources", "/tests", "examples"]
 
 [dev-dependencies]
-m-bus-oms-rules = { version = "0.7.4", path = "crates/m-bus-oms-rules" }
 criterion = { version = "0.8.1", features = ["html_reports"] }
 walkdir = "2.5.0"
 hex = "0.4"
@@ -34,9 +33,9 @@ oms-gen4-3 = ["oms-gen4-2"]
 oms-gen4-4 = ["oms-gen4-3"]
 oms-gen4-5 = ["oms-gen4-4", "decryption-mode-10"]
 oms-gen4 = ["oms-gen4-5"]
-oms-gen5 = ["oms-gen4-5"]
+oms-gen5 = ["oms-gen4-5", "m-bus-application-layer/oms-gen5", "m-bus-oms-rules?/dlms"]
 default = []
-std = ["dep:m-bus-manufacturer", "prettytable-rs", "serde_json", "dep:serde_norway", "serde", "unicode-width", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std", "m-bus-application-layer/std"]
+std = ["m-bus-oms-rules/serde", "dep:m-bus-manufacturer", "prettytable-rs", "serde_json", "dep:serde_norway", "serde", "unicode-width", "wired-mbus-link-layer/std", "wireless-mbus-link-layer/std", "m-bus-core/std", "m-bus-application-layer/std"]
 serde_yaml = ["dep:serde_norway"]
 plaintext-before-extension = ["m-bus-application-layer/plaintext-before-extension"]
 serde = ["dep:serde", "bitflags/serde", "wired-mbus-link-layer/serde", "wireless-mbus-link-layer/serde", "m-bus-core/serde", "m-bus-application-layer/serde"]
@@ -44,7 +43,7 @@ defmt = ["dep:defmt", "wired-mbus-link-layer/defmt", "wireless-mbus-link-layer/d
 decryption = ["decryption-mode-5", "decryption-mode-7", "decryption-mode-10", "decryption-mode-13"]
 decryption-api = ["m-bus-application-layer/decryption-api"]
 decryption-mode-5 = ["decryption-api", "m-bus-application-layer/decryption-mode-5"]
-decryption-mode-7 = ["decryption-api", "m-bus-application-layer/decryption-mode-7"]
+decryption-mode-7 = ["decryption-api", "m-bus-application-layer/decryption-mode-7", "dep:aes-kw", "dep:zeroize"]
 decryption-mode-10 = ["decryption-api", "m-bus-application-layer/decryption-mode-10"]
 decryption-mode-13 = ["decryption-api", "m-bus-application-layer/decryption-mode-13", "dep:zeroize"]
 
@@ -57,6 +56,7 @@ codegen-units = 1 # Reduce codegen units to improve optimizations
 opt-level = "s"
 
 [dependencies]
+m-bus-oms-rules = { version = "0.7.4", path = "crates/m-bus-oms-rules", optional = true }
 crc16 = { version = "0.4", optional = true }
 m-bus-manufacturer = { version = "0.7.4", path = "crates/m-bus-manufacturer", optional = true }
 zeroize = { version = "1.9", optional = true, default-features = false, features = ["alloc"] }
@@ -71,6 +71,7 @@ wired-mbus-link-layer = { version = "0.7.4", path = "crates/wired-mbus-link-laye
 wireless-mbus-link-layer = { version = "0.7.4", path = "crates/wireless-mbus-link-layer" }
 m-bus-core = { version = "0.7.4", path = "crates/m-bus-core" }
 m-bus-application-layer = { version = "0.7.4", path = "crates/m-bus-application-layer" }
+aes-kw = { version = "0.3.1", default-features = false, optional = true, features = ["zeroize"] }
 
 [workspace]
 members = ["crates/m-bus-oms-rules", "crates/m-bus-manufacturer", "cli", "wasm", "wasm/site","python", "c", "crates/m-bus-application-layer", "crates/wired-mbus-link-layer", "crates/wireless-mbus-link-layer", "crates/m-bus-core"]
