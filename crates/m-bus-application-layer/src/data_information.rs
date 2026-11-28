@@ -737,12 +737,8 @@ impl DataFieldCoding {
             Self::NoData | Self::SelectionForReadout => Some(0),
             Self::Integer8Bit | Self::BCD2Digit => Some(1),
             Self::Integer16Bit | Self::BCD4Digit | Self::DateTypeG => Some(2),
-            Self::Integer24Bit | Self::BCD6Digit => Some(3),
-            Self::Integer32Bit
-            | Self::Real32Bit
-            | Self::BCD8Digit
-            | Self::DateTimeTypeF
-            | Self::DateTimeTypeJ => Some(4),
+            Self::Integer24Bit | Self::BCD6Digit | Self::DateTimeTypeJ => Some(3),
+            Self::Integer32Bit | Self::Real32Bit | Self::BCD8Digit | Self::DateTimeTypeF => Some(4),
             Self::Integer48Bit | Self::BCDDigit12 | Self::DateTimeTypeI => Some(6),
             Self::Integer64Bit => Some(8),
             Self::VariableLength => match *input.first()? {
@@ -1011,7 +1007,7 @@ impl DataFieldCoding {
 
                 Ok(Data {
                     value: Some(DataType::Time(seconds, minutes, hours)),
-                    size: 4,
+                    size: 3,
                 })
             }
             Self::DateTimeTypeI => {

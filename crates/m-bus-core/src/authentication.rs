@@ -28,7 +28,14 @@ impl<'a> AuthenticationHeader<'a> {
         };
         let mut remaining = remaining;
         let flags = u16::from_le_bytes([*low, *high]);
-        if flags & 0xc1ff != 0 {
+        let tls_mode = match transport.first() {
+            Some(0x5f | 0x9f) => transport.get(12),
+            Some(0x9e) => transport.get(4),
+            _ => None,
+        };
+        let complete_tls_handshake =
+            flags & 0xc1ff == 1 && tls_mode.is_some_and(|cf| cf & 0x1f == 13);
+        if flags & 0xc1ff != 0 && !complete_tls_handshake {
             return Err(ApplicationLayerError::InvalidPayload {
                 field: "fragmented or reserved AFL control",
             });

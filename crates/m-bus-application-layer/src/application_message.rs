@@ -70,6 +70,10 @@ pub enum ApplicationProtocol {
     RequestFormatFrame,
     NetworkLayer,
     NetworkManagement,
+    ApplicationResetOrSelect,
+    SelectedApplication,
+    ImageTransfer,
+    TlsHandshake,
 }
 
 impl ApplicationProtocol {
@@ -93,6 +97,10 @@ impl ApplicationProtocol {
             Self::Compact => "compact",
             Self::DlmsCosem => "dlms_cosem",
             Self::Sml => "sml",
+            Self::ApplicationResetOrSelect => "application_reset_or_select",
+            Self::SelectedApplication => "selected_application",
+            Self::ImageTransfer => "image_transfer",
+            Self::TlsHandshake => "tls_handshake",
             Self::TransportOnly => "transport_only",
             Self::RequestCompactFrame => "request_compact_frame",
             Self::RequestFormatFrame => "request_format_frame",
@@ -161,6 +169,7 @@ pub enum ApplicationPayload<'a> {
     Format(FormatFrame<'a>),
     Compact(CompactFrame<'a>),
     External(&'a [u8]),
+    SecurityTransferBlocks(&'a [u8]),
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -201,6 +210,11 @@ impl<'a> ApplicationMessage<'a> {
             C::ApplicationErrorShortTransport => (P::ApplicationError, 4),
             C::ApplicationErrorLongTransport => (P::ApplicationError, 12),
             C::SendAlarmStatus => (P::Alarm, 0),
+            C::OmsApplication {
+                protocol,
+                header_size,
+                ..
+            } => (protocol, usize::from(header_size)),
             C::AlarmShortTransport => (P::Alarm, 4),
             C::AlarmLongTransport => (P::Alarm, 12),
             C::SecurityTransferCommandLong => (P::SecurityTransfer, 12),
@@ -236,7 +250,7 @@ impl<'a> ApplicationMessage<'a> {
             _ => {
                 return Err(ApplicationLayerError::InvalidControlInformation {
                     byte: data.first().copied().unwrap_or(0),
-                })
+                });
             }
         };
         let header_bytes = data
@@ -320,30 +334,14 @@ impl<'a> ApplicationMessage<'a> {
                 status: payload.first().copied(),
                 details: payload.get(1..).unwrap_or_default(),
             }),
-            P::SecurityTransfer => {
-                let [low, high, fields @ ..] = payload else {
-                    return Err(ApplicationLayerError::InsufficientData);
-                };
-                require_length(fields, usize::from(u16::from_le_bytes([*low, *high])))?;
-                let [block_id, block_control, recipient, data_selector, key_id, key_version, body @ ..] =
-                    fields
-                else {
-                    return Err(ApplicationLayerError::InsufficientData);
-                };
-                Ok(V::SecurityTransfer {
-                    block_id: *block_id,
-                    block_control: *block_control,
-                    recipient: *recipient,
-                    data_selector: *data_selector,
-                    key_id: *key_id,
-                    key_version: *key_version,
-                    body,
-                })
-            }
+            P::SecurityTransfer => parse_sitp(payload),
             P::ClockSet | P::ClockAdjust => {
                 let payload = payload.strip_prefix(&[0x2F, 0x2F]).unwrap_or(payload);
-                require_length(payload, 14)?;
-                let (operation, value) = parse_clock(self.protocol, payload)?;
+                if !cfg!(feature = "oms-gen5") {
+                    require_length(payload, 14)?;
+                }
+                let (operation, value) =
+                    parse_clock(self.protocol, payload, cfg!(feature = "oms-gen5"))?;
                 Ok(V::Clock { operation, value })
             }
             P::Format => FormatFrame::parse(payload).map(V::Format),
@@ -351,6 +349,30 @@ impl<'a> ApplicationMessage<'a> {
             _ => Ok(V::External(payload)),
         }
     }
+}
+
+pub fn parse_sitp(payload: &[u8]) -> Result<ApplicationPayload<'_>, ApplicationLayerError> {
+    let mut blocks = crate::sitp::SitpBlocks::new(payload);
+    let first = blocks
+        .next()
+        .transpose()?
+        .ok_or(ApplicationLayerError::InsufficientData)?;
+    if let Some(second) = blocks.next() {
+        second?;
+        for block in blocks {
+            block?;
+        }
+        return Ok(ApplicationPayload::SecurityTransferBlocks(payload));
+    }
+    Ok(ApplicationPayload::SecurityTransfer {
+        block_id: first.block_id,
+        block_control: first.block_control,
+        recipient: first.recipient,
+        data_selector: first.data_selector,
+        key_id: first.key_id,
+        key_version: first.key_version,
+        body: first.body,
+    })
 }
 
 pub(crate) fn require_length(data: &[u8], expected: usize) -> Result<(), ApplicationLayerError> {
@@ -367,12 +389,13 @@ pub(crate) fn require_length(data: &[u8], expected: usize) -> Result<(), Applica
 pub fn parse_sitp_clock(
     payload: &[u8],
 ) -> Result<(ClockOperation, DataType<'_>), ApplicationLayerError> {
-    parse_clock(ApplicationProtocol::ClockSet, payload)
+    parse_clock(ApplicationProtocol::ClockSet, payload, false)
 }
 
 fn parse_clock(
     protocol: ApplicationProtocol,
     payload: &[u8],
+    optional_gateway_fields: bool,
 ) -> Result<(ClockOperation, DataType<'_>), ApplicationLayerError> {
     let control = *payload
         .first()
@@ -391,7 +414,7 @@ fn parse_clock(
         _ => {
             return Err(ApplicationLayerError::InvalidPayload {
                 field: "clock control",
-            })
+            });
         }
     };
     let value_size = if operation == ClockOperation::Set {
@@ -399,7 +422,14 @@ fn parse_clock(
     } else {
         3
     };
-    if payload.len() != 1 + value_size {
+    let required = 1 + value_size;
+    if optional_gateway_fields {
+        if ![required, 10, required + 4, 14].contains(&payload.len()) {
+            return Err(ApplicationLayerError::InvalidPayload {
+                field: "clock optional fields",
+            });
+        }
+    } else if payload.len() != required {
         require_length(payload, 14)?;
         let reserved = payload
             .get(1 + value_size..10)

@@ -9,6 +9,7 @@ readme = "README.md"
 
 [features]
 oms-gen2 = []
+oms-gen5 = []
 default = []
 std = ["m-bus-core/std"]
 serde = ["dep:serde", "bitflags/serde", "m-bus-core/serde"]
