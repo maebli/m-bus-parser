@@ -35,6 +35,7 @@ mod key_wrap;
 mod lpwan;
 mod messages;
 mod oms;
+mod validation;
 pub use oms::{
     render_oms_capture, render_oms_capture_with_options, render_oms_reports, OmsCaptureOptions,
     OmsFormat, OmsNationalProfile, OmsRadioMode, Taf7Parameters,
@@ -125,6 +126,7 @@ impl FromStr for OutputFormat {
             "table" | "table_format" => Ok(Self::Table),
             "table-ansi" => Ok(Self::TableAnsi),
             "table-html" => Ok(Self::TableHtml),
+            "validation-json" => Ok(Self::Oms(OmsFormat::ValidationJson)),
             "oms-json" => Ok(Self::Oms(OmsFormat::Json)),
             "oms-xml" => Ok(Self::Oms(OmsFormat::Xml)),
             "oms-csv" => Ok(Self::Oms(OmsFormat::Csv)),

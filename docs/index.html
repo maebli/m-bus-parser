@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="./favicon.ico">
     <title>M-Bus Parser (Wired & Wireless)</title>
-    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=0335ab50be47581b">
+    <link rel="preload" as="fetch" type="application/wasm" crossorigin fetchpriority="high" href="./parser_bg.wasm?v=3d70e4f05c002b30">
     <link rel="modulepreload" href="./parser.js?v=ea35fbf04cf5eb6e">
     <link rel="modulepreload" href="./input-format.js">
     <link rel="modulepreload" href="./tls-session.js">
@@ -473,6 +473,7 @@
         .oms-report table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
         .oms-report th, .oms-report td { padding: 10px 12px; border-bottom: 1px solid var(--rule-line); vertical-align: top; }
         .oms-report thead { background: var(--rule-header); color: var(--rule-muted); font-size: 0.78rem; }
+        .oms-report .validation-group { color: var(--rule-muted); background: var(--rule-header); font-size: .78rem; }
         .oms-report tbody th { font-weight: 600; }
         .oms-report .rule-detail, .oms-report .rule-reference { color: var(--rule-muted); font-size: 0.8rem; font-weight: 400; }
         .oms-report .rule-detail { display: block; margin-top: 3px; }
@@ -489,12 +490,44 @@
             .oms-report .inline-reference { display: block; margin-top: 4px; }
         }
         .output-toolbar { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; }
-        #oms-context { position: relative; font-size: .85rem; }
-        #oms-context summary { cursor: pointer; }
-        .oms-settings { display: grid; gap: .5rem; padding: .6rem 0; }
-        #taf7-periods:not([hidden]) { display: grid; gap: .4rem; }
-        #taf7-periods label { display: flex; justify-content: space-between; gap: .6rem; }
-        #taf7-periods input { width: 8em; }
+        #oms-context {
+            --option-line: #d1d9e0;
+            --option-muted: #59636e;
+            --option-field: #f6f8fa;
+            margin: 0 clamp(8px, 2vw, 20px) 12px;
+            border-bottom: 1px solid var(--option-line);
+            font-size: .875rem;
+        }
+        body.dark-mode #oms-context {
+            --option-line: #3d444d;
+            --option-muted: #b1bac4;
+            --option-field: #161b22;
+            color-scheme: dark;
+        }
+        #oms-context summary {
+            width: fit-content;
+            padding: 6px 2px;
+            color: var(--option-muted);
+            font-size: .8rem;
+            cursor: pointer;
+        }
+        #oms-context summary:hover { color: inherit; }
+        #oms-context summary:focus-visible { outline: 2px solid #3973bd; outline-offset: 2px; }
+        #oms-context p, #oms-context small { color: var(--option-muted); font-size: .78rem; line-height: 1.45; }
+        #oms-context p { margin: 2px 0 12px; }
+        .oms-settings, .oms-setting-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 12px 18px; }
+        .oms-settings { max-width: 48rem; padding-bottom: 14px; }
+        .oms-setting-group { grid-column: 1 / -1; }
+        .oms-settings label { display: grid; align-content: start; gap: 4px; min-width: 0; }
+        .oms-settings select, .oms-settings input:not([type="checkbox"]) {
+            width: 100%; min-width: 0; box-sizing: border-box; margin: 0; padding: 6px 8px;
+            border: 1px solid var(--option-line); border-radius: 6px;
+            background: var(--option-field); color: inherit; font: inherit;
+        }
+        .oms-settings .oms-toggle { display: flex; align-items: baseline; gap: 8px; }
+        .oms-toggle input { margin: 0; }
+        .oms-toggle small { display: block; margin-top: 2px; }
+        #oms-context [hidden] { display: none; }
         .output-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
         .result-views { min-width: 0; }
         .result-views .parse-actions { margin: 0; gap: 4px; }
@@ -1829,7 +1862,7 @@
     <div id="output-container">
         <div class="output-modes" role="group" aria-label="Operation">
             <button type="button" id="mode-parse" aria-controls="parse-formats" aria-pressed="true">Parse</button>
-            <button type="button" id="mode-oms" aria-controls="oms-formats" aria-pressed="false">OMS validation</button>
+            <button type="button" id="mode-oms" aria-controls="oms-formats" aria-pressed="false">Validate</button>
         </div>
         <div class="output-toolbar">
             <div class="result-views">
@@ -1843,51 +1876,13 @@
                     <input id="parse_csv" type="button" value="CSV" aria-pressed="false" />
                     <input id="parse_xml" type="button" value="XML" aria-pressed="false" />
                 </div>
-                <div id="oms-formats" class="parse-actions" role="group" aria-label="OMS validation format" hidden>
+                <div id="oms-formats" class="parse-actions" role="group" aria-label="Validation format" hidden>
                     <input id="parse_oms" type="button" value="Table" aria-pressed="false" />
                     <input id="parse_oms-json" type="button" value="JSON" aria-pressed="false" />
                     <input id="parse_oms-csv" type="button" value="CSV" aria-pressed="false" />
                     <input id="parse_oms-xml" type="button" value="XML" aria-pressed="false" />
                 </div>
             </div>
-            <details id="oms-context" hidden>
-                <summary>Test settings</summary>
-                <div class="oms-settings">
-                    <label>Declared national profile
-                        <select id="oms-national-profile">
-                            <option value="">Unknown</option>
-                            <option value="bsi-unidirectional">BSI unidirectional</option>
-                            <option value="bsi-bidirectional">BSI bidirectional</option>
-                            <option value="idis">IDIS</option>
-                        </select>
-                    </label>
-                    <label id="radio-mode-option" hidden>Declared radio mode
-                        <select id="oms-radio-mode">
-                            <option value="">Unknown</option><option value="c">C</option><option value="c1">C1</option>
-                            <option value="c2">C2</option><option value="other">Other</option>
-                        </select>
-                    </label>
-                    <label id="consecutive-option" hidden><input id="consecutive-capture" type="checkbox"> No missing transmissions or meter restart</label>
-                    <label id="tls-key-option" hidden>OMS communication key <input id="oms-tls-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
-                    <label id="application-key-option" hidden>Application key <input id="oms-application-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
-                    <label id="wrapping-key-option" hidden>Wrapping key <input id="oms-wrapping-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
-                    <div id="firmware-settings" hidden>
-                        <label>Firmware image (optional for captures) <input id="oms-firmware" type="file"></label>
-                        <label>Image key <input id="oms-image-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
-                    </div>
-                    <div id="lpwan-mac-settings" hidden>
-                        <label>LPWAN MAC key <input id="lpwan-mac-key" type="password" autocomplete="off" placeholder="32 hex digits"></label>
-                        <label>Derivation counter <input id="lpwan-counter" type="number" min="0" max="255" step="1" placeholder="From frame"></label>
-                    </div>
-                    <label><input id="taf7" type="checkbox"> Declared TAF7 profile</label>
-                    <div id="taf7-periods" hidden>
-                        <label>Measuring period (ms)<input name="measuring_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
-                        <label>Registration period (ms)<input name="registration_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
-                        <label>Nominal transmission interval (ms)<input name="nominal_transmission_interval_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
-                        <label>Acceptance window (ms)<input name="acceptance_window_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
-                    </div>
-                </div>
-            </details>
             <div class="output-actions">
                 <button id="copy_output" title="Copy Output" hidden>
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1904,13 +1899,62 @@
                 </a>
             </div>
         </div>
+        <details id="oms-context" hidden>
+            <summary>Validation options</summary>
+            <p>These optional details come from the meter configuration or capture notes. Leave any you do not know unset.</p>
+            <div class="oms-settings">
+                <label>Meter interface profile
+                    <select id="oms-national-profile" aria-describedby="profile-hint">
+                        <option value="">Unspecified</option>
+                        <option value="bsi-unidirectional">BSI · one-way</option>
+                        <option value="bsi-bidirectional">BSI · two-way</option>
+                        <option value="idis">IDIS</option>
+                    </select>
+                    <small id="profile-hint">Applies the OMS Annex E rules for the interface listed in the meter specification.</small>
+                </label>
+                <label id="radio-mode-option" hidden>Wireless M-Bus mode
+                    <select id="oms-radio-mode" aria-describedby="radio-hint">
+                        <option value="">Unspecified</option>
+                        <option value="c">C · variant unknown</option>
+                        <option value="c1">C1 · one-way</option>
+                        <option value="c2">C2 · two-way</option>
+                        <option value="other">Other radio mode</option>
+                    </select>
+                    <small id="radio-hint">Uses the configured radio mode to check the wireless headers and access flags.</small>
+                </label>
+                <label id="consecutive-option" class="oms-toggle" hidden>
+                    <input id="consecutive-capture" type="checkbox">
+                    <span>Complete capture<small>Enable if every transmission was recorded in order and the meter did not restart. This lets OMS check counters and replies.</small></span>
+                </label>
+                <label class="oms-toggle">
+                    <input id="taf7" type="checkbox">
+                    <span>Meter reading profile (TAF7)<small>Enable if the meter uses the German TAF7 tariff use case. Checks the recorded readings and their timing.</small></span>
+                </label>
+                <div id="taf7-periods" class="oms-setting-group" hidden>
+                    <label>Time between measurements (ms)<input name="measuring_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                    <label>Time between stored readings (ms)<input name="registration_period_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                    <label>Expected time between transmissions (ms)<input name="nominal_transmission_interval_ms" type="number" min="1" step="1" placeholder="Unknown"></label>
+                    <label>Acceptance window (ms)<input name="acceptance_window_ms" type="number" min="1" step="1" placeholder="Unknown"><small>Permitted time window for accepting a reading.</small></label>
+                </div>
+                <label id="tls-key-option" hidden>OMS communication key<input id="oms-tls-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the authentication tag on the OMS message carrying TLS.</small></label>
+                <label id="application-key-option" hidden>Application key<input id="oms-application-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the protected application data inside the security transfer.</small></label>
+                <label id="wrapping-key-option" hidden>Wrapping key<input id="oms-wrapping-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Checks the integrity of a wrapped key in this transfer.</small></label>
+                <div id="firmware-settings" class="oms-setting-group" hidden>
+                    <label>Firmware image<input id="oms-firmware" type="file"><small>Supply the image file when the capture does not contain the complete image.</small></label>
+                    <label>Firmware image key<input id="oms-image-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the image authentication tag.</small></label>
+                </div>
+                <div id="lpwan-mac-settings" class="oms-setting-group" hidden>
+                    <label>LPWAN MAC key<input id="lpwan-mac-key" type="password" autocomplete="off" placeholder="32 hex digits"><small>Verifies the link-layer authentication tag.</small></label>
+                    <label>Key derivation counter<input id="lpwan-counter" type="number" min="0" max="255" step="1" placeholder="From telegram"><small>Supply the counter only if the telegram omits it.</small></label>
+                </div>
+            </div>
+        </details>
         <template id="oms-table-template">
             <section class="oms-report">
-                <h3 id="oms-report-heading"><a target="_blank" rel="noopener noreferrer"></a><small></small></h3>
+                <h3 id="oms-report-heading"><span></span><small></small></h3>
                 <p class="oms-scope">Checks use the selected telegram and any preceding telegrams in the capture.</p>
                 <table aria-labelledby="oms-report-heading">
                     <thead><tr><th scope="col">Result</th><th scope="col">Rule</th><th scope="col" class="reference-column">Reference</th></tr></thead>
-                    <tbody></tbody>
                 </table>
             </section>
         </template>
@@ -1933,6 +1977,7 @@
     <script type="module">
         import init, { m_bus_decode, m_bus_render, m_bus_render_application, m_bus_decode_tls, m_bus_render_tls, m_bus_render_oms_capture, m_bus_check_firmware, version } from "./parser.js?v=ea35fbf04cf5eb6e";
 
+        import { exportValidation, validationError } from "./validation.js";
         import { normalizeInput } from "./input-format.js";
 
         import { createTlsSessionPanel } from "./tls-session.js";
@@ -1992,7 +2037,12 @@
             } catch (error) {
                 if (error.code !== 'frame.invalid') throw error;
                 try {
-                    return JSON.parse(api.application(input, 'json', undefined, width, true));
+                    const decoded = JSON.parse(api.application(input, 'json', undefined, width, true));
+                    const hex = decoded.raw.original_frame_hex;
+                    if (/^10[0-9a-f]{6}16$/i.test(hex) || /^68[0-9a-f]{4}68[0-9a-f]*16$/i.test(hex)) {
+                        decoded.rejectedWiredFrame = errorDetails(error);
+                    }
+                    return decoded;
                 } catch (applicationError) {
                     if (applicationError.code === 'security.key_missing') {
                         const failure = new Error('Paste the complete telegram to detect its security mode and verify decryption.');
@@ -2102,42 +2152,61 @@
             return { status: 'Security status unavailable', tone: 'neutral', message: 'The parser did not return a security status for this input.' };
         }
 
-        function renderOmsReport(container, report) {
+        function renderValidationReport(container, report) {
             const view = document.getElementById('oms-table-template').content.cloneNode(true);
-            const link = view.querySelector('h3 a');
-            link.href = report.specification + "#page=23&view=FitH,842";
-            link.textContent = `OMS ${report.version} · ${report.passed}/${report.assessed} passed`;
+            view.querySelector('h3 span').textContent = `Validation · ${report.passed}/${report.assessed} passed`;
             if (report.unchecked) view.querySelector('h3 small').textContent = `${report.unchecked} could not be checked`;
 
             const labels = { passed: 'Passed', failed: 'Failed', could_not_check: 'Could not check', not_applicable: 'Not applicable' };
-            const body = view.querySelector('tbody');
-            for (const finding of report.findings) {
-                const row = body.insertRow();
-                row.dataset.status = finding.status;
-                const status = document.createElement('span');
-                status.className = 'oms-status';
-                status.textContent = labels[finding.status];
-                row.insertCell().append(status);
+            const reportTable = view.querySelector('table');
+            for (const group of new Set(report.findings.map(finding => finding.group))) {
+                const body = reportTable.createTBody();
+                const groupRow = body.insertRow();
+                const heading = document.createElement('th');
+                heading.scope = 'rowgroup';
+                heading.colSpan = 3;
+                heading.className = 'validation-group';
+                heading.textContent = group;
+                if (group === 'OMS') {
+                    const specification = document.createElement('a');
+                    specification.href = report.specification + '#page=23&view=FitH,842';
+                    specification.textContent = `OMS ${report.version}`;
+                    specification.target = '_blank';
+                    specification.rel = 'noopener noreferrer';
+                    heading.replaceChildren(specification);
+                }
+                groupRow.append(heading);
+                for (const finding of report.findings.filter(entry => entry.group === group)) {
+                    const row = body.insertRow();
+                    row.dataset.status = finding.status;
+                    const status = document.createElement('span');
+                    status.className = 'oms-status';
+                    status.textContent = labels[finding.status];
+                    row.insertCell().append(status);
 
-                const rule = document.createElement('th');
-                rule.scope = 'row';
-                rule.textContent = finding.rule;
-                const detail = document.createElement('span');
-                detail.className = 'rule-detail';
-                detail.textContent = finding.record_number ? `Record ${finding.record_number} · ${finding.detail}` : finding.detail;
-                const reference = document.createElement('span');
-                reference.className = 'rule-reference inline-reference';
-                const source = document.createElement('a');
-                source.href = finding.source_url || report.specification;
-                source.textContent = finding.reference;
-                source.target = '_blank';
-                source.rel = 'noopener noreferrer';
-                reference.append(source);
-                rule.append(detail, reference);
-                row.append(rule);
-                const citation = row.insertCell();
-                citation.className = 'rule-reference reference-column';
-                citation.append(source.cloneNode(true));
+                    const rule = document.createElement('th');
+                    rule.scope = 'row';
+                    rule.textContent = finding.rule;
+                    const detail = document.createElement('span');
+                    detail.className = 'rule-detail';
+                    detail.textContent = finding.record_number ? `Record ${finding.record_number} · ${finding.detail}` : finding.detail;
+                    if (finding.offset_start != null) detail.textContent += ` (byte offset ${finding.offset_start})`;
+                    rule.append(detail);
+                    row.append(rule);
+                    const citation = row.insertCell();
+                    citation.className = 'rule-reference reference-column';
+                    if (!finding.source_url) continue;
+                    const reference = document.createElement('span');
+                    reference.className = 'rule-reference inline-reference';
+                    const source = document.createElement('a');
+                    source.href = finding.source_url;
+                    source.textContent = finding.reference;
+                    source.target = '_blank';
+                    source.rel = 'noopener noreferrer';
+                    reference.append(source);
+                    rule.append(reference);
+                    citation.append(source.cloneNode(true));
+                }
             }
             container.replaceChildren(view);
         }
@@ -2320,7 +2389,7 @@
                 }
             });
 
-            await init({ module_or_path: new URL("./parser_bg.wasm?v=0335ab50be47581b", import.meta.url) });
+            await init({ module_or_path: new URL("./parser_bg.wasm?v=3d70e4f05c002b30", import.meta.url) });
             document.getElementById('parser-version').textContent = 'v' + version();
 
             let lastAttempt = null;
@@ -2400,8 +2469,7 @@
                 macSettings.hidden = !inspectedTelegram?.lpwan?.body?.authentication_code;
                 document.getElementById('oms-context').hidden = !isOmsView(currentFormat) || !inspectedTelegram;
                 document.getElementById('radio-mode-option').hidden = !isOmsView(currentFormat) || inspectedTelegram?.frame?.kind !== 'wireless';
-                const wirelessCapture = captureFrames.some(({ frame }) => frame.kind === 'wireless' || frame.kind === 'lpwan');
-                document.getElementById('consecutive-option').hidden = !isOmsView(currentFormat) || !wirelessCapture;
+                document.getElementById('consecutive-option').hidden = captureFrames.length < 2;
             }
 
             function setOutputView(format) {
@@ -2543,7 +2611,7 @@
 
             function selectFormat(format) {
                 setOutputView(format);
-                if (hasDecoded) parseInput(format);
+                if (hasDecoded || lastAttempt?.error) parseInput(format);
             }
 
             const tlsPanel = createTlsSessionPanel(document, () => {
@@ -2749,7 +2817,7 @@
                         attempt.tableWidth = width;
                     }
                     const sessionJson = isTls ? tlsPanel.sessionJson() : undefined;
-                    const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : format === 'oms' ? 'oms-json' : format;
+                    const renderFormat = table ? 'table-html' : format === 'product' ? 'json' : oms ? 'validation-json' : format;
                     const result = sessionJson && !(oms && selectedFrame)
                         ? renderTlsPayload(normalizedInput, renderFormat, sessionJson, width, inspectedTelegram)
                         : renderWithFallback(parserApi, normalizedInput, renderFormat, isTls ? undefined : aesKey || undefined, width, inspectedTelegram);
@@ -2794,6 +2862,13 @@
                             formattedResult = m_bus_render_oms_capture(fullInput, selected, renderFormat, consecutive.checked, transportKey, sessionJson, JSON.stringify(settings));
                         }
                     }
+                    let report;
+                    if (oms) {
+                        report = result.decoded.rejectedWiredFrame
+                            ? validationError({ ...result.decoded.rejectedWiredFrame, mode: 'Wired frame structure' }, 1)
+                            : JSON.parse(formattedResult);
+                        formattedResult = exportValidation(report, format);
+                    }
                     hasDecoded = true;
 
                     if (table) {
@@ -2809,7 +2884,7 @@
                             renderHexViewer(outputContainer, result.plaintext.output, result.plaintext.input, result.decoded, 'Decrypted application data · authenticated · offsets start at 0');
                         }
                     } else if (format === 'oms') {
-                        renderOmsReport(outputContainer, JSON.parse(formattedResult));
+                        renderValidationReport(outputContainer, report);
                     } else if (format === 'product') {
                         const { renderProduct } = await loadProductView();
                         if (generation !== renderGeneration) return;
@@ -2840,7 +2915,7 @@
                     hasDecoded = true;
                     window._lastRawOutput = formattedResult;
                     if (oms) {
-                        outputSummary.textContent = 'OMS validation results';
+                        outputSummary.textContent = 'Validation results';
                     } else if (['key_missing', 'session_required'].includes(result.security?.decryption_state)) {
                         outputSummary.textContent = 'Header information only. The payload remains encrypted.';
                     } else if (result.mode === 'application') {
@@ -2863,7 +2938,18 @@
                     if (generation !== renderGeneration) return;
                     window._lastRawOutput = '';
                     fail(error);
-                    updateDownload('', extension, mimeType);
+                    if (oms && inputString.trim() && ['link', 'application', 'security'].includes(error.layer)) {
+                        const report = validationError(error, Math.max(0, captureFrame.selectedIndex) + 1);
+                        hasDecoded = true;
+                        const content = exportValidation(report, format);
+                        if (format === 'oms') renderValidationReport(outputContainer, report);
+                        else renderCodeViewer(outputContainer, content, language, 'Validation results');
+                        outputSummary.textContent = 'Validation results';
+                        window._lastRawOutput = content;
+                        updateDownload(content, extension, mimeType);
+                    } else {
+                        updateDownload('', extension, mimeType);
+                    }
                 }
             }
         }
@@ -2920,7 +3006,7 @@
             const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
             const downloadLink = document.getElementById('download_output');
             downloadLink.href = url;
-            downloadLink.download = `${currentFormat.startsWith('oms') ? 'oms-report' : 'm-bus-output'}.${extension}`;
+            downloadLink.download = `${currentFormat.startsWith('oms') ? 'validation-report' : 'm-bus-output'}.${extension}`;
             window._lastDownloadUrl = url;
         }
 

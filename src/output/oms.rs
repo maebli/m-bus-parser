@@ -22,6 +22,7 @@ pub struct OmsCaptureOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OmsFormat {
+    ValidationJson,
     Json,
     Xml,
     Csv,
@@ -30,6 +31,7 @@ pub enum OmsFormat {
 impl OmsFormat {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ValidationJson => "validation-json",
             Self::Json => "oms-json",
             Self::Xml => "oms-xml",
             Self::Csv => "oms-csv",
@@ -431,6 +433,25 @@ pub fn render_oms_capture_with_options(
         }
     }
     match format {
+        OmsFormat::ValidationJson => {
+            let offset = selected.unwrap_or(0);
+            let results: Vec<_> = reports
+                .iter()
+                .zip(frames.iter().skip(offset))
+                .enumerate()
+                .map(|(index, (report, frame))| {
+                    super::validation::report(frame, report, offset + index + 1)
+                })
+                .collect();
+            match results.as_slice() {
+                [one] => serde_json::to_string_pretty(one),
+                _ => serde_json::to_string_pretty(&results),
+            }
+            .map_err(|error| OutputError::Serialization {
+                format: format.as_str(),
+                message: error.to_string(),
+            })
+        }
         OmsFormat::Json => match reports.as_slice() {
             [report] => serde_json::to_string_pretty(report),
             _ => serde_json::to_string_pretty(&reports),
