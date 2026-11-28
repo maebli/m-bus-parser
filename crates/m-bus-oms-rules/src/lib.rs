@@ -5,9 +5,12 @@ extern crate alloc;
 #[macro_use]
 mod sources;
 
+mod catalog;
+mod commands;
 pub mod dlms;
 pub mod layers;
 pub mod national;
+pub mod readings;
 pub mod telegram;
 pub mod tls_hello;
 

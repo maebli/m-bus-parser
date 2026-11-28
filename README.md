@@ -154,6 +154,8 @@ m-bus-parser-cli parse -d "$ENCRYPTED_FRAME" -k "0102030405060708090A0B0C0D0E0F1
 
 The [OMS rules crate](./crates/m-bus-oms-rules) checks decoded link, transport, and security
 fields against OMS 5.0.1. Each finding identifies its rule, status, and specification reference.
+The rules also check data-point tags, required readings for the declared device type,
+and the register descriptors and timestamps in compact profiles.
 
 Add to `Cargo.toml`:
 

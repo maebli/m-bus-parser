@@ -12,6 +12,7 @@ keywords = ["m-bus", "parser", "parse"]
 exclude = ["/resources", "/tests", "examples"]
 
 [dev-dependencies]
+m-bus-oms-rules = { version = "0.7.4", path = "crates/m-bus-oms-rules" }
 criterion = { version = "0.8.1", features = ["html_reports"] }
 walkdir = "2.5.0"
 hex = "0.4"

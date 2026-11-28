@@ -13,6 +13,11 @@ macro_rules! annex_m {
         concat!("https://oms-group.org/wp-content/uploads/2024/05/OMS-Spec_Vol2_AnnexM_C111.pdf#page=", $page $(, "&view=FitH,", $top)?)
     };
 }
+macro_rules! annex_r {
+    ($page:literal $(, $top:literal)?) => {
+        concat!("https://oms-group.org/wp-content/uploads/2024/05/OMS-Spec_Vol2_AnnexR_A101.pdf#page=", $page $(, "&view=FitH,", $top)?)
+    };
+}
 
 pub(super) fn tag_page(tag: &str) -> &'static str {
     match tag.split(" / ").next().unwrap_or(tag) {
