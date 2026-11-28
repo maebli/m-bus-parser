@@ -40,6 +40,7 @@ class BindingsTests(unittest.TestCase):
             [
                 "MbusParserError",
                 "parse",
+                "parse_fragments",
                 "parse_records",
                 "render",
                 "parse_application_layer",
@@ -82,7 +83,7 @@ class BindingsTests(unittest.TestCase):
         with self.assertRaisesRegex(pymbusparser.MbusParserError, r"\[format.unsupported\]"):
             pymbusparser.render(WIRED_FRAME, "not-a-format")
         with self.assertRaisesRegex(pymbusparser.MbusParserError, r"\[input.invalid_hex\]"):
-            pymbusparser.parse("68,3D")
+            pymbusparser.parse("68,3Z")
         with self.assertRaises(TypeError):
             pymbusparser.parse(object())
 

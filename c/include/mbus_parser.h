@@ -9,6 +9,10 @@ extern "C" {
 #endif
 
 typedef struct MbusResult MbusResult;
+typedef struct {
+    const uint8_t *data;
+    size_t length;
+} MbusFrame;
 
 #define MBUS_ABI_VERSION 1
 #define MBUS_FORMAT_JSON 0
@@ -26,6 +30,8 @@ MbusResult *mbus_parse(const uint8_t *data, size_t data_length,
                        const uint8_t *key, size_t key_length);
 MbusResult *mbus_render(const uint8_t *data, size_t data_length,
                         const uint8_t *key, size_t key_length, int32_t format);
+MbusResult *mbus_parse_fragments(const MbusFrame *frames, size_t count,
+                                 const uint8_t *key, size_t key_length);
 MbusResult *mbus_parse_records(const uint8_t *data, size_t data_length);
 const char *mbus_result_text(const MbusResult *result);
 size_t mbus_result_text_length(const MbusResult *result);

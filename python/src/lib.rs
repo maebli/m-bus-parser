@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use m_bus_parser::{
-    decode_bytes, decode_data_records, decode_hex_bytes, render_bytes, render_hex, DecodeOptions,
-    OutputError, OutputFormat, RenderOptions,
+    decode_capture_bytes, decode_capture_hex, decode_data_records, decode_hex_bytes, render_bytes,
+    render_hex, DecodeOptions, OutputError, OutputFormat, RenderOptions,
 };
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -83,9 +83,45 @@ fn parse(
     key: Option<&Bound<'_, PyAny>>,
     include_enrichment: bool,
 ) -> PyResult<Py<PyAny>> {
-    let data = extract_bytes(data, "data")?;
-    let decoded = decode_bytes(
-        &data,
+    let options = DecodeOptions {
+        key: extract_key(key)?,
+        include_enrichment,
+    };
+    let mut decoded = if let Ok(text) = data.extract::<String>() {
+        decode_capture_hex(&text, &options)
+    } else {
+        decode_capture_bytes(&extract_bytes(data, "data")?, &options)
+    }
+    .map_err(parser_error)?;
+    if let m_bus_parser::output::FragmentOutput::Single(frame) = &mut decoded {
+        frame.raw.input = None;
+    }
+    let json = serde_json::to_string(&decoded)
+        .map_err(|error| binding_error("render.serialization", error))?;
+    json_to_python(py, &json)
+}
+
+#[pyfunction]
+#[pyo3(signature = (frames, *, key=None, include_enrichment=true))]
+fn parse_fragments(
+    py: Python<'_>,
+    frames: &Bound<'_, pyo3::types::PySequence>,
+    key: Option<&Bound<'_, PyAny>>,
+    include_enrichment: bool,
+) -> PyResult<Py<PyAny>> {
+    let count = frames.len()?;
+    if !(1..=255).contains(&count) {
+        return Err(binding_error(
+            "fragment.invalid",
+            "expected 1 to 255 ordered packets",
+        ));
+    }
+    let data = (0..count)
+        .map(|index| extract_bytes(&frames.get_item(index)?, "frame"))
+        .collect::<PyResult<Vec<_>>>()?;
+    let slices = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let decoded = m_bus_parser::decode_fragment_frames(
+        &slices,
         &DecodeOptions {
             key: extract_key(key)?,
             include_enrichment,
@@ -114,19 +150,19 @@ fn render(
     width: Option<usize>,
     include_enrichment: bool,
 ) -> PyResult<String> {
-    let data = extract_bytes(data, "data")?;
     let format = OutputFormat::from_str(format).map_err(parser_error)?;
-    render_bytes(
-        &data,
-        format,
-        &RenderOptions {
-            decode: DecodeOptions {
-                key: extract_key(key)?,
-                include_enrichment,
-            },
-            table_width: width,
+    let options = RenderOptions {
+        decode: DecodeOptions {
+            key: extract_key(key)?,
+            include_enrichment,
         },
-    )
+        table_width: width,
+    };
+    if let Ok(text) = data.extract::<String>() {
+        render_hex(&text, format, &options)
+    } else {
+        render_bytes(&extract_bytes(data, "data")?, format, &options)
+    }
     .map_err(parser_error)
 }
 
@@ -176,6 +212,7 @@ fn pymbusparser(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("MbusParserError", m.py().get_type::<MbusParserError>())?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_fragments, m)?)?;
     m.add_function(wrap_pyfunction!(parse_records, m)?)?;
     m.add_function(wrap_pyfunction!(render, m)?)?;
     m.add_function(wrap_pyfunction!(parse_application_layer, m)?)?;
@@ -185,6 +222,7 @@ fn pymbusparser(m: &Bound<'_, PyModule>) -> PyResult<()> {
         vec![
             "MbusParserError",
             "parse",
+            "parse_fragments",
             "parse_records",
             "render",
             "parse_application_layer",
