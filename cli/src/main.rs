@@ -5,8 +5,9 @@ use std::process::ExitCode;
 use std::str::FromStr;
 
 use clap::{ColorChoice, Parser, Subcommand};
+use m_bus_parser::output::{FragmentOutput, OmsCaptureOptions, OmsRadioMode, Taf7Parameters};
 use m_bus_parser::{
-    decode_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
+    decode_capture_hex, output::render_application_hex, render_hex, DecodeOptions, OutputError,
     OutputFormat, RenderOptions,
 };
 use terminal_size::{terminal_size, Width};
@@ -35,6 +36,15 @@ struct Cli {
 enum Command {
     #[command(about = "List drivers provided by the installed wmbusmeters executable")]
     Drivers,
+    #[command(
+        about = "Decode OMS AFL fragments, ACRIOS packets, or a joined wired stream as JSON"
+    )]
+    ParseFragments {
+        #[arg(required = true, num_args = 1..)]
+        frames: Vec<String>,
+        #[arg(short, long)]
+        key: Option<String>,
+    },
     #[command(about = "Decode one frame as JSON using a local wmbusmeters driver")]
     Vendor {
         #[arg(
@@ -56,47 +66,22 @@ enum Command {
         #[arg(short, long, help = "Hexadecimal meter key for this telegram")]
         key: Option<String>,
     },
+    #[command(about = "Check a telegram against the supported OMS 5.0.1 rules")]
+    CheckOms {
+        #[command(flatten)]
+        validation: ValidationArgs,
+        #[command(flatten)]
+        input: TelegramInput,
+        #[arg(short = 't', long, default_value = "json", value_parser = ["json", "xml", "csv"])]
+        format: String,
+    },
     /// Parse an M-Bus data file
     Parse {
-        #[arg(
-            short = 'f',
-            long,
-            conflicts_with = "data",
-            help = "File containing a hex or Base64 M-Bus frame"
-        )]
-        file: Option<PathBuf>,
-
-        #[arg(
-            short = 'd',
-            long,
-            conflicts_with = "file",
-            help = "Hex or Base64 M-Bus frame"
-        )]
-        data: Option<String>,
-
-        #[arg(
-            long,
-            value_enum,
-            default_value = "auto",
-            help = "Input encoding (auto prefers valid hex)"
-        )]
-        input_format: InputFormat,
-
+        #[command(flatten)]
+        input: TelegramInput,
         /// Output format: table, json, yaml, csv, mermaid, xml, annotated, annotated-text
         #[arg(short = 't', long, default_value = "table")]
         format: String,
-
-        /// Decryption key (exactly 32 hexadecimal characters)
-        #[arg(short = 'k', long)]
-        key: Option<String>,
-
-        #[cfg(feature = "decryption-mode-13")]
-        #[arg(
-            long,
-            conflicts_with = "key",
-            help = "JSON file containing TLS session data for mode 13"
-        )]
-        tls_session: Option<PathBuf>,
 
         /// Table width in terminal columns (auto-detected for interactive output)
         #[arg(long)]
@@ -106,6 +91,145 @@ enum Command {
         #[arg(long)]
         no_enrichment: bool,
     },
+}
+#[derive(clap::Args)]
+struct TelegramInput {
+    #[arg(
+        short = 'f',
+        long,
+        conflicts_with = "data",
+        help = "File containing a hex or Base64 M-Bus frame"
+    )]
+    file: Option<PathBuf>,
+
+    #[arg(
+        short = 'd',
+        long,
+        conflicts_with = "file",
+        help = "Hex or Base64 M-Bus frame"
+    )]
+    data: Option<String>,
+
+    #[arg(
+        long,
+        value_enum,
+        default_value = "auto",
+        help = "Input encoding (auto prefers valid hex)"
+    )]
+    input_format: InputFormat,
+
+    /// Decryption key (exactly 32 hexadecimal characters)
+    #[arg(short = 'k', long)]
+    key: Option<String>,
+
+    #[cfg(feature = "decryption-mode-13")]
+    #[arg(
+        long,
+        conflicts_with = "key",
+        help = "JSON file containing TLS session data for mode 13"
+    )]
+    tls_session: Option<PathBuf>,
+}
+
+#[derive(clap::Args, Default)]
+struct ValidationArgs {
+    #[arg(
+        long,
+        help = "Confirm that all transmissions are present in order without a device restart"
+    )]
+    consecutive: bool,
+    #[arg(long, value_name = "MODE", value_parser = parse_radio_mode, help = "Declared wireless mode: c, c1, c2 or other")]
+    radio_mode: Option<OmsRadioMode>,
+    #[arg(
+        long,
+        help = "Declared Annex E meter interface: bsi-unidirectional, bsi-bidirectional or idis"
+    )]
+    national_profile: Option<m_bus_parser::output::OmsNationalProfile>,
+    #[cfg(feature = "decryption-mode-7")]
+    #[arg(
+        long,
+        value_name = "KEY",
+        help = "Application key for SITP ASP10 and ASP20"
+    )]
+    application_key: Option<String>,
+    #[cfg(feature = "oms-gen5")]
+    #[arg(
+        long,
+        requires = "firmware_key",
+        value_name = "FILE",
+        help = "Firmware image for the UC-05 integrity check"
+    )]
+    firmware_image: Option<std::path::PathBuf>,
+    #[cfg(feature = "oms-gen5")]
+    #[arg(
+        long,
+        value_name = "KEY",
+        help = "Firmware image key (ID 18), for a supplied image or captured transfer blocks"
+    )]
+    firmware_key: Option<String>,
+    #[cfg(feature = "oms-gen5")]
+    #[arg(long, value_name="KEY", value_parser=parse_key, help="Wrapping key for SITP AES-KWP integrity checks")]
+    wrapping_key: Option<[u8; 16]>,
+    #[cfg(feature = "decryption-mode-10")]
+    #[arg(
+        long,
+        value_name = "KEY",
+        help = "Persistent LPWAN MAC key, separate from the application key"
+    )]
+    lpwan_mac_key: Option<String>,
+    #[cfg(feature = "decryption-mode-10")]
+    #[arg(
+        long,
+        requires = "lpwan_mac_key",
+        value_name = "COUNTER",
+        help = "MAC derivation counter when omitted by the frame"
+    )]
+    lpwan_derivation_counter: Option<u8>,
+    #[arg(long, help = "Check the declared TAF7 use case")]
+    taf7: bool,
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared TAF7 measuring period in milliseconds")]
+    taf7_measuring_period_ms: Option<u64>,
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared TAF7 registration period in milliseconds")]
+    taf7_registration_period_ms: Option<u64>,
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u64).range(1..), help = "Declared nominal TAF7 radio transmission interval in milliseconds")]
+    taf7_nominal_transmission_interval_ms: Option<u64>,
+    #[arg(
+        long,
+        value_name = "MS",
+        help = "Declared TAF7 acceptance window in milliseconds"
+    )]
+    taf7_acceptance_window_ms: Option<u64>,
+}
+
+fn parse_radio_mode(value: &str) -> Result<OmsRadioMode, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "c" => Ok(OmsRadioMode::C),
+        "c1" => Ok(OmsRadioMode::C1),
+        "c2" => Ok(OmsRadioMode::C2),
+        "other" => Ok(OmsRadioMode::Other),
+        _ => Err("expected c, c1, c2 or other".into()),
+    }
+}
+
+impl From<&ValidationArgs> for OmsCaptureOptions {
+    fn from(args: &ValidationArgs) -> Self {
+        let has_taf7 = args.taf7
+            || args.taf7_measuring_period_ms.is_some()
+            || args.taf7_nominal_transmission_interval_ms.is_some()
+            || args.taf7_registration_period_ms.is_some()
+            || args.taf7_acceptance_window_ms.is_some();
+        Self {
+            consecutive: args.consecutive,
+            radio_mode: args.radio_mode,
+            national_profile: args.national_profile,
+            taf7: has_taf7.then_some(Taf7Parameters {
+                measuring_period_ms: args.taf7_measuring_period_ms,
+                registration_period_ms: args.taf7_registration_period_ms,
+                acceptance_window_ms: args.taf7_acceptance_window_ms,
+                nominal_transmission_interval_ms: args.taf7_nominal_transmission_interval_ms,
+            }),
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -122,6 +246,25 @@ fn run() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
         Command::Drivers => vendor::list(),
+        Command::ParseFragments { frames, key } => {
+            let data = frames
+                .iter()
+                .map(|frame| m_bus_parser::decode_hex_bytes(frame))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            let frames = data.iter().map(Vec::as_slice).collect::<Vec<_>>();
+            let options = DecodeOptions {
+                key: key.as_deref().map(parse_key).transpose()?,
+                ..DecodeOptions::default()
+            };
+            let result = m_bus_parser::output::decode_fragment_frames(&frames, &options)
+                .map_err(|e| e.to_string())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).map_err(|e| e.to_string())?
+            );
+            Ok(())
+        }
         Command::Vendor {
             data,
             file,
@@ -132,91 +275,194 @@ fn run() -> Result<(), String> {
             let input = read_input(file, data, input_format)?;
             vendor::decode(&input, driver.as_deref(), key.as_deref())
         }
-        Command::Parse {
-            file,
-            data,
-            input_format,
+        Command::CheckOms {
+            input,
             format,
-            key,
-            #[cfg(feature = "decryption-mode-13")]
-            tls_session,
+            validation,
+        } => render_input(
+            input,
+            &format!("oms-{format}"),
+            None,
+            true,
+            cli.color,
+            validation,
+        ),
+        Command::Parse {
+            input,
+            format,
             width,
             no_enrichment,
-        } => {
-            let input = read_input(file, data, input_format)?;
-            let output_format = OutputFormat::from_str(&format)
-                .map_err(|error| format!("[{}] {error}", error.code()))?;
-            let use_color = match cli.color {
-                ColorChoice::Always => true,
-                ColorChoice::Never => false,
-                ColorChoice::Auto => {
-                    io::stdout().is_terminal()
-                        && std::env::var_os("NO_COLOR").unwrap_or_default().is_empty()
-                        && std::env::var_os("TERM").as_deref() != Some(std::ffi::OsStr::new("dumb"))
+        } => render_input(
+            input,
+            &format,
+            width,
+            no_enrichment,
+            cli.color,
+            Default::default(),
+        ),
+    }
+}
+
+fn render_input(
+    input: TelegramInput,
+    format: &str,
+    width: Option<usize>,
+    no_enrichment: bool,
+    color: ColorChoice,
+    validation: ValidationArgs,
+) -> Result<(), String> {
+    let TelegramInput {
+        file,
+        data,
+        input_format,
+        key,
+        #[cfg(feature = "decryption-mode-13")]
+        tls_session,
+    } = input;
+    let input = read_input(file, data, input_format)?;
+    let output_format =
+        OutputFormat::from_str(format).map_err(|error| format!("[{}] {error}", error.code()))?;
+    let use_color = match color {
+        ColorChoice::Always => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => {
+            io::stdout().is_terminal()
+                && std::env::var_os("NO_COLOR").unwrap_or_default().is_empty()
+                && std::env::var_os("TERM").as_deref() != Some(std::ffi::OsStr::new("dumb"))
+        }
+    };
+    let output_format = if output_format == OutputFormat::Table && use_color {
+        OutputFormat::TableAnsi
+    } else {
+        output_format
+    };
+    let key = key
+        .as_deref()
+        .map(parse_key)
+        .transpose()
+        .map_err(|error| format!("[option.invalid] {error}"))?;
+    let width = width.or_else(|| {
+        if io::stdout().is_terminal() {
+            terminal_size().map(|(Width(columns), _)| usize::from(columns))
+        } else {
+            Some(100)
+        }
+    });
+    let options = RenderOptions {
+        decode: DecodeOptions {
+            key,
+            include_enrichment: !no_enrichment,
+        },
+        table_width: width,
+    };
+    let capture = OmsCaptureOptions::from(&validation);
+    #[cfg(feature = "decryption-mode-13")]
+    let imported = tls_session
+        .as_ref()
+        .map(|path| {
+            let json = fs::read_to_string(path).map_err(|error| {
+                format!(
+                    "[input.tls_session] failed to read {}: {error}",
+                    path.display()
+                )
+            })?;
+            m_bus_parser::output::ImportedTlsSession::from_json(&json)
+                .map_err(|error| format!("[{}] {error}", error.code()))
+        })
+        .transpose()?;
+    #[cfg(feature = "decryption-mode-13")]
+    let session = imported.as_ref().map(|imported| imported.session());
+    let rendered = if let OutputFormat::Oms(format) = output_format {
+        #[cfg(feature = "decryption-mode-13")]
+        let decoded = match session.as_ref() {
+            Some(session) => m_bus_parser::output::decode_capture_hex_with_tls_session(
+                &input,
+                &options.decode,
+                session,
+            ),
+            None => decode_capture_hex(&input, &options.decode),
+        };
+        #[cfg(not(feature = "decryption-mode-13"))]
+        let decoded = decode_capture_hex(&input, &options.decode);
+        match decoded {
+            Ok(frames) => render_checked_frames(frames, format, &validation),
+            Err(OutputError::InvalidFrame { .. }) => {
+                #[cfg(feature = "decryption-mode-7")]
+                let key = validation.sitp_key().map_err(|error| error.to_string())?;
+                #[cfg(not(feature = "decryption-mode-7"))]
+                let key: Option<[u8; 16]> = None;
+                #[cfg(feature = "decryption-mode-13")]
+                {
+                    #[cfg(feature = "oms-gen5")]
+                    let image = validation
+                        .firmware_evidence()
+                        .map_err(|error| error.to_string())?;
+                    m_bus_parser::output::render_application_oms_with_evidence(
+                        &input,
+                        format,
+                        &options,
+                        capture,
+                        session.as_ref(),
+                        key.as_ref(),
+                        |_frame| {
+                            #[cfg(feature = "oms-gen5")]
+                            if let Some(evidence) = &image {
+                                evidence.verify(std::slice::from_mut(_frame))?;
+                            }
+                            #[cfg(feature = "oms-gen5")]
+                            if let Some(key) = &validation.wrapping_key {
+                                _frame.verify_key_wrap(key)?;
+                            }
+                            Ok(())
+                        },
+                    )
                 }
-            };
-            let output_format = if output_format == OutputFormat::Table && use_color {
-                OutputFormat::TableAnsi
-            } else {
-                output_format
-            };
-            let key = key
-                .as_deref()
-                .map(parse_key)
-                .transpose()
-                .map_err(|error| format!("[option.invalid] {error}"))?;
-            let width = width.or_else(|| {
-                if io::stdout().is_terminal() {
-                    terminal_size().map(|(Width(columns), _)| usize::from(columns))
-                } else {
-                    Some(100)
+                #[cfg(all(not(feature = "decryption-mode-13"), feature = "decryption-mode-7"))]
+                match key {
+                    Some(key) => m_bus_parser::output::render_application_oms_with_application_key(
+                        &input, format, &options, capture, &key,
+                    ),
+                    None => m_bus_parser::output::render_application_oms(
+                        &input, format, &options, capture,
+                    ),
                 }
-            });
-            let options = RenderOptions {
-                decode: DecodeOptions {
-                    key,
-                    include_enrichment: !no_enrichment,
-                },
-                table_width: width,
-            };
-            #[cfg(feature = "decryption-mode-13")]
-            let rendered = match tls_session {
-                Some(path) => {
-                    let json = fs::read_to_string(&path).map_err(|error| {
-                        format!(
-                            "[input.tls_session] failed to read {}: {error}",
-                            path.display()
-                        )
-                    })?;
-                    let imported = m_bus_parser::output::ImportedTlsSession::from_json(&json)
-                        .map_err(|error| format!("[{}] {error}", error.code()))?;
-                    let session = imported.session();
-                    match m_bus_parser::output::render_hex_with_tls_session(
+                #[cfg(not(any(feature = "decryption-mode-13", feature = "decryption-mode-7")))]
+                {
+                    let _ = key;
+                    m_bus_parser::output::render_application_oms(&input, format, &options, capture)
+                }
+            }
+            Err(error) => Err(error),
+        }
+    } else {
+        #[cfg(feature = "decryption-mode-13")]
+        if let Some(session) = &session {
+            match m_bus_parser::output::render_capture_hex_with_tls_session(
+                &input,
+                output_format,
+                &options,
+                capture,
+                session,
+            ) {
+                Err(OutputError::InvalidFrame { .. }) => {
+                    m_bus_parser::output::render_application_hex_with_tls_session(
                         &input,
                         output_format,
                         &options,
-                        &session,
-                    ) {
-                        Err(OutputError::InvalidFrame { .. }) => {
-                            m_bus_parser::output::render_application_hex_with_tls_session(
-                                &input,
-                                output_format,
-                                &options,
-                                &session,
-                            )
-                        }
-                        result => result,
-                    }
+                        session,
+                    )
                 }
-                None => render_auto_detected(&input, output_format, &options),
-            };
-            #[cfg(not(feature = "decryption-mode-13"))]
-            let rendered = render_auto_detected(&input, output_format, &options);
-            let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
-            print!("{rendered}");
-            Ok(())
+                result => result,
+            }
+        } else {
+            render_auto_detected(&input, output_format, &options)
         }
-    }
+        #[cfg(not(feature = "decryption-mode-13"))]
+        render_auto_detected(&input, output_format, &options)
+    };
+    let rendered = rendered.map_err(|error| format!("[{}] {error}", error.code()))?;
+    print!("{rendered}");
+    Ok(())
 }
 
 fn read_input(
@@ -236,14 +482,108 @@ fn read_input(
     normalize_input(&input, input_format)
 }
 
+#[cfg(feature = "oms-gen5")]
+struct FirmwareEvidence {
+    image: Option<Vec<u8>>,
+    key: [u8; 16],
+}
+
+#[cfg(feature = "oms-gen5")]
+impl FirmwareEvidence {
+    fn verify(&self, frames: &mut [m_bus_parser::DecodedOutput]) -> Result<(), OutputError> {
+        if let Some(image) = &self.image {
+            for frame in frames {
+                frame.verify_firmware_image(image, &self.key)?;
+            }
+            Ok(())
+        } else {
+            m_bus_parser::output::verify_captured_firmware(frames, &self.key)
+        }
+    }
+}
+
+#[cfg(feature = "decryption-mode-7")]
+impl ValidationArgs {
+    #[cfg(feature = "oms-gen5")]
+    fn firmware_evidence(&self) -> Result<Option<FirmwareEvidence>, OutputError> {
+        let Some(key) = &self.firmware_key else {
+            return Ok(None);
+        };
+        let key = parse_key(key).map_err(|_| OutputError::InvalidOption {
+            option: "firmware-key",
+            message: "Expected 32 hexadecimal characters.".into(),
+        })?;
+        let image = self
+            .firmware_image
+            .as_ref()
+            .map(std::fs::read)
+            .transpose()
+            .map_err(|e| OutputError::InvalidOption {
+                option: "firmware-image",
+                message: e.to_string(),
+            })?;
+        Ok(Some(FirmwareEvidence { image, key }))
+    }
+
+    fn sitp_key(&self) -> Result<Option<[u8; 16]>, OutputError> {
+        self.application_key
+            .as_deref()
+            .map(parse_key)
+            .transpose()
+            .map_err(|_| OutputError::InvalidOption {
+                option: "application-key",
+                message: "Expected 32 hexadecimal characters.".into(),
+            })
+    }
+}
+
+fn render_checked_frames(
+    mut output: FragmentOutput,
+    format: m_bus_parser::output::OmsFormat,
+    validation: &ValidationArgs,
+) -> Result<String, OutputError> {
+    let frames = match &mut output {
+        FragmentOutput::Single(frame) => std::slice::from_mut(frame.as_mut()),
+        FragmentOutput::Multiple(frames) => frames.as_mut_slice(),
+    };
+    #[cfg(feature = "decryption-mode-7")]
+    if let Some(key) = validation.sitp_key()? {
+        for frame in &mut *frames {
+            frame.authenticate_application(&key)?;
+        }
+    }
+    #[cfg(feature = "oms-gen5")]
+    if let Some(key) = &validation.wrapping_key {
+        for frame in &mut *frames {
+            frame.verify_key_wrap(key)?;
+        }
+    }
+    #[cfg(feature = "oms-gen5")]
+    if let Some(evidence) = validation.firmware_evidence()? {
+        evidence.verify(frames)?;
+    }
+    #[cfg(feature = "decryption-mode-10")]
+    if let Some(value) = &validation.lpwan_mac_key {
+        let key = parse_key(value).map_err(|_| OutputError::InvalidOption {
+            option: "lpwan-mac-key",
+            message: "Expected 32 hexadecimal characters.".into(),
+        })?;
+        for frame in &mut *frames {
+            frame.authenticate_lpwan_mac(&key, validation.lpwan_derivation_counter)?;
+        }
+    }
+    m_bus_parser::output::render_oms_capture_with_options(frames, format, None, validation.into())
+}
+
 fn render_auto_detected(
     input: &str,
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
-    match decode_hex(input, &options.decode) {
+    match decode_capture_hex(input, &options.decode) {
         Err(OutputError::InvalidFrame { .. }) => render_application_hex(input, format, options),
-        _ => render_hex(input, format, options),
+        Err(error) => Err(error),
+        Ok(_) => render_hex(input, format, options),
     }
 }
 
