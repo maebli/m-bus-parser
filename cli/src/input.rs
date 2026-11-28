@@ -14,7 +14,12 @@ pub enum InputFormat {
 
 pub fn normalize_input(input: &str, format: InputFormat) -> Result<String, String> {
     if matches!(format, InputFormat::Hex)
-        || matches!(format, InputFormat::Auto) && decode_hex_bytes(input).is_ok()
+        || matches!(format, InputFormat::Auto)
+            && (decode_hex_bytes(input).is_ok()
+                || input
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .all(|line| decode_hex_bytes(line).is_ok()))
     {
         return Ok(input.to_string());
     }

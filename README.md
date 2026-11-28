@@ -113,6 +113,14 @@ by whitespace, colons, or hyphens.
 0x68:0x04:0x04:0x68:0x53:0x01:0x00:0x00:0x54:0x16  (prefixed byte tokens)
 ```
 
+### Check an OMS telegram
+
+```bash
+cargo run -p m-bus-parser-cli --features oms-gen5 -- check-oms -f frame.hex -t json
+```
+
+Use `-t csv` or `-t xml` to change the report format.
+
 ### Table output (default)
 
 The table automatically selects a wide, compact, or vertical-card layout and

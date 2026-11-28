@@ -134,6 +134,45 @@ mod enabled {
     }
 
     #[test]
+    fn capture_decrypts_consecutive_records_and_rejects_unrelated_peers() {
+        let fixture = Fixture::new(SESSION);
+        let first = Fixture::frame();
+        let second = "2f4493157856341233037a0200ff0d01170303001bb0b1b2b3b4b5b6b71a328ff47fb0c89526b0ee7aa06be5dfd04a29";
+        let clear = "114493157856341233037a0100000001132a";
+        let run = |data: &str| {
+            cli()
+                .current_dir(&fixture.directory)
+                .args([
+                    "check-oms",
+                    "--consecutive",
+                    "--radio-mode",
+                    "c2",
+                    "--data",
+                    data,
+                    "--tls-session",
+                    "session.json",
+                ])
+                .output()
+                .unwrap()
+        };
+        let output = run(&[first.as_str(), clear, second].join("\n"));
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let reports: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(reports.as_array().unwrap().len(), 3);
+        let unrelated = second.replacen("78563412", "79563412", 1);
+        let output = run(&[first.as_str(), &unrelated].join("\n"));
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("security.tls_ambiguous_peer"));
+        let output = run(&[first.as_str(), first.as_str()].join("\n"));
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("security.authentication_failed"));
+    }
+
+    #[test]
     fn tls_application_only_input_uses_the_fallback() {
         let fixture = Fixture::new(SESSION);
         let application = format!("7a0100ff0d01{}", OPENSSL_AES128_RECORD);
