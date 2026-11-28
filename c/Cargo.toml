@@ -12,6 +12,8 @@ name = "mbus_parser"
 crate-type = ["cdylib", "staticlib"]
 
 [features]
+sml = ["m-bus-parser/sml"]
+dlms-cosem = ["m-bus-parser/dlms-cosem"]
 default = ["decryption"]
 decryption = ["m-bus-parser/decryption"]
 oms-gen2 = ["m-bus-parser/oms-gen2"]

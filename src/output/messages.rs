@@ -15,6 +15,7 @@ mod authentication;
 pub(super) fn application_output(
     block: Option<&UserDataBlock<'_>>,
     security: &SecurityContext,
+    protocol_data: &mut Option<Box<ProtocolData>>,
 ) -> (Option<ApplicationOutput>, Option<Diagnostic>) {
     let Some(UserDataBlock::ApplicationMessage(message)) = block else {
         return (None, None);
@@ -28,27 +29,55 @@ pub(super) fn application_output(
     if security.encrypted && !security.decrypted {
         return (Some(output), None);
     }
-    #[cfg(feature = "oms-gen3")]
-    if message.protocol == ApplicationProtocol::Sml {
-        let payload = security
-            .decrypted_payload
-            .as_deref()
-            .unwrap_or(message.payload);
-        if let Some(0x76) = payload.iter().find(|byte| **byte != 0x2f) {
-            return match super::sml::decode(payload) {
-                Ok(value) => {
-                    output.decoded = Some(value);
-                    (Some(output), None)
-                }
-                Err(reason) => (
-                    Some(output),
-                    Some(application_diagnostic(
-                        "application.payload_invalid",
-                        reason.into(),
-                    )),
-                ),
+    let payload = security
+        .decrypted_payload
+        .as_deref()
+        .unwrap_or(message.payload);
+    let mut parsed = ProtocolData::default();
+    let decoded: Option<Result<serde_json::Value, &'static str>> = match message.protocol {
+        #[cfg(feature = "sml")]
+        ApplicationProtocol::Sml => super::sml::decode(payload, &mut parsed),
+        ApplicationProtocol::DlmsCosem => {
+            let mode = security.mode.map(|mode| mode.to_bits());
+            let padded = security.decrypted_payload.is_some() && matches!(mode, Some(5 | 7));
+            let bytes = if padded && mode == Some(5) {
+                payload.strip_prefix(&[0x2f, 0x2f]).unwrap_or(payload)
+            } else {
+                payload
             };
+            parsed.evidence.association =
+                m_bus_oms_rules::telegram::DlmsAssociation::from_mbus_payload(bytes);
+            #[cfg(feature = "dlms-cosem")]
+            {
+                super::dlms::decode(bytes, padded, &mut parsed)
+            }
+            #[cfg(not(feature = "dlms-cosem"))]
+            {
+                None
+            }
         }
+        _ => None,
+    };
+    if decoded.is_some()
+        || parsed.evidence.association.is_some()
+        || parsed.evidence.dlms_service.is_some()
+    {
+        *protocol_data = Some(Box::new(parsed));
+    }
+    if let Some(result) = decoded {
+        return match result {
+            Ok(value) => {
+                output.decoded = Some(value);
+                (Some(output), None)
+            }
+            Err(reason) => (
+                Some(output),
+                Some(application_diagnostic(
+                    "application.payload_invalid",
+                    reason.into(),
+                )),
+            ),
+        };
     }
     let result = if let Some(plaintext) = &security.decrypted_payload {
         message.decode_payload(plaintext)

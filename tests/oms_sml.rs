@@ -1,4 +1,4 @@
-#![cfg(all(feature = "std", feature = "oms-gen5"))]
+#![cfg(all(feature = "std", feature = "sml"))]
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
 use m_bus_oms_rules::telegram::TelegramReport;
@@ -11,8 +11,9 @@ fn outcome<'a>(report: &'a TelegramReport, name: &str) -> Option<&'a str> {
         .map(|f| f.status.as_str())
 }
 
+#[cfg(feature = "decryption-mode-5")]
 #[test]
-fn published_sml_response_and_framed_sml_files_have_valid_structure() {
+fn published_sml_response() {
     use m_bus_parser::{decode_hex, DecodeOptions};
     let fixtures: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/oms-annex-n.json")).unwrap();
@@ -50,7 +51,11 @@ fn published_sml_response_and_framed_sml_files_have_valid_structure() {
         outcome(&published, "SML message body schema"),
         Some("passed")
     );
+}
 
+#[test]
+fn framed_sml_files_have_valid_structure() {
+    use m_bus_parser::{decode_hex, DecodeOptions};
     let message = |tag: u16, fields: &[u8]| {
         let mut data = vec![0x76, 2, 1, 0x62, 0, 0x62, 0, 0x72, 0x63];
         data.extend(tag.to_be_bytes());
@@ -68,7 +73,7 @@ fn published_sml_response_and_framed_sml_files_have_valid_structure() {
     frame.resize(frame.len() + padding, 0);
     frame.extend([0x1b, 0x1b, 0x1b, 0x1b, 0x1a, padding as u8]);
     frame.extend(crc16::State::<crc16::X_25>::calculate(&frame).to_le_bytes());
-    let assess = |data: &[u8]| {
+    let decode = |data: &[u8]| {
         decode_hex(
             &format!(
                 "{:02X}4493157856341233077F01000000{}",
@@ -78,9 +83,17 @@ fn published_sml_response_and_framed_sml_files_have_valid_structure() {
             &DecodeOptions::default(),
         )
         .unwrap()
-        .assess_oms_5_0_1()
     };
-    let result = assess(&frame);
+    let packet = decode(&frame);
+    let decoded = packet
+        .application
+        .as_ref()
+        .unwrap()
+        .decoded
+        .as_ref()
+        .unwrap();
+    assert_eq!(decoded["messages"].as_array().unwrap().len(), 2);
+    let result = packet.assess_oms_5_0_1();
     for rule in [
         "SML version 1 transport",
         "SML file open and close",
@@ -91,7 +104,10 @@ fn published_sml_response_and_framed_sml_files_have_valid_structure() {
     }
     *frame.last_mut().unwrap() ^= 1;
     assert_eq!(
-        outcome(&assess(&frame), "SML version 1 transport"),
+        outcome(
+            &decode(&frame).assess_oms_5_0_1(),
+            "SML version 1 transport"
+        ),
         Some("failed")
     );
 }

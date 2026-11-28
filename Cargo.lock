@@ -859,6 +859,7 @@ dependencies = [
  "bincode",
  "bitflags 2.13.2",
  "defmt",
+ "dlms-cosem-kit",
  "m-bus-core",
  "serde",
 ]
@@ -889,7 +890,7 @@ dependencies = [
 name = "m-bus-oms-rules"
 version = "0.7.4"
 dependencies = [
- "dlms-cosem-kit",
+ "m-bus-application-layer",
  "m-bus-core",
  "serde",
 ]
