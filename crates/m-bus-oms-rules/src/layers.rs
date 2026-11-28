@@ -125,6 +125,10 @@ fn uplink_ci(ci: u8) -> Option<bool> {
 }
 
 impl LayerFields {
+    pub(super) fn readings_possible(&self) -> bool {
+        self.application_ci.or(self.outer_ci).and_then(uplink_ci) != Some(false)
+    }
+
     pub(super) fn content_index(self, cf: ConfigurationField) -> Option<u8> {
         match cf.security_mode().to_bits() {
             7 => Some(cf.mode_specific_lower() & 7),
@@ -132,6 +136,27 @@ impl LayerFields {
                 .configuration_extension
                 .map(|ext| ((ext >> 10) & 15) as u8),
             _ => None,
+        }
+    }
+
+    pub(super) fn standard_push(self, link: Link, cf: Option<ConfigurationField>) -> Option<bool> {
+        if !matches!(link, Link::Wireless(0x44)) {
+            return Some(false);
+        }
+        let cf = cf?;
+        let mode = cf.security_mode().to_bits();
+        let synchronous = self
+            .lpwan_sync
+            .or_else(|| self.communication_control.map(|cc| cc & 0x20 != 0))
+            .or_else(|| (mode == 5).then_some(cf.raw() & 0x2000 != 0));
+        match mode {
+            5 if cf.mode_specific_lower() & 12 == 0 => synchronous,
+            13 if cf.raw() >> 14 == 0 => synchronous,
+            7 | 10 if cf.raw() >> 14 == 0 => match self.content_index(cf)? {
+                0 => synchronous,
+                index => Some(index == 2),
+            },
+            _ => Some(false),
         }
     }
 

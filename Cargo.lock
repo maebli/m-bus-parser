@@ -897,6 +897,7 @@ dependencies = [
  "m-bus-application-layer",
  "m-bus-core",
  "m-bus-manufacturer",
+ "m-bus-oms-rules",
  "prettytable-rs",
  "serde",
  "serde-xml-rs",

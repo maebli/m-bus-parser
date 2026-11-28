@@ -21,6 +21,24 @@ pub struct ApplicationProtocolEvidence {
     pub selection_length: Option<usize>,
 }
 
+pub(crate) fn selected_application(parameters: &[u8]) -> Option<(u16, u64)> {
+    if parameters.is_empty() || parameters.len() > 10 {
+        return None;
+    }
+    let mut application = 0;
+    let mut extended = true;
+    let mut block = 0;
+    for (position, byte) in parameters.iter().enumerate() {
+        let selector = byte >> 4;
+        if extended {
+            application += u16::from(selector);
+            extended = selector == 15;
+        }
+        block |= u64::from(byte & 15) << (4 * position);
+    }
+    Some((application, block))
+}
+
 #[derive(Clone, Copy)]
 pub struct SmlBlock {
     pub control: u8,
