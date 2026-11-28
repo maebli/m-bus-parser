@@ -11,7 +11,15 @@ pub fn render_application_hex(
     format: OutputFormat,
     options: &RenderOptions,
 ) -> Result<String, OutputError> {
-    render_application_with_session(input, format, options, None)
+    render_application_with_session(
+        input,
+        format,
+        options,
+        None,
+        Default::default(),
+        None,
+        |_| Ok(()),
+    )
 }
 
 #[cfg(feature = "decryption-mode-13")]
@@ -22,7 +30,111 @@ pub fn render_application_hex_with_tls_session(
     session: &TlsSession<'_>,
 ) -> Result<String, OutputError> {
     tls::require_tls_output_format(format)?;
-    render_application_with_session(input, format, options, Some(session))
+    render_application_with_session(
+        input,
+        format,
+        options,
+        Some(session),
+        Default::default(),
+        None,
+        |_| Ok(()),
+    )
+}
+
+pub fn render_application_oms(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        None,
+        capture,
+        None,
+        |_| Ok(()),
+    )
+}
+
+#[cfg(feature = "decryption-mode-13")]
+pub fn render_application_oms_with_tls_session(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    session: &TlsSession<'_>,
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        Some(session),
+        capture,
+        None,
+        |_| Ok(()),
+    )
+}
+
+#[cfg(feature = "decryption-mode-7")]
+pub fn render_application_oms_with_application_key(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    key: &[u8; 16],
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        None,
+        capture,
+        Some(key),
+        |_| Ok(()),
+    )
+}
+
+#[cfg(feature = "decryption-mode-13")]
+pub fn render_application_oms_with_keys(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    session: Option<&TlsSession<'_>>,
+    application_key: Option<&[u8; 16]>,
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        session,
+        capture,
+        application_key,
+        |_| Ok(()),
+    )
+}
+
+#[cfg(feature = "decryption-mode-13")]
+pub fn render_application_oms_with_evidence(
+    input: &str,
+    format: OmsFormat,
+    options: &RenderOptions,
+    capture: OmsCaptureOptions,
+    session: Option<&TlsSession<'_>>,
+    application_key: Option<&[u8; 16]>,
+    evidence: impl FnOnce(&mut DecodedOutput) -> Result<(), OutputError>,
+) -> Result<String, OutputError> {
+    render_application_with_session(
+        input,
+        OutputFormat::Oms(format),
+        options,
+        session,
+        capture,
+        application_key,
+        evidence,
+    )
 }
 
 fn render_application_with_session(
@@ -30,6 +142,9 @@ fn render_application_with_session(
     format: OutputFormat,
     options: &RenderOptions,
     session: Option<&TlsSession<'_>>,
+    capture: OmsCaptureOptions,
+    application_key: Option<&[u8; 16]>,
+    evidence: impl FnOnce(&mut DecodedOutput) -> Result<(), OutputError>,
 ) -> Result<String, OutputError> {
     let data = decode_hex_bytes(input)?;
     let block = match user_data::parse_application_layer(&data) {
@@ -69,7 +184,7 @@ fn render_application_with_session(
         Some(user_data::parse_data_records(&data))
     };
     let (meter, _) = meter_and_transport(block.as_ref(), None);
-    let (parsed_records, error) = collect_records(records.as_ref(), meter.identity.as_ref());
+    let (parsed_records, error) = collect_records(records.as_ref(), meter.identity.as_ref(), None);
     if let Some((offset, message)) = error {
         return Err(OutputError::Rendering {
             code: "application.records_invalid",
@@ -172,5 +287,24 @@ fn render_application_with_session(
         security.clone(),
         options.decode.include_enrichment,
     );
+    if let OutputFormat::Oms(format) = format {
+        let mut decoded = decoded;
+        if let Some(key) = application_key {
+            #[cfg(feature = "decryption-mode-7")]
+            {
+                decoded.authenticate_application(key)?;
+            }
+            #[cfg(not(feature = "decryption-mode-7"))]
+            {
+                let _ = key;
+                return Err(OutputError::Decryption {
+                    code: "security.application_mac_unavailable",
+                    message: "ASP10 support is required to authenticate this command.".into(),
+                });
+            }
+        }
+        evidence(&mut decoded)?;
+        return render_oms_capture_with_options(&[decoded], format, None, capture);
+    }
     render_decoded(&decoded, format, options)
 }

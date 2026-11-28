@@ -1136,7 +1136,7 @@ fn product_name(manufacturer: &str, version: u8, medium: u8, id: u32) -> String 
 
 /// XML text encoding ported from `mbus_str_xml_encode`: control characters
 /// become spaces, `& < > "` are escaped, everything else passes through.
-fn xml_encode(text: &str) -> String {
+pub(crate) fn xml_encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         if c.is_ascii_control() {

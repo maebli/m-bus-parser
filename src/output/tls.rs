@@ -1,4 +1,6 @@
+mod capture;
 use super::*;
+pub use capture::{decode_capture_hex_with_tls_session, render_capture_hex_with_tls_session};
 use m_bus_core::decryption::mode13::{Mode13Error, TlsContentType, TlsDirection};
 
 pub fn decode_hex_with_tls_session(
@@ -7,7 +9,7 @@ pub fn decode_hex_with_tls_session(
     session: &TlsSession<'_>,
 ) -> Result<DecodedOutput, OutputError> {
     let bytes = decode_hex_bytes(input)?;
-    let mut decoded = decode_bytes_with_keys(&bytes, options, Some(session), None)?;
+    let mut decoded = decode_bytes_with_session(&bytes, options, Some(session))?;
     decoded.raw.input = Some(input.to_string());
     Ok(decoded)
 }
@@ -53,6 +55,8 @@ fn tls_error(error: Mode13Error) -> OutputError {
 
 pub(super) fn prepare_mode13(
     user_data: Option<&user_data::UserDataBlock<'_>>,
+    wireless_id: Option<&wireless::ManufacturerId>,
+    communication_key: Option<&[u8; 16]>,
     session: Option<&TlsSession<'_>>,
 ) -> Result<SecurityContext, OutputError> {
     let block = user_data.ok_or_else(|| tls_error(Mode13Error::InvalidConfiguration))?;
@@ -60,7 +64,40 @@ pub(super) fn prepare_mode13(
         .mode13_payload()
         .map_err(tls_error)?
         .ok_or_else(|| tls_error(Mode13Error::InvalidConfiguration))?;
+    let cmac_verified = if let (Some(afl), Some(key)) = (block.authentication(), communication_key)
+    {
+        let (header, _) = block
+            .transport_payload()
+            .ok_or_else(|| tls_error(Mode13Error::InvalidConfiguration))?;
+        let from_meter = matches!(header.direction(), Ok(user_data::Direction::SlaveToMaster));
+        let meter_id = match block {
+            user_data::UserDataBlock::ApplicationMessage(user_data::ApplicationMessage {
+                transport_header: user_data::TransportHeader::Long(header),
+                ..
+            })
+            | user_data::UserDataBlock::VariableDataStructureWithLongTplHeader {
+                long_tpl_header: header,
+                ..
+            } => Some(header.identification_number.number),
+            _ if from_meter => wireless_id.map(|id| id.identification_number.number),
+            _ => None,
+        };
+        if let Some(id) = meter_id {
+            m_bus_core::decryption::verify_afl_cmac(&afl, key, id, from_meter).map_err(
+                |error| OutputError::Decryption {
+                    code: "security.authentication_failed",
+                    message: error.to_string(),
+                },
+            )?;
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
     let tls = TlsOutput {
+        cmac_verified,
         protocol: if payload.is_channel_request() {
             "channel_request"
         } else {
@@ -70,6 +107,9 @@ pub(super) fn prepare_mode13(
         records: payload
             .records()
             .map(|record| TlsRecordOutput {
+                hello: (record.content_type == TlsContentType::Handshake)
+                    .then(|| m_bus_oms_rules::tls_hello::TlsHello::parse(record.payload))
+                    .flatten(),
                 content_type: match record.content_type {
                     TlsContentType::ChannelRequest => "channel_request",
                     TlsContentType::ChangeCipherSpec => "change_cipher_spec",
@@ -87,10 +127,9 @@ pub(super) fn prepare_mode13(
         mode: Some(SecurityMode::SpecificUsage13),
         ell_encrypted: false,
         decrypted: false,
-        key_supplied: session.is_some(),
+        key_supplied: session.is_some() || communication_key.is_some(),
         decrypted_payload: None,
         tls: Some(tls),
-        application_mac_verified: false,
     };
     let Some(session) = session else {
         return Ok(context);

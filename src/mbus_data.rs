@@ -77,14 +77,22 @@ impl<'a> TryFrom<&'a [u8]> for MbusData<'a, WirelessFrame<'a>> {
         let mut data_records = None;
         let mut application_error = None;
         use user_data::extended_link_layer::{EllFormat, ExtendedLinkLayer};
-        let block = match (frame.function, frame.data) {
-            (Some(m_bus_core::Function::ReqUd2 { .. }), [0x8E, header @ ..])
-                if header.len() == 10 =>
+        let ell_only = match (frame.control_field, frame.data) {
+            (0x47 | 0x00 | 0x10 | 0x20 | 0x30 | 0x01 | 0x11 | 0x21 | 0x31, [0x8c, header @ ..])
+                if header.len() == 2 =>
             {
-                ExtendedLinkLayer::parse(header, EllFormat::FormatIII)
-                    .map(|(ell, _)| user_data::UserDataBlock::ExtendedLinkLayerOnly(ell))
+                Some((header, EllFormat::FormatI))
             }
-            _ => user_data::UserDataBlock::try_from(frame.data),
+            (
+                0x47 | 0x00 | 0x10 | 0x20 | 0x30 | 0x01 | 0x11 | 0x21 | 0x31 | 0x5b | 0x7b,
+                [0x8e, header @ ..],
+            ) if header.len() == 10 => Some((header, EllFormat::FormatIII)),
+            _ => None,
+        };
+        let block = match ell_only {
+            Some((header, format)) => ExtendedLinkLayer::parse(header, format)
+                .map(|(ell, _)| user_data::UserDataBlock::ExtendedLinkLayerOnly(ell)),
+            None => user_data::UserDataBlock::try_from(frame.data),
         };
 
         match block {

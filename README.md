@@ -222,6 +222,9 @@ fn main() -> Result<(), DataRecordError> {
 
 ### Decode and render with typed APIs
 
+With `std` enabled, call `assess_oms_5_0_1()` on a decoded telegram for its findings.
+An encrypted or incomplete payload can leave individual rules unchecked.
+
 ```rust
 use m_bus_parser::{
     DecodeOptions, OutputError, OutputFormat, RenderOptions, decode_hex, render_hex,

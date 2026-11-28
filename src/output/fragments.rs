@@ -4,6 +4,52 @@ use super::*;
 enum Link {
     Wired(wired::Address),
     Wireless(wireless::ManufacturerId, Option<[u8; 8]>),
+    Lpwan(wireless::ManufacturerId, Option<[u8; 8]>),
+}
+
+pub(super) fn wireless_destination(frames: &[String]) -> Option<bool> {
+    let mut addressed = None;
+    for hex in frames {
+        let bytes = decode_hex_bytes(hex).ok()?;
+        let mut scratch = [0; 290];
+        if let Ok((Link::Wireless(_, receiver), _, data)) = link_payload(&bytes, &mut scratch) {
+            if is_fragment(data) {
+                addressed = Some(addressed.unwrap_or(true) && receiver.is_some());
+            }
+        }
+    }
+    addressed
+}
+
+pub(super) fn application_meter(frames: &[String], downlink: bool) -> Option<[u8; 8]> {
+    frames.iter().find_map(|hex| {
+        let bytes = decode_hex_bytes(hex).ok()?;
+        let mut scratch = [0; 290];
+        let (link, from_meter, data) = link_payload(&bytes, &mut scratch).ok()?;
+        if from_meter == downlink || !is_fragment(data) {
+            return None;
+        }
+        match link {
+            Link::Wireless(_, receiver) if downlink => receiver,
+            Link::Wireless(_, _) => wireless::strip_format_a_crcs(&bytes, &mut scratch)
+                .unwrap_or(&bytes)
+                .get(2..10)?
+                .try_into()
+                .ok(),
+            Link::Lpwan(_, _) => {
+                let header = m_bus_oms_rules::lpwan::LpwanHeader::parse(&bytes)
+                    .ok()?
+                    .0
+                    .llc?;
+                if downlink {
+                    header.receiver
+                } else {
+                    header.sender
+                }
+            }
+            Link::Wired(_) => None,
+        }
+    })
 }
 
 fn invalid(message: &str) -> OutputError {
@@ -22,6 +68,12 @@ pub(super) fn is_fragment(mut data: &[u8]) -> bool {
     let [0x90, size, id, flags, rest @ ..] = data else {
         return false;
     };
+    if *id == 1
+        && flags & 0x40 == 0
+        && m_bus_core::authentication::AuthenticationHeader::parse(data).is_ok()
+    {
+        return false;
+    }
     let Some(header_len) = size.checked_sub(2).map(usize::from) else {
         return false;
     };
@@ -51,6 +103,25 @@ fn link_payload<'a>(
     }) = wired::WiredFrame::try_from(frame)
     {
         (Link::Wired(address), Some(function), data)
+    } else if m_bus_oms_rules::lpwan::has_mac_crc(frame) {
+        let (header, data) = m_bus_oms_rules::lpwan::LpwanHeader::parse(frame).map_err(invalid)?;
+        let down = header.downlink();
+        let llc = header
+            .llc
+            .ok_or_else(|| invalid("missing LPWAN fragment LLC"))?;
+        let (meter, peer) = if down {
+            (llc.receiver, llc.sender)
+        } else {
+            (llc.sender, llc.receiver)
+        };
+        let meter = meter
+            .and_then(super::lpwan::manufacturer_id)
+            .ok_or_else(|| invalid("missing LPWAN fragment origin"))?;
+        (
+            Link::Lpwan(meter, peer),
+            llc.control.and_then(|c| Function::try_from(c).ok()),
+            data,
+        )
     } else {
         let bytes = wireless::strip_format_a_crcs(frame, scratch).unwrap_or(frame);
         let frame = wireless::WirelessFrame::try_from(bytes)
@@ -227,6 +298,12 @@ fn afl_frame(frame: &[u8]) -> bool {
     link_payload(frame, &mut [0; 290]).is_ok_and(|(_, _, data)| is_fragment(data))
 }
 
+fn complete_wireless_frame(packet: &[u8]) -> bool {
+    let mut scratch = [0; 290];
+    let frame = wireless::strip_format_a_crcs(packet, &mut scratch).unwrap_or(packet);
+    wireless::WirelessFrame::try_from(frame).is_ok() || m_bus_oms_rules::lpwan::has_mac_crc(packet)
+}
+
 pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputError> {
     let mut lines = input.lines().map(str::trim).filter(|line| !line.is_empty());
     let (Some(first), Some(second)) = (lines.next(), lines.next()) else {
@@ -234,7 +311,8 @@ pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputEr
     };
     let first = decode_hex_bytes(first)?;
     let numbered = matches!(first.as_slice(), [1, 2..=255, _, ..]);
-    if !numbered && !complete_wired_frame(&first) && !afl_frame(&first) {
+    let wireless_lines = !numbered && !complete_wired_frame(&first) && !afl_frame(&first);
+    if wireless_lines && !complete_wireless_frame(&first) {
         return Ok(None);
     }
     let mut packets = vec![first];
@@ -243,6 +321,9 @@ pub(super) fn text_packets(input: &str) -> Result<Option<Vec<Vec<u8>>>, OutputEr
             return Err(invalid("too many packets"));
         }
         packets.push(decode_hex_bytes(line)?);
+    }
+    if wireless_lines && !packets.iter().all(|packet| complete_wireless_frame(packet)) {
+        return Ok(None);
     }
     Ok(Some(packets))
 }
@@ -290,6 +371,9 @@ pub(super) fn detect_bytes(
     data: &[u8],
     options: &DecodeOptions,
 ) -> Result<Option<FragmentOutput>, OutputError> {
+    if m_bus_oms_rules::lpwan::has_mac_crc(data) {
+        return Ok(None);
+    }
     if let [1, 1, payload @ ..] = data {
         let payload = acrios_meter_data(payload);
         if wired_frame_size(payload).is_some() {
@@ -350,6 +434,16 @@ pub fn decode_fragment_frames(
     }
     if packets.len() > 1 && packets.iter().all(|packet| complete_wired_frame(packet)) {
         return decode_wired_packets(packets, options);
+    }
+    if packets.len() > 1
+        && packets.iter().all(|packet| complete_wireless_frame(packet))
+        && !packets.iter().any(|packet| afl_frame(packet))
+    {
+        let decoded = packets
+            .iter()
+            .map(|packet| decode_bytes_with_session(packet, options, None))
+            .collect::<Result<_, _>>()?;
+        return Ok(FragmentOutput::Multiple(decoded));
     }
     if !matches!(packets.first(), Some([1, ..])) {
         return decode_afl_fragments(packets, options)
@@ -415,7 +509,7 @@ fn decode_wired_packets(
     }
     let mut decoded = frames
         .iter()
-        .map(|frame| decode_bytes_with_keys(frame, options, None, None))
+        .map(|frame| decode_bytes_with_session(frame, options, None))
         .collect::<Result<Vec<_>, _>>()?;
     if decoded.len() == 1 {
         let frame = decoded
@@ -508,6 +602,7 @@ fn decode_afl_fragments(
     }
     let (protocol, wireless_id, address) = match origin {
         Some((Link::Wireless(ref id, _), _)) => ("wireless", Some(id), None),
+        Some((Link::Lpwan(ref id, _), _)) => ("oms_lpwan", Some(id), None),
         Some((Link::Wired(ref address), _)) => ("wired", None, Some(address.to_string())),
         None => return Err(invalid("missing fragment origin")),
     };
