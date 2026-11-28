@@ -44,6 +44,8 @@ pub mod application_message;
 pub mod compact;
 pub mod data_information;
 pub mod data_record;
+#[cfg(feature = "dlms-cosem")]
+pub mod dlms;
 pub mod extended_link_layer;
 pub mod sitp;
 pub mod value_information;

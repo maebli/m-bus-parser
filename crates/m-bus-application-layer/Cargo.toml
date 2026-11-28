@@ -8,6 +8,7 @@ repository = "https://github.com/maebli/m-bus-parser"
 readme = "README.md"
 
 [features]
+dlms-cosem = ["dep:dlms-cosem-kit"]
 oms-gen2 = []
 oms-gen5 = []
 default = []
@@ -23,6 +24,7 @@ decryption-mode-13 = ["decryption-api", "m-bus-core/decryption-mode-13"]
 plaintext-before-extension = []
 
 [dependencies]
+dlms-cosem-kit = { version = "0.3", default-features = false, features = ["sn"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 defmt = { version = "1.0.1", optional = true }
 bitflags = "2.8.0"
