@@ -70,13 +70,15 @@ Source: [`cli/`](./cli)
 pip install pymbusparser
 ```
 
+Use `parse_fragments(frames, key=...)` to decode a sequence of fragment frames.
+
 Source: [`python/`](./python)
 
 ### C bindings
 
 [![C release](https://img.shields.io/github/v/release/maebli/m-bus-parser?filter=c-v%2A&label=C%20release)](https://github.com/maebli/m-bus-parser/releases?q=c-v)
 
-Download the archive for your platform. It includes the libraries and the `mbus_parser.h` header.
+Download the archive for your platform. It includes the libraries and the `mbus_parser.h` header. Pass an array of frames to `mbus_parse_fragments` to decode a fragmented telegram.
 
 [Source](./c) · [C example](./c/examples/parse.c)
 

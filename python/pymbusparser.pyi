@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
 DataInput = Union[str, bytes, bytearray]
 KeyInput = Union[str, bytes, bytearray]
@@ -25,7 +25,13 @@ def parse(
     *,
     key: Optional[KeyInput] = None,
     include_enrichment: bool = True,
-) -> Dict[str, Any]: ...
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]: ...
+def parse_fragments(
+    frames: Sequence[DataInput],
+    *,
+    key: Optional[KeyInput] = None,
+    include_enrichment: bool = True,
+) -> Union[Dict[str, Any], List[Dict[str, Any]]]: ...
 def parse_records(data: DataInput) -> List[Any]: ...
 def render(
     data: DataInput,
