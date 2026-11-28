@@ -1,6 +1,6 @@
 use super::DecodedOutput;
-use crate::output::{decode_hex_bytes, RecordAvailability};
-use m_bus_oms_rules::telegram::{ApplicationProtocolEvidence, DlmsAssociation};
+use crate::output::RecordAvailability;
+use m_bus_oms_rules::telegram::ApplicationProtocolEvidence;
 
 pub(in crate::output) fn application_protocol(
     frame: &DecodedOutput,
@@ -47,46 +47,10 @@ pub(in crate::output) fn application_protocol(
             });
         return evidence;
     }
-    let Some(application) = frame
-        .application
+    frame
+        .protocol_data
         .as_ref()
-        .filter(|app| matches!(app.protocol.as_str(), "sml" | "dlms_cosem"))
-    else {
-        return evidence;
-    };
-    let clear = frame.security.decrypted_payload_hex.as_deref().or_else(|| {
-        (!matches!(
-            frame.record_availability,
-            RecordAvailability::Encrypted | RecordAvailability::Fragmented
-        ))
-        .then_some(application.payload_hex.as_str())
-    });
-    let Some(bytes) = clear.and_then(|hex| decode_hex_bytes(hex).ok()) else {
-        return evidence;
-    };
-    if application.protocol == "dlms_cosem" {
-        let bytes = if frame.security.decrypted_payload_hex.is_some()
-            && frame.security.mode_code == Some(5)
-        {
-            bytes.strip_prefix(&[0x2f, 0x2f]).unwrap_or(&bytes)
-        } else {
-            &bytes
-        };
-        evidence.association = DlmsAssociation::from_mbus_payload(bytes);
-        #[cfg(feature = "oms-gen5")]
-        {
-            let padded = frame.security.decrypted_payload_hex.is_some()
-                && matches!(frame.security.mode_code, Some(5 | 7));
-            evidence.dlms_service =
-                Some(m_bus_oms_rules::dlms::DlmsService::inspect(bytes, padded));
-        }
-    } else {
-        #[cfg(feature = "oms-gen3")]
-        {
-            crate::output::sml::inspect(&bytes, &mut evidence);
-        }
-    }
-    evidence
+        .map_or(evidence, |parsed| parsed.evidence)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -104,7 +68,7 @@ impl Route {
     }
 }
 
-#[cfg(feature = "oms-gen3")]
+#[cfg(feature = "sml")]
 #[derive(Default)]
 struct FileBlocks {
     next: u8,
@@ -114,14 +78,14 @@ struct FileBlocks {
 
 #[derive(Default)]
 pub(super) struct SmlTransfers {
-    #[cfg(feature = "oms-gen3")]
+    #[cfg(feature = "sml")]
     files: std::collections::BTreeMap<(Route, u8), FileBlocks>,
     previous: Option<(Route, m_bus_oms_rules::telegram::SmlBlock)>,
     maximum: std::collections::BTreeMap<(Route, u8), u16>,
 }
 
 impl SmlTransfers {
-    #[cfg(feature = "oms-gen3")]
+    #[cfg(feature = "sml")]
     fn assemble(
         &mut self,
         route: Route,
@@ -206,31 +170,18 @@ impl SmlTransfers {
             ) => Route::Wired(address, control & 0x40 != 0),
             _ => return,
         };
-        #[cfg(feature = "oms-gen3")]
+        #[cfg(feature = "sml")]
         let block = {
-            let clear = frame.security.decrypted_payload_hex.as_deref().or_else(|| {
-                if matches!(
-                    frame.record_availability,
-                    RecordAvailability::Encrypted | RecordAvailability::Fragmented
-                ) {
-                    return None;
-                }
-                Some(frame.application.as_ref()?.payload_hex.as_str())
-            });
-            let Some(bytes) = clear.and_then(|hex| decode_hex_bytes(hex).ok()) else {
+            let Some(parsed) = frame.protocol_data.as_ref() else {
                 return;
             };
-            let start = bytes.iter().position(|b| *b != 0x2f).unwrap_or(bytes.len());
-            let Some((block, data)) = bytes
-                .get(start..)
-                .and_then(crate::output::sml::version_two_block)
-            else {
+            let Some(Ok(block)) = parsed.evidence.sml_v2 else {
                 return;
             };
-            self.assemble(route, block, &data, report);
+            self.assemble(route, block, &parsed.block_data, report);
             block
         };
-        #[cfg(not(feature = "oms-gen3"))]
+        #[cfg(not(feature = "sml"))]
         let Some(Ok(block)) = application_protocol(frame).sml_v2
         else {
             return;

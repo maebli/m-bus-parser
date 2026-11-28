@@ -7,7 +7,7 @@ macro_rules! sml_page {
     };
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Debug, Copy, Default)]
 pub struct ApplicationProtocolEvidence {
     pub sml_envelope: Option<bool>,
     pub sml_body: Option<bool>,
@@ -39,7 +39,7 @@ pub(crate) fn selected_application(parameters: &[u8]) -> Option<(u16, u64)> {
     Some((application, block))
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub struct SmlBlock {
     pub control: u8,
     pub file: u8,
@@ -144,7 +144,7 @@ fn sml_transfer_finding(rule: &'static str, valid: bool, detail: &'static str) -
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub struct DlmsAssociation {
     response: bool,
     length: Option<bool>,

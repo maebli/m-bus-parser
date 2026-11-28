@@ -230,6 +230,12 @@ fn main() -> Result<(), DataRecordError> {
 
 ### Decode and render with typed APIs
 
+Enable `std,sml` or `std,dlms-cosem` to decode the corresponding application payload
+without selecting an OMS generation. `oms-gen3` includes SML and `oms-gen5` also
+includes DLMS/COSEM. Read the parsed fields in `application.decoded`. SML list entries
+include the OBIS code, unit, scaler, and value. A normal DLMS GET request includes
+the invoke ID, COSEM class, object name, and attribute ID.
+
 With `std` enabled, call `assess_oms_5_0_1()` on a decoded telegram for its findings.
 An encrypted or incomplete payload can leave individual rules unchecked.
 [Rule coverage and required evidence](./crates/m-bus-oms-rules/coverage.tsv)
@@ -406,7 +412,7 @@ contracts.
 | Clock set / adjustment | 0x6C, 0x6D | Time values, operation and command verification |
 | Format / compact frames | 0x69–0x6B, 0x79, 0x7B | Format descriptors and CRC-checked reconstruction with `CompactFrame::expand` |
 | Extended link layer I / II / III | 0x8C, 0x8D, 0x8E | Headers parsed; I/III decode the following CI; encrypted ELL payloads remain undecoded |
-| DLMS/COSEM / SML wrappers | 0x60, 0x61, 0x64, 0x65, 0x7C–0x7F | M-Bus transport headers and external payloads with checks for supported DLMS and SML structures |
+| DLMS/COSEM / SML wrappers | 0x60, 0x61, 0x64, 0x65, 0x7C–0x7F | Transport headers, optional DLMS service fields and SML messages, and raw payload bytes |
 | Transport-only / frame-format requests | 0x80, 0x84, 0x85, 0x8A, 0x8B | Headers and command identity |
 | Network / manufacturer / legacy hash commands | 0x81–0x83, 0x89, 0xB1–0xB4, 0xB6, 0x90–0x97 | Protocol identity and raw payloads |
 
